@@ -74,14 +74,12 @@
 			<optional>true</optional>
 		</dependency>
 
-		<!-- Tests (CHỨA @SpringBootTest) -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 
-		<!-- Security test helpers (optional nhưng hay dùng) -->
 		<dependency>
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-test</artifactId>
