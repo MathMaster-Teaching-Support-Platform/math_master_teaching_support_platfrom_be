@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: math-master
+
+  datasource:
+    url: jdbc:postgresql://ep-green-mouse-ahwgiq0a-pooler.c-3.us-east-1.aws.neon.tech:5432/neondb?sslmode=require&channel_binding=require
+    username: neondb_owner
+    password: npg_ZuSN4IPnBd7o
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      pool-name: HikariPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update  # dev: update | prod: validate/none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+
+server:
+  port: 8080
+
+logging:
+  level:
+    org.springframework: INFO
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql: INFO
