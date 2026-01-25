@@ -8,3 +8,16 @@
 /dataSources.local.xml
 # Editor-based HTTP Client requests
 /httpRequests/
+
+# IDE project files to ignore
+/compiler.xml
+/copilot.*.xml
+/encodings.xml
+/jarRepositories.xml
+/material_theme_project_new.xml
+/math_master_teaching_support_platfrom_be.iml
+/misc.xml
+/modules.xml
+/remote-targets.xml
+/vcs.xml
+
