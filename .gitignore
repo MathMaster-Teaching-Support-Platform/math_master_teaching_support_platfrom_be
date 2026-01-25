@@ -1,2 +1,9 @@
 
 *:Zone.Identifier
+
+# JetBrains IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+

@@ -21,6 +21,12 @@ public enum ErrorCode {
     PERMISSION_NOT_EXISTED(1011, "Permission not existed", HttpStatus.NOT_FOUND),
     PERMISSION_ALREADY_EXISTS(1012, "Permission already exists", HttpStatus.BAD_REQUEST),
     EMAIL_ALREADY_EXISTS(1013, "Email already exists", HttpStatus.BAD_REQUEST),
+    INCORRECT_PASSWORD(1014, "Current password is incorrect", HttpStatus.BAD_REQUEST),
+    PASSWORD_MISMATCH(1015, "New password and confirm password do not match", HttpStatus.BAD_REQUEST),
+    USER_ALREADY_BANNED(1016, "User is already banned", HttpStatus.BAD_REQUEST),
+    USER_NOT_BANNED(1017, "User is not banned", HttpStatus.BAD_REQUEST),
+    USER_ALREADY_DISABLED(1018, "User is already disabled", HttpStatus.BAD_REQUEST),
+    USER_ALREADY_ENABLED(1019, "User is already enabled", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

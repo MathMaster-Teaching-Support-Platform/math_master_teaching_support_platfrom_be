@@ -64,6 +64,12 @@ public class User {
     @Enumerated(EnumType.STRING)
     private Status status;
 
+    @Column(name = "ban_reason", length = 500)
+    private String banReason;
+
+    @Column(name = "ban_date")
+    private Instant banDate;
+
     @Column(name = "created_date")
     private Instant createdDate;
 
