@@ -1,20 +1,15 @@
 package com.fptu.math_master.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
-import java.util.LinkedHashSet;
-import java.util.Set;
-
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Getter
-@Setter
+@Data
 @Entity
 @Table(
         name = "permissions",
@@ -52,10 +47,4 @@ public class Permission {
     @Nationalized
     @Column(name = "description", length = 500)
     private String description;
-
-    // Inverse side: Role <-> Permission
-    @ManyToMany(mappedBy = "permissions", fetch = FetchType.LAZY)
-    @JsonIgnore
-    @Builder.Default
-    private Set<Role> roles = new LinkedHashSet<>();
 }

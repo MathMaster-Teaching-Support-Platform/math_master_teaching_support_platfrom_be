@@ -9,14 +9,12 @@ import org.hibernate.annotations.Nationalized;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.LinkedHashSet;
 import java.util.Set;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Getter
-@Setter
+@Data
 @Entity
 @Table(name = "users")
 public class User {
@@ -35,7 +33,7 @@ public class User {
     private String password;
 
     @Size(max = 255)
-    @Column(name = "fullname", length = 255)
+    @Column(name = "full_name", length = 255)
     private String fullName;
 
     @Size(max = 255)
@@ -80,14 +78,13 @@ public class User {
     @Column(name = "updated_by", length = 50)
     private String updatedBy;
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany
     @JoinTable(
-            name = "user_roles",
-            joinColumns = @JoinColumn(name = "user_id", referencedColumnName = "account_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id", referencedColumnName = "id")
+            name = "users_roles",
+            joinColumns = @JoinColumn(name = "user_account_id"),
+            inverseJoinColumns = @JoinColumn(name = "roles_id")
     )
-    @Builder.Default
-    private Set<Role> roles = new LinkedHashSet<>();
+    Set<Role> roles;
 
     @PrePersist
     public void prePersist() {
