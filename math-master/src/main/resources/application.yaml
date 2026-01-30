@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: math-master
+  devtools:
+    restart:
+      enabled: false
+
+  datasource:
+    url: jdbc:postgresql://ep-green-mouse-ahwgiq0a-pooler.c-3.us-east-1.aws.neon.tech:5432/neondb?sslmode=require
+    username: neondb_owner
+    password: npg_ZuSN4IPnBd7o
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      pool-name: HikariPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-test-query: SELECT 1
+      data-source-properties:
+        sslmode: require
+        prepareThreshold: 0
+        preparedStatementCacheQueries: 0
+        preparedStatementCacheSizeMiB: 0
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+
+server:
+  port: 8080
+
+# ================================
+# JWT
+# ================================
+jwt:
+  signerKey: 1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij
+  valid-duration: 3600
+  refreshable-duration: 36000
+
+logging:
+  level:
+    org.springframework: INFO
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql: INFO
+
+# ================================
+# Springdoc OpenAPI Configuration
+# ================================
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui
+    operationsSorter: method
+    tagsSorter: alpha
