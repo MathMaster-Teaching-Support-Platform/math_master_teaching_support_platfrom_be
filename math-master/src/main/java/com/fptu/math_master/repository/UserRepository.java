@@ -26,6 +26,12 @@ public interface UserRepository extends JpaRepository<User, Integer>, UserReposi
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles WHERE u.userName = :userName")
     Optional<User> findByUserNameWithRoles(String userName);
 
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles r LEFT JOIN FETCH r.permissions WHERE u.email = :email")
+    Optional<User> findByEmailWithRolesAndPermissions(String email);
+
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles r LEFT JOIN FETCH r.permissions WHERE u.id = :id")
+    Optional<User> findByIdWithRolesAndPermissions(Integer id);
+
     List<User> findByStatus(Status status);
 
     Page<User> findByStatus(Status status, Pageable pageable);

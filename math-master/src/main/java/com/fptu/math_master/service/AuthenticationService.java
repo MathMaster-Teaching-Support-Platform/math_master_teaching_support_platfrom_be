@@ -4,8 +4,10 @@ import com.fptu.math_master.dto.request.AuthenticationRequest;
 import com.fptu.math_master.dto.request.IntrospectRequest;
 import com.fptu.math_master.dto.request.LogoutRequest;
 import com.fptu.math_master.dto.request.RefreshRequest;
+import com.fptu.math_master.dto.request.UserRegistrationRequest;
 import com.fptu.math_master.dto.response.AuthenticationResponse;
 import com.fptu.math_master.dto.response.IntrospectResponse;
+import com.fptu.math_master.dto.response.UserResponse;
 import com.nimbusds.jose.JOSEException;
 import java.text.ParseException;
 
@@ -17,4 +19,6 @@ public interface AuthenticationService {
         void logout(LogoutRequest request) throws ParseException, JOSEException;
 
         AuthenticationResponse refreshToken(RefreshRequest request) throws ParseException, JOSEException;
+
+        UserResponse register(UserRegistrationRequest request);
 }
