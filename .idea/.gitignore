@@ -21,3 +21,9 @@
 /remote-targets.xml
 /vcs.xml
 
+# JetBrains IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+

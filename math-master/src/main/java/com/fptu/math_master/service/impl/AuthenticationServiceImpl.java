@@ -4,20 +4,29 @@ import java.text.ParseException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
+import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AuthenticationRequest;
 import com.fptu.math_master.dto.request.IntrospectRequest;
 import com.fptu.math_master.dto.request.LogoutRequest;
 import com.fptu.math_master.dto.request.RefreshRequest;
+import com.fptu.math_master.dto.request.UserRegistrationRequest;
 import com.fptu.math_master.dto.response.AuthenticationResponse;
 import com.fptu.math_master.dto.response.IntrospectResponse;
+import com.fptu.math_master.dto.response.UserResponse;
 import com.fptu.math_master.entity.InvalidatedToken;
+import com.fptu.math_master.entity.Role;
 import com.fptu.math_master.entity.User;
+import com.fptu.math_master.enums.Status;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.InvalidatedTokenRepository;
+import com.fptu.math_master.repository.RoleRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AuthenticationService;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,6 +54,7 @@ import lombok.extern.slf4j.Slf4j;
 public class AuthenticationServiceImpl implements AuthenticationService {
     UserRepository userRepository;
     InvalidatedTokenRepository invalidatedTokenRepository;
+    RoleRepository roleRepository;
 
     @NonFinal
     @Value("${jwt.signerKey}")
@@ -136,6 +146,50 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    public UserResponse register(UserRegistrationRequest request) {
+        log.info("Registering new user with username: {}", request.getUserName());
+
+        // Check if username already exists
+        if (userRepository.existsByUserName(request.getUserName())) {
+            throw new AppException(ErrorCode.USER_EXISTED);
+        }
+
+        // Check if email already exists
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
+
+        // Build user entity
+        User user = User.builder()
+                .userName(request.getUserName())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .fullName(request.getFullName())
+                .email(request.getEmail())
+                .phoneNumber(request.getPhoneNumber())
+                .gender(request.getGender())
+                .dob(request.getDob())
+                .status(Status.ACTIVE)
+                .build();
+
+        // Assign default USER role
+        Role userRole = roleRepository.findByName(PredefinedRole.USER_ROLE)
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+
+        Set<Role> roles = new HashSet<>();
+        roles.add(userRole);
+        user.setRoles(roles);
+
+        // Save user
+        user = userRepository.save(user);
+
+        log.info("User registered successfully with id: {}", user.getId());
+        return mapToUserResponse(user);
+    }
+
     private String generateToken(User user) {
         JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
@@ -204,5 +258,34 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
         return stringJoiner.toString();
+    }
+
+    private UserResponse mapToUserResponse(User user) {
+        Set<String> roles = null;
+        if (user.getRoles() != null) {
+            roles = user.getRoles().stream()
+                    .map(Role::getName)
+                    .collect(Collectors.toSet());
+        }
+
+        return UserResponse.builder()
+                .id(user.getId())
+                .userName(user.getUserName())
+                .fullName(user.getFullName())
+                .email(user.getEmail())
+                .phoneNumber(user.getPhoneNumber())
+                .gender(user.getGender())
+                .avatar(user.getAvatar())
+                .dob(user.getDob())
+                .code(user.getCode())
+                .status(user.getStatus())
+                .banReason(user.getBanReason())
+                .banDate(user.getBanDate())
+                .roles(roles)
+                .createdDate(user.getCreatedDate())
+                .createdBy(user.getCreatedBy())
+                .updatedDate(user.getUpdatedDate())
+                .updatedBy(user.getUpdatedBy())
+                .build();
     }
 }
