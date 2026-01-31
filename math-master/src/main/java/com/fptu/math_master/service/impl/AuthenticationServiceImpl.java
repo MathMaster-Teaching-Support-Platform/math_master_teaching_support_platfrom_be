@@ -86,7 +86,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     public AuthenticationResponse login(AuthenticationRequest request) {
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
         var user = userRepository
-                .findByEmail(request.getEmail())
+                .findByEmailWithRolesAndPermissions(request.getEmail())
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         boolean authenticated = passwordEncoder.matches(request.getPassword(), user.getPassword());
@@ -135,7 +135,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         var userId = signedJWT.getJWTClaimsSet().getSubject();
 
-        var user = userRepository.findById(Integer.parseInt(userId)).orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
+        var user = userRepository.findByIdWithRolesAndPermissions(Integer.parseInt(userId)).orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
 
         var token = generateToken(user);
 
