@@ -6,9 +6,11 @@ import com.fptu.math_master.dto.request.AuthenticationRequest;
 import com.fptu.math_master.dto.request.IntrospectRequest;
 import com.fptu.math_master.dto.request.LogoutRequest;
 import com.fptu.math_master.dto.request.RefreshRequest;
+import com.fptu.math_master.dto.request.UserRegistrationRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.AuthenticationResponse;
 import com.fptu.math_master.dto.response.IntrospectResponse;
+import com.fptu.math_master.dto.response.UserResponse;
 import com.fptu.math_master.service.AuthenticationService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -28,6 +30,20 @@ import lombok.experimental.FieldDefaults;
 public class AuthenticationController {
 
     AuthenticationService authenticationService;
+
+    @PostMapping("/register")
+    @Operation(
+            summary = "User registration",
+            description = "Register a new user account with basic information. The user will be assigned the default USER role."
+    )
+    ApiResponse<UserResponse> register(
+            @Valid @RequestBody UserRegistrationRequest request) {
+
+        var result = authenticationService.register(request);
+        return ApiResponse.<UserResponse>builder()
+                .result(result)
+                .build();
+    }
 
     @PostMapping("/login")
     @Operation(
