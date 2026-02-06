@@ -175,8 +175,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .status(Status.ACTIVE)
                 .build();
 
-        // Assign default USER role
-        Role userRole = roleRepository.findByName(PredefinedRole.USER_ROLE)
+        // Assign default STUDENT role
+        Role userRole = roleRepository.findByName(PredefinedRole.STUDENT_ROLE)
                 .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
         Set<Role> roles = new HashSet<>();
