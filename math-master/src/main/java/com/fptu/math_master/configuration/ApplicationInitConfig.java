@@ -181,10 +181,10 @@ public class ApplicationInitConfig {
 
     private Role createUserRole(RoleRepository roleRepository,
                                 Set<Permission> permissions) {
-        return roleRepository.findByName(PredefinedRole.USER_ROLE)
+        return roleRepository.findByName(PredefinedRole.STUDENT_ROLE)
                 .orElseGet(() -> {
                     Role role = Role.builder()
-                            .name(PredefinedRole.USER_ROLE)
+                            .name(PredefinedRole.STUDENT_ROLE)
                             .permissions(permissions)
                             .build();
                     return roleRepository.save(role);
