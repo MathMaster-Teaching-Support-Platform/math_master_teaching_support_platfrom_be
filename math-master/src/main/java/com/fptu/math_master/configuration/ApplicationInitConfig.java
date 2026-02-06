@@ -65,10 +65,12 @@ public class ApplicationInitConfig {
     public void initializeData() {
         // Step 1: Create Permissions
         Set<Permission> adminPermissions = createPermissions(permissionRepository);
-        Set<Permission> userPermissions = createUserPermissions(permissionRepository);
+        Set<Permission> studentPermissions = createStudentPermissions(permissionRepository);
+        Set<Permission> teacherPermissions = createTeacherPermissions(permissionRepository);
 
         // Step 2: Create Roles with Permissions
-        Role userRole = createUserRole(roleRepository, userPermissions);
+        Role studentRole = createStudentRole(roleRepository, studentPermissions);
+        Role teacherRole = createTeacherRole(roleRepository, teacherPermissions);
         Role adminRole = createAdminRole(roleRepository, adminPermissions);
 
             // Step 3: Create Admin User
@@ -90,10 +92,10 @@ public class ApplicationInitConfig {
                         ADMIN_USER_NAME, ADMIN_PASSWORD);
             }
 
-            // Step 4: Create Regular User
+            // Step 4: Create Regular User (Student)
             if (userRepository.findByUserName(REGULAR_USER_NAME).isEmpty()) {
                 Set<Role> userRoles = new HashSet<>();
-                userRoles.add(userRole);
+                userRoles.add(studentRole);
 
                 User regularUser = User.builder()
                         .userName(REGULAR_USER_NAME)
@@ -158,12 +160,26 @@ public class ApplicationInitConfig {
         return permissions;
     }
 
-    private Set<Permission> createUserPermissions(PermissionRepository permissionRepository) {
+    private Set<Permission> createStudentPermissions(PermissionRepository permissionRepository) {
         Set<Permission> permissions = new HashSet<>();
 
-        // Regular users can only read their own info and submit quizzes
+        // Students can only read their own info and submit quizzes
         permissions.add(permissionRepository.findByCode(PredefinedPermission.USER_READ).orElseThrow());
         permissions.add(permissionRepository.findByCode(PredefinedPermission.QUIZ_READ).orElseThrow());
+        permissions.add(permissionRepository.findByCode(PredefinedPermission.QUIZ_SUBMIT).orElseThrow());
+
+        return permissions;
+    }
+
+    private Set<Permission> createTeacherPermissions(PermissionRepository permissionRepository) {
+        Set<Permission> permissions = new HashSet<>();
+
+        // Teachers have student permissions plus ability to create/update/delete quizzes
+        permissions.add(permissionRepository.findByCode(PredefinedPermission.USER_READ).orElseThrow());
+        permissions.add(permissionRepository.findByCode(PredefinedPermission.QUIZ_READ).orElseThrow());
+        permissions.add(permissionRepository.findByCode(PredefinedPermission.QUIZ_CREATE).orElseThrow());
+        permissions.add(permissionRepository.findByCode(PredefinedPermission.QUIZ_UPDATE).orElseThrow());
+        permissions.add(permissionRepository.findByCode(PredefinedPermission.QUIZ_DELETE).orElseThrow());
         permissions.add(permissionRepository.findByCode(PredefinedPermission.QUIZ_SUBMIT).orElseThrow());
 
         return permissions;
@@ -179,12 +195,24 @@ public class ApplicationInitConfig {
                         .build()));
     }
 
-    private Role createUserRole(RoleRepository roleRepository,
+    private Role createStudentRole(RoleRepository roleRepository,
                                 Set<Permission> permissions) {
-        return roleRepository.findByName(PredefinedRole.USER_ROLE)
+        return roleRepository.findByName(PredefinedRole.STUDENT_ROLE)
                 .orElseGet(() -> {
                     Role role = Role.builder()
-                            .name(PredefinedRole.USER_ROLE)
+                            .name(PredefinedRole.STUDENT_ROLE)
+                            .permissions(permissions)
+                            .build();
+                    return roleRepository.save(role);
+                });
+    }
+
+    private Role createTeacherRole(RoleRepository roleRepository,
+                                   Set<Permission> permissions) {
+        return roleRepository.findByName(PredefinedRole.TEACHER_ROLE)
+                .orElseGet(() -> {
+                    Role role = Role.builder()
+                            .name(PredefinedRole.TEACHER_ROLE)
                             .permissions(permissions)
                             .build();
                     return roleRepository.save(role);

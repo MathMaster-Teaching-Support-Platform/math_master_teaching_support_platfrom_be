@@ -27,6 +27,13 @@ public enum ErrorCode {
     USER_NOT_BANNED(1017, "User is not banned", HttpStatus.BAD_REQUEST),
     USER_ALREADY_DISABLED(1018, "User is already disabled", HttpStatus.BAD_REQUEST),
     USER_ALREADY_ENABLED(1019, "User is already enabled", HttpStatus.BAD_REQUEST),
+    PROFILE_ALREADY_EXISTS(1020, "Teacher profile already exists", HttpStatus.BAD_REQUEST),
+    PROFILE_NOT_FOUND(1021, "Teacher profile not found", HttpStatus.NOT_FOUND),
+    PROFILE_ALREADY_APPROVED(1022, "Profile is already approved", HttpStatus.BAD_REQUEST),
+    PROFILE_CANNOT_BE_MODIFIED(1023, "Approved profile cannot be modified", HttpStatus.BAD_REQUEST),
+    INVALID_PROFILE_STATUS(1024, "Invalid profile status for this operation", HttpStatus.BAD_REQUEST),
+    SCHOOL_NOT_FOUND(1025, "School not found", HttpStatus.NOT_FOUND),
+    SCHOOL_ALREADY_EXISTS(1026, "School already exists", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
