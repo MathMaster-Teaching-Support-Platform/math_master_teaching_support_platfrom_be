@@ -19,48 +19,48 @@ import java.time.LocalDateTime;
 @Table(name = "teacher_profiles")
 public class TeacherProfile {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  Long id;
 
-    @OneToOne
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
-    User user;
+  @OneToOne
+  @JoinColumn(name = "user_id", nullable = false, unique = true)
+  User user;
 
-    @ManyToOne
-    @JoinColumn(name = "school_id", nullable = false)
-    School school;
+  @ManyToOne
+  @JoinColumn(name = "school_id", nullable = false)
+  School school;
 
-    @Column(name = "position", nullable = false)
-    String position;
+  @Column(name = "position", nullable = false)
+  String position;
 
-    @Column(name = "certificate_url")
-    String certificateUrl; // URL của file minh chứng (upload lên cloud storage)
+  @Column(name = "certificate_url")
+  String certificateUrl; // URL của file minh chứng (upload lên cloud storage)
 
-    @Column(name = "identification_document_url")
-    String identificationDocumentUrl; // URL của CMND/CCCD
+  @Column(name = "identification_document_url")
+  String identificationDocumentUrl; // URL của CMND/CCCD
 
-    @Column(name = "description", columnDefinition = "TEXT")
-    String description;
+  @Column(name = "description", columnDefinition = "TEXT")
+  String description;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    ProfileStatus status;
+  @Enumerated(EnumType.STRING)
+  @Column(name = "status", nullable = false)
+  ProfileStatus status;
 
-    @Column(name = "admin_comment", columnDefinition = "TEXT")
-    String adminComment; // Lý do từ chối hoặc ghi chú của admin
+  @Column(name = "admin_comment", columnDefinition = "TEXT")
+  String adminComment; // Lý do từ chối hoặc ghi chú của admin
 
-    @Column(name = "reviewed_by")
-    Integer reviewedBy; // ID của admin đã duyệt
+  @Column(name = "reviewed_by")
+  Integer reviewedBy; // ID của admin đã duyệt
 
-    @Column(name = "reviewed_at")
-    LocalDateTime reviewedAt;
+  @Column(name = "reviewed_at")
+  LocalDateTime reviewedAt;
 
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
-    LocalDateTime createdAt;
+  @CreationTimestamp
+  @Column(name = "created_at", updatable = false)
+  LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    LocalDateTime updatedAt;
+  @UpdateTimestamp
+  @Column(name = "updated_at")
+  LocalDateTime updatedAt;
 }

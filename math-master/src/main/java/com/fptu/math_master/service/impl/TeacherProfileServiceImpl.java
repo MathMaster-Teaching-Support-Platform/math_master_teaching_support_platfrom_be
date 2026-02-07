@@ -35,198 +35,198 @@ import java.util.Set;
 @Slf4j
 public class TeacherProfileServiceImpl implements TeacherProfileService {
 
-    TeacherProfileRepository teacherProfileRepository;
-    UserRepository userRepository;
-    RoleRepository roleRepository;
-    SchoolRepository schoolRepository;
+  TeacherProfileRepository teacherProfileRepository;
+  UserRepository userRepository;
+  RoleRepository roleRepository;
+  SchoolRepository schoolRepository;
 
-    @Override
-    @Transactional
-    public TeacherProfileResponse submitProfile(TeacherProfileRequest request, Integer userId) {
-        log.info("User {} submitting teacher profile", userId);
+  @Override
+  @Transactional
+  public TeacherProfileResponse submitProfile(TeacherProfileRequest request, Integer userId) {
+    log.info("User {} submitting teacher profile", userId);
 
-        // Check if user exists
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    // Check if user exists
+    User user = userRepository.findById(userId)
+      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        // Check if profile already exists
-        if (teacherProfileRepository.existsByUserId(userId)) {
-            throw new AppException(ErrorCode.PROFILE_ALREADY_EXISTS);
-        }
-
-        // Check if school exists
-        School school = schoolRepository.findById(request.getSchoolId())
-                .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
-
-        // Create new profile
-        TeacherProfile profile = TeacherProfile.builder()
-                .user(user)
-                .school(school)
-                .position(request.getPosition())
-                .certificateUrl(request.getCertificateUrl())
-                .identificationDocumentUrl(request.getIdentificationDocumentUrl())
-                .description(request.getDescription())
-                .status(ProfileStatus.PENDING)
-                .build();
-
-        profile = teacherProfileRepository.save(profile);
-        log.info("Teacher profile submitted successfully for user {}", userId);
-
-        return mapToResponse(profile);
+    // Check if profile already exists
+    if (teacherProfileRepository.existsByUserId(userId)) {
+      throw new AppException(ErrorCode.PROFILE_ALREADY_EXISTS);
     }
 
-    @Override
-    @Transactional
-    public TeacherProfileResponse updateProfile(TeacherProfileRequest request, Integer userId) {
-        log.info("User {} updating teacher profile", userId);
+    // Check if school exists
+    School school = schoolRepository.findById(request.getSchoolId())
+      .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
 
-        TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    // Create new profile
+    TeacherProfile profile = TeacherProfile.builder()
+      .user(user)
+      .school(school)
+      .position(request.getPosition())
+      .certificateUrl(request.getCertificateUrl())
+      .identificationDocumentUrl(request.getIdentificationDocumentUrl())
+      .description(request.getDescription())
+      .status(ProfileStatus.PENDING)
+      .build();
 
-        // Only PENDING or REJECTED profiles can be updated
-        if (profile.getStatus() == ProfileStatus.APPROVED) {
-            throw new AppException(ErrorCode.PROFILE_CANNOT_BE_MODIFIED);
-        }
+    profile = teacherProfileRepository.save(profile);
+    log.info("Teacher profile submitted successfully for user {}", userId);
 
-        // Check if school exists
-        School school = schoolRepository.findById(request.getSchoolId())
-                .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
+    return mapToResponse(profile);
+  }
 
-        // Update profile fields
-        profile.setSchool(school);
-        profile.setPosition(request.getPosition());
-        profile.setCertificateUrl(request.getCertificateUrl());
-        profile.setIdentificationDocumentUrl(request.getIdentificationDocumentUrl());
-        profile.setDescription(request.getDescription());
+  @Override
+  @Transactional
+  public TeacherProfileResponse updateProfile(TeacherProfileRequest request, Integer userId) {
+    log.info("User {} updating teacher profile", userId);
 
-        // If updating a rejected profile, reset status to PENDING
-        if (profile.getStatus() == ProfileStatus.REJECTED) {
-            profile.setStatus(ProfileStatus.PENDING);
-            profile.setAdminComment(null);
-            profile.setReviewedBy(null);
-            profile.setReviewedAt(null);
-        }
+    TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
+      .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-        profile = teacherProfileRepository.save(profile);
-        log.info("Teacher profile updated successfully for user {}", userId);
-
-        return mapToResponse(profile);
+    // Only PENDING or REJECTED profiles can be updated
+    if (profile.getStatus() == ProfileStatus.APPROVED) {
+      throw new AppException(ErrorCode.PROFILE_CANNOT_BE_MODIFIED);
     }
 
-    @Override
-    public TeacherProfileResponse getMyProfile(Integer userId) {
-        TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    // Check if school exists
+    School school = schoolRepository.findById(request.getSchoolId())
+      .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
 
-        return mapToResponse(profile);
+    // Update profile fields
+    profile.setSchool(school);
+    profile.setPosition(request.getPosition());
+    profile.setCertificateUrl(request.getCertificateUrl());
+    profile.setIdentificationDocumentUrl(request.getIdentificationDocumentUrl());
+    profile.setDescription(request.getDescription());
+
+    // If updating a rejected profile, reset status to PENDING
+    if (profile.getStatus() == ProfileStatus.REJECTED) {
+      profile.setStatus(ProfileStatus.PENDING);
+      profile.setAdminComment(null);
+      profile.setReviewedBy(null);
+      profile.setReviewedAt(null);
     }
 
-    @Override
-    public TeacherProfileResponse getProfileById(Long profileId) {
-        TeacherProfile profile = teacherProfileRepository.findById(profileId)
-                .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    profile = teacherProfileRepository.save(profile);
+    log.info("Teacher profile updated successfully for user {}", userId);
 
-        return mapToResponse(profile);
+    return mapToResponse(profile);
+  }
+
+  @Override
+  public TeacherProfileResponse getMyProfile(Integer userId) {
+    TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
+      .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+
+    return mapToResponse(profile);
+  }
+
+  @Override
+  public TeacherProfileResponse getProfileById(Long profileId) {
+    TeacherProfile profile = teacherProfileRepository.findById(profileId)
+      .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+
+    return mapToResponse(profile);
+  }
+
+  @Override
+  public Page<TeacherProfileResponse> getProfilesByStatus(ProfileStatus status, Pageable pageable) {
+    Page<TeacherProfile> profiles = teacherProfileRepository
+      .findByStatusOrderByCreatedAtDesc(status, pageable);
+
+    return profiles.map(this::mapToResponse);
+  }
+
+  @Override
+  @Transactional
+  public TeacherProfileResponse reviewProfile(Long profileId, ProfileReviewRequest request, Integer adminId) {
+    log.info("Admin {} reviewing profile {}", adminId, profileId);
+
+    TeacherProfile profile = teacherProfileRepository.findById(profileId)
+      .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+
+    // Check if profile is in PENDING status
+    if (profile.getStatus() != ProfileStatus.PENDING) {
+      throw new AppException(ErrorCode.INVALID_PROFILE_STATUS);
     }
 
-    @Override
-    public Page<TeacherProfileResponse> getProfilesByStatus(ProfileStatus status, Pageable pageable) {
-        Page<TeacherProfile> profiles = teacherProfileRepository
-                .findByStatusOrderByCreatedAtDesc(status, pageable);
-
-        return profiles.map(this::mapToResponse);
+    // Validate review status
+    if (request.getStatus() != ProfileStatus.APPROVED && request.getStatus() != ProfileStatus.REJECTED) {
+      throw new AppException(ErrorCode.INVALID_PROFILE_STATUS);
     }
 
-    @Override
-    @Transactional
-    public TeacherProfileResponse reviewProfile(Long profileId, ProfileReviewRequest request, Integer adminId) {
-        log.info("Admin {} reviewing profile {}", adminId, profileId);
+    // Update profile status
+    profile.setStatus(request.getStatus());
+    profile.setAdminComment(request.getAdminComment());
+    profile.setReviewedBy(adminId);
+    profile.setReviewedAt(LocalDateTime.now());
 
-        TeacherProfile profile = teacherProfileRepository.findById(profileId)
-                .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    // If approved, upgrade user role to TEACHER
+    if (request.getStatus() == ProfileStatus.APPROVED) {
+      User user = profile.getUser();
+      Role teacherRole = roleRepository.findByName(PredefinedRole.TEACHER_ROLE)
+        .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
-        // Check if profile is in PENDING status
-        if (profile.getStatus() != ProfileStatus.PENDING) {
-            throw new AppException(ErrorCode.INVALID_PROFILE_STATUS);
-        }
+      Set<Role> roles = new HashSet<>(user.getRoles());
+      roles.add(teacherRole);
+      user.setRoles(roles);
+      userRepository.save(user);
 
-        // Validate review status
-        if (request.getStatus() != ProfileStatus.APPROVED && request.getStatus() != ProfileStatus.REJECTED) {
-            throw new AppException(ErrorCode.INVALID_PROFILE_STATUS);
-        }
-
-        // Update profile status
-        profile.setStatus(request.getStatus());
-        profile.setAdminComment(request.getAdminComment());
-        profile.setReviewedBy(adminId);
-        profile.setReviewedAt(LocalDateTime.now());
-
-        // If approved, upgrade user role to TEACHER
-        if (request.getStatus() == ProfileStatus.APPROVED) {
-            User user = profile.getUser();
-            Role teacherRole = roleRepository.findByName(PredefinedRole.TEACHER_ROLE)
-                    .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
-
-            Set<Role> roles = new HashSet<>(user.getRoles());
-            roles.add(teacherRole);
-            user.setRoles(roles);
-            userRepository.save(user);
-
-            log.info("User {} upgraded to TEACHER role", user.getId());
-        }
-
-        profile = teacherProfileRepository.save(profile);
-        log.info("Profile {} reviewed with status {}", profileId, request.getStatus());
-
-        return mapToResponse(profile);
+      log.info("User {} upgraded to TEACHER role", user.getId());
     }
 
-    @Override
-    public long countPendingProfiles() {
-        return teacherProfileRepository.countPendingProfiles();
+    profile = teacherProfileRepository.save(profile);
+    log.info("Profile {} reviewed with status {}", profileId, request.getStatus());
+
+    return mapToResponse(profile);
+  }
+
+  @Override
+  public long countPendingProfiles() {
+    return teacherProfileRepository.countPendingProfiles();
+  }
+
+  @Override
+  @Transactional
+  public void deleteMyProfile(Integer userId) {
+    TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
+      .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+
+    // Can only delete PENDING or REJECTED profiles
+    if (profile.getStatus() == ProfileStatus.APPROVED) {
+      throw new AppException(ErrorCode.PROFILE_CANNOT_BE_MODIFIED);
     }
 
-    @Override
-    @Transactional
-    public void deleteMyProfile(Integer userId) {
-        TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    teacherProfileRepository.delete(profile);
+    log.info("Profile deleted for user {}", userId);
+  }
 
-        // Can only delete PENDING or REJECTED profiles
-        if (profile.getStatus() == ProfileStatus.APPROVED) {
-            throw new AppException(ErrorCode.PROFILE_CANNOT_BE_MODIFIED);
-        }
+  private TeacherProfileResponse mapToResponse(TeacherProfile profile) {
+    TeacherProfileResponse response = TeacherProfileResponse.builder()
+      .id(profile.getId())
+      .userId(profile.getUser().getId())
+      .userName(profile.getUser().getUserName())
+      .fullName(profile.getUser().getFullName())
+      .schoolId(profile.getSchool().getId())
+      .schoolName(profile.getSchool().getName())
+      .position(profile.getPosition())
+      .certificateUrl(profile.getCertificateUrl())
+      .identificationDocumentUrl(profile.getIdentificationDocumentUrl())
+      .description(profile.getDescription())
+      .status(profile.getStatus())
+      .adminComment(profile.getAdminComment())
+      .reviewedBy(profile.getReviewedBy())
+      .reviewedAt(profile.getReviewedAt())
+      .createdAt(profile.getCreatedAt())
+      .updatedAt(profile.getUpdatedAt())
+      .build();
 
-        teacherProfileRepository.delete(profile);
-        log.info("Profile deleted for user {}", userId);
+    // Get reviewer name if available
+    if (profile.getReviewedBy() != null) {
+      userRepository.findById(profile.getReviewedBy())
+        .ifPresent(reviewer -> response.setReviewedByName(reviewer.getFullName()));
     }
 
-    private TeacherProfileResponse mapToResponse(TeacherProfile profile) {
-        TeacherProfileResponse response = TeacherProfileResponse.builder()
-                .id(profile.getId())
-                .userId(profile.getUser().getId())
-                .userName(profile.getUser().getUserName())
-                .fullName(profile.getUser().getFullName())
-                .schoolId(profile.getSchool().getId())
-                .schoolName(profile.getSchool().getName())
-                .position(profile.getPosition())
-                .certificateUrl(profile.getCertificateUrl())
-                .identificationDocumentUrl(profile.getIdentificationDocumentUrl())
-                .description(profile.getDescription())
-                .status(profile.getStatus())
-                .adminComment(profile.getAdminComment())
-                .reviewedBy(profile.getReviewedBy())
-                .reviewedAt(profile.getReviewedAt())
-                .createdAt(profile.getCreatedAt())
-                .updatedAt(profile.getUpdatedAt())
-                .build();
-
-        // Get reviewer name if available
-        if (profile.getReviewedBy() != null) {
-            userRepository.findById(profile.getReviewedBy())
-                    .ifPresent(reviewer -> response.setReviewedByName(reviewer.getFullName()));
-        }
-
-        return response;
-    }
+    return response;
+  }
 }

@@ -13,9 +13,9 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProfileReviewRequest {
 
-    @NotNull(message = "Status is required")
-    ProfileStatus status; // APPROVED or REJECTED
+  @NotNull(message = "Status is required")
+  ProfileStatus status; // APPROVED or REJECTED
 
-    @Size(max = 1000, message = "Comment must not exceed 1000 characters")
-    String adminComment;
+  @Size(max = 1000, message = "Comment must not exceed 1000 characters")
+  String adminComment;
 }

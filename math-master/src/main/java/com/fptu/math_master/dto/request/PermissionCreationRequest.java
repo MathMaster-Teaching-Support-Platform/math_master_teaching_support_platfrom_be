@@ -12,15 +12,15 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PermissionCreationRequest {
 
-    @NotBlank(message = "Permission code is required")
-    @Size(max = 100, message = "Permission code must not exceed 100 characters")
-    String code;
+  @NotBlank(message = "Permission code is required")
+  @Size(max = 100, message = "Permission code must not exceed 100 characters")
+  String code;
 
-    @NotBlank(message = "Permission name is required")
-    @Size(max = 255, message = "Permission name must not exceed 255 characters")
-    String name;
+  @NotBlank(message = "Permission name is required")
+  @Size(max = 255, message = "Permission name must not exceed 255 characters")
+  String name;
 
-    @Size(max = 500, message = "Description must not exceed 500 characters")
-    String description;
+  @Size(max = 500, message = "Description must not exceed 500 characters")
+  String description;
 }
 

@@ -16,38 +16,38 @@ import java.util.Set;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserResponse {
 
-    Integer id;
+  Integer id;
 
-    String userName;
+  String userName;
 
-    String fullName;
+  String fullName;
 
-    String email;
+  String email;
 
-    String phoneNumber;
+  String phoneNumber;
 
-    Gender gender;
+  Gender gender;
 
-    String avatar;
+  String avatar;
 
-    LocalDate dob;
+  LocalDate dob;
 
-    String code;
+  String code;
 
-    Status status;
+  Status status;
 
-    String banReason;
+  String banReason;
 
-    Instant banDate;
+  Instant banDate;
 
-    Set<String> roles;
+  Set<String> roles;
 
-    Instant createdDate;
+  Instant createdDate;
 
-    String createdBy;
+  String createdBy;
 
-    Instant updatedDate;
+  Instant updatedDate;
 
-    String updatedBy;
+  String updatedBy;
 }
 

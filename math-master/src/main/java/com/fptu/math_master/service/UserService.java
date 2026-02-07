@@ -11,36 +11,36 @@ import org.springframework.data.domain.Pageable;
 import java.util.List;
 
 public interface UserService {
-    UserResponse createUser(UserCreationRequest request);
+  UserResponse createUser(UserCreationRequest request);
 
-    UserResponse updateUser(Integer userId, UserUpdateRequest request);
+  UserResponse updateUser(Integer userId, UserUpdateRequest request);
 
-    void deleteUser(Integer userId);
+  void deleteUser(Integer userId);
 
-    UserResponse getUserById(Integer userId);
+  UserResponse getUserById(Integer userId);
 
-    List<UserResponse> getAllUsers();
+  List<UserResponse> getAllUsers();
 
-    Page<UserResponse> getAllUsers(Pageable pageable);
+  Page<UserResponse> getAllUsers(Pageable pageable);
 
-    UserResponse getMyInfo();
+  UserResponse getMyInfo();
 
-    UserResponse updateMyInfo(UserUpdateRequest request);
+  UserResponse updateMyInfo(UserUpdateRequest request);
 
-    // Search and filtering
-    Page<UserResponse> searchUsers(UserSearchRequest request, Pageable pageable);
+  // Search and filtering
+  Page<UserResponse> searchUsers(UserSearchRequest request, Pageable pageable);
 
-    // Ban/Unban operations
-    UserResponse banUser(Integer userId, String reason);
+  // Ban/Unban operations
+  UserResponse banUser(Integer userId, String reason);
 
-    UserResponse unbanUser(Integer userId);
+  UserResponse unbanUser(Integer userId);
 
-    // Soft delete operations
-    UserResponse disableUser(Integer userId);
+  // Soft delete operations
+  UserResponse disableUser(Integer userId);
 
-    UserResponse enableUser(Integer userId);
+  UserResponse enableUser(Integer userId);
 
-    // Password management
-    void changePassword(ChangePasswordRequest request);
+  // Password management
+  void changePassword(ChangePasswordRequest request);
 }
 

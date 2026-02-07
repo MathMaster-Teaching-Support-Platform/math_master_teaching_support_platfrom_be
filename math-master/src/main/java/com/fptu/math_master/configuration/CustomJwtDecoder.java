@@ -11,20 +11,20 @@ import com.nimbusds.jwt.SignedJWT;
 
 @Component
 public class CustomJwtDecoder implements JwtDecoder {
-    @Override
-    public Jwt decode(String token) throws JwtException {
-        try {
-            SignedJWT signedJWT = SignedJWT.parse(token);
+  @Override
+  public Jwt decode(String token) throws JwtException {
+    try {
+      SignedJWT signedJWT = SignedJWT.parse(token);
 
-            return new Jwt(
-                    token,
-                    signedJWT.getJWTClaimsSet().getIssueTime().toInstant(),
-                    signedJWT.getJWTClaimsSet().getExpirationTime().toInstant(),
-                    signedJWT.getHeader().toJSONObject(),
-                    signedJWT.getJWTClaimsSet().getClaims());
+      return new Jwt(
+        token,
+        signedJWT.getJWTClaimsSet().getIssueTime().toInstant(),
+        signedJWT.getJWTClaimsSet().getExpirationTime().toInstant(),
+        signedJWT.getHeader().toJSONObject(),
+        signedJWT.getJWTClaimsSet().getClaims());
 
-        } catch (ParseException e) {
-            throw new JwtException("Invalid token");
-        }
+    } catch (ParseException e) {
+      throw new JwtException("Invalid token");
     }
+  }
 }

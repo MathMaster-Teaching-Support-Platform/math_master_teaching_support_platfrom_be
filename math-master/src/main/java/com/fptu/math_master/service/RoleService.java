@@ -10,22 +10,22 @@ import java.util.List;
 
 public interface RoleService {
 
-    RoleResponse createRole(RoleCreationRequest request);
+  RoleResponse createRole(RoleCreationRequest request);
 
-    RoleResponse updateRole(Integer roleId, RoleUpdateRequest request);
+  RoleResponse updateRole(Integer roleId, RoleUpdateRequest request);
 
-    void deleteRole(Integer roleId);
+  void deleteRole(Integer roleId);
 
-    RoleResponse getRoleById(Integer roleId);
+  RoleResponse getRoleById(Integer roleId);
 
-    RoleResponse getRoleByName(String name);
+  RoleResponse getRoleByName(String name);
 
-    List<RoleResponse> getAllRoles();
+  List<RoleResponse> getAllRoles();
 
-    Page<RoleResponse> getAllRoles(Pageable pageable);
+  Page<RoleResponse> getAllRoles(Pageable pageable);
 
-    RoleResponse addPermissionsToRole(Integer roleId, List<String> permissionCodes);
+  RoleResponse addPermissionsToRole(Integer roleId, List<String> permissionCodes);
 
-    RoleResponse removePermissionsFromRole(Integer roleId, List<String> permissionCodes);
+  RoleResponse removePermissionsFromRole(Integer roleId, List<String> permissionCodes);
 }
 

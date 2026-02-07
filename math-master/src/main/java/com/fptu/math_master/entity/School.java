@@ -18,36 +18,36 @@ import java.time.LocalDateTime;
 @Table(name = "schools")
 public class School {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  Long id;
 
-    @Column(name = "name", nullable = false, unique = true)
-    String name;
+  @Column(name = "name", nullable = false, unique = true)
+  String name;
 
-    @Column(name = "address")
-    String address;
+  @Column(name = "address")
+  String address;
 
-    @Column(name = "city")
-    String city;
+  @Column(name = "city")
+  String city;
 
-    @Column(name = "district")
-    String district;
+  @Column(name = "district")
+  String district;
 
-    @Column(name = "phone_number")
-    String phoneNumber;
+  @Column(name = "phone_number")
+  String phoneNumber;
 
-    @Column(name = "email")
-    String email;
+  @Column(name = "email")
+  String email;
 
-    @Column(name = "website")
-    String website;
+  @Column(name = "website")
+  String website;
 
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
-    LocalDateTime createdAt;
+  @CreationTimestamp
+  @Column(name = "created_at", updatable = false)
+  LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    LocalDateTime updatedAt;
+  @UpdateTimestamp
+  @Column(name = "updated_at")
+  LocalDateTime updatedAt;
 }

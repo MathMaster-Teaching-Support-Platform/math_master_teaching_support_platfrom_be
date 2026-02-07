@@ -31,192 +31,192 @@ import java.util.stream.Collectors;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class RoleServiceImpl implements RoleService {
 
-    RoleRepository roleRepository;
-    PermissionRepository permissionRepository;
+  RoleRepository roleRepository;
+  PermissionRepository permissionRepository;
 
-    @Override
-    @Transactional
-    public RoleResponse createRole(RoleCreationRequest request) {
-        log.info("Creating role with name: {}", request.getName());
+  @Override
+  @Transactional
+  public RoleResponse createRole(RoleCreationRequest request) {
+    log.info("Creating role with name: {}", request.getName());
 
-        if (roleRepository.existsByName(request.getName())) {
-            throw new AppException(ErrorCode.ROLE_ALREADY_EXISTS);
-        }
-
-        Role role = Role.builder()
-                .name(request.getName())
-                .build();
-
-        // Set permissions if provided
-        if (request.getPermissionCodes() != null && !request.getPermissionCodes().isEmpty()) {
-            Set<Permission> permissions = new HashSet<>();
-            for (String code : request.getPermissionCodes()) {
-                Permission permission = permissionRepository.findByCode(code)
-                        .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
-                permissions.add(permission);
-            }
-            role.setPermissions(permissions);
-        }
-
-        role = roleRepository.save(role);
-
-        log.info("Role created successfully with id: {}", role.getId());
-        return mapToRoleResponse(role);
+    if (roleRepository.existsByName(request.getName())) {
+      throw new AppException(ErrorCode.ROLE_ALREADY_EXISTS);
     }
 
-    @Override
-    @Transactional
-    public RoleResponse updateRole(Integer roleId, RoleUpdateRequest request) {
-        log.info("Updating role with id: {}", roleId);
+    Role role = Role.builder()
+      .name(request.getName())
+      .build();
 
-        Role role = roleRepository.findById(roleId)
-                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
-
-        // Update name if provided
-        if (request.getName() != null) {
-            // Check if new name already exists
-            if (!role.getName().equals(request.getName()) && roleRepository.existsByName(request.getName())) {
-                throw new AppException(ErrorCode.ROLE_ALREADY_EXISTS);
-            }
-            role.setName(request.getName());
-        }
-
-        // Update permissions if provided
-        if (request.getPermissionCodes() != null) {
-            Set<Permission> permissions = new HashSet<>();
-            for (String code : request.getPermissionCodes()) {
-                Permission permission = permissionRepository.findByCode(code)
-                        .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
-                permissions.add(permission);
-            }
-            role.setPermissions(permissions);
-        }
-
-        role = roleRepository.save(role);
-
-        log.info("Role updated successfully with id: {}", roleId);
-        return mapToRoleResponse(role);
+    // Set permissions if provided
+    if (request.getPermissionCodes() != null && !request.getPermissionCodes().isEmpty()) {
+      Set<Permission> permissions = new HashSet<>();
+      for (String code : request.getPermissionCodes()) {
+        Permission permission = permissionRepository.findByCode(code)
+          .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
+        permissions.add(permission);
+      }
+      role.setPermissions(permissions);
     }
 
-    @Override
-    @Transactional
-    public void deleteRole(Integer roleId) {
-        log.info("Deleting role with id: {}", roleId);
+    role = roleRepository.save(role);
 
-        Role role = roleRepository.findById(roleId)
-                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+    log.info("Role created successfully with id: {}", role.getId());
+    return mapToRoleResponse(role);
+  }
 
-        roleRepository.delete(role);
+  @Override
+  @Transactional
+  public RoleResponse updateRole(Integer roleId, RoleUpdateRequest request) {
+    log.info("Updating role with id: {}", roleId);
 
-        log.info("Role deleted successfully with id: {}", roleId);
+    Role role = roleRepository.findById(roleId)
+      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+
+    // Update name if provided
+    if (request.getName() != null) {
+      // Check if new name already exists
+      if (!role.getName().equals(request.getName()) && roleRepository.existsByName(request.getName())) {
+        throw new AppException(ErrorCode.ROLE_ALREADY_EXISTS);
+      }
+      role.setName(request.getName());
     }
 
-    @Override
-    public RoleResponse getRoleById(Integer roleId) {
-        log.info("Getting role with id: {}", roleId);
-
-        Role role = roleRepository.findByIdWithPermissions(roleId)
-                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
-
-        return mapToRoleResponse(role);
+    // Update permissions if provided
+    if (request.getPermissionCodes() != null) {
+      Set<Permission> permissions = new HashSet<>();
+      for (String code : request.getPermissionCodes()) {
+        Permission permission = permissionRepository.findByCode(code)
+          .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
+        permissions.add(permission);
+      }
+      role.setPermissions(permissions);
     }
 
-    @Override
-    public RoleResponse getRoleByName(String name) {
-        log.info("Getting role with name: {}", name);
+    role = roleRepository.save(role);
 
-        Role role = roleRepository.findByName(name)
-                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+    log.info("Role updated successfully with id: {}", roleId);
+    return mapToRoleResponse(role);
+  }
 
-        return mapToRoleResponse(role);
+  @Override
+  @Transactional
+  public void deleteRole(Integer roleId) {
+    log.info("Deleting role with id: {}", roleId);
+
+    Role role = roleRepository.findById(roleId)
+      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+
+    roleRepository.delete(role);
+
+    log.info("Role deleted successfully with id: {}", roleId);
+  }
+
+  @Override
+  public RoleResponse getRoleById(Integer roleId) {
+    log.info("Getting role with id: {}", roleId);
+
+    Role role = roleRepository.findByIdWithPermissions(roleId)
+      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+
+    return mapToRoleResponse(role);
+  }
+
+  @Override
+  public RoleResponse getRoleByName(String name) {
+    log.info("Getting role with name: {}", name);
+
+    Role role = roleRepository.findByName(name)
+      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+
+    return mapToRoleResponse(role);
+  }
+
+  @Override
+  public List<RoleResponse> getAllRoles() {
+    log.info("Getting all roles");
+
+    List<Role> roles = roleRepository.findAll();
+
+    return roles.stream()
+      .map(this::mapToRoleResponse)
+      .collect(Collectors.toList());
+  }
+
+  @Override
+  public Page<RoleResponse> getAllRoles(Pageable pageable) {
+    log.info("Getting all roles with pagination");
+
+    Page<Role> roles = roleRepository.findAll(pageable);
+
+    return roles.map(this::mapToRoleResponse);
+  }
+
+  @Override
+  @Transactional
+  public RoleResponse addPermissionsToRole(Integer roleId, List<String> permissionCodes) {
+    log.info("Adding permissions to role with id: {}", roleId);
+
+    Role role = roleRepository.findByIdWithPermissions(roleId)
+      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+
+    if (role.getPermissions() == null) {
+      role.setPermissions(new HashSet<>());
     }
 
-    @Override
-    public List<RoleResponse> getAllRoles() {
-        log.info("Getting all roles");
-
-        List<Role> roles = roleRepository.findAll();
-
-        return roles.stream()
-                .map(this::mapToRoleResponse)
-                .collect(Collectors.toList());
+    for (String code : permissionCodes) {
+      Permission permission = permissionRepository.findByCode(code)
+        .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
+      role.getPermissions().add(permission);
     }
 
-    @Override
-    public Page<RoleResponse> getAllRoles(Pageable pageable) {
-        log.info("Getting all roles with pagination");
+    role = roleRepository.save(role);
 
-        Page<Role> roles = roleRepository.findAll(pageable);
+    log.info("Permissions added successfully to role with id: {}", roleId);
+    return mapToRoleResponse(role);
+  }
 
-        return roles.map(this::mapToRoleResponse);
+  @Override
+  @Transactional
+  public RoleResponse removePermissionsFromRole(Integer roleId, List<String> permissionCodes) {
+    log.info("Removing permissions from role with id: {}", roleId);
+
+    Role role = roleRepository.findByIdWithPermissions(roleId)
+      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+
+    if (role.getPermissions() != null) {
+      for (String code : permissionCodes) {
+        role.getPermissions().removeIf(permission -> permission.getCode().equals(code));
+      }
     }
 
-    @Override
-    @Transactional
-    public RoleResponse addPermissionsToRole(Integer roleId, List<String> permissionCodes) {
-        log.info("Adding permissions to role with id: {}", roleId);
+    role = roleRepository.save(role);
 
-        Role role = roleRepository.findByIdWithPermissions(roleId)
-                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+    log.info("Permissions removed successfully from role with id: {}", roleId);
+    return mapToRoleResponse(role);
+  }
 
-        if (role.getPermissions() == null) {
-            role.setPermissions(new HashSet<>());
-        }
-
-        for (String code : permissionCodes) {
-            Permission permission = permissionRepository.findByCode(code)
-                    .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
-            role.getPermissions().add(permission);
-        }
-
-        role = roleRepository.save(role);
-
-        log.info("Permissions added successfully to role with id: {}", roleId);
-        return mapToRoleResponse(role);
+  private RoleResponse mapToRoleResponse(Role role) {
+    Set<PermissionResponse> permissions = null;
+    if (role.getPermissions() != null) {
+      permissions = role.getPermissions().stream()
+        .map(this::mapToPermissionResponse)
+        .collect(Collectors.toSet());
     }
 
-    @Override
-    @Transactional
-    public RoleResponse removePermissionsFromRole(Integer roleId, List<String> permissionCodes) {
-        log.info("Removing permissions from role with id: {}", roleId);
+    return RoleResponse.builder()
+      .id(role.getId())
+      .name(role.getName())
+      .permissions(permissions)
+      .build();
+  }
 
-        Role role = roleRepository.findByIdWithPermissions(roleId)
-                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
-
-        if (role.getPermissions() != null) {
-            for (String code : permissionCodes) {
-                role.getPermissions().removeIf(permission -> permission.getCode().equals(code));
-            }
-        }
-
-        role = roleRepository.save(role);
-
-        log.info("Permissions removed successfully from role with id: {}", roleId);
-        return mapToRoleResponse(role);
-    }
-
-    private RoleResponse mapToRoleResponse(Role role) {
-        Set<PermissionResponse> permissions = null;
-        if (role.getPermissions() != null) {
-            permissions = role.getPermissions().stream()
-                    .map(this::mapToPermissionResponse)
-                    .collect(Collectors.toSet());
-        }
-
-        return RoleResponse.builder()
-                .id(role.getId())
-                .name(role.getName())
-                .permissions(permissions)
-                .build();
-    }
-
-    private PermissionResponse mapToPermissionResponse(Permission permission) {
-        return PermissionResponse.builder()
-                .id(permission.getId())
-                .code(permission.getCode())
-                .name(permission.getName())
-                .description(permission.getDescription())
-                .build();
-    }
+  private PermissionResponse mapToPermissionResponse(Permission permission) {
+    return PermissionResponse.builder()
+      .id(permission.getId())
+      .code(permission.getCode())
+      .name(permission.getName())
+      .description(permission.getDescription())
+      .build();
+  }
 }
 

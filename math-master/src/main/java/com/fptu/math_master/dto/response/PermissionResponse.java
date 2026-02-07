@@ -10,11 +10,11 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PermissionResponse {
 
-    Integer id;
+  Integer id;
 
-    String code;
+  String code;
 
-    String name;
+  String name;
 
-    String description;
+  String description;
 }

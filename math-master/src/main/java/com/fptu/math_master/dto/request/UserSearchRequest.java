@@ -14,24 +14,24 @@ import java.time.LocalDate;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserSearchRequest {
 
-    String keyword; // Search in username, fullName, email
+  String keyword; // Search in username, fullName, email
 
-    String userName;
+  String userName;
 
-    String email;
+  String email;
 
-    String fullName;
+  String fullName;
 
-    Gender gender;
+  Gender gender;
 
-    Status status;
+  Status status;
 
-    String code;
+  String code;
 
-    LocalDate dobFrom;
+  LocalDate dobFrom;
 
-    LocalDate dobTo;
+  LocalDate dobTo;
 
-    String roleName;
+  String roleName;
 }
 

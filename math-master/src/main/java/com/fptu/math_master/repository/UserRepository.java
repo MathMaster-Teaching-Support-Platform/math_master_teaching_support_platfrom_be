@@ -1,5 +1,7 @@
 package com.fptu.math_master.repository;
+
 import java.util.Optional;
+
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.Status;
 import org.springframework.data.domain.Page;
@@ -12,27 +14,27 @@ import java.util.List;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Integer>, UserRepositoryCustom {
-    boolean existsByUserName(String userName);
+  boolean existsByUserName(String userName);
 
-    Optional<User> findByUserName(String userName);
+  Optional<User> findByUserName(String userName);
 
-    Optional<User> findByEmail(String email);
+  Optional<User> findByEmail(String email);
 
-    boolean existsByEmail(String email);
+  boolean existsByEmail(String email);
 
-    @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles WHERE u.id = :id")
-    Optional<User> findByIdWithRoles(Integer id);
+  @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles WHERE u.id = :id")
+  Optional<User> findByIdWithRoles(Integer id);
 
-    @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles WHERE u.userName = :userName")
-    Optional<User> findByUserNameWithRoles(String userName);
+  @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles WHERE u.userName = :userName")
+  Optional<User> findByUserNameWithRoles(String userName);
 
-    @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles r LEFT JOIN FETCH r.permissions WHERE u.email = :email")
-    Optional<User> findByEmailWithRolesAndPermissions(String email);
+  @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles r LEFT JOIN FETCH r.permissions WHERE u.email = :email")
+  Optional<User> findByEmailWithRolesAndPermissions(String email);
 
-    @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles r LEFT JOIN FETCH r.permissions WHERE u.id = :id")
-    Optional<User> findByIdWithRolesAndPermissions(Integer id);
+  @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles r LEFT JOIN FETCH r.permissions WHERE u.id = :id")
+  Optional<User> findByIdWithRolesAndPermissions(Integer id);
 
-    List<User> findByStatus(Status status);
+  List<User> findByStatus(Status status);
 
-    Page<User> findByStatus(Status status, Pageable pageable);
+  Page<User> findByStatus(Status status, Pageable pageable);
 }
