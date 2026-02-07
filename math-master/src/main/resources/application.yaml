@@ -64,3 +64,28 @@ springdoc:
     path: /swagger-ui
     operationsSorter: method
     tagsSorter: alpha
+
+# ================================
+# Username and Password
+# ================================
+app:
+  init:
+    enabled: true
+
+    admin:
+      username: ${ADMIN_USERNAME}
+      password: ${ADMIN_PASSWORD}
+      email:    ${ADMIN_GMAIL}
+      fullname: ${ADMIN_FULLNAME}
+
+    student:
+      username: ${STUDENT_USERNAME}
+      password: ${STUDENT_PASSWORD}
+      email:    ${STUDENT_GMAIL}
+      fullname: ${STUDENT_FULLNAME}
+
+    teacher:
+      username: ${TEACHER_USERNAME}
+      password: ${TEACHER_PASSWORD}
+      email:    ${TEACHER_GMAIL}
+      fullname: ${TEACHER_FULLNAME}
