@@ -17,30 +17,30 @@ import java.util.Set;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserUpdateRequest {
 
-    @Size(min = 8, message = "Password must be at least 8 characters")
-    String password;
+  @Size(min = 8, message = "Password must be at least 8 characters")
+  String password;
 
-    @Size(max = 255, message = "Full name must not exceed 255 characters")
-    String fullName;
+  @Size(max = 255, message = "Full name must not exceed 255 characters")
+  String fullName;
 
-    @Email(message = "Email must be valid")
-    @Size(max = 255, message = "Email must not exceed 255 characters")
-    String email;
+  @Email(message = "Email must be valid")
+  @Size(max = 255, message = "Email must not exceed 255 characters")
+  String email;
 
-    @Size(max = 20, message = "Phone number must not exceed 20 characters")
-    String phoneNumber;
+  @Size(max = 20, message = "Phone number must not exceed 20 characters")
+  String phoneNumber;
 
-    Gender gender;
+  Gender gender;
 
-    String avatar;
+  String avatar;
 
-    LocalDate dob;
+  LocalDate dob;
 
-    @Size(max = 100, message = "Code must not exceed 100 characters")
-    String code;
+  @Size(max = 100, message = "Code must not exceed 100 characters")
+  String code;
 
-    Status status;
+  Status status;
 
-    Set<String> roles;
+  Set<String> roles;
 }
 

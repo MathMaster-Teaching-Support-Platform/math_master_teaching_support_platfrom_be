@@ -14,10 +14,10 @@ import java.util.Set;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class RoleCreationRequest {
 
-    @NotBlank(message = "Role name is required")
-    @Size(max = 255, message = "Role name must not exceed 255 characters")
-    String name;
+  @NotBlank(message = "Role name is required")
+  @Size(max = 255, message = "Role name must not exceed 255 characters")
+  String name;
 
-    Set<String> permissionCodes;
+  Set<String> permissionCodes;
 }
 

@@ -12,9 +12,9 @@ import java.util.Set;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class RoleResponse {
 
-    Integer id;
+  Integer id;
 
-    String name;
+  String name;
 
-    Set<PermissionResponse> permissions;
+  Set<PermissionResponse> permissions;
 }

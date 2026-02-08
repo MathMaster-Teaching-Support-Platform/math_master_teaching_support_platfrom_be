@@ -10,18 +10,18 @@ import java.util.List;
 
 public interface PermissionService {
 
-    PermissionResponse createPermission(PermissionCreationRequest request);
+  PermissionResponse createPermission(PermissionCreationRequest request);
 
-    PermissionResponse updatePermission(Integer permissionId, PermissionUpdateRequest request);
+  PermissionResponse updatePermission(Integer permissionId, PermissionUpdateRequest request);
 
-    void deletePermission(Integer permissionId);
+  void deletePermission(Integer permissionId);
 
-    PermissionResponse getPermissionById(Integer permissionId);
+  PermissionResponse getPermissionById(Integer permissionId);
 
-    PermissionResponse getPermissionByCode(String code);
+  PermissionResponse getPermissionByCode(String code);
 
-    List<PermissionResponse> getAllPermissions();
+  List<PermissionResponse> getAllPermissions();
 
-    Page<PermissionResponse> getAllPermissions(Pageable pageable);
+  Page<PermissionResponse> getAllPermissions(Pageable pageable);
 }
 

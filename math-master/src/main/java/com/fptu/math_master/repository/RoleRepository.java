@@ -9,10 +9,10 @@ import java.util.Optional;
 
 @Repository
 public interface RoleRepository extends JpaRepository<Role, Integer> {
-    Optional<Role> findByName(String name);
+  Optional<Role> findByName(String name);
 
-    boolean existsByName(String name);
+  boolean existsByName(String name);
 
-    @Query("SELECT r FROM Role r LEFT JOIN FETCH r.permissions WHERE r.id = :id")
-    Optional<Role> findByIdWithPermissions(Integer id);
+  @Query("SELECT r FROM Role r LEFT JOIN FETCH r.permissions WHERE r.id = :id")
+  Optional<Role> findByIdWithPermissions(Integer id);
 }

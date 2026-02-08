@@ -16,27 +16,27 @@ import java.util.Set;
 @Data
 @Entity
 @Table(
-        name = "roles",
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uk_role_name", columnNames = "name")
-        }
+  name = "roles",
+  uniqueConstraints = {
+    @UniqueConstraint(name = "uk_role_name", columnNames = "name")
+  }
 )
 public class Role {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id")
-    private Integer id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  @Column(name = "id")
+  private Integer id;
 
-    /**
-     * Example: "ADMIN", "STUDENT"
-     */
-    @NotBlank
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "name", length = 255, nullable = false)
-    private String name;
+  /**
+   * Example: "ADMIN", "STUDENT"
+   */
+  @NotBlank
+  @Size(max = 255)
+  @Nationalized
+  @Column(name = "name", length = 255, nullable = false)
+  private String name;
 
-    @ManyToMany
-    Set<Permission> permissions;
+  @ManyToMany
+  Set<Permission> permissions;
 }

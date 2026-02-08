@@ -6,8 +6,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class MathMasterApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(MathMasterApplication.class, args);
-	}
+  public static void main(String[] args) {
+    SpringApplication.run(MathMasterApplication.class, args);
+  }
 
 }

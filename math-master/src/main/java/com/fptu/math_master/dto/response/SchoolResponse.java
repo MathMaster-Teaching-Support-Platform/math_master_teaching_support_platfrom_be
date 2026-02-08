@@ -12,14 +12,14 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SchoolResponse {
 
-    Long id;
-    String name;
-    String address;
-    String city;
-    String district;
-    String phoneNumber;
-    String email;
-    String website;
-    LocalDateTime createdAt;
-    LocalDateTime updatedAt;
+  Long id;
+  String name;
+  String address;
+  String city;
+  String district;
+  String phoneNumber;
+  String email;
+  String website;
+  LocalDateTime createdAt;
+  LocalDateTime updatedAt;
 }

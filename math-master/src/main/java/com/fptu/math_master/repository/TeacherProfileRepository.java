@@ -14,17 +14,17 @@ import java.util.Optional;
 @Repository
 public interface TeacherProfileRepository extends JpaRepository<TeacherProfile, Long> {
 
-    Optional<TeacherProfile> findByUser(User user);
+  Optional<TeacherProfile> findByUser(User user);
 
-    Optional<TeacherProfile> findByUserId(Integer userId);
+  Optional<TeacherProfile> findByUserId(Integer userId);
 
-    boolean existsByUserId(Integer userId);
+  boolean existsByUserId(Integer userId);
 
-    Page<TeacherProfile> findByStatus(ProfileStatus status, Pageable pageable);
+  Page<TeacherProfile> findByStatus(ProfileStatus status, Pageable pageable);
 
-    @Query("SELECT tp FROM TeacherProfile tp WHERE tp.status = :status ORDER BY tp.createdAt DESC")
-    Page<TeacherProfile> findByStatusOrderByCreatedAtDesc(ProfileStatus status, Pageable pageable);
+  @Query("SELECT tp FROM TeacherProfile tp WHERE tp.status = :status ORDER BY tp.createdAt DESC")
+  Page<TeacherProfile> findByStatusOrderByCreatedAtDesc(ProfileStatus status, Pageable pageable);
 
-    @Query("SELECT COUNT(tp) FROM TeacherProfile tp WHERE tp.status = 'PENDING'")
-    long countPendingProfiles();
+  @Query("SELECT COUNT(tp) FROM TeacherProfile tp WHERE tp.status = 'PENDING'")
+  long countPendingProfiles();
 }
