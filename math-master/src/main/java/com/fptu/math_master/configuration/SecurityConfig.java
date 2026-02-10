@@ -36,7 +36,8 @@ public class SecurityConfig {
     "/auth/login",
     "/auth/introspect",
     "/auth/logout",
-    "/auth/refresh"
+    "/auth/refresh",
+    "/api/payment/webhook"
   };
 
   private static final String[] PUBLIC_GET_ENDPOINTS = {

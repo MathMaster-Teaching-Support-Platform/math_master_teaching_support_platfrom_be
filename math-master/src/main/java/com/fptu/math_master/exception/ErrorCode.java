@@ -34,6 +34,14 @@ public enum ErrorCode {
   INVALID_PROFILE_STATUS(1024, "Invalid profile status for this operation", HttpStatus.BAD_REQUEST),
   SCHOOL_NOT_FOUND(1025, "School not found", HttpStatus.NOT_FOUND),
   SCHOOL_ALREADY_EXISTS(1026, "School already exists", HttpStatus.BAD_REQUEST),
+  WALLET_NOT_FOUND(1027, "Wallet not found", HttpStatus.NOT_FOUND),
+  WALLET_ALREADY_EXISTS(1028, "Wallet already exists", HttpStatus.BAD_REQUEST),
+  INSUFFICIENT_BALANCE(1029, "Insufficient balance", HttpStatus.BAD_REQUEST),
+  TRANSACTION_NOT_FOUND(1030, "Transaction not found", HttpStatus.NOT_FOUND),
+  PAYMENT_CREATION_FAILED(1031, "Payment creation failed", HttpStatus.INTERNAL_SERVER_ERROR),
+  INVALID_WEBHOOK_SIGNATURE(1032, "Invalid webhook signature", HttpStatus.BAD_REQUEST),
+  PAYMENT_ALREADY_PROCESSED(1033, "Payment already processed", HttpStatus.BAD_REQUEST),
+  INVALID_AMOUNT(1034, "Invalid amount", HttpStatus.BAD_REQUEST),
   ;
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
