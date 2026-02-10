@@ -75,17 +75,27 @@ app:
     admin:
       username: ${ADMIN_USERNAME}
       password: ${ADMIN_PASSWORD}
-      email:    ${ADMIN_GMAIL}
+      email: ${ADMIN_GMAIL}
       fullname: ${ADMIN_FULLNAME}
 
     student:
       username: ${STUDENT_USERNAME}
       password: ${STUDENT_PASSWORD}
-      email:    ${STUDENT_GMAIL}
+      email: ${STUDENT_GMAIL}
       fullname: ${STUDENT_FULLNAME}
 
     teacher:
       username: ${TEACHER_USERNAME}
       password: ${TEACHER_PASSWORD}
-      email:    ${TEACHER_GMAIL}
+      email: ${TEACHER_GMAIL}
       fullname: ${TEACHER_FULLNAME}
+
+# ================================
+# PayOS Configuration
+# ================================
+payos:
+  client-id: 3af710f4-e502-4ddb-b99d-72ffa68f8423
+  api-key: b5087001-a7a7-4f60-af06-c941f374e5aa
+  checksum-key: 7a6fd4e43ca930c32838b42f7976dd13c746ccc236a678b95585b68da743a5a4
+  return-url: ${PAYOS_RETURN_URL:http://localhost:3000/payment/success}
+  cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/payment/cancel}
