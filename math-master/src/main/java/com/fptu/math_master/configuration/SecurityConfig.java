@@ -29,9 +29,9 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class SecurityConfig {
 
-  CustomJwtDecoder customJwtDecoder;
+    CustomJwtDecoder customJwtDecoder;
 
-  private static final String[] PUBLIC_ENDPOINTS = {
+  private static final String[] PUBLIC_POST_ENDPOINTS = {
     "/auth/register",
     "/auth/login",
     "/auth/introspect",
@@ -57,7 +57,7 @@ public class SecurityConfig {
     httpSecurity
       .authorizeHttpRequests(request -> request
         .requestMatchers(SWAGGER_WHITELIST).permitAll()
-        .requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS).permitAll()
+        .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
         .anyRequest().authenticated())
       .oauth2ResourceServer(oauth2 -> oauth2

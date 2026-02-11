@@ -27,7 +27,7 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 @Tag(name = "School", description = "APIs for managing schools")
-@SecurityRequirement(name = "bearer-key")
+@SecurityRequirement(name = "bearerAuth")
 public class SchoolController {
 
   SchoolService schoolService;

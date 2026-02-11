@@ -31,7 +31,7 @@ public class PaymentController {
 
     @Operation(summary = "Create deposit payment",
                description = "Create a payment link for depositing money to wallet")
-    @SecurityRequirement(name = "bearer-key")
+    @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/deposit")
     public ApiResponse<PaymentLinkResponse> createDeposit(
             @Valid @RequestBody DepositRequest request) {

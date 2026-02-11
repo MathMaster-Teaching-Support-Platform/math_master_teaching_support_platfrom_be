@@ -28,7 +28,7 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 @Tag(name = "Wallet", description = "APIs for managing user wallets")
-@SecurityRequirement(name = "bearer-key")
+@SecurityRequirement(name = "bearerAuth")
 public class WalletController {
 
     WalletService walletService;

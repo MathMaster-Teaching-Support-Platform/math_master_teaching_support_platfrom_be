@@ -41,8 +41,7 @@ public enum ErrorCode {
   PAYMENT_CREATION_FAILED(1031, "Payment creation failed", HttpStatus.INTERNAL_SERVER_ERROR),
   INVALID_WEBHOOK_SIGNATURE(1032, "Invalid webhook signature", HttpStatus.BAD_REQUEST),
   PAYMENT_ALREADY_PROCESSED(1033, "Payment already processed", HttpStatus.BAD_REQUEST),
-  INVALID_AMOUNT(1034, "Invalid amount", HttpStatus.BAD_REQUEST),
-  ;
+  INVALID_AMOUNT(1034, "Invalid amount", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

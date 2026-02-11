@@ -30,7 +30,7 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 @Tag(name = "Teacher Profile", description = "APIs for managing teacher profile submissions")
-@SecurityRequirement(name = "bearer-key")
+@SecurityRequirement(name = "bearerAuth")
 public class TeacherProfileController {
 
   TeacherProfileService teacherProfileService;
