@@ -46,7 +46,16 @@ public enum ErrorCode {
   QUESTION_BANK_ACCESS_DENIED(1036, "You do not have permission to access this question bank", HttpStatus.FORBIDDEN),
   QUESTION_BANK_HAS_QUESTIONS_IN_USE(1037, "Question bank has questions being used in assessments", HttpStatus.BAD_REQUEST),
   INVALID_SUBJECT(1038, "Invalid subject", HttpStatus.BAD_REQUEST),
-  NOT_A_TEACHER(1039, "Only teachers can create question banks", HttpStatus.FORBIDDEN);
+  NOT_A_TEACHER(1039, "Only teachers can create question banks", HttpStatus.FORBIDDEN),
+  ASSESSMENT_NOT_FOUND(1040, "Assessment not found", HttpStatus.NOT_FOUND),
+  ASSESSMENT_ACCESS_DENIED(1041, "You do not have permission to access this assessment", HttpStatus.FORBIDDEN),
+  ASSESSMENT_ALREADY_PUBLISHED(1042, "Assessment is already published and cannot be edited", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_HAS_SUBMISSIONS(1043, "Assessment has submissions and cannot be deleted or unpublished", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_NO_QUESTIONS(1044, "Assessment must have at least one question to publish", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_INVALID_SCHEDULE(1045, "Start date must be before end date", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_START_DATE_PAST(1046, "Start date cannot be in the past", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_NOT_PUBLISHED(1047, "Assessment is not published", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_QUESTION_NOT_FOUND(1048, "Assessment question not found", HttpStatus.NOT_FOUND);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
