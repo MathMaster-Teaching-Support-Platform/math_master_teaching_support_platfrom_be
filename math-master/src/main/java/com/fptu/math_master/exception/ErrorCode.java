@@ -41,7 +41,30 @@ public enum ErrorCode {
   PAYMENT_CREATION_FAILED(1031, "Payment creation failed", HttpStatus.INTERNAL_SERVER_ERROR),
   INVALID_WEBHOOK_SIGNATURE(1032, "Invalid webhook signature", HttpStatus.BAD_REQUEST),
   PAYMENT_ALREADY_PROCESSED(1033, "Payment already processed", HttpStatus.BAD_REQUEST),
-  INVALID_AMOUNT(1034, "Invalid amount", HttpStatus.BAD_REQUEST);
+  INVALID_AMOUNT(1034, "Invalid amount", HttpStatus.BAD_REQUEST),
+  QUESTION_BANK_NOT_FOUND(1035, "Question bank not found", HttpStatus.NOT_FOUND),
+  QUESTION_BANK_ACCESS_DENIED(1036, "You do not have permission to access this question bank", HttpStatus.FORBIDDEN),
+  QUESTION_BANK_HAS_QUESTIONS_IN_USE(1037, "Question bank has questions being used in assessments", HttpStatus.BAD_REQUEST),
+  INVALID_SUBJECT(1038, "Invalid subject", HttpStatus.BAD_REQUEST),
+  NOT_A_TEACHER(1039, "Only teachers can create question banks", HttpStatus.FORBIDDEN),
+  ASSESSMENT_NOT_FOUND(1040, "Assessment not found", HttpStatus.NOT_FOUND),
+  ASSESSMENT_ACCESS_DENIED(1041, "You do not have permission to access this assessment", HttpStatus.FORBIDDEN),
+  ASSESSMENT_ALREADY_PUBLISHED(1042, "Assessment is already published and cannot be edited", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_HAS_SUBMISSIONS(1043, "Assessment has submissions and cannot be deleted or unpublished", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_NO_QUESTIONS(1044, "Assessment must have at least one question to publish", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_INVALID_SCHEDULE(1045, "Start date must be before end date", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_START_DATE_PAST(1046, "Start date cannot be in the past", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_NOT_PUBLISHED(1047, "Assessment is not published", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_QUESTION_NOT_FOUND(1048, "Assessment question not found", HttpStatus.NOT_FOUND),
+  EXAM_MATRIX_NOT_FOUND(1049, "Exam matrix not found", HttpStatus.NOT_FOUND),
+  EXAM_MATRIX_ALREADY_EXISTS(1050, "Assessment already has an exam matrix", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_MUST_HAVE_LESSON(1051, "Assessment must be linked to a lesson to create matrix", HttpStatus.BAD_REQUEST),
+  LESSON_HAS_NO_CHAPTERS(1052, "Lesson has no chapters", HttpStatus.BAD_REQUEST),
+  EXAM_MATRIX_LOCKED(1053, "Exam matrix is locked and cannot be modified", HttpStatus.BAD_REQUEST),
+  MATRIX_CELL_NOT_FOUND(1054, "Matrix cell not found", HttpStatus.NOT_FOUND),
+  MATRIX_VALIDATION_FAILED(1055, "Matrix validation failed", HttpStatus.BAD_REQUEST),
+  MATRIX_NOT_APPROVED(1056, "Matrix must be approved before assessment can be published", HttpStatus.BAD_REQUEST),
+  INSUFFICIENT_QUESTIONS_AVAILABLE(1057, "Not enough questions available matching the criteria", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
