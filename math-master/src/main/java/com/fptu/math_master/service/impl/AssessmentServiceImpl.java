@@ -11,11 +11,9 @@ import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
-import com.fptu.math_master.repository.AssessmentQuestionRepository;
-import com.fptu.math_master.repository.AssessmentRepository;
-import com.fptu.math_master.repository.LessonRepository;
-import com.fptu.math_master.repository.UserRepository;
+import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.AssessmentService;
+import com.fptu.math_master.service.ExamMatrixService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -41,6 +39,8 @@ public class AssessmentServiceImpl implements AssessmentService {
   AssessmentQuestionRepository assessmentQuestionRepository;
   UserRepository userRepository;
   LessonRepository lessonRepository;
+  ExamMatrixRepository examMatrixRepository;
+  ExamMatrixService examMatrixService;
 
   @Override
   @Transactional
@@ -226,6 +226,17 @@ public class AssessmentServiceImpl implements AssessmentService {
     if (assessment.getStartDate() != null && assessment.getStartDate().isBefore(Instant.now())) {
       throw new AppException(ErrorCode.ASSESSMENT_START_DATE_PAST);
     }
+
+    // If assessment has a matrix, lock it
+    if (assessment.getHasMatrix()) {
+      examMatrixRepository.findByAssessmentIdAndNotDeleted(id).ifPresent(matrix -> {
+        if (matrix.getStatus() != com.fptu.math_master.enums.MatrixStatus.APPROVED) {
+          throw new AppException(ErrorCode.MATRIX_NOT_APPROVED);
+        }
+        examMatrixService.lockMatrix(matrix.getId());
+      });
+    }
+
 
     assessment.setStatus(AssessmentStatus.PUBLISHED);
     assessment = assessmentRepository.save(assessment);
