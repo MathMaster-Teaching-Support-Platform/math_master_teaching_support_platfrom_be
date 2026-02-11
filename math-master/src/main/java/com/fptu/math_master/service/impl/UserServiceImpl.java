@@ -258,7 +258,10 @@ public class UserServiceImpl implements UserService {
   @Override
   public Page<UserResponse> searchUsers(UserSearchRequest request, Pageable pageable) {
     log.info("Searching users with criteria: {}", request);
-    Page<User> users = userRepository.searchUsers(request, pageable);
+    Page<User> users = userRepository.findAll(
+        com.fptu.math_master.repository.UserSpecification.searchUsers(request), 
+        pageable
+    );
     return users.map(this::mapToUserResponse);
   }
 
