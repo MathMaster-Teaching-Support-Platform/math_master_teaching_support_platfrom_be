@@ -41,7 +41,12 @@ public enum ErrorCode {
   PAYMENT_CREATION_FAILED(1031, "Payment creation failed", HttpStatus.INTERNAL_SERVER_ERROR),
   INVALID_WEBHOOK_SIGNATURE(1032, "Invalid webhook signature", HttpStatus.BAD_REQUEST),
   PAYMENT_ALREADY_PROCESSED(1033, "Payment already processed", HttpStatus.BAD_REQUEST),
-  INVALID_AMOUNT(1034, "Invalid amount", HttpStatus.BAD_REQUEST);
+  INVALID_AMOUNT(1034, "Invalid amount", HttpStatus.BAD_REQUEST),
+  QUESTION_BANK_NOT_FOUND(1035, "Question bank not found", HttpStatus.NOT_FOUND),
+  QUESTION_BANK_ACCESS_DENIED(1036, "You do not have permission to access this question bank", HttpStatus.FORBIDDEN),
+  QUESTION_BANK_HAS_QUESTIONS_IN_USE(1037, "Question bank has questions being used in assessments", HttpStatus.BAD_REQUEST),
+  INVALID_SUBJECT(1038, "Invalid subject", HttpStatus.BAD_REQUEST),
+  NOT_A_TEACHER(1039, "Only teachers can create question banks", HttpStatus.FORBIDDEN);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
