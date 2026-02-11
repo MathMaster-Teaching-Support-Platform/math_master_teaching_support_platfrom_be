@@ -22,119 +22,120 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 public class WalletService {
-    
+
     WalletRepository walletRepository;
     UserRepository userRepository;
     TransactionRepository transactionRepository;
-    
+
     @Transactional
-    public WalletResponse createWallet(Integer userId) {
+    public WalletResponse createWallet(UUID userId) {
         log.info("Creating wallet for user: {}", userId);
-        
+
         // Check if user exists
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-        
+
         // Check if wallet already exists
         if (walletRepository.existsByUserId(userId)) {
             throw new AppException(ErrorCode.WALLET_ALREADY_EXISTS);
         }
-        
+
         // Create wallet
         Wallet wallet = Wallet.builder()
             .user(user)
             .balance(BigDecimal.ZERO)
             .status(Status.ACTIVE)
             .build();
-        
+
         wallet = walletRepository.save(wallet);
         log.info("Wallet created successfully for user: {}", userId);
-        
+
         return mapToWalletResponse(wallet);
     }
-    
-    public WalletResponse getMyWallet(Integer userId) {
+
+    public WalletResponse getMyWallet(UUID userId) {
         log.info("Getting wallet for user: {}", userId);
-        
+
         Wallet wallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-        
+
         return mapToWalletResponse(wallet);
     }
-    
-    public WalletResponse getOrCreateWallet(Integer userId) {
+
+    public WalletResponse getOrCreateWallet(UUID userId) {
         log.info("Getting or creating wallet for user: {}", userId);
-        
+
         return walletRepository.findByUserId(userId)
             .map(this::mapToWalletResponse)
             .orElseGet(() -> createWallet(userId));
     }
-    
+
     @Transactional
-    public void addBalance(Long walletId, BigDecimal amount) {
+    public void addBalance(UUID walletId, BigDecimal amount) {
         log.info("Adding balance {} to wallet: {}", amount, walletId);
-        
+
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new AppException(ErrorCode.INVALID_AMOUNT);
         }
-        
+
         Wallet wallet = walletRepository.findById(walletId)
             .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-        
+
         wallet.setBalance(wallet.getBalance().add(amount));
         walletRepository.save(wallet);
-        
+
         log.info("Balance added successfully. New balance: {}", wallet.getBalance());
     }
-    
+
     @Transactional
-    public void deductBalance(Long walletId, BigDecimal amount) {
+    public void deductBalance(UUID walletId, BigDecimal amount) {
         log.info("Deducting balance {} from wallet: {}", amount, walletId);
-        
+
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new AppException(ErrorCode.INVALID_AMOUNT);
         }
-        
+
         Wallet wallet = walletRepository.findById(walletId)
             .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-        
+
         if (wallet.getBalance().compareTo(amount) < 0) {
             throw new AppException(ErrorCode.INSUFFICIENT_BALANCE);
         }
-        
+
         wallet.setBalance(wallet.getBalance().subtract(amount));
         walletRepository.save(wallet);
-        
+
         log.info("Balance deducted successfully. New balance: {}", wallet.getBalance());
     }
-    
-    public Page<TransactionResponse> getMyTransactions(Integer userId, Pageable pageable) {
+
+    public Page<TransactionResponse> getMyTransactions(UUID userId, Pageable pageable) {
         log.info("Getting transactions for user: {}", userId);
-        
+
         Wallet wallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-        
+
         return transactionRepository.findByWalletId(wallet.getId(), pageable)
             .map(this::mapToTransactionResponse);
     }
-    
+
     public Page<TransactionResponse> getMyTransactionsByStatus(
-            Integer userId, TransactionStatus status, Pageable pageable) {
+            UUID userId, TransactionStatus status, Pageable pageable) {
         log.info("Getting transactions with status {} for user: {}", status, userId);
-        
+
         Wallet wallet = walletRepository.findByUserId(userId)
             .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-        
+
         return transactionRepository.findByWalletIdAndStatus(wallet.getId(), status, pageable)
             .map(this::mapToTransactionResponse);
     }
-    
+
     private WalletResponse mapToWalletResponse(Wallet wallet) {
         return WalletResponse.builder()
             .walletId(wallet.getId())
@@ -145,7 +146,7 @@ public class WalletService {
             .updatedAt(wallet.getUpdatedAt())
             .build();
     }
-    
+
     private TransactionResponse mapToTransactionResponse(Transaction transaction) {
         return TransactionResponse.builder()
             .transactionId(transaction.getId())

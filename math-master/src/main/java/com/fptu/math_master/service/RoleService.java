@@ -7,16 +7,17 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface RoleService {
 
   RoleResponse createRole(RoleCreationRequest request);
 
-  RoleResponse updateRole(Integer roleId, RoleUpdateRequest request);
+  RoleResponse updateRole(UUID roleId, RoleUpdateRequest request);
 
-  void deleteRole(Integer roleId);
+  void deleteRole(UUID roleId);
 
-  RoleResponse getRoleById(Integer roleId);
+  RoleResponse getRoleById(UUID roleId);
 
   RoleResponse getRoleByName(String name);
 
@@ -24,8 +25,8 @@ public interface RoleService {
 
   Page<RoleResponse> getAllRoles(Pageable pageable);
 
-  RoleResponse addPermissionsToRole(Integer roleId, List<String> permissionCodes);
+  RoleResponse addPermissionsToRole(UUID roleId, List<String> permissionCodes);
 
-  RoleResponse removePermissionsFromRole(Integer roleId, List<String> permissionCodes);
+  RoleResponse removePermissionsFromRole(UUID roleId, List<String> permissionCodes);
 }
 

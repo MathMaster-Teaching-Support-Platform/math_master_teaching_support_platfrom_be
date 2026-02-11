@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface SchoolService {
 
@@ -17,12 +18,12 @@ public interface SchoolService {
   /**
    * Update school information (Admin only)
    */
-  SchoolResponse updateSchool(Long schoolId, SchoolRequest request);
+  SchoolResponse updateSchool(UUID schoolId, SchoolRequest request);
 
   /**
    * Get school by ID
    */
-  SchoolResponse getSchoolById(Long schoolId);
+  SchoolResponse getSchoolById(UUID schoolId);
 
   /**
    * Get all schools with pagination
@@ -42,5 +43,5 @@ public interface SchoolService {
   /**
    * Delete school (Admin only)
    */
-  void deleteSchool(Long schoolId);
+  void deleteSchool(UUID schoolId);
 }

@@ -7,6 +7,8 @@ import com.fptu.math_master.enums.ProfileStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.UUID;
+
 public interface TeacherProfileService {
 
   /**
@@ -16,7 +18,7 @@ public interface TeacherProfileService {
    * @param userId  Current user ID
    * @return Created profile response
    */
-  TeacherProfileResponse submitProfile(TeacherProfileRequest request, Integer userId);
+  TeacherProfileResponse submitProfile(TeacherProfileRequest request, UUID userId);
 
   /**
    * Update pending teacher profile
@@ -25,7 +27,7 @@ public interface TeacherProfileService {
    * @param userId  Current user ID
    * @return Updated profile response
    */
-  TeacherProfileResponse updateProfile(TeacherProfileRequest request, Integer userId);
+  TeacherProfileResponse updateProfile(TeacherProfileRequest request, UUID userId);
 
   /**
    * Get user's teacher profile
@@ -33,7 +35,7 @@ public interface TeacherProfileService {
    * @param userId User ID
    * @return Profile response
    */
-  TeacherProfileResponse getMyProfile(Integer userId);
+  TeacherProfileResponse getMyProfile(UUID userId);
 
   /**
    * Get teacher profile by ID (Admin only)
@@ -41,7 +43,7 @@ public interface TeacherProfileService {
    * @param profileId Profile ID
    * @return Profile response
    */
-  TeacherProfileResponse getProfileById(Long profileId);
+  TeacherProfileResponse getProfileById(UUID profileId);
 
   /**
    * Get all profiles by status
@@ -60,7 +62,7 @@ public interface TeacherProfileService {
    * @param adminId   Admin user ID
    * @return Updated profile response
    */
-  TeacherProfileResponse reviewProfile(Long profileId, ProfileReviewRequest request, Integer adminId);
+  TeacherProfileResponse reviewProfile(UUID profileId, ProfileReviewRequest request, UUID adminId);
 
   /**
    * Count pending profiles
@@ -74,5 +76,5 @@ public interface TeacherProfileService {
    *
    * @param userId Current user ID
    */
-  void deleteMyProfile(Integer userId);
+  void deleteMyProfile(UUID userId);
 }

@@ -22,6 +22,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/users")
@@ -53,7 +54,7 @@ public class UserController {
     description = "Update an existing user's information by user ID. Only accessible by ADMIN role."
   )
   public ApiResponse<UserResponse> updateUser(
-    @PathVariable Integer userId,
+    @PathVariable UUID userId,
     @Valid @RequestBody UserUpdateRequest request) {
     log.info("REST request to update user: {}", userId);
     return ApiResponse.<UserResponse>builder()
@@ -67,7 +68,7 @@ public class UserController {
     summary = "Delete user by ID",
     description = "Delete a user account by user ID. Only accessible by ADMIN role."
   )
-  public ApiResponse<Void> deleteUser(@PathVariable Integer userId) {
+  public ApiResponse<Void> deleteUser(@PathVariable UUID userId) {
     log.info("REST request to delete user: {}", userId);
     userService.deleteUser(userId);
     return ApiResponse.<Void>builder()
@@ -81,7 +82,7 @@ public class UserController {
     summary = "Get user by ID",
     description = "Retrieve user information by user ID."
   )
-  public ApiResponse<UserResponse> getUserById(@PathVariable Integer userId) {
+  public ApiResponse<UserResponse> getUserById(@PathVariable UUID userId) {
     log.info("REST request to get user: {}", userId);
     return ApiResponse.<UserResponse>builder()
       .result(userService.getUserById(userId))
@@ -181,7 +182,7 @@ public class UserController {
     description = "Ban a user by setting their status to BANNED. Only accessible by ADMIN role."
   )
   public ApiResponse<UserResponse> banUser(
-    @PathVariable Integer userId,
+    @PathVariable UUID userId,
     @RequestParam(required = false, defaultValue = "Violated terms of service") String reason) {
     log.info("REST request to ban user: {} with reason: {}", userId, reason);
     return ApiResponse.<UserResponse>builder()
@@ -195,7 +196,7 @@ public class UserController {
     summary = "Unban a user",
     description = "Unban a user by restoring their status to ACTIVE. Only accessible by ADMIN role."
   )
-  public ApiResponse<UserResponse> unbanUser(@PathVariable Integer userId) {
+  public ApiResponse<UserResponse> unbanUser(@PathVariable UUID userId) {
     log.info("REST request to unban user: {}", userId);
     return ApiResponse.<UserResponse>builder()
       .result(userService.unbanUser(userId))
@@ -208,7 +209,7 @@ public class UserController {
     summary = "Disable a user",
     description = "Disable a user by setting their status to INACTIVE (soft delete). Only accessible by ADMIN role."
   )
-  public ApiResponse<UserResponse> disableUser(@PathVariable Integer userId) {
+  public ApiResponse<UserResponse> disableUser(@PathVariable UUID userId) {
     log.info("REST request to disable user: {}", userId);
     return ApiResponse.<UserResponse>builder()
       .result(userService.disableUser(userId))
@@ -221,7 +222,7 @@ public class UserController {
     summary = "Enable a user",
     description = "Enable a user by setting their status to ACTIVE. Only accessible by ADMIN role."
   )
-  public ApiResponse<UserResponse> enableUser(@PathVariable Integer userId) {
+  public ApiResponse<UserResponse> enableUser(@PathVariable UUID userId) {
     log.info("REST request to enable user: {}", userId);
     return ApiResponse.<UserResponse>builder()
       .result(userService.enableUser(userId))

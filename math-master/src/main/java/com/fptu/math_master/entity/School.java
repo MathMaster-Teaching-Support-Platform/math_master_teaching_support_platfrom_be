@@ -1,5 +1,6 @@
 package com.fptu.math_master.entity;
 
+import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -7,6 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -19,8 +21,9 @@ import java.time.LocalDateTime;
 public class School {
 
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  Long id;
+  @UuidV7Generator.UuidV7
+  @Column(name = "id", updatable = false, nullable = false)
+  UUID id;
 
   @Column(name = "name", nullable = false, unique = true)
   String name;

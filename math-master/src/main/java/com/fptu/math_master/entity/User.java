@@ -2,6 +2,7 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.Gender;
 import com.fptu.math_master.enums.Status;
+import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.*;
@@ -10,6 +11,7 @@ import org.hibernate.annotations.Nationalized;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
+import java.util.UUID;
 
 @Builder
 @AllArgsConstructor
@@ -20,9 +22,9 @@ import java.util.Set;
 public class User {
 
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  @Column(name = "account_id", nullable = false)
-  private Integer id;
+  @UuidV7Generator.UuidV7
+  @Column(name = "account_id", updatable = false, nullable = false)
+  private UUID id;
 
   @Size(max = 50)
   @Column(name = "username", length = 50)

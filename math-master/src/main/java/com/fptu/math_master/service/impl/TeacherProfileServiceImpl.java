@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -42,7 +43,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
   @Override
   @Transactional
-  public TeacherProfileResponse submitProfile(TeacherProfileRequest request, Integer userId) {
+  public TeacherProfileResponse submitProfile(TeacherProfileRequest request, UUID userId) {
     log.info("User {} submitting teacher profile", userId);
 
     // Check if user exists
@@ -77,7 +78,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
   @Override
   @Transactional
-  public TeacherProfileResponse updateProfile(TeacherProfileRequest request, Integer userId) {
+  public TeacherProfileResponse updateProfile(TeacherProfileRequest request, UUID userId) {
     log.info("User {} updating teacher profile", userId);
 
     TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
@@ -114,7 +115,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   }
 
   @Override
-  public TeacherProfileResponse getMyProfile(Integer userId) {
+  public TeacherProfileResponse getMyProfile(UUID userId) {
     TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
       .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
@@ -122,7 +123,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   }
 
   @Override
-  public TeacherProfileResponse getProfileById(Long profileId) {
+  public TeacherProfileResponse getProfileById(UUID profileId) {
     TeacherProfile profile = teacherProfileRepository.findById(profileId)
       .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
@@ -139,7 +140,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
   @Override
   @Transactional
-  public TeacherProfileResponse reviewProfile(Long profileId, ProfileReviewRequest request, Integer adminId) {
+  public TeacherProfileResponse reviewProfile(UUID profileId, ProfileReviewRequest request, UUID adminId) {
     log.info("Admin {} reviewing profile {}", adminId, profileId);
 
     TeacherProfile profile = teacherProfileRepository.findById(profileId)
@@ -188,7 +189,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
   @Override
   @Transactional
-  public void deleteMyProfile(Integer userId) {
+  public void deleteMyProfile(UUID userId) {
     TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
       .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 

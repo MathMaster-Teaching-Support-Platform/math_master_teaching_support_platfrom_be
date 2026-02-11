@@ -135,7 +135,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     var userId = signedJWT.getJWTClaimsSet().getSubject();
 
-    var user = userRepository.findByIdWithRolesAndPermissions(Integer.parseInt(userId)).orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
+    var user = userRepository.findByIdWithRolesAndPermissions(UUID.fromString(userId)).orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
 
     var token = generateToken(user);
 
@@ -194,7 +194,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
     JWTClaimsSet jwtClaimsSet = new JWTClaimsSet.Builder()
-      .subject(String.valueOf(user.getId()))
+      .subject(user.getId().toString())
       .issuer("school.edu")
       .issueTime(new Date())
       .expirationTime(new Date(
