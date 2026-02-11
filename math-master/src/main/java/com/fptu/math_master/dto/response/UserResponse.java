@@ -8,6 +8,7 @@ import lombok.experimental.FieldDefaults;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -16,7 +17,7 @@ import java.util.Set;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserResponse {
 
-  Integer id;
+  UUID id;
 
   String userName;
 

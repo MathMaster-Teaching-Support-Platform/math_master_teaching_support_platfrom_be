@@ -1,6 +1,7 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.ProfileStatus;
+import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -8,6 +9,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -20,8 +22,9 @@ import java.time.LocalDateTime;
 public class TeacherProfile {
 
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  Long id;
+  @UuidV7Generator.UuidV7
+  @Column(name = "id", updatable = false, nullable = false)
+  UUID id;
 
   @OneToOne
   @JoinColumn(name = "user_id", nullable = false, unique = true)
@@ -51,7 +54,7 @@ public class TeacherProfile {
   String adminComment; // Lý do từ chối hoặc ghi chú của admin
 
   @Column(name = "reviewed_by")
-  Integer reviewedBy; // ID của admin đã duyệt
+  UUID reviewedBy; // ID của admin đã duyệt
 
   @Column(name = "reviewed_at")
   LocalDateTime reviewedAt;

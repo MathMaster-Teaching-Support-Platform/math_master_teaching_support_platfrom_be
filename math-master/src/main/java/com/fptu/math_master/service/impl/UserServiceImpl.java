@@ -28,6 +28,7 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -89,7 +90,7 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @Transactional
-  public UserResponse updateUser(Integer userId, UserUpdateRequest request) {
+  public UserResponse updateUser(UUID userId, UserUpdateRequest request) {
     log.info("Updating user with id: {}", userId);
 
     User user = userRepository.findById(userId)
@@ -156,7 +157,7 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @Transactional
-  public void deleteUser(Integer userId) {
+  public void deleteUser(UUID userId) {
     log.info("Soft deleting user with id: {}", userId);
 
     User user = userRepository.findById(userId)
@@ -170,7 +171,7 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
-  public UserResponse getUserById(Integer userId) {
+  public UserResponse getUserById(UUID userId) {
     log.info("Getting user with id: {}", userId);
 
     User user = userRepository.findByIdWithRoles(userId)
@@ -264,7 +265,7 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @Transactional
-  public UserResponse banUser(Integer userId, String reason) {
+  public UserResponse banUser(UUID userId, String reason) {
     log.info("Banning user with id: {}", userId);
     User user = userRepository.findById(userId)
       .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
@@ -281,7 +282,7 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @Transactional
-  public UserResponse unbanUser(Integer userId) {
+  public UserResponse unbanUser(UUID userId) {
     log.info("Unbanning user with id: {}", userId);
     User user = userRepository.findById(userId)
       .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
@@ -298,7 +299,7 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @Transactional
-  public UserResponse disableUser(Integer userId) {
+  public UserResponse disableUser(UUID userId) {
     log.info("Disabling user with id: {}", userId);
     User user = userRepository.findById(userId)
       .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
@@ -313,7 +314,7 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @Transactional
-  public UserResponse enableUser(Integer userId) {
+  public UserResponse enableUser(UUID userId) {
     log.info("Enabling user with id: {}", userId);
     User user = userRepository.findById(userId)
       .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));

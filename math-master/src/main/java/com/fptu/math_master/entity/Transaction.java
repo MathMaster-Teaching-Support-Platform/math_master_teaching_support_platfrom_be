@@ -2,11 +2,13 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.TransactionStatus;
 import com.fptu.math_master.enums.TransactionType;
+import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 @Builder
 @AllArgsConstructor
@@ -17,9 +19,9 @@ import java.time.Instant;
 public class Transaction {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "transaction_id", nullable = false)
-    private Long id;
+    @UuidV7Generator.UuidV7
+    @Column(name = "transaction_id", updatable = false, nullable = false)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "wallet_id", nullable = false)

@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,7 +52,7 @@ public class PermissionServiceImpl implements PermissionService {
 
   @Override
   @Transactional
-  public PermissionResponse updatePermission(Integer permissionId, PermissionUpdateRequest request) {
+  public PermissionResponse updatePermission(UUID permissionId, PermissionUpdateRequest request) {
     log.info("Updating permission with id: {}", permissionId);
 
     Permission permission = permissionRepository.findById(permissionId)
@@ -80,7 +81,7 @@ public class PermissionServiceImpl implements PermissionService {
 
   @Override
   @Transactional
-  public void deletePermission(Integer permissionId) {
+  public void deletePermission(UUID permissionId) {
     log.info("Deleting permission with id: {}", permissionId);
 
     Permission permission = permissionRepository.findById(permissionId)
@@ -92,7 +93,7 @@ public class PermissionServiceImpl implements PermissionService {
   }
 
   @Override
-  public PermissionResponse getPermissionById(Integer permissionId) {
+  public PermissionResponse getPermissionById(UUID permissionId) {
     log.info("Getting permission with id: {}", permissionId);
 
     Permission permission = permissionRepository.findById(permissionId)
