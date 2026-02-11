@@ -73,22 +73,22 @@ app:
     enabled: true
 
     admin:
-      username: ${ADMIN_USERNAME}
-      password: ${ADMIN_PASSWORD}
-      email: ${ADMIN_GMAIL}
-      fullname: ${ADMIN_FULLNAME}
+      username: ${ADMIN_USERNAME:admin}
+      password: ${ADMIN_PASSWORD:admin123}
+      email: ${ADMIN_GMAIL:admin@mathmaster.edu.vn}
+      fullname: ${ADMIN_FULLNAME:System Administrator}
 
     student:
-      username: ${STUDENT_USERNAME}
-      password: ${STUDENT_PASSWORD}
-      email: ${STUDENT_GMAIL}
-      fullname: ${STUDENT_FULLNAME}
+      username: ${STUDENT_USERNAME:student}
+      password: ${STUDENT_PASSWORD:student123}
+      email: ${STUDENT_GMAIL:student@mathmaster.edu.vn}
+      fullname: ${STUDENT_FULLNAME:Student User}
 
     teacher:
-      username: ${TEACHER_USERNAME}
-      password: ${TEACHER_PASSWORD}
-      email: ${TEACHER_GMAIL}
-      fullname: ${TEACHER_FULLNAME}
+      username: ${TEACHER_USERNAME:teacher}
+      password: ${TEACHER_PASSWORD:teacher123}
+      email: ${TEACHER_GMAIL:teacher@mathmaster.edu.vn}
+      fullname: ${TEACHER_FULLNAME:Teacher User}
 
 # ================================
 # PayOS Configuration
