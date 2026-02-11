@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -66,7 +67,7 @@ public class RoleServiceImpl implements RoleService {
 
   @Override
   @Transactional
-  public RoleResponse updateRole(Integer roleId, RoleUpdateRequest request) {
+  public RoleResponse updateRole(UUID roleId, RoleUpdateRequest request) {
     log.info("Updating role with id: {}", roleId);
 
     Role role = roleRepository.findById(roleId)
@@ -100,7 +101,7 @@ public class RoleServiceImpl implements RoleService {
 
   @Override
   @Transactional
-  public void deleteRole(Integer roleId) {
+  public void deleteRole(UUID roleId) {
     log.info("Deleting role with id: {}", roleId);
 
     Role role = roleRepository.findById(roleId)
@@ -112,7 +113,7 @@ public class RoleServiceImpl implements RoleService {
   }
 
   @Override
-  public RoleResponse getRoleById(Integer roleId) {
+  public RoleResponse getRoleById(UUID roleId) {
     log.info("Getting role with id: {}", roleId);
 
     Role role = roleRepository.findByIdWithPermissions(roleId)
@@ -153,7 +154,7 @@ public class RoleServiceImpl implements RoleService {
 
   @Override
   @Transactional
-  public RoleResponse addPermissionsToRole(Integer roleId, List<String> permissionCodes) {
+  public RoleResponse addPermissionsToRole(UUID roleId, List<String> permissionCodes) {
     log.info("Adding permissions to role with id: {}", roleId);
 
     Role role = roleRepository.findByIdWithPermissions(roleId)
@@ -177,7 +178,7 @@ public class RoleServiceImpl implements RoleService {
 
   @Override
   @Transactional
-  public RoleResponse removePermissionsFromRole(Integer roleId, List<String> permissionCodes) {
+  public RoleResponse removePermissionsFromRole(UUID roleId, List<String> permissionCodes) {
     log.info("Removing permissions from role with id: {}", roleId);
 
     Role role = roleRepository.findByIdWithPermissions(roleId)

@@ -6,13 +6,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface RoleRepository extends JpaRepository<Role, Integer> {
+public interface RoleRepository extends JpaRepository<Role, UUID> {
   Optional<Role> findByName(String name);
 
   boolean existsByName(String name);
 
   @Query("SELECT r FROM Role r LEFT JOIN FETCH r.permissions WHERE r.id = :id")
-  Optional<Role> findByIdWithPermissions(Integer id);
+  Optional<Role> findByIdWithPermissions(UUID id);
 }

@@ -20,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/roles")
@@ -51,7 +52,7 @@ public class RoleController {
     description = "Update an existing role's information by role ID. Only accessible by ADMIN role."
   )
   public ApiResponse<RoleResponse> updateRole(
-    @PathVariable Integer roleId,
+    @PathVariable UUID roleId,
     @Valid @RequestBody RoleUpdateRequest request) {
     log.info("REST request to update role: {}", roleId);
     return ApiResponse.<RoleResponse>builder()
@@ -65,7 +66,7 @@ public class RoleController {
     summary = "Delete role by ID",
     description = "Delete a role by role ID. Only accessible by ADMIN role."
   )
-  public ApiResponse<Void> deleteRole(@PathVariable Integer roleId) {
+  public ApiResponse<Void> deleteRole(@PathVariable UUID roleId) {
     log.info("REST request to delete role: {}", roleId);
     roleService.deleteRole(roleId);
     return ApiResponse.<Void>builder()
@@ -79,7 +80,7 @@ public class RoleController {
     summary = "Get role by ID",
     description = "Retrieve role information by role ID including its permissions."
   )
-  public ApiResponse<RoleResponse> getRoleById(@PathVariable Integer roleId) {
+  public ApiResponse<RoleResponse> getRoleById(@PathVariable UUID roleId) {
     log.info("REST request to get role: {}", roleId);
     return ApiResponse.<RoleResponse>builder()
       .result(roleService.getRoleById(roleId))
@@ -143,7 +144,7 @@ public class RoleController {
     description = "Add one or more permissions to an existing role. Only accessible by ADMIN role."
   )
   public ApiResponse<RoleResponse> addPermissionsToRole(
-    @PathVariable Integer roleId,
+    @PathVariable UUID roleId,
     @RequestBody List<String> permissionCodes) {
     log.info("REST request to add permissions to role: {}", roleId);
     return ApiResponse.<RoleResponse>builder()
@@ -158,7 +159,7 @@ public class RoleController {
     description = "Remove one or more permissions from an existing role. Only accessible by ADMIN role."
   )
   public ApiResponse<RoleResponse> removePermissionsFromRole(
-    @PathVariable Integer roleId,
+    @PathVariable UUID roleId,
     @RequestBody List<String> permissionCodes) {
     log.info("REST request to remove permissions from role: {}", roleId);
     return ApiResponse.<RoleResponse>builder()

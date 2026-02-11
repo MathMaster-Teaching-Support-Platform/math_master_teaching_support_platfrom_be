@@ -17,6 +17,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/payment")
 @RequiredArgsConstructor
@@ -24,22 +26,22 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @Tag(name = "Payment", description = "APIs for payment processing")
 public class PaymentController {
-    
+
     PaymentService paymentService;
-    
-    @Operation(summary = "Create deposit payment", 
+
+    @Operation(summary = "Create deposit payment",
                description = "Create a payment link for depositing money to wallet")
     @SecurityRequirement(name = "bearer-key")
     @PostMapping("/deposit")
     public ApiResponse<PaymentLinkResponse> createDeposit(
             @Valid @RequestBody DepositRequest request) {
-        Integer userId = getCurrentUserId();
+        UUID userId = getCurrentUserId();
         return ApiResponse.<PaymentLinkResponse>builder()
             .result(paymentService.createDepositPayment(request, userId))
             .build();
     }
-    
-    @Operation(summary = "PayOS Webhook", 
+
+    @Operation(summary = "PayOS Webhook",
                description = "Webhook endpoint for receiving payment notifications from PayOS")
     @PostMapping("/webhook")
     public ApiResponse<Void> handleWebhook(@RequestBody PayOSWebhookRequest webhookRequest) {
@@ -49,9 +51,9 @@ public class PaymentController {
             .message("Webhook processed successfully")
             .build();
     }
-    
-    private Integer getCurrentUserId() {
+
+    private UUID getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return Integer.parseInt(authentication.getName());
+        return UUID.fromString(authentication.getName());
     }
 }

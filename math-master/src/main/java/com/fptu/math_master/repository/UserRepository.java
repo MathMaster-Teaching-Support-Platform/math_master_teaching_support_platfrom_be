@@ -1,6 +1,7 @@
 package com.fptu.math_master.repository;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.Status;
@@ -13,7 +14,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface UserRepository extends JpaRepository<User, Integer>, UserRepositoryCustom {
+public interface UserRepository extends JpaRepository<User, UUID>, UserRepositoryCustom {
   boolean existsByUserName(String userName);
 
   Optional<User> findByUserName(String userName);
@@ -23,7 +24,7 @@ public interface UserRepository extends JpaRepository<User, Integer>, UserReposi
   boolean existsByEmail(String email);
 
   @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles WHERE u.id = :id")
-  Optional<User> findByIdWithRoles(Integer id);
+  Optional<User> findByIdWithRoles(UUID id);
 
   @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles WHERE u.userName = :userName")
   Optional<User> findByUserNameWithRoles(String userName);
@@ -32,7 +33,7 @@ public interface UserRepository extends JpaRepository<User, Integer>, UserReposi
   Optional<User> findByEmailWithRolesAndPermissions(String email);
 
   @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles r LEFT JOIN FETCH r.permissions WHERE u.id = :id")
-  Optional<User> findByIdWithRolesAndPermissions(Integer id);
+  Optional<User> findByIdWithRolesAndPermissions(UUID id);
 
   List<User> findByStatus(Status status);
 

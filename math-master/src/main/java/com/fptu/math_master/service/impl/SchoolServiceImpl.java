@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -55,7 +56,7 @@ public class SchoolServiceImpl implements SchoolService {
 
   @Override
   @Transactional
-  public SchoolResponse updateSchool(Long schoolId, SchoolRequest request) {
+  public SchoolResponse updateSchool(UUID schoolId, SchoolRequest request) {
     log.info("Updating school id: {}", schoolId);
 
     School school = schoolRepository.findById(schoolId)
@@ -82,7 +83,7 @@ public class SchoolServiceImpl implements SchoolService {
   }
 
   @Override
-  public SchoolResponse getSchoolById(Long schoolId) {
+  public SchoolResponse getSchoolById(UUID schoolId) {
     School school = schoolRepository.findById(schoolId)
       .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
 
@@ -113,7 +114,7 @@ public class SchoolServiceImpl implements SchoolService {
 
   @Override
   @Transactional
-  public void deleteSchool(Long schoolId) {
+  public void deleteSchool(UUID schoolId) {
     School school = schoolRepository.findById(schoolId)
       .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
 

@@ -8,22 +8,23 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class WalletResponse {
-    
-    private Long walletId;
-    
-    private Integer userId;
-    
+
+    private UUID walletId;
+
+    private UUID userId;
+
     private BigDecimal balance;
-    
+
     private Status status;
-    
+
     private Instant createdAt;
-    
+
     private Instant updatedAt;
 }

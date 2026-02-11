@@ -20,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/permissions")
@@ -51,7 +52,7 @@ public class PermissionController {
     description = "Update an existing permission's information by permission ID. Only accessible by ADMIN role."
   )
   public ApiResponse<PermissionResponse> updatePermission(
-    @PathVariable Integer permissionId,
+    @PathVariable UUID permissionId,
     @Valid @RequestBody PermissionUpdateRequest request) {
     log.info("REST request to update permission: {}", permissionId);
     return ApiResponse.<PermissionResponse>builder()
@@ -65,7 +66,7 @@ public class PermissionController {
     summary = "Delete permission by ID",
     description = "Delete a permission by permission ID. Only accessible by ADMIN role."
   )
-  public ApiResponse<Void> deletePermission(@PathVariable Integer permissionId) {
+  public ApiResponse<Void> deletePermission(@PathVariable UUID permissionId) {
     log.info("REST request to delete permission: {}", permissionId);
     permissionService.deletePermission(permissionId);
     return ApiResponse.<Void>builder()
@@ -79,7 +80,7 @@ public class PermissionController {
     summary = "Get permission by ID",
     description = "Retrieve permission information by permission ID."
   )
-  public ApiResponse<PermissionResponse> getPermissionById(@PathVariable Integer permissionId) {
+  public ApiResponse<PermissionResponse> getPermissionById(@PathVariable UUID permissionId) {
     log.info("REST request to get permission: {}", permissionId);
     return ApiResponse.<PermissionResponse>builder()
       .result(permissionService.getPermissionById(permissionId))

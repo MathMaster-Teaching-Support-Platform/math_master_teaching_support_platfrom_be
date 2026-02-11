@@ -22,6 +22,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/teacher-profiles")
 @RequiredArgsConstructor
@@ -37,7 +39,7 @@ public class TeacherProfileController {
   @PostMapping("/submit")
   @PreAuthorize("hasRole('STUDENT')")
   public ApiResponse<TeacherProfileResponse> submitProfile(@Valid @RequestBody TeacherProfileRequest request) {
-    Integer userId = getCurrentUserId();
+    UUID userId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
       .result(teacherProfileService.submitProfile(request, userId))
       .build();
@@ -47,7 +49,7 @@ public class TeacherProfileController {
   @PutMapping("/my-profile")
   @PreAuthorize("hasRole('STUDENT')")
   public ApiResponse<TeacherProfileResponse> updateMyProfile(@Valid @RequestBody TeacherProfileRequest request) {
-    Integer userId = getCurrentUserId();
+    UUID userId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
       .result(teacherProfileService.updateProfile(request, userId))
       .build();
@@ -57,7 +59,7 @@ public class TeacherProfileController {
   @GetMapping("/my-profile")
   @PreAuthorize("hasRole('STUDENT') or hasRole('TEACHER')")
   public ApiResponse<TeacherProfileResponse> getMyProfile() {
-    Integer userId = getCurrentUserId();
+    UUID userId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
       .result(teacherProfileService.getMyProfile(userId))
       .build();
@@ -67,7 +69,7 @@ public class TeacherProfileController {
   @DeleteMapping("/my-profile")
   @PreAuthorize("hasRole('STUDENT')")
   public ApiResponse<Void> deleteMyProfile() {
-    Integer userId = getCurrentUserId();
+    UUID userId = getCurrentUserId();
     teacherProfileService.deleteMyProfile(userId);
     return ApiResponse.<Void>builder()
       .message("Profile deleted successfully")
@@ -77,7 +79,7 @@ public class TeacherProfileController {
   @Operation(summary = "Get profile by ID", description = "Admin gets specific profile details")
   @GetMapping("/{profileId}")
   @PreAuthorize("hasRole('ADMIN')")
-  public ApiResponse<TeacherProfileResponse> getProfileById(@PathVariable Long profileId) {
+  public ApiResponse<TeacherProfileResponse> getProfileById(@PathVariable UUID profileId) {
     return ApiResponse.<TeacherProfileResponse>builder()
       .result(teacherProfileService.getProfileById(profileId))
       .build();
@@ -100,9 +102,9 @@ public class TeacherProfileController {
   @PostMapping("/{profileId}/review")
   @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<TeacherProfileResponse> reviewProfile(
-    @PathVariable Long profileId,
+    @PathVariable UUID profileId,
     @Valid @RequestBody ProfileReviewRequest request) {
-    Integer adminId = getCurrentUserId();
+    UUID adminId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
       .result(teacherProfileService.reviewProfile(profileId, request, adminId))
       .build();
@@ -117,8 +119,8 @@ public class TeacherProfileController {
       .build();
   }
 
-  private Integer getCurrentUserId() {
+  private UUID getCurrentUserId() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    return Integer.parseInt(authentication.getName());
+    return UUID.fromString(authentication.getName());
   }
 }

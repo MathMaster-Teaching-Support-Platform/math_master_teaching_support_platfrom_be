@@ -19,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/schools")
@@ -44,7 +45,7 @@ public class SchoolController {
   @PutMapping("/{schoolId}")
   @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<SchoolResponse> updateSchool(
-    @PathVariable Long schoolId,
+    @PathVariable UUID schoolId,
     @Valid @RequestBody SchoolRequest request) {
     return ApiResponse.<SchoolResponse>builder()
       .result(schoolService.updateSchool(schoolId, request))
@@ -53,7 +54,7 @@ public class SchoolController {
 
   @Operation(summary = "Get school by ID", description = "Get school details by ID")
   @GetMapping("/{schoolId}")
-  public ApiResponse<SchoolResponse> getSchoolById(@PathVariable Long schoolId) {
+  public ApiResponse<SchoolResponse> getSchoolById(@PathVariable UUID schoolId) {
     return ApiResponse.<SchoolResponse>builder()
       .result(schoolService.getSchoolById(schoolId))
       .build();
@@ -89,7 +90,7 @@ public class SchoolController {
   @Operation(summary = "Delete school", description = "Admin deletes a school")
   @DeleteMapping("/{schoolId}")
   @PreAuthorize("hasRole('ADMIN')")
-  public ApiResponse<Void> deleteSchool(@PathVariable Long schoolId) {
+  public ApiResponse<Void> deleteSchool(@PathVariable UUID schoolId) {
     schoolService.deleteSchool(schoolId);
     return ApiResponse.<Void>builder()
       .message("School deleted successfully")

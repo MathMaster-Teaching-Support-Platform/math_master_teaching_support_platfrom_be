@@ -8,13 +8,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface TransactionRepository extends JpaRepository<Transaction, Long> {
-    
-    Page<Transaction> findByWalletId(Long walletId, Pageable pageable);
-    
+public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
+
+    Page<Transaction> findByWalletId(UUID walletId, Pageable pageable);
+
     Optional<Transaction> findByOrderCode(Long orderCode);
-    
-    Page<Transaction> findByWalletIdAndStatus(Long walletId, TransactionStatus status, Pageable pageable);
+
+    Page<Transaction> findByWalletIdAndStatus(UUID walletId, TransactionStatus status, Pageable pageable);
 }

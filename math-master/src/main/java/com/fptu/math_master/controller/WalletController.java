@@ -20,6 +20,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/wallet")
 @RequiredArgsConstructor
@@ -28,55 +30,55 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Wallet", description = "APIs for managing user wallets")
 @SecurityRequirement(name = "bearer-key")
 public class WalletController {
-    
+
     WalletService walletService;
-    
+
     @Operation(summary = "Create wallet", description = "Create a new wallet for current user")
     @PostMapping("/create")
     public ApiResponse<WalletResponse> createWallet() {
-        Integer userId = getCurrentUserId();
+        UUID userId = getCurrentUserId();
         return ApiResponse.<WalletResponse>builder()
             .result(walletService.createWallet(userId))
             .build();
     }
-    
+
     @Operation(summary = "Get my wallet", description = "Get current user's wallet information")
     @GetMapping("/my-wallet")
     public ApiResponse<WalletResponse> getMyWallet() {
-        Integer userId = getCurrentUserId();
+        UUID userId = getCurrentUserId();
         return ApiResponse.<WalletResponse>builder()
             .result(walletService.getOrCreateWallet(userId))
             .build();
     }
-    
+
     @Operation(summary = "Get my transactions", description = "Get transaction history")
     @GetMapping("/transactions")
     public ApiResponse<Page<TransactionResponse>> getMyTransactions(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Integer userId = getCurrentUserId();
+        UUID userId = getCurrentUserId();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return ApiResponse.<Page<TransactionResponse>>builder()
             .result(walletService.getMyTransactions(userId, pageable))
             .build();
     }
-    
-    @Operation(summary = "Get transactions by status", 
+
+    @Operation(summary = "Get transactions by status",
                description = "Get transaction history filtered by status")
     @GetMapping("/transactions/status/{status}")
     public ApiResponse<Page<TransactionResponse>> getMyTransactionsByStatus(
             @PathVariable TransactionStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Integer userId = getCurrentUserId();
+        UUID userId = getCurrentUserId();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return ApiResponse.<Page<TransactionResponse>>builder()
             .result(walletService.getMyTransactionsByStatus(userId, status, pageable))
             .build();
     }
-    
-    private Integer getCurrentUserId() {
+
+    private UUID getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return Integer.parseInt(authentication.getName());
+        return UUID.fromString(authentication.getName());
     }
 }

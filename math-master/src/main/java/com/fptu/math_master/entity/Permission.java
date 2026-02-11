@@ -1,12 +1,13 @@
 package com.fptu.math_master.entity;
 
+import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
-import java.time.Instant;
+import java.util.UUID;
 
 @Builder
 @AllArgsConstructor
@@ -22,9 +23,9 @@ import java.time.Instant;
 public class Permission {
 
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  @Column(name = "id")
-  private Integer id;
+  @UuidV7Generator.UuidV7
+  @Column(name = "id", updatable = false, nullable = false)
+  private UUID id;
 
   /**
    * Unique permission key used by code checks.

@@ -10,15 +10,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface TeacherProfileRepository extends JpaRepository<TeacherProfile, Long> {
+public interface TeacherProfileRepository extends JpaRepository<TeacherProfile, UUID> {
 
   Optional<TeacherProfile> findByUser(User user);
 
-  Optional<TeacherProfile> findByUserId(Integer userId);
+  Optional<TeacherProfile> findByUserId(UUID userId);
 
-  boolean existsByUserId(Integer userId);
+  boolean existsByUserId(UUID userId);
 
   Page<TeacherProfile> findByStatus(ProfileStatus status, Pageable pageable);
 
