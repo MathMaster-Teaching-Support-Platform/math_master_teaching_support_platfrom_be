@@ -110,7 +110,14 @@ public class TeacherProfileController {
       .build();
   }
 
-  // ...existing code...
+  @Operation(summary = "Count pending profiles", description = "Get number of profiles waiting for review")
+  @GetMapping("/pending/count")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<Long> countPendingProfiles() {
+    return ApiResponse.<Long>builder()
+      .result(teacherProfileService.countPendingProfiles())
+      .build();
+  }
 
   private UUID getCurrentUserId() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
