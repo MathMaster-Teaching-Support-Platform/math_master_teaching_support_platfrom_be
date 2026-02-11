@@ -74,20 +74,20 @@ app:
 
     admin:
       username: ${ADMIN_USERNAME:admin}
-      password: ${ADMIN_PASSWORD:admin123}
-      email: ${ADMIN_GMAIL:admin@mathmaster.edu.vn}
+      password: ${ADMIN_PASSWORD:Admin@123456}
+      email: ${ADMIN_GMAIL:admin@mathmaster.com}
       fullname: ${ADMIN_FULLNAME:System Administrator}
 
     student:
       username: ${STUDENT_USERNAME:student}
-      password: ${STUDENT_PASSWORD:student123}
-      email: ${STUDENT_GMAIL:student@mathmaster.edu.vn}
+      password: ${STUDENT_PASSWORD:Student@123456}
+      email: ${STUDENT_GMAIL:student@mathmaster.com}
       fullname: ${STUDENT_FULLNAME:Student User}
 
     teacher:
       username: ${TEACHER_USERNAME:teacher}
-      password: ${TEACHER_PASSWORD:teacher123}
-      email: ${TEACHER_GMAIL:teacher@mathmaster.edu.vn}
+      password: ${TEACHER_PASSWORD:Teacher@123456}
+      email: ${TEACHER_GMAIL:teacher@mathmaster.com}
       fullname: ${TEACHER_FULLNAME:Teacher User}
 
 # ================================
