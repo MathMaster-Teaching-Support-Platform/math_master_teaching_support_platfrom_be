@@ -76,6 +76,15 @@ public class Assessment {
   @Column(name = "has_matrix")
   private Boolean hasMatrix;
 
+  @Column(name = "allow_multiple_attempts")
+  private Boolean allowMultipleAttempts;
+
+  @Column(name = "max_attempts")
+  private Integer maxAttempts;
+
+  @Column(name = "show_score_immediately")
+  private Boolean showScoreImmediately;
+
   @Column(name = "status")
   @Enumerated(EnumType.STRING)
   private AssessmentStatus status;
@@ -114,6 +123,8 @@ public class Assessment {
     if (randomizeQuestions == null) randomizeQuestions = false;
     if (showCorrectAnswers == null) showCorrectAnswers = false;
     if (hasMatrix == null) hasMatrix = false;
+    if (allowMultipleAttempts == null) allowMultipleAttempts = false;
+    if (showScoreImmediately == null) showScoreImmediately = true;
     if (status == null) status = AssessmentStatus.DRAFT;
     if (createdAt == null) createdAt = Instant.now();
     if (updatedAt == null) updatedAt = Instant.now();

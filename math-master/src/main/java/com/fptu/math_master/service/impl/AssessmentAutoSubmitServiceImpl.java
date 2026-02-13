@@ -1,0 +1,88 @@
+package com.fptu.math_master.service.impl;
+
+import com.fptu.math_master.entity.Assessment;
+import com.fptu.math_master.entity.QuizAttempt;
+import com.fptu.math_master.enums.SubmissionStatus;
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.AssessmentRepository;
+import com.fptu.math_master.repository.QuizAttemptRepository;
+import com.fptu.math_master.service.AssessmentAutoSubmitService;
+import com.fptu.math_master.service.AssessmentDraftService;
+import com.fptu.math_master.service.CentrifugoService;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class AssessmentAutoSubmitServiceImpl implements AssessmentAutoSubmitService {
+
+    QuizAttemptRepository quizAttemptRepository;
+    AssessmentRepository assessmentRepository;
+    AssessmentDraftService draftService;
+    CentrifugoService centrifugoService;
+
+    @Override
+    @Scheduled(fixedRate = 60000)
+    @Transactional
+    public void autoSubmitExpiredAttempts() {
+        log.debug("Checking for expired assessment attempts...");
+
+        Instant now = Instant.now();
+        List<QuizAttempt> expiredAttempts = quizAttemptRepository.findExpiredAttempts(now);
+
+        for (QuizAttempt attempt : expiredAttempts) {
+            try {
+                Assessment assessment = assessmentRepository.findById(attempt.getAssessmentId())
+                        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+                if (assessment.getTimeLimitMinutes() != null) {
+                    Instant expiresAt = attempt.getStartedAt()
+                            .plusSeconds(assessment.getTimeLimitMinutes() * 60L);
+
+                    if (now.isAfter(expiresAt)) {
+                        log.info("Auto-submitting expired attempt: {} for student: {}",
+                                 attempt.getId(), attempt.getStudentId());
+
+                        try {
+                            draftService.flushDraftToDatabase(attempt.getId());
+                        } catch (Exception e) {
+                            log.error("Error flushing draft for attempt: {}", attempt.getId(), e);
+                        }
+
+                        attempt.setSubmittedAt(now);
+                        attempt.setStatus(SubmissionStatus.SUBMITTED);
+                        attempt.setTimeSpentSeconds(
+                            (int) Duration.between(attempt.getStartedAt(), now).getSeconds()
+                        );
+
+                        quizAttemptRepository.save(attempt);
+                        draftService.deleteDraft(attempt.getId());
+                        centrifugoService.publishSubmitted(attempt.getId());
+
+                        log.info("Successfully auto-submitted attempt: {}", attempt.getId());
+                    }
+                }
+
+            } catch (Exception e) {
+                log.error("Error auto-submitting attempt: {}", attempt.getId(), e);
+            }
+        }
+
+        if (!expiredAttempts.isEmpty()) {
+            log.info("Auto-submitted {} expired attempts", expiredAttempts.size());
+        }
+    }
+}
+

@@ -35,6 +35,15 @@
       "subscribe_to_publish": false,
       "history_size": 50,
       "history_ttl": "600s"
+    },
+    {
+      "name": "attempt",
+      "publish": true,
+      "subscribe_to_publish": true,
+      "presence": false,
+      "join_leave": false,
+      "history_size": 200,
+      "history_ttl": "7200s"
     }
   ],
   "client_insecure": false,

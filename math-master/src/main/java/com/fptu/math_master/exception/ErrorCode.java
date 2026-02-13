@@ -64,7 +64,22 @@ public enum ErrorCode {
   MATRIX_CELL_NOT_FOUND(1054, "Matrix cell not found", HttpStatus.NOT_FOUND),
   MATRIX_VALIDATION_FAILED(1055, "Matrix validation failed", HttpStatus.BAD_REQUEST),
   MATRIX_NOT_APPROVED(1056, "Matrix must be approved before assessment can be published", HttpStatus.BAD_REQUEST),
-  INSUFFICIENT_QUESTIONS_AVAILABLE(1057, "Not enough questions available matching the criteria", HttpStatus.BAD_REQUEST);
+  INSUFFICIENT_QUESTIONS_AVAILABLE(1057, "Not enough questions available matching the criteria", HttpStatus.BAD_REQUEST),
+
+
+  ASSESSMENT_NOT_AVAILABLE(1058, "Assessment is not available at this time", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_EXPIRED(1059, "Assessment has expired", HttpStatus.BAD_REQUEST),
+  MAX_ATTEMPTS_REACHED(1060, "Maximum number of attempts reached", HttpStatus.BAD_REQUEST),
+  QUIZ_ATTEMPT_NOT_FOUND(1061, "Quiz attempt not found", HttpStatus.NOT_FOUND),
+  ATTEMPT_NOT_IN_PROGRESS(1062, "Attempt is not in progress", HttpStatus.BAD_REQUEST),
+  ATTEMPT_ALREADY_SUBMITTED(1063, "Attempt has already been submitted", HttpStatus.BAD_REQUEST),
+  ATTEMPT_ACCESS_DENIED(1064, "You do not have permission to access this attempt", HttpStatus.FORBIDDEN),
+  TIME_LIMIT_EXCEEDED(1065, "Time limit has been exceeded", HttpStatus.BAD_REQUEST),
+  SUBMISSION_NOT_FOUND(1066, "Submission not found", HttpStatus.NOT_FOUND),
+  ASSESSMENT_NOT_SCHEDULED(1067, "Assessment is not currently scheduled", HttpStatus.BAD_REQUEST),
+  ANSWER_NOT_FOUND(1068, "Answer not found", HttpStatus.NOT_FOUND),
+  INVALID_ANSWER_FORMAT(1069, "Invalid answer format", HttpStatus.BAD_REQUEST),
+  DRAFT_NOT_FOUND(1070, "Draft not found", HttpStatus.NOT_FOUND);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
