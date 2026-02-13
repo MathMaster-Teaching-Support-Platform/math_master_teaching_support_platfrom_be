@@ -1,0 +1,585 @@
+package com.fptu.math_master.service.impl;
+
+import com.fptu.math_master.dto.request.*;
+import com.fptu.math_master.dto.response.*;
+import com.fptu.math_master.entity.*;
+import com.fptu.math_master.enums.AssessmentStatus;
+import com.fptu.math_master.enums.SubmissionStatus;
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.*;
+import com.fptu.math_master.service.*;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class StudentAssessmentServiceImpl implements StudentAssessmentService {
+
+    AssessmentRepository assessmentRepository;
+    SubmissionRepository submissionRepository;
+    QuizAttemptRepository quizAttemptRepository;
+    AssessmentQuestionRepository assessmentQuestionRepository;
+    AnswerRepository answerRepository;
+    AssessmentDraftService draftService;
+    CentrifugoService centrifugoService;
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<StudentAssessmentResponse> getMyAssessments(String statusFilter, Pageable pageable) {
+        UUID studentId = getCurrentUserId();
+        Instant now = Instant.now();
+
+        log.info("Getting assessments for student: {}, filter: {}", studentId, statusFilter);
+
+        List<Assessment> allAssessments = assessmentRepository.findAll().stream()
+                .filter(a -> a.getStatus() == AssessmentStatus.PUBLISHED)
+                .filter(a -> isAssessmentAvailable(a, now))
+                .collect(Collectors.toList());
+
+        List<StudentAssessmentResponse> responses = allAssessments.stream()
+                .map(assessment -> mapToStudentResponse(assessment, studentId, now))
+                .filter(response -> matchesStatusFilter(response, statusFilter))
+                .sorted(Comparator.comparing(StudentAssessmentResponse::getDueDate,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .collect(Collectors.toList());
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), responses.size());
+
+        return new PageImpl<>(
+                responses.subList(start, end),
+                pageable,
+                responses.size()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StudentAssessmentResponse getAssessmentDetails(UUID assessmentId) {
+        UUID studentId = getCurrentUserId();
+        Instant now = Instant.now();
+
+        Assessment assessment = assessmentRepository.findById(assessmentId)
+                .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+        if (assessment.getStatus() != AssessmentStatus.PUBLISHED) {
+            throw new AppException(ErrorCode.ASSESSMENT_NOT_PUBLISHED);
+        }
+
+        return mapToStudentResponse(assessment, studentId, now);
+    }
+
+    @Override
+    @Transactional
+    public AttemptStartResponse startAssessment(StartAssessmentRequest request) {
+        UUID studentId = getCurrentUserId();
+        UUID assessmentId = request.getAssessmentId();
+        Instant now = Instant.now();
+
+        log.info("Student {} starting assessment {}", studentId, assessmentId);
+
+        Assessment assessment = assessmentRepository.findById(assessmentId)
+                .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+        validateAssessmentCanStart(assessment, studentId, now);
+
+        Submission submission = submissionRepository
+                .findByAssessmentIdAndStudentId(assessmentId, studentId)
+                .orElseGet(() -> createSubmission(assessment, studentId));
+
+        Integer attemptNumber = quizAttemptRepository.countBySubmissionId(submission.getId()) + 1;
+
+        QuizAttempt attempt = QuizAttempt.builder()
+                .submissionId(submission.getId())
+                .assessmentId(assessmentId)
+                .studentId(studentId)
+                .attemptNumber(attemptNumber)
+                .status(SubmissionStatus.IN_PROGRESS)
+                .startedAt(now)
+                .ipAddress(request.getIpAddress())
+                .build();
+
+        attempt = quizAttemptRepository.save(attempt);
+        log.info("Created quiz attempt: {}", attempt.getId());
+
+        draftService.initDraft(attempt.getId(), assessmentId, assessment.getTimeLimitMinutes());
+
+        String connectionToken = centrifugoService.generateConnectionToken(studentId, attempt.getId());
+        String channelName = centrifugoService.getAttemptChannel(attempt.getId());
+
+        List<AssessmentQuestion> assessmentQuestions = assessmentQuestionRepository
+                .findByAssessmentIdOrderByOrderIndex(assessmentId);
+
+        if (Boolean.TRUE.equals(assessment.getRandomizeQuestions())) {
+            Collections.shuffle(assessmentQuestions);
+        }
+
+        List<AttemptQuestionResponse> questions = assessmentQuestions.stream()
+                .map(this::mapToAttemptQuestion)
+                .collect(Collectors.toList());
+
+        Instant expiresAt = assessment.getTimeLimitMinutes() != null
+                ? now.plusSeconds(assessment.getTimeLimitMinutes() * 60L)
+                : null;
+
+        return AttemptStartResponse.builder()
+                .attemptId(attempt.getId())
+                .assessmentId(assessmentId)
+                .attemptNumber(attemptNumber)
+                .startedAt(now)
+                .expiresAt(expiresAt)
+                .timeLimitMinutes(assessment.getTimeLimitMinutes())
+                .totalQuestions((long) questions.size())
+                .instructions(assessment.getDescription())
+                .connectionToken(connectionToken)
+                .channelName(channelName)
+                .questions(questions)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public AnswerAckResponse updateAnswer(AnswerUpdateRequest request) {
+        UUID studentId = getCurrentUserId();
+        UUID attemptId = request.getAttemptId();
+
+        log.debug("Updating answer for attempt {}, question {}", attemptId, request.getQuestionId());
+
+        QuizAttempt attempt = validateAttemptAccess(attemptId, studentId);
+
+        if (isAttemptExpired(attempt)) {
+            throw new AppException(ErrorCode.TIME_LIMIT_EXCEEDED);
+        }
+
+        draftService.saveAnswer(attemptId, request.getQuestionId(), request.getAnswerValue());
+        centrifugoService.publishAnswerAck(attemptId, request.getQuestionId(), request.getSequenceNumber());
+
+        return AnswerAckResponse.builder()
+                .type("ack")
+                .questionId(request.getQuestionId())
+                .serverTimestamp(Instant.now())
+                .sequenceNumber(request.getSequenceNumber())
+                .success(true)
+                .message("Answer saved successfully")
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public AnswerAckResponse updateFlag(FlagUpdateRequest request) {
+        UUID studentId = getCurrentUserId();
+        UUID attemptId = request.getAttemptId();
+
+        log.debug("Updating flag for attempt {}, question {}: {}",
+                 attemptId, request.getQuestionId(), request.getFlagged());
+
+        validateAttemptAccess(attemptId, studentId);
+
+        draftService.saveFlag(attemptId, request.getQuestionId(), request.getFlagged());
+        centrifugoService.publishFlagAck(attemptId, request.getQuestionId(), request.getFlagged());
+
+        return AnswerAckResponse.builder()
+                .type("flag_ack")
+                .questionId(request.getQuestionId())
+                .serverTimestamp(Instant.now())
+                .success(true)
+                .message("Flag updated successfully")
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public void submitAssessment(SubmitAssessmentRequest request) {
+        UUID studentId = getCurrentUserId();
+        UUID attemptId = request.getAttemptId();
+
+        log.info("Student {} submitting attempt {}", studentId, attemptId);
+
+        QuizAttempt attempt = validateAttemptAccess(attemptId, studentId);
+
+        draftService.flushDraftToDatabase(attemptId);
+
+        Instant now = Instant.now();
+        attempt.setSubmittedAt(now);
+        attempt.setStatus(SubmissionStatus.SUBMITTED);
+        attempt.setTimeSpentSeconds((int) Duration.between(attempt.getStartedAt(), now).getSeconds());
+
+        quizAttemptRepository.save(attempt);
+
+        updateSubmissionStatus(attempt.getSubmissionId());
+
+        draftService.deleteDraft(attemptId);
+        centrifugoService.publishSubmitted(attemptId);
+
+        log.info("Assessment submitted successfully: {}", attemptId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DraftSnapshotResponse getDraftSnapshot(UUID attemptId) {
+        UUID studentId = getCurrentUserId();
+
+        QuizAttempt attempt = validateAttemptAccess(attemptId, studentId);
+
+        Map<String, Object> snapshot = draftService.getDraftSnapshot(attemptId);
+
+        Map<UUID, Object> answers = parseAnswersMap(snapshot.get("answers"));
+        Map<UUID, Boolean> flags = parseFlagsMap(snapshot.get("flags"));
+
+        Integer answeredCount = draftService.getAnsweredCount(attemptId);
+        Long totalQuestions = (long) assessmentQuestionRepository
+                .findByAssessmentIdOrderByOrderIndex(attempt.getAssessmentId())
+                .size();
+
+        Integer timeRemainingSeconds = calculateTimeRemaining(attempt);
+
+        return DraftSnapshotResponse.builder()
+                .attemptId(attemptId)
+                .answers(answers)
+                .flags(flags)
+                .startedAt(attempt.getStartedAt())
+                .expiresAt(getExpiresAt(attempt))
+                .timeRemainingSeconds(timeRemainingSeconds)
+                .answeredCount(answeredCount)
+                .totalQuestions(totalQuestions.intValue())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public void saveAndExit(UUID attemptId) {
+        UUID studentId = getCurrentUserId();
+
+        log.info("Student {} saving and exiting attempt {}", studentId, attemptId);
+        validateAttemptAccess(attemptId, studentId);
+        log.info("Attempt saved and exited: {}", attemptId);
+    }
+
+    private UUID getCurrentUserId() {
+        return UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName());
+    }
+
+    private boolean isAssessmentAvailable(Assessment assessment, Instant now) {
+        if (assessment.getStartDate() != null && now.isBefore(assessment.getStartDate())) {
+            return false;
+        }
+        if (assessment.getEndDate() != null && now.isAfter(assessment.getEndDate())) {
+            return false;
+        }
+        return true;
+    }
+
+    private StudentAssessmentResponse mapToStudentResponse(Assessment assessment, UUID studentId, Instant now) {
+        Long totalQuestions = (long) assessmentQuestionRepository
+                .findByAssessmentIdOrderByOrderIndex(assessment.getId())
+                .size();
+
+        Double totalPointsDouble = assessmentRepository.calculateTotalPoints(assessment.getId());
+        BigDecimal totalPoints = totalPointsDouble != null
+                ? BigDecimal.valueOf(totalPointsDouble)
+                : BigDecimal.ZERO;
+
+        Optional<Submission> submissionOpt = submissionRepository
+                .findByAssessmentIdAndStudentId(assessment.getId(), studentId);
+
+        String studentStatus = determineStudentStatus(assessment, submissionOpt, now);
+        UUID currentAttemptId = null;
+        Integer attemptNumber = 0;
+
+        if (submissionOpt.isPresent()) {
+            List<QuizAttempt> attempts = quizAttemptRepository
+                    .findBySubmissionIdOrderByAttemptNumberDesc(submissionOpt.get().getId());
+
+            if (!attempts.isEmpty()) {
+                QuizAttempt latestAttempt = attempts.get(0);
+                if (latestAttempt.getStatus() == SubmissionStatus.IN_PROGRESS) {
+                    currentAttemptId = latestAttempt.getId();
+                }
+                attemptNumber = attempts.size();
+            }
+        }
+
+        boolean canStart = canStartAssessment(assessment, submissionOpt, now);
+        String cannotStartReason = canStart ? null : getCannotStartReason(assessment, submissionOpt, now);
+
+        return StudentAssessmentResponse.builder()
+                .id(assessment.getId())
+                .title(assessment.getTitle())
+                .description(assessment.getDescription())
+                .assessmentType(assessment.getAssessmentType())
+                .totalQuestions(totalQuestions)
+                .totalPoints(totalPoints)
+                .timeLimitMinutes(assessment.getTimeLimitMinutes())
+                .dueDate(assessment.getEndDate())
+                .startDate(assessment.getStartDate())
+                .endDate(assessment.getEndDate())
+                .status(assessment.getStatus())
+                .studentStatus(studentStatus)
+                .currentAttemptId(currentAttemptId)
+                .attemptNumber(attemptNumber)
+                .maxAttempts(assessment.getMaxAttempts())
+                .allowMultipleAttempts(assessment.getAllowMultipleAttempts())
+                .canStart(canStart)
+                .cannotStartReason(cannotStartReason)
+                .build();
+    }
+
+    private String determineStudentStatus(Assessment assessment, Optional<Submission> submissionOpt, Instant now) {
+        if (assessment.getStartDate() != null && now.isBefore(assessment.getStartDate())) {
+            return "UPCOMING";
+        }
+
+        if (submissionOpt.isPresent()) {
+            List<QuizAttempt> inProgressAttempts = quizAttemptRepository
+                    .findByAssessmentIdAndStudentIdAndStatus(
+                            assessment.getId(),
+                            submissionOpt.get().getStudentId(),
+                            SubmissionStatus.IN_PROGRESS);
+
+            if (!inProgressAttempts.isEmpty()) {
+                return "IN_PROGRESS";
+            }
+
+            if (submissionOpt.get().getStatus() == SubmissionStatus.SUBMITTED ||
+                submissionOpt.get().getStatus() == SubmissionStatus.GRADED) {
+                return "COMPLETED";
+            }
+        }
+
+        if (assessment.getEndDate() != null && now.isAfter(assessment.getEndDate())) {
+            return "COMPLETED";
+        }
+
+        return "IN_PROGRESS";
+    }
+
+    private boolean matchesStatusFilter(StudentAssessmentResponse response, String statusFilter) {
+        if (statusFilter == null || statusFilter.isEmpty()) {
+            return true;
+        }
+        return response.getStudentStatus().equalsIgnoreCase(statusFilter);
+    }
+
+    private void validateAssessmentCanStart(Assessment assessment, UUID studentId, Instant now) {
+        if (assessment.getStatus() != AssessmentStatus.PUBLISHED) {
+            throw new AppException(ErrorCode.ASSESSMENT_NOT_PUBLISHED);
+        }
+
+        if (assessment.getStartDate() != null && now.isBefore(assessment.getStartDate())) {
+            throw new AppException(ErrorCode.ASSESSMENT_NOT_AVAILABLE);
+        }
+
+        if (assessment.getEndDate() != null && now.isAfter(assessment.getEndDate())) {
+            throw new AppException(ErrorCode.ASSESSMENT_EXPIRED);
+        }
+
+        Optional<Submission> submissionOpt = submissionRepository
+                .findByAssessmentIdAndStudentId(assessment.getId(), studentId);
+
+        if (submissionOpt.isPresent()) {
+            Integer attemptCount = quizAttemptRepository.countBySubmissionId(submissionOpt.get().getId());
+
+            if (Boolean.TRUE.equals(assessment.getAllowMultipleAttempts())) {
+                if (assessment.getMaxAttempts() != null && attemptCount >= assessment.getMaxAttempts()) {
+                    throw new AppException(ErrorCode.MAX_ATTEMPTS_REACHED);
+                }
+            } else {
+                if (attemptCount > 0) {
+                    throw new AppException(ErrorCode.MAX_ATTEMPTS_REACHED);
+                }
+            }
+
+            List<QuizAttempt> inProgressAttempts = quizAttemptRepository
+                    .findByAssessmentIdAndStudentIdAndStatus(
+                            assessment.getId(), studentId, SubmissionStatus.IN_PROGRESS);
+
+            if (!inProgressAttempts.isEmpty()) {
+                throw new AppException(ErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+            }
+        }
+    }
+
+    private boolean canStartAssessment(Assessment assessment, Optional<Submission> submissionOpt, Instant now) {
+        try {
+            validateAssessmentCanStart(assessment,
+                    submissionOpt.map(Submission::getStudentId).orElse(getCurrentUserId()),
+                    now);
+            return true;
+        } catch (AppException e) {
+            return false;
+        }
+    }
+
+    private String getCannotStartReason(Assessment assessment, Optional<Submission> submissionOpt, Instant now) {
+        if (assessment.getStartDate() != null && now.isBefore(assessment.getStartDate())) {
+            return "Assessment has not started yet";
+        }
+
+        if (assessment.getEndDate() != null && now.isAfter(assessment.getEndDate())) {
+            return "Assessment has expired";
+        }
+
+        if (submissionOpt.isPresent()) {
+            Integer attemptCount = quizAttemptRepository.countBySubmissionId(submissionOpt.get().getId());
+
+            if (Boolean.TRUE.equals(assessment.getAllowMultipleAttempts())) {
+                if (assessment.getMaxAttempts() != null && attemptCount >= assessment.getMaxAttempts()) {
+                    return "Maximum attempts reached";
+                }
+            } else if (attemptCount > 0) {
+                return "Only one attempt allowed";
+            }
+        }
+
+        return null;
+    }
+
+    private Submission createSubmission(Assessment assessment, UUID studentId) {
+        Submission submission = Submission.builder()
+                .assessmentId(assessment.getId())
+                .studentId(studentId)
+                .status(SubmissionStatus.IN_PROGRESS)
+                .startedAt(Instant.now())
+                .build();
+
+        return submissionRepository.save(submission);
+    }
+
+    private QuizAttempt validateAttemptAccess(UUID attemptId, UUID studentId) {
+        QuizAttempt attempt = quizAttemptRepository.findById(attemptId)
+                .orElseThrow(() -> new AppException(ErrorCode.QUIZ_ATTEMPT_NOT_FOUND));
+
+        if (!attempt.getStudentId().equals(studentId)) {
+            throw new AppException(ErrorCode.ATTEMPT_ACCESS_DENIED);
+        }
+
+        if (attempt.getStatus() != SubmissionStatus.IN_PROGRESS) {
+            throw new AppException(ErrorCode.ATTEMPT_NOT_IN_PROGRESS);
+        }
+
+        return attempt;
+    }
+
+    private boolean isAttemptExpired(QuizAttempt attempt) {
+        Assessment assessment = assessmentRepository.findById(attempt.getAssessmentId())
+                .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+        if (assessment.getTimeLimitMinutes() == null) {
+            return false;
+        }
+
+        Instant expiresAt = attempt.getStartedAt().plusSeconds(assessment.getTimeLimitMinutes() * 60L);
+        return Instant.now().isAfter(expiresAt);
+    }
+
+    private void updateSubmissionStatus(UUID submissionId) {
+        Submission submission = submissionRepository.findById(submissionId)
+                .orElseThrow(() -> new AppException(ErrorCode.SUBMISSION_NOT_FOUND));
+
+        List<QuizAttempt> attempts = quizAttemptRepository
+                .findBySubmissionIdOrderByAttemptNumberDesc(submissionId);
+
+        boolean allSubmitted = attempts.stream()
+                .allMatch(a -> a.getStatus() == SubmissionStatus.SUBMITTED ||
+                              a.getStatus() == SubmissionStatus.GRADED);
+
+        if (allSubmitted && !attempts.isEmpty()) {
+            submission.setStatus(SubmissionStatus.SUBMITTED);
+            submission.setSubmittedAt(Instant.now());
+            submissionRepository.save(submission);
+        }
+    }
+
+    private AttemptQuestionResponse mapToAttemptQuestion(AssessmentQuestion aq) {
+        Question question = aq.getQuestion();
+
+        return AttemptQuestionResponse.builder()
+                .questionId(question.getId())
+                .orderIndex(aq.getOrderIndex())
+                .questionType(question.getQuestionType())
+                .questionText(question.getQuestionText())
+                .options(question.getOptions())
+                .points(aq.getPointsOverride() != null ? aq.getPointsOverride() : question.getPoints())
+                .build();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<UUID, Object> parseAnswersMap(Object answersObj) {
+        if (answersObj instanceof Map) {
+            Map<String, Object> raw = (Map<String, Object>) answersObj;
+            Map<UUID, Object> parsed = new HashMap<>();
+            raw.forEach((k, v) -> {
+                try {
+                    parsed.put(UUID.fromString(k), v);
+                } catch (Exception e) {
+                    log.warn("Failed to parse answer key: {}", k);
+                }
+            });
+            return parsed;
+        }
+        return new HashMap<>();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<UUID, Boolean> parseFlagsMap(Object flagsObj) {
+        if (flagsObj instanceof Map) {
+            Map<String, Boolean> raw = (Map<String, Boolean>) flagsObj;
+            Map<UUID, Boolean> parsed = new HashMap<>();
+            raw.forEach((k, v) -> {
+                try {
+                    parsed.put(UUID.fromString(k), v);
+                } catch (Exception e) {
+                    log.warn("Failed to parse flag key: {}", k);
+                }
+            });
+            return parsed;
+        }
+        return new HashMap<>();
+    }
+
+    private Integer calculateTimeRemaining(QuizAttempt attempt) {
+        Assessment assessment = assessmentRepository.findById(attempt.getAssessmentId())
+                .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+        if (assessment.getTimeLimitMinutes() == null) {
+            return null;
+        }
+
+        long elapsed = Duration.between(attempt.getStartedAt(), Instant.now()).getSeconds();
+        long total = assessment.getTimeLimitMinutes() * 60L;
+        long remaining = total - elapsed;
+
+        return remaining > 0 ? (int) remaining : 0;
+    }
+
+    private Instant getExpiresAt(QuizAttempt attempt) {
+        Assessment assessment = assessmentRepository.findById(attempt.getAssessmentId())
+                .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+        if (assessment.getTimeLimitMinutes() == null) {
+            return null;
+        }
+
+        return attempt.getStartedAt().plusSeconds(assessment.getTimeLimitMinutes() * 60L);
+    }
+}
+
+
+
