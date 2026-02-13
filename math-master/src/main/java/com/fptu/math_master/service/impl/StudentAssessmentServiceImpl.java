@@ -39,6 +39,7 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     AnswerRepository answerRepository;
     AssessmentDraftService draftService;
     CentrifugoService centrifugoService;
+    GradingService gradingService;
 
     @Override
     @Transactional(readOnly = true)

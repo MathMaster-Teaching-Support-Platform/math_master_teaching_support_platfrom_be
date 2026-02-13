@@ -61,6 +61,25 @@ public class Submission {
   @Column(name = "time_spent_seconds")
   private Integer timeSpentSeconds;
 
+  @Column(name = "manual_adjustment", precision = 5, scale = 2)
+  private BigDecimal manualAdjustment;
+
+  @Lob
+  @Column(name = "manual_adjustment_reason")
+  private String manualAdjustmentReason;
+
+  @Column(name = "final_score", precision = 5, scale = 2)
+  private BigDecimal finalScore;
+
+  @Column(name = "grades_released")
+  private Boolean gradesReleased;
+
+  @Column(name = "graded_by")
+  private UUID gradedBy;
+
+  @Column(name = "graded_at")
+  private Instant gradedAt;
+
   @Column(name = "created_at")
   private Instant createdAt;
 
@@ -84,10 +103,22 @@ public class Submission {
   @OneToMany(mappedBy = "submission", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<AiReview> aiReviews;
 
+  @OneToMany(mappedBy = "submission", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<GradeAuditLog> gradeAuditLogs;
+
+  @OneToMany(mappedBy = "submission", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<RegradeRequest> regradeRequests;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "graded_by", insertable = false, updatable = false)
+  private User grader;
+
   @PrePersist
   public void prePersist() {
     if (status == null) status = SubmissionStatus.IN_PROGRESS;
     if (startedAt == null) startedAt = Instant.now();
+    if (gradesReleased == null) gradesReleased = false;
+    if (manualAdjustment == null) manualAdjustment = BigDecimal.ZERO;
     if (createdAt == null) createdAt = Instant.now();
     if (updatedAt == null) updatedAt = Instant.now();
   }

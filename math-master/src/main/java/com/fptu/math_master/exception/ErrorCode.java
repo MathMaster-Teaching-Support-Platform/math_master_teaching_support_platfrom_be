@@ -79,7 +79,11 @@ public enum ErrorCode {
   ASSESSMENT_NOT_SCHEDULED(1067, "Assessment is not currently scheduled", HttpStatus.BAD_REQUEST),
   ANSWER_NOT_FOUND(1068, "Answer not found", HttpStatus.NOT_FOUND),
   INVALID_ANSWER_FORMAT(1069, "Invalid answer format", HttpStatus.BAD_REQUEST),
-  DRAFT_NOT_FOUND(1070, "Draft not found", HttpStatus.NOT_FOUND);
+  DRAFT_NOT_FOUND(1070, "Draft not found", HttpStatus.NOT_FOUND),
+  QUESTION_NOT_FOUND(1071, "Question not found", HttpStatus.NOT_FOUND),
+  SUBMISSION_NOT_GRADED(1072, "Submission has not been graded yet", HttpStatus.BAD_REQUEST),
+  GRADES_NOT_RELEASED(1073, "Grades have not been released yet", HttpStatus.BAD_REQUEST),
+  REGRADE_REQUEST_NOT_FOUND(1074, "Regrade request not found", HttpStatus.NOT_FOUND);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
