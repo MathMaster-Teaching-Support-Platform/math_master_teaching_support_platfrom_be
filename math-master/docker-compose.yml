@@ -1,0 +1,106 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: math-master-redis
+    command: redis-server --appendonly yes --requirepass redis_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_password", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - math-master-network
+    restart: unless-stopped
+
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    container_name: math-master-centrifugo
+    command: centrifugo --config /centrifugo/config.json
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    volumes:
+      - ./centrifugo-config.json:/centrifugo/config.json:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      CENTRIFUGO_REDIS_ADDRESS: redis:6379
+      CENTRIFUGO_REDIS_PASSWORD: redis_password
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - math-master-network
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: math-master-app
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: redis_password
+
+      SERVER_PORT: 8080
+
+      JWT_SIGNERKEY: 1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij
+      JWT_VALID-DURATION: 3600
+      JWT_REFRESHABLE-DURATION: 36000
+
+      PAYOS_CLIENT-ID: 3af710f4-e502-4ddb-b99d-72ffa68f8423
+      PAYOS_API-KEY: b5087001-a7a7-4f60-af06-c941f374e5aa
+      PAYOS_CHECKSUM-KEY: 7a6fd4e43ca930c32838b42f7976dd13c746ccc236a678b95585b68da743a5a4
+      PAYOS_RETURN_URL: http://localhost:3000/payment/success
+      PAYOS_CANCEL_URL: http://localhost:3000/payment/cancel
+
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: Admin@123456
+      ADMIN_GMAIL: admin@mathmaster.com
+      ADMIN_FULLNAME: System Administrator
+
+      STUDENT_USERNAME: student
+      STUDENT_PASSWORD: Student@123456
+      STUDENT_GMAIL: student@mathmaster.com
+      STUDENT_FULLNAME: Student User
+
+      TEACHER_USERNAME: teacher
+      TEACHER_PASSWORD: Teacher@123456
+      TEACHER_GMAIL: teacher@mathmaster.com
+      TEACHER_FULLNAME: Teacher User
+
+      CENTRIFUGO_API_URL: http://centrifugo:8000/api
+      CENTRIFUGO_WS_URL: ws://localhost:8000/connection/websocket
+
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      centrifugo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - math-master-network
+    restart: unless-stopped
+
+networks:
+  math-master-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local
