@@ -1,0 +1,137 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: math-master-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_prod_change_me}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "-a",
+          "${REDIS_PASSWORD:-redis_password_prod_change_me}",
+          "ping",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - math-master-network
+    restart: unless-stopped
+
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    container_name: math-master-centrifugo
+    command: centrifugo --config /centrifugo/config.json
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    volumes:
+      - ./centrifugo-config.json:/centrifugo/config.json:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      CENTRIFUGO_REDIS_ADDRESS: redis:6379
+      CENTRIFUGO_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password_prod_change_me}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8000/health",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - math-master-network
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: math-master-app
+    environment:
+      # Redis Configuration
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password_prod_change_me}
+
+      # Server Configuration
+      SERVER_PORT: 8080
+
+      # JWT Configuration
+      JWT_SIGNERKEY: ${JWT_SIGNERKEY}
+      JWT_VALID-DURATION: ${JWT_VALID_DURATION:-3600}
+      JWT_REFRESHABLE-DURATION: ${JWT_REFRESHABLE_DURATION:-36000}
+
+      # PayOS Configuration
+      PAYOS_CLIENT-ID: ${PAYOS_CLIENT_ID}
+      PAYOS_API-KEY: ${PAYOS_API_KEY}
+      PAYOS_CHECKSUM-KEY: ${PAYOS_CHECKSUM_KEY}
+      PAYOS_RETURN_URL: ${PAYOS_RETURN_URL:-http://18.208.211.119:3000/payment/success}
+      PAYOS_CANCEL_URL: ${PAYOS_CANCEL_URL:-http://18.208.211.119:3000/payment/cancel}
+
+      # Admin Configuration
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_GMAIL: ${ADMIN_GMAIL:-admin@mathmaster.com}
+      ADMIN_FULLNAME: ${ADMIN_FULLNAME:-System Administrator}
+
+      # Student Configuration
+      STUDENT_USERNAME: ${STUDENT_USERNAME:-student}
+      STUDENT_PASSWORD: ${STUDENT_PASSWORD}
+      STUDENT_GMAIL: ${STUDENT_GMAIL:-student@mathmaster.com}
+      STUDENT_FULLNAME: ${STUDENT_FULLNAME:-Student User}
+
+      # Teacher Configuration
+      TEACHER_USERNAME: ${TEACHER_USERNAME:-teacher}
+      TEACHER_PASSWORD: ${TEACHER_PASSWORD}
+      TEACHER_GMAIL: ${TEACHER_GMAIL:-teacher@mathmaster.com}
+      TEACHER_FULLNAME: ${TEACHER_FULLNAME:-Teacher User}
+
+      # Centrifugo Configuration
+      CENTRIFUGO_API_URL: http://centrifugo:8000/api
+      CENTRIFUGO_WS_URL: ${CENTRIFUGO_WS_URL:-ws://18.208.211.119:8000/connection/websocket}
+
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      centrifugo:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/actuator/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - math-master-network
+    restart: unless-stopped
+
+networks:
+  math-master-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local

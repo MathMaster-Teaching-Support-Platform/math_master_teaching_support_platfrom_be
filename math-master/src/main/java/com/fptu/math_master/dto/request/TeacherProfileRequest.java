@@ -6,6 +6,8 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.util.UUID;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -13,17 +15,17 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class TeacherProfileRequest {
 
-    @NotNull(message = "School ID is required")
-    Long schoolId;
+  @NotNull(message = "School ID is required")
+  UUID schoolId;
 
-    @NotBlank(message = "Position is required")
-    @Size(max = 100, message = "Position must not exceed 100 characters")
-    String position;
+  @NotBlank(message = "Position is required")
+  @Size(max = 100, message = "Position must not exceed 100 characters")
+  String position;
 
-    String certificateUrl;
+  String certificateUrl;
 
-    String identificationDocumentUrl;
+  String identificationDocumentUrl;
 
-    @Size(max = 1000, message = "Description must not exceed 1000 characters")
-    String description;
+  @Size(max = 1000, message = "Description must not exceed 1000 characters")
+  String description;
 }

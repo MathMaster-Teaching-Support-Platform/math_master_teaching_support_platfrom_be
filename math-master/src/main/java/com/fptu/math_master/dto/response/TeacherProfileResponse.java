@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -13,21 +14,21 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class TeacherProfileResponse {
 
-    Long id;
-    Integer userId;
-    String userName;
-    String fullName;
-    Long schoolId;
-    String schoolName;
-    String position;
-    String certificateUrl;
-    String identificationDocumentUrl;
-    String description;
-    ProfileStatus status;
-    String adminComment;
-    Integer reviewedBy;
-    String reviewedByName;
-    LocalDateTime reviewedAt;
-    LocalDateTime createdAt;
-    LocalDateTime updatedAt;
+  UUID id;
+  UUID userId;
+  String userName;
+  String fullName;
+  UUID schoolId;
+  String schoolName;
+  String position;
+  String certificateUrl;
+  String identificationDocumentUrl;
+  String description;
+  ProfileStatus status;
+  String adminComment;
+  UUID reviewedBy;
+  String reviewedByName;
+  LocalDateTime reviewedAt;
+  LocalDateTime createdAt;
+  LocalDateTime updatedAt;
 }

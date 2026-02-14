@@ -9,38 +9,39 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface UserService {
-    UserResponse createUser(UserCreationRequest request);
+  UserResponse createUser(UserCreationRequest request);
 
-    UserResponse updateUser(Integer userId, UserUpdateRequest request);
+  UserResponse updateUser(UUID userId, UserUpdateRequest request);
 
-    void deleteUser(Integer userId);
+  void deleteUser(UUID userId);
 
-    UserResponse getUserById(Integer userId);
+  UserResponse getUserById(UUID userId);
 
-    List<UserResponse> getAllUsers();
+  List<UserResponse> getAllUsers();
 
-    Page<UserResponse> getAllUsers(Pageable pageable);
+  Page<UserResponse> getAllUsers(Pageable pageable);
 
-    UserResponse getMyInfo();
+  UserResponse getMyInfo();
 
-    UserResponse updateMyInfo(UserUpdateRequest request);
+  UserResponse updateMyInfo(UserUpdateRequest request);
 
-    // Search and filtering
-    Page<UserResponse> searchUsers(UserSearchRequest request, Pageable pageable);
+  // Search and filtering
+  Page<UserResponse> searchUsers(UserSearchRequest request, Pageable pageable);
 
-    // Ban/Unban operations
-    UserResponse banUser(Integer userId, String reason);
+  // Ban/Unban operations
+  UserResponse banUser(UUID userId, String reason);
 
-    UserResponse unbanUser(Integer userId);
+  UserResponse unbanUser(UUID userId);
 
-    // Soft delete operations
-    UserResponse disableUser(Integer userId);
+  // Soft delete operations
+  UserResponse disableUser(UUID userId);
 
-    UserResponse enableUser(Integer userId);
+  UserResponse enableUser(UUID userId);
 
-    // Password management
-    void changePassword(ChangePasswordRequest request);
+  // Password management
+  void changePassword(ChangePasswordRequest request);
 }
 

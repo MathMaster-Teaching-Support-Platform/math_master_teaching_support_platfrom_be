@@ -35,6 +35,20 @@ spring:
         format_sql: true
     show-sql: false
 
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:redis_password}
+      database: ${SPRING_DATA_REDIS_DATABASE:0}
+      timeout: 60000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
 server:
   port: 8080
 
@@ -64,3 +78,56 @@ springdoc:
     path: /swagger-ui
     operationsSorter: method
     tagsSorter: alpha
+
+# ================================
+# Username and Password
+# ================================
+app:
+  init:
+    enabled: true
+
+    admin:
+      username: ${ADMIN_USERNAME:admin}
+      password: ${ADMIN_PASSWORD:Admin@123456}
+      email: ${ADMIN_GMAIL:admin@mathmaster.com}
+      fullname: ${ADMIN_FULLNAME:System Administrator}
+
+    student:
+      username: ${STUDENT_USERNAME:student}
+      password: ${STUDENT_PASSWORD:Student@123456}
+      email: ${STUDENT_GMAIL:student@mathmaster.com}
+      fullname: ${STUDENT_FULLNAME:Student User}
+
+    teacher:
+      username: ${TEACHER_USERNAME:teacher}
+      password: ${TEACHER_PASSWORD:Teacher@123456}
+      email: ${TEACHER_GMAIL:teacher@mathmaster.com}
+      fullname: ${TEACHER_FULLNAME:Teacher User}
+
+# ================================
+# PayOS Configuration
+# ================================
+payos:
+  client-id: 3af710f4-e502-4ddb-b99d-72ffa68f8423
+  api-key: b5087001-a7a7-4f60-af06-c941f374e5aa
+  checksum-key: 7a6fd4e43ca930c32838b42f7976dd13c746ccc236a678b95585b68da743a5a4
+  return-url: ${PAYOS_RETURN_URL:http://localhost:3000/payment/success}
+  cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/payment/cancel}
+
+# ================================
+# Centrifugo Configuration
+# ================================
+centrifugo:
+  api-url: ${CENTRIFUGO_API_URL:http://localhost:8000/api}
+  api-key: ${CENTRIFUGO_API_KEY:my-api-key-change-this-in-production}
+  token-hmac-secret: ${CENTRIFUGO_TOKEN_SECRET:my-secret-key-change-this-in-production}
+  ws-url: ${CENTRIFUGO_WS_URL:ws://localhost:8000/connection/websocket}
+
+# ================================
+# Assessment Draft Configuration
+# ================================
+assessment:
+  draft:
+    ttl: 86400  # 24 hours in seconds
+    auto-save-interval: 2000  # milliseconds
+

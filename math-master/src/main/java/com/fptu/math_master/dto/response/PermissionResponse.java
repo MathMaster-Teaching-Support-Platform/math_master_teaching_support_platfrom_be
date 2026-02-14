@@ -3,6 +3,8 @@ package com.fptu.math_master.dto.response;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.util.UUID;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -10,11 +12,11 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PermissionResponse {
 
-    Integer id;
+  UUID id;
 
-    String code;
+  String code;
 
-    String name;
+  String name;
 
-    String description;
+  String description;
 }

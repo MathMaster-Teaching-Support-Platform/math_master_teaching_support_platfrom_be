@@ -6,12 +6,13 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 @Repository
-public interface PermissionRepository extends JpaRepository<Permission, Integer> {
-    Optional<Permission> findByCode(String code);
+public interface PermissionRepository extends JpaRepository<Permission, UUID> {
+  Optional<Permission> findByCode(String code);
 
-    boolean existsByCode(String code);
+  boolean existsByCode(String code);
 
-    Set<Permission> findByCodeIn(Set<String> codes);
+  Set<Permission> findByCodeIn(Set<String> codes);
 }

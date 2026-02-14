@@ -7,21 +7,22 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface PermissionService {
 
-    PermissionResponse createPermission(PermissionCreationRequest request);
+  PermissionResponse createPermission(PermissionCreationRequest request);
 
-    PermissionResponse updatePermission(Integer permissionId, PermissionUpdateRequest request);
+  PermissionResponse updatePermission(UUID permissionId, PermissionUpdateRequest request);
 
-    void deletePermission(Integer permissionId);
+  void deletePermission(UUID permissionId);
 
-    PermissionResponse getPermissionById(Integer permissionId);
+  PermissionResponse getPermissionById(UUID permissionId);
 
-    PermissionResponse getPermissionByCode(String code);
+  PermissionResponse getPermissionByCode(String code);
 
-    List<PermissionResponse> getAllPermissions();
+  List<PermissionResponse> getAllPermissions();
 
-    Page<PermissionResponse> getAllPermissions(Pageable pageable);
+  Page<PermissionResponse> getAllPermissions(Pageable pageable);
 }
 

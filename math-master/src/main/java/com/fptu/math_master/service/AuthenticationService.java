@@ -9,16 +9,17 @@ import com.fptu.math_master.dto.response.AuthenticationResponse;
 import com.fptu.math_master.dto.response.IntrospectResponse;
 import com.fptu.math_master.dto.response.UserResponse;
 import com.nimbusds.jose.JOSEException;
+
 import java.text.ParseException;
 
 public interface AuthenticationService {
-        IntrospectResponse introspect(IntrospectRequest request);
+  IntrospectResponse introspect(IntrospectRequest request);
 
-        AuthenticationResponse login(AuthenticationRequest request);
+  AuthenticationResponse login(AuthenticationRequest request);
 
-        void logout(LogoutRequest request) throws ParseException, JOSEException;
+  void logout(LogoutRequest request) throws ParseException, JOSEException;
 
-        AuthenticationResponse refreshToken(RefreshRequest request) throws ParseException, JOSEException;
+  AuthenticationResponse refreshToken(RefreshRequest request) throws ParseException, JOSEException;
 
-        UserResponse register(UserRegistrationRequest request);
+  UserResponse register(UserRegistrationRequest request);
 }

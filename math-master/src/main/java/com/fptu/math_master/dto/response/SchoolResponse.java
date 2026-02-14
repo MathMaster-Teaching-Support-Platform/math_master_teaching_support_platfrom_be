@@ -4,6 +4,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -12,14 +13,14 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SchoolResponse {
 
-    Long id;
-    String name;
-    String address;
-    String city;
-    String district;
-    String phoneNumber;
-    String email;
-    String website;
-    LocalDateTime createdAt;
-    LocalDateTime updatedAt;
+  UUID id;
+  String name;
+  String address;
+  String city;
+  String district;
+  String phoneNumber;
+  String email;
+  String website;
+  LocalDateTime createdAt;
+  LocalDateTime updatedAt;
 }
