@@ -52,6 +52,19 @@ public class PaymentController {
             .build();
     }
 
+    @Operation(summary = "Manual confirm transaction (Admin/Dev only)",
+               description = "Manually confirm a pending transaction as successful. Use this for transactions where webhook was not received.")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/confirm/{orderCode}")
+    public ApiResponse<String> confirmTransaction(@PathVariable Long orderCode) {
+        log.info("Manual confirmation requested for orderCode: {}", orderCode);
+        paymentService.manualConfirmTransaction(orderCode);
+        return ApiResponse.<String>builder()
+            .message("Transaction confirmed successfully")
+            .result("Wallet balance updated")
+            .build();
+    }
+
     private UUID getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return UUID.fromString(authentication.getName());
