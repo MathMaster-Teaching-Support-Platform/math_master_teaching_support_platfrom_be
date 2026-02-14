@@ -42,7 +42,9 @@ public class SecurityConfig {
 
   private static final String[] PUBLIC_GET_ENDPOINTS = {
     "/api/schools/**",
-    "/actuator/health"
+    "/actuator/health",
+    "/actuator/info",
+    "/actuator/mappings"
   };
 
   private static final String[] SWAGGER_WHITELIST = {
