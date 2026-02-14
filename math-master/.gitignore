@@ -1,5 +1,8 @@
 # Env file
 .env
+.env.production
+.env.local
+.env.*.local
 
 # IntelliJ / JetBrains
 .idea/
