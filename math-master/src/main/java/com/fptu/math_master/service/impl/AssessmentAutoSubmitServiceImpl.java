@@ -10,6 +10,7 @@ import com.fptu.math_master.repository.QuizAttemptRepository;
 import com.fptu.math_master.service.AssessmentAutoSubmitService;
 import com.fptu.math_master.service.AssessmentDraftService;
 import com.fptu.math_master.service.CentrifugoService;
+import com.fptu.math_master.service.GradingService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -32,6 +33,7 @@ public class AssessmentAutoSubmitServiceImpl implements AssessmentAutoSubmitServ
     AssessmentRepository assessmentRepository;
     AssessmentDraftService draftService;
     CentrifugoService centrifugoService;
+    GradingService gradingService;
 
     @Override
     @Scheduled(fixedRate = 60000)
@@ -70,6 +72,13 @@ public class AssessmentAutoSubmitServiceImpl implements AssessmentAutoSubmitServ
                         quizAttemptRepository.save(attempt);
                         draftService.deleteDraft(attempt.getId());
                         centrifugoService.publishSubmitted(attempt.getId());
+
+                        // Trigger auto-grading
+                        try {
+                            gradingService.autoGradeSubmission(attempt.getSubmissionId());
+                        } catch (Exception ex) {
+                            log.error("Error during auto-grading for submission: {}", attempt.getSubmissionId(), ex);
+                        }
 
                         log.info("Successfully auto-submitted attempt: {}", attempt.getId());
                     }

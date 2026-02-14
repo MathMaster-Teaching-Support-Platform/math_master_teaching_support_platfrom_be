@@ -1,16 +1,12 @@
 package com.fptu.math_master.entity;
 
+import com.fptu.math_master.enums.RegradeRequestStatus;
 import com.fptu.math_master.util.UuidV7Generator;
-import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
-import org.hibernate.annotations.Type;
 
-import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 @Builder
@@ -19,16 +15,15 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "answers",
-  uniqueConstraints = {
-    @UniqueConstraint(name = "uq_answers", columnNames = {"submission_id", "question_id"})
-  },
+  name = "regrade_requests",
   indexes = {
-    @Index(name = "idx_answers_submission", columnList = "submission_id"),
-    @Index(name = "idx_answers_question", columnList = "question_id")
+    @Index(name = "idx_regrade_submission", columnList = "submission_id"),
+    @Index(name = "idx_regrade_student", columnList = "student_id"),
+    @Index(name = "idx_regrade_status", columnList = "status"),
+    @Index(name = "idx_regrade_question", columnList = "question_id")
   }
 )
-public class Answer {
+public class RegradeRequest {
 
   @Id
   @UuidV7Generator.UuidV7
@@ -41,25 +36,28 @@ public class Answer {
   @Column(name = "question_id", nullable = false)
   private UUID questionId;
 
-  @Lob
-  @Nationalized
-  @Column(name = "answer_text")
-  private String answerText;
-
-  @Type(JsonBinaryType.class)
-  @Column(name = "answer_data", columnDefinition = "jsonb")
-  private Map<String, Object> answerData;
-
-  @Column(name = "is_correct")
-  private Boolean isCorrect;
-
-  @Column(name = "points_earned", precision = 5, scale = 2)
-  private BigDecimal pointsEarned;
+  @Column(name = "student_id", nullable = false)
+  private UUID studentId;
 
   @Lob
   @Nationalized
-  @Column(name = "feedback")
-  private String feedback;
+  @Column(name = "reason", nullable = false)
+  private String reason;
+
+  @Column(name = "status")
+  @Enumerated(EnumType.STRING)
+  private RegradeRequestStatus status;
+
+  @Lob
+  @Nationalized
+  @Column(name = "teacher_response")
+  private String teacherResponse;
+
+  @Column(name = "reviewed_by")
+  private UUID reviewedBy;
+
+  @Column(name = "reviewed_at")
+  private Instant reviewedAt;
 
   @Column(name = "created_at")
   private Instant createdAt;
@@ -75,14 +73,17 @@ public class Answer {
   @JoinColumn(name = "question_id", insertable = false, updatable = false)
   private Question question;
 
-  @OneToMany(mappedBy = "answer", cascade = CascadeType.ALL, orphanRemoval = true)
-  private Set<AiReview> aiReviews;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "student_id", insertable = false, updatable = false)
+  private User student;
 
-  @OneToMany(mappedBy = "answer", cascade = CascadeType.ALL, orphanRemoval = true)
-  private Set<GradeAuditLog> gradeAuditLogs;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "reviewed_by", insertable = false, updatable = false)
+  private User reviewer;
 
   @PrePersist
   public void prePersist() {
+    if (status == null) status = RegradeRequestStatus.PENDING;
     if (createdAt == null) createdAt = Instant.now();
     if (updatedAt == null) updatedAt = Instant.now();
   }
