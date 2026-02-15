@@ -2,6 +2,8 @@ package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.enums.AssessmentStatus;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,17 +12,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.Optional;
-import java.util.UUID;
-
 @Repository
-public interface AssessmentRepository extends JpaRepository<Assessment, UUID>, JpaSpecificationExecutor<Assessment> {
+public interface AssessmentRepository
+    extends JpaRepository<Assessment, UUID>, JpaSpecificationExecutor<Assessment> {
 
   @Query("SELECT a FROM Assessment a WHERE a.id = :id AND a.deletedAt IS NULL")
   Optional<Assessment> findByIdAndNotDeleted(@Param("id") UUID id);
 
   @Query("SELECT a FROM Assessment a WHERE a.teacherId = :teacherId AND a.deletedAt IS NULL")
-  Page<Assessment> findByTeacherIdAndNotDeleted(@Param("teacherId") UUID teacherId, Pageable pageable);
+  Page<Assessment> findByTeacherIdAndNotDeleted(
+      @Param("teacherId") UUID teacherId, Pageable pageable);
 
   @Query("SELECT a FROM Assessment a WHERE a.lessonId = :lessonId AND a.deletedAt IS NULL")
   Page<Assessment> findByLessonIdAndNotDeleted(@Param("lessonId") UUID lessonId, Pageable pageable);
@@ -31,22 +32,22 @@ public interface AssessmentRepository extends JpaRepository<Assessment, UUID>, J
   @Query("SELECT COUNT(aq) FROM AssessmentQuestion aq WHERE aq.assessmentId = :assessmentId")
   Long countQuestionsByAssessmentId(@Param("assessmentId") UUID assessmentId);
 
-  @Query("SELECT COALESCE(SUM(CASE WHEN aq.pointsOverride IS NOT NULL THEN aq.pointsOverride ELSE q.points END), 0) " +
-         "FROM AssessmentQuestion aq " +
-         "JOIN Question q ON aq.questionId = q.id " +
-         "WHERE aq.assessmentId = :assessmentId")
+  @Query(
+      "SELECT COALESCE(SUM(CASE WHEN aq.pointsOverride IS NOT NULL THEN aq.pointsOverride ELSE q.points END), 0) "
+          + "FROM AssessmentQuestion aq "
+          + "JOIN Question q ON aq.questionId = q.id "
+          + "WHERE aq.assessmentId = :assessmentId")
   Double calculateTotalPoints(@Param("assessmentId") UUID assessmentId);
 
-  @Query("SELECT a FROM Assessment a " +
-         "WHERE a.deletedAt IS NULL " +
-         "AND a.teacherId = :teacherId " +
-         "AND (:status IS NULL OR a.status = :status) " +
-         "AND (:lessonId IS NULL OR a.lessonId = :lessonId)")
+  @Query(
+      "SELECT a FROM Assessment a "
+          + "WHERE a.deletedAt IS NULL "
+          + "AND a.teacherId = :teacherId "
+          + "AND (:status IS NULL OR a.status = :status) "
+          + "AND (:lessonId IS NULL OR a.lessonId = :lessonId)")
   Page<Assessment> findWithFilters(
-    @Param("teacherId") UUID teacherId,
-    @Param("status") AssessmentStatus status,
-    @Param("lessonId") UUID lessonId,
-    Pageable pageable
-  );
+      @Param("teacherId") UUID teacherId,
+      @Param("status") AssessmentStatus status,
+      @Param("lessonId") UUID lessonId,
+      Pageable pageable);
 }
-

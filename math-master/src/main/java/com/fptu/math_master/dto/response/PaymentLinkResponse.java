@@ -10,12 +10,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PaymentLinkResponse {
-    
-    private String checkoutUrl;
-    
-    private String qrCode;
-    
-    private Long orderCode;
-    
-    private String paymentLinkId;
+
+  private String checkoutUrl;
+
+  private String qrCode;
+
+  private Long orderCode;
+
+  private String paymentLinkId;
 }

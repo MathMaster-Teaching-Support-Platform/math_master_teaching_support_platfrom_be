@@ -3,11 +3,10 @@ package com.fptu.math_master.entity;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-
 import java.time.Instant;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
@@ -15,15 +14,16 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "chapters",
-  uniqueConstraints = {
-    @UniqueConstraint(name = "uq_chapters_lesson_order", columnNames = {"lesson_id", "order_index"})
-  },
-  indexes = {
-    @Index(name = "idx_chapters_lesson_id", columnList = "lesson_id"),
-    @Index(name = "idx_chapters_order", columnList = "order_index")
-  }
-)
+    name = "chapters",
+    uniqueConstraints = {
+      @UniqueConstraint(
+          name = "uq_chapters_lesson_order",
+          columnNames = {"lesson_id", "order_index"})
+    },
+    indexes = {
+      @Index(name = "idx_chapters_lesson_id", columnList = "lesson_id"),
+      @Index(name = "idx_chapters_order", columnList = "order_index")
+    })
 public class Chapter {
 
   @Id
@@ -71,4 +71,3 @@ public class Chapter {
     updatedAt = Instant.now();
   }
 }
-

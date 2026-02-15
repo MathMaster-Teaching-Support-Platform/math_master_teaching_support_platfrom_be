@@ -1,11 +1,10 @@
 package com.fptu.math_master.dto.response;
 
 import com.fptu.math_master.enums.ProfileStatus;
-import lombok.*;
-import lombok.experimental.FieldDefaults;
-
 import java.time.LocalDateTime;
 import java.util.UUID;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 @Data
 @Builder

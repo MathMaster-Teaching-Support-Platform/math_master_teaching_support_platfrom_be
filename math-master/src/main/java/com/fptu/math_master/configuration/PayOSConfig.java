@@ -8,9 +8,9 @@ import org.springframework.web.client.RestTemplate;
 @Configuration
 @Slf4j
 public class PayOSConfig {
-    
-    @Bean
-    public RestTemplate restTemplate() {
-        return new RestTemplate();
-    }
+
+  @Bean
+  public RestTemplate restTemplate() {
+    return new RestTemplate();
+  }
 }

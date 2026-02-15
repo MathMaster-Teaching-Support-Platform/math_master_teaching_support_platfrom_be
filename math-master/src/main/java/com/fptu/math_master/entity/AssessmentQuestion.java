@@ -2,11 +2,10 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
-import lombok.*;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.*;
 
 @Builder
 @AllArgsConstructor
@@ -14,17 +13,20 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "assessment_questions",
-  uniqueConstraints = {
-    @UniqueConstraint(name = "uq_assessment_questions", columnNames = {"assessment_id", "question_id"}),
-    @UniqueConstraint(name = "uq_assessment_questions_order", columnNames = {"assessment_id", "order_index"})
-  },
-  indexes = {
-    @Index(name = "idx_assessment_questions_assessment", columnList = "assessment_id"),
-    @Index(name = "idx_assessment_questions_question", columnList = "question_id"),
-    @Index(name = "idx_assessment_questions_order", columnList = "order_index")
-  }
-)
+    name = "assessment_questions",
+    uniqueConstraints = {
+      @UniqueConstraint(
+          name = "uq_assessment_questions",
+          columnNames = {"assessment_id", "question_id"}),
+      @UniqueConstraint(
+          name = "uq_assessment_questions_order",
+          columnNames = {"assessment_id", "order_index"})
+    },
+    indexes = {
+      @Index(name = "idx_assessment_questions_assessment", columnList = "assessment_id"),
+      @Index(name = "idx_assessment_questions_question", columnList = "question_id"),
+      @Index(name = "idx_assessment_questions_order", columnList = "order_index")
+    })
 public class AssessmentQuestion {
 
   @Id
@@ -60,4 +62,3 @@ public class AssessmentQuestion {
     if (createdAt == null) createdAt = Instant.now();
   }
 }
-

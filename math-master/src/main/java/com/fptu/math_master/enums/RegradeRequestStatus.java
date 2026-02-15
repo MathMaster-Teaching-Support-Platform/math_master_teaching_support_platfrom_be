@@ -6,4 +6,3 @@ public enum RegradeRequestStatus {
   REJECTED,
   RESOLVED
 }
-

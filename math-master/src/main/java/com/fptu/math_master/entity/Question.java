@@ -7,15 +7,14 @@ import io.hypersistence.utils.hibernate.type.array.StringArrayType;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-import org.hibernate.annotations.Type;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
+import org.hibernate.annotations.Type;
 
 @Builder
 @AllArgsConstructor
@@ -23,16 +22,15 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "questions",
-  indexes = {
-    @Index(name = "idx_questions_bank", columnList = "question_bank_id"),
-    @Index(name = "idx_questions_chapter", columnList = "chapter_id"),
-    @Index(name = "idx_questions_created_by", columnList = "created_by"),
-    @Index(name = "idx_questions_type", columnList = "question_type"),
-    @Index(name = "idx_questions_difficulty", columnList = "difficulty"),
-    @Index(name = "idx_questions_cognitive_level", columnList = "cognitive_level")
-  }
-)
+    name = "questions",
+    indexes = {
+      @Index(name = "idx_questions_bank", columnList = "question_bank_id"),
+      @Index(name = "idx_questions_chapter", columnList = "chapter_id"),
+      @Index(name = "idx_questions_created_by", columnList = "created_by"),
+      @Index(name = "idx_questions_type", columnList = "question_type"),
+      @Index(name = "idx_questions_difficulty", columnList = "difficulty"),
+      @Index(name = "idx_questions_cognitive_level", columnList = "cognitive_level")
+    })
 public class Question {
 
   @Id
@@ -138,4 +136,3 @@ public class Question {
     updatedAt = Instant.now();
   }
 }
-

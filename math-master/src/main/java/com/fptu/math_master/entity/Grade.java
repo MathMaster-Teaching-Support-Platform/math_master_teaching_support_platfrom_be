@@ -2,12 +2,11 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
@@ -15,14 +14,13 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "grades",
-  indexes = {
-    @Index(name = "idx_grades_student", columnList = "student_id"),
-    @Index(name = "idx_grades_lesson", columnList = "lesson_id"),
-    @Index(name = "idx_grades_teacher", columnList = "teacher_id"),
-    @Index(name = "idx_grades_student_lesson", columnList = "student_id, lesson_id")
-  }
-)
+    name = "grades",
+    indexes = {
+      @Index(name = "idx_grades_student", columnList = "student_id"),
+      @Index(name = "idx_grades_lesson", columnList = "lesson_id"),
+      @Index(name = "idx_grades_teacher", columnList = "teacher_id"),
+      @Index(name = "idx_grades_student_lesson", columnList = "student_id, lesson_id")
+    })
 public class Grade {
 
   @Id
@@ -96,4 +94,3 @@ public class Grade {
     updatedAt = Instant.now();
   }
 }
-

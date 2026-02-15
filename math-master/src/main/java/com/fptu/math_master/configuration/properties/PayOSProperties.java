@@ -8,14 +8,14 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "payos")
 public class PayOSProperties {
-    
-    private String clientId;
-    
-    private String apiKey;
-    
-    private String checksumKey;
-    
-    private String returnUrl;
-    
-    private String cancelUrl;
+
+  private String clientId;
+
+  private String apiKey;
+
+  private String checksumKey;
+
+  private String returnUrl;
+
+  private String cancelUrl;
 }

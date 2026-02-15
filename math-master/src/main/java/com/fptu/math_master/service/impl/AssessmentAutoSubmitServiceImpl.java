@@ -11,6 +11,9 @@ import com.fptu.math_master.service.AssessmentAutoSubmitService;
 import com.fptu.math_master.service.AssessmentDraftService;
 import com.fptu.math_master.service.CentrifugoService;
 import com.fptu.math_master.service.GradingService;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -19,79 +22,78 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AssessmentAutoSubmitServiceImpl implements AssessmentAutoSubmitService {
 
-    QuizAttemptRepository quizAttemptRepository;
-    AssessmentRepository assessmentRepository;
-    AssessmentDraftService draftService;
-    CentrifugoService centrifugoService;
-    GradingService gradingService;
+  QuizAttemptRepository quizAttemptRepository;
+  AssessmentRepository assessmentRepository;
+  AssessmentDraftService draftService;
+  CentrifugoService centrifugoService;
+  GradingService gradingService;
 
-    @Override
-    @Scheduled(fixedRate = 60000)
-    @Transactional
-    public void autoSubmitExpiredAttempts() {
-        log.debug("Checking for expired assessment attempts...");
+  @Override
+  @Scheduled(fixedRate = 60000)
+  @Transactional
+  public void autoSubmitExpiredAttempts() {
+    log.debug("Checking for expired assessment attempts...");
 
-        Instant now = Instant.now();
-        List<QuizAttempt> expiredAttempts = quizAttemptRepository.findExpiredAttempts(now);
+    Instant now = Instant.now();
+    List<QuizAttempt> expiredAttempts = quizAttemptRepository.findExpiredAttempts(now);
 
-        for (QuizAttempt attempt : expiredAttempts) {
+    for (QuizAttempt attempt : expiredAttempts) {
+      try {
+        Assessment assessment =
+            assessmentRepository
+                .findById(attempt.getAssessmentId())
+                .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+        if (assessment.getTimeLimitMinutes() != null) {
+          Instant expiresAt =
+              attempt.getStartedAt().plusSeconds(assessment.getTimeLimitMinutes() * 60L);
+
+          if (now.isAfter(expiresAt)) {
+            log.info(
+                "Auto-submitting expired attempt: {} for student: {}",
+                attempt.getId(),
+                attempt.getStudentId());
+
             try {
-                Assessment assessment = assessmentRepository.findById(attempt.getAssessmentId())
-                        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
-                if (assessment.getTimeLimitMinutes() != null) {
-                    Instant expiresAt = attempt.getStartedAt()
-                            .plusSeconds(assessment.getTimeLimitMinutes() * 60L);
-
-                    if (now.isAfter(expiresAt)) {
-                        log.info("Auto-submitting expired attempt: {} for student: {}",
-                                 attempt.getId(), attempt.getStudentId());
-
-                        try {
-                            draftService.flushDraftToDatabase(attempt.getId());
-                        } catch (Exception e) {
-                            log.error("Error flushing draft for attempt: {}", attempt.getId(), e);
-                        }
-
-                        attempt.setSubmittedAt(now);
-                        attempt.setStatus(SubmissionStatus.SUBMITTED);
-                        attempt.setTimeSpentSeconds(
-                            (int) Duration.between(attempt.getStartedAt(), now).getSeconds()
-                        );
-
-                        quizAttemptRepository.save(attempt);
-                        draftService.deleteDraft(attempt.getId());
-                        centrifugoService.publishSubmitted(attempt.getId());
-
-                        // Trigger auto-grading
-                        try {
-                            gradingService.autoGradeSubmission(attempt.getSubmissionId());
-                        } catch (Exception ex) {
-                            log.error("Error during auto-grading for submission: {}", attempt.getSubmissionId(), ex);
-                        }
-
-                        log.info("Successfully auto-submitted attempt: {}", attempt.getId());
-                    }
-                }
-
+              draftService.flushDraftToDatabase(attempt.getId());
             } catch (Exception e) {
-                log.error("Error auto-submitting attempt: {}", attempt.getId(), e);
+              log.error("Error flushing draft for attempt: {}", attempt.getId(), e);
             }
+
+            attempt.setSubmittedAt(now);
+            attempt.setStatus(SubmissionStatus.SUBMITTED);
+            attempt.setTimeSpentSeconds(
+                (int) Duration.between(attempt.getStartedAt(), now).getSeconds());
+
+            quizAttemptRepository.save(attempt);
+            draftService.deleteDraft(attempt.getId());
+            centrifugoService.publishSubmitted(attempt.getId());
+
+            // Trigger auto-grading
+            try {
+              gradingService.autoGradeSubmission(attempt.getSubmissionId());
+            } catch (Exception ex) {
+              log.error(
+                  "Error during auto-grading for submission: {}", attempt.getSubmissionId(), ex);
+            }
+
+            log.info("Successfully auto-submitted attempt: {}", attempt.getId());
+          }
         }
 
-        if (!expiredAttempts.isEmpty()) {
-            log.info("Auto-submitted {} expired attempts", expiredAttempts.size());
-        }
+      } catch (Exception e) {
+        log.error("Error auto-submitting attempt: {}", attempt.getId(), e);
+      }
     }
-}
 
+    if (!expiredAttempts.isEmpty()) {
+      log.info("Auto-submitted {} expired attempts", expiredAttempts.size());
+    }
+  }
+}

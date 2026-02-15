@@ -4,11 +4,10 @@ import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
@@ -16,11 +15,8 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "roles",
-  uniqueConstraints = {
-    @UniqueConstraint(name = "uk_role_name", columnNames = "name")
-  }
-)
+    name = "roles",
+    uniqueConstraints = {@UniqueConstraint(name = "uk_role_name", columnNames = "name")})
 public class Role {
 
   @Id
@@ -28,15 +24,12 @@ public class Role {
   @Column(name = "id", updatable = false, nullable = false)
   private UUID id;
 
-  /**
-   * Example: "ADMIN", "STUDENT"
-   */
+  /** Example: "ADMIN", "STUDENT" */
   @NotBlank
   @Size(max = 255)
   @Nationalized
   @Column(name = "name", length = 255, nullable = false)
   private String name;
 
-  @ManyToMany
-  Set<Permission> permissions;
+  @ManyToMany Set<Permission> permissions;
 }

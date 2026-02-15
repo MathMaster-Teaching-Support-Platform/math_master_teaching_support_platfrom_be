@@ -1,12 +1,11 @@
 package com.fptu.math_master.dto.request;
 
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 @Data
 @Builder
@@ -14,9 +13,8 @@ import java.util.UUID;
 @AllArgsConstructor
 public class StartAssessmentRequest {
 
-    @NotNull(message = "Assessment ID is required")
-    private UUID assessmentId;
+  @NotNull(message = "Assessment ID is required")
+  private UUID assessmentId;
 
-    private String ipAddress;
+  private String ipAddress;
 }
-

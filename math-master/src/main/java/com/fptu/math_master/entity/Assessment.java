@@ -5,13 +5,12 @@ import com.fptu.math_master.enums.AssessmentType;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
@@ -19,15 +18,14 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "assessments",
-  indexes = {
-    @Index(name = "idx_assessments_teacher", columnList = "teacher_id"),
-    @Index(name = "idx_assessments_lesson", columnList = "lesson_id"),
-    @Index(name = "idx_assessments_status", columnList = "status"),
-    @Index(name = "idx_assessments_start_date", columnList = "start_date"),
-    @Index(name = "idx_assessments_end_date", columnList = "end_date")
-  }
-)
+    name = "assessments",
+    indexes = {
+      @Index(name = "idx_assessments_teacher", columnList = "teacher_id"),
+      @Index(name = "idx_assessments_lesson", columnList = "lesson_id"),
+      @Index(name = "idx_assessments_status", columnList = "status"),
+      @Index(name = "idx_assessments_start_date", columnList = "start_date"),
+      @Index(name = "idx_assessments_end_date", columnList = "end_date")
+    })
 public class Assessment {
 
   @Id
@@ -135,4 +133,3 @@ public class Assessment {
     updatedAt = Instant.now();
   }
 }
-

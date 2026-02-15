@@ -11,6 +11,11 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.PermissionRepository;
 import com.fptu.math_master.repository.RoleRepository;
 import com.fptu.math_master.service.RoleService;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -19,12 +24,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -44,16 +43,16 @@ public class RoleServiceImpl implements RoleService {
       throw new AppException(ErrorCode.ROLE_ALREADY_EXISTS);
     }
 
-    Role role = Role.builder()
-      .name(request.getName())
-      .build();
+    Role role = Role.builder().name(request.getName()).build();
 
     // Set permissions if provided
     if (request.getPermissionCodes() != null && !request.getPermissionCodes().isEmpty()) {
       Set<Permission> permissions = new HashSet<>();
       for (String code : request.getPermissionCodes()) {
-        Permission permission = permissionRepository.findByCode(code)
-          .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
+        Permission permission =
+            permissionRepository
+                .findByCode(code)
+                .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
         permissions.add(permission);
       }
       role.setPermissions(permissions);
@@ -70,13 +69,16 @@ public class RoleServiceImpl implements RoleService {
   public RoleResponse updateRole(UUID roleId, RoleUpdateRequest request) {
     log.info("Updating role with id: {}", roleId);
 
-    Role role = roleRepository.findById(roleId)
-      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+    Role role =
+        roleRepository
+            .findById(roleId)
+            .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
     // Update name if provided
     if (request.getName() != null) {
       // Check if new name already exists
-      if (!role.getName().equals(request.getName()) && roleRepository.existsByName(request.getName())) {
+      if (!role.getName().equals(request.getName())
+          && roleRepository.existsByName(request.getName())) {
         throw new AppException(ErrorCode.ROLE_ALREADY_EXISTS);
       }
       role.setName(request.getName());
@@ -86,8 +88,10 @@ public class RoleServiceImpl implements RoleService {
     if (request.getPermissionCodes() != null) {
       Set<Permission> permissions = new HashSet<>();
       for (String code : request.getPermissionCodes()) {
-        Permission permission = permissionRepository.findByCode(code)
-          .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
+        Permission permission =
+            permissionRepository
+                .findByCode(code)
+                .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
         permissions.add(permission);
       }
       role.setPermissions(permissions);
@@ -104,8 +108,10 @@ public class RoleServiceImpl implements RoleService {
   public void deleteRole(UUID roleId) {
     log.info("Deleting role with id: {}", roleId);
 
-    Role role = roleRepository.findById(roleId)
-      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+    Role role =
+        roleRepository
+            .findById(roleId)
+            .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
     roleRepository.delete(role);
 
@@ -116,8 +122,10 @@ public class RoleServiceImpl implements RoleService {
   public RoleResponse getRoleById(UUID roleId) {
     log.info("Getting role with id: {}", roleId);
 
-    Role role = roleRepository.findByIdWithPermissions(roleId)
-      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+    Role role =
+        roleRepository
+            .findByIdWithPermissions(roleId)
+            .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
     return mapToRoleResponse(role);
   }
@@ -126,8 +134,10 @@ public class RoleServiceImpl implements RoleService {
   public RoleResponse getRoleByName(String name) {
     log.info("Getting role with name: {}", name);
 
-    Role role = roleRepository.findByName(name)
-      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+    Role role =
+        roleRepository
+            .findByName(name)
+            .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
     return mapToRoleResponse(role);
   }
@@ -138,9 +148,7 @@ public class RoleServiceImpl implements RoleService {
 
     List<Role> roles = roleRepository.findAll();
 
-    return roles.stream()
-      .map(this::mapToRoleResponse)
-      .collect(Collectors.toList());
+    return roles.stream().map(this::mapToRoleResponse).collect(Collectors.toList());
   }
 
   @Override
@@ -157,16 +165,20 @@ public class RoleServiceImpl implements RoleService {
   public RoleResponse addPermissionsToRole(UUID roleId, List<String> permissionCodes) {
     log.info("Adding permissions to role with id: {}", roleId);
 
-    Role role = roleRepository.findByIdWithPermissions(roleId)
-      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+    Role role =
+        roleRepository
+            .findByIdWithPermissions(roleId)
+            .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
     if (role.getPermissions() == null) {
       role.setPermissions(new HashSet<>());
     }
 
     for (String code : permissionCodes) {
-      Permission permission = permissionRepository.findByCode(code)
-        .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
+      Permission permission =
+          permissionRepository
+              .findByCode(code)
+              .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
       role.getPermissions().add(permission);
     }
 
@@ -181,8 +193,10 @@ public class RoleServiceImpl implements RoleService {
   public RoleResponse removePermissionsFromRole(UUID roleId, List<String> permissionCodes) {
     log.info("Removing permissions from role with id: {}", roleId);
 
-    Role role = roleRepository.findByIdWithPermissions(roleId)
-      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+    Role role =
+        roleRepository
+            .findByIdWithPermissions(roleId)
+            .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
     if (role.getPermissions() != null) {
       for (String code : permissionCodes) {
@@ -199,25 +213,25 @@ public class RoleServiceImpl implements RoleService {
   private RoleResponse mapToRoleResponse(Role role) {
     Set<PermissionResponse> permissions = null;
     if (role.getPermissions() != null) {
-      permissions = role.getPermissions().stream()
-        .map(this::mapToPermissionResponse)
-        .collect(Collectors.toSet());
+      permissions =
+          role.getPermissions().stream()
+              .map(this::mapToPermissionResponse)
+              .collect(Collectors.toSet());
     }
 
     return RoleResponse.builder()
-      .id(role.getId())
-      .name(role.getName())
-      .permissions(permissions)
-      .build();
+        .id(role.getId())
+        .name(role.getName())
+        .permissions(permissions)
+        .build();
   }
 
   private PermissionResponse mapToPermissionResponse(Permission permission) {
     return PermissionResponse.builder()
-      .id(permission.getId())
-      .code(permission.getCode())
-      .name(permission.getName())
-      .description(permission.getDescription())
-      .build();
+        .id(permission.getId())
+        .code(permission.getCode())
+        .name(permission.getName())
+        .description(permission.getDescription())
+        .build();
   }
 }
-

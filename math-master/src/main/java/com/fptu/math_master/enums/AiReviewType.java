@@ -4,5 +4,3 @@ public enum AiReviewType {
   OVERALL,
   QUESTION_SPECIFIC
 }
-
-

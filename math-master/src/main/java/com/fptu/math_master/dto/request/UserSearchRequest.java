@@ -2,10 +2,9 @@ package com.fptu.math_master.dto.request;
 
 import com.fptu.math_master.enums.Gender;
 import com.fptu.math_master.enums.Status;
+import java.time.LocalDate;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-
-import java.time.LocalDate;
 
 @Data
 @Builder
@@ -34,4 +33,3 @@ public class UserSearchRequest {
 
   String roleName;
 }
-
