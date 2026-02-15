@@ -5,13 +5,12 @@ import com.fptu.math_master.enums.Status;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
@@ -88,10 +87,9 @@ public class User {
 
   @ManyToMany
   @JoinTable(
-    name = "users_roles",
-    joinColumns = @JoinColumn(name = "user_account_id"),
-    inverseJoinColumns = @JoinColumn(name = "roles_id")
-  )
+      name = "users_roles",
+      joinColumns = @JoinColumn(name = "user_account_id"),
+      inverseJoinColumns = @JoinColumn(name = "roles_id"))
   Set<Role> roles;
 
   @PrePersist

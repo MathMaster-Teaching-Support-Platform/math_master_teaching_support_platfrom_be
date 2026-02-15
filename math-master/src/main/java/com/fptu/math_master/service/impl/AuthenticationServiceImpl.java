@@ -1,15 +1,5 @@
 package com.fptu.math_master.service.impl;
 
-import java.text.ParseException;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.StringJoiner;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AuthenticationRequest;
 import com.fptu.math_master.dto.request.IntrospectRequest;
@@ -29,23 +19,31 @@ import com.fptu.math_master.repository.InvalidatedTokenRepository;
 import com.fptu.math_master.repository.RoleRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AuthenticationService;
+import com.nimbusds.jose.*;
+import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jose.crypto.MACVerifier;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+import java.text.ParseException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.StringJoiner;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
-import com.nimbusds.jose.*;
-import com.nimbusds.jose.crypto.MACSigner;
-import com.nimbusds.jose.crypto.MACVerifier;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
-
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.experimental.NonFinal;
-import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
@@ -85,9 +83,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
   @Override
   public AuthenticationResponse login(AuthenticationRequest request) {
     PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
-    var user = userRepository
-      .findByEmailWithRolesAndPermissions(request.getEmail())
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    var user =
+        userRepository
+            .findByEmailWithRolesAndPermissions(request.getEmail())
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     boolean authenticated = passwordEncoder.matches(request.getPassword(), user.getPassword());
 
@@ -96,10 +95,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     var token = generateToken(user);
 
     return AuthenticationResponse.builder()
-      .token(token)
-      .expiryTime(new Date(
-        Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
-      .build();
+        .token(token)
+        .expiryTime(new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
+        .build();
   }
 
   @Override
@@ -112,7 +110,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
       Date expiryTime = signToken.getJWTClaimsSet().getExpirationTime();
 
       InvalidatedToken invalidatedToken =
-        InvalidatedToken.builder().id(jit).expiryTime(expiryTime).build();
+          InvalidatedToken.builder().id(jit).expiryTime(expiryTime).build();
 
       invalidatedTokenRepository.save(invalidatedToken);
     } catch (AppException exception) {
@@ -122,28 +120,31 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
   @Override
   @Transactional
-  public AuthenticationResponse refreshToken(RefreshRequest request) throws ParseException, JOSEException {
+  public AuthenticationResponse refreshToken(RefreshRequest request)
+      throws ParseException, JOSEException {
     var signedJWT = verifyToken(request.getToken(), true);
 
     var jit = signedJWT.getJWTClaimsSet().getJWTID();
     var expiryTime = signedJWT.getJWTClaimsSet().getExpirationTime();
 
     InvalidatedToken invalidatedToken =
-      InvalidatedToken.builder().id(jit).expiryTime(expiryTime).build();
+        InvalidatedToken.builder().id(jit).expiryTime(expiryTime).build();
 
     invalidatedTokenRepository.save(invalidatedToken);
 
     var userId = signedJWT.getJWTClaimsSet().getSubject();
 
-    var user = userRepository.findByIdWithRolesAndPermissions(UUID.fromString(userId)).orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
+    var user =
+        userRepository
+            .findByIdWithRolesAndPermissions(UUID.fromString(userId))
+            .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
 
     var token = generateToken(user);
 
     return AuthenticationResponse.builder()
-      .token(token)
-      .expiryTime(new Date(
-        Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
-      .build();
+        .token(token)
+        .expiryTime(new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
+        .build();
   }
 
   @Override
@@ -164,20 +165,23 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
 
     // Build user entity
-    User user = User.builder()
-      .userName(request.getUserName())
-      .password(passwordEncoder.encode(request.getPassword()))
-      .fullName(request.getFullName())
-      .email(request.getEmail())
-      .phoneNumber(request.getPhoneNumber())
-      .gender(request.getGender())
-      .dob(request.getDob())
-      .status(Status.ACTIVE)
-      .build();
+    User user =
+        User.builder()
+            .userName(request.getUserName())
+            .password(passwordEncoder.encode(request.getPassword()))
+            .fullName(request.getFullName())
+            .email(request.getEmail())
+            .phoneNumber(request.getPhoneNumber())
+            .gender(request.getGender())
+            .dob(request.getDob())
+            .status(Status.ACTIVE)
+            .build();
 
     // Assign default STUDENT role
-    Role userRole = roleRepository.findByName(PredefinedRole.STUDENT_ROLE)
-      .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+    Role userRole =
+        roleRepository
+            .findByName(PredefinedRole.STUDENT_ROLE)
+            .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
     Set<Role> roles = new HashSet<>();
     roles.add(userRole);
@@ -193,16 +197,17 @@ public class AuthenticationServiceImpl implements AuthenticationService {
   private String generateToken(User user) {
     JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
-    JWTClaimsSet jwtClaimsSet = new JWTClaimsSet.Builder()
-      .subject(user.getId().toString())
-      .issuer("school.edu")
-      .issueTime(new Date())
-      .expirationTime(new Date(
-        Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
-      .jwtID(UUID.randomUUID().toString())
-      .claim("scope", buildScope(user))
-      .claim("email", user.getEmail())
-      .build();
+    JWTClaimsSet jwtClaimsSet =
+        new JWTClaimsSet.Builder()
+            .subject(user.getId().toString())
+            .issuer("school.edu")
+            .issueTime(new Date())
+            .expirationTime(
+                new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
+            .jwtID(UUID.randomUUID().toString())
+            .claim("scope", buildScope(user))
+            .claim("email", user.getEmail())
+            .build();
 
     Payload payload = new Payload(jwtClaimsSet.toJSONObject());
 
@@ -217,23 +222,27 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
   }
 
-  private SignedJWT verifyToken(String token, boolean isRefresh) throws JOSEException, ParseException {
+  private SignedJWT verifyToken(String token, boolean isRefresh)
+      throws JOSEException, ParseException {
     JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes());
 
     SignedJWT signedJWT = SignedJWT.parse(token);
 
-    Date expiryTime = (isRefresh)
-      ? new Date(signedJWT
-      .getJWTClaimsSet()
-      .getIssueTime()
-      .toInstant()
-      .plus(REFRESHABLE_DURATION, ChronoUnit.SECONDS)
-      .toEpochMilli())
-      : signedJWT.getJWTClaimsSet().getExpirationTime();
+    Date expiryTime =
+        (isRefresh)
+            ? new Date(
+                signedJWT
+                    .getJWTClaimsSet()
+                    .getIssueTime()
+                    .toInstant()
+                    .plus(REFRESHABLE_DURATION, ChronoUnit.SECONDS)
+                    .toEpochMilli())
+            : signedJWT.getJWTClaimsSet().getExpirationTime();
 
     var verified = signedJWT.verify(verifier);
 
-    if (!(verified && expiryTime.after(new Date()))) throw new AppException(ErrorCode.UNAUTHENTICATED);
+    if (!(verified && expiryTime.after(new Date())))
+      throw new AppException(ErrorCode.UNAUTHENTICATED);
 
     if (invalidatedTokenRepository.existsById(signedJWT.getJWTClaimsSet().getJWTID()))
       throw new AppException(ErrorCode.UNAUTHENTICATED);
@@ -245,16 +254,17 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     StringJoiner stringJoiner = new StringJoiner(" ");
 
     if (!CollectionUtils.isEmpty(user.getRoles())) {
-      user.getRoles().forEach(role -> {
-        stringJoiner.add("ROLE_" + role.getName());
+      user.getRoles()
+          .forEach(
+              role -> {
+                stringJoiner.add("ROLE_" + role.getName());
 
-        // Add all permissions for this role
-        if (!CollectionUtils.isEmpty(role.getPermissions())) {
-          role.getPermissions().forEach(permission ->
-            stringJoiner.add(permission.getCode())
-          );
-        }
-      });
+                // Add all permissions for this role
+                if (!CollectionUtils.isEmpty(role.getPermissions())) {
+                  role.getPermissions()
+                      .forEach(permission -> stringJoiner.add(permission.getCode()));
+                }
+              });
     }
 
     return stringJoiner.toString();
@@ -263,29 +273,27 @@ public class AuthenticationServiceImpl implements AuthenticationService {
   private UserResponse mapToUserResponse(User user) {
     Set<String> roles = null;
     if (user.getRoles() != null) {
-      roles = user.getRoles().stream()
-        .map(Role::getName)
-        .collect(Collectors.toSet());
+      roles = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
     }
 
     return UserResponse.builder()
-      .id(user.getId())
-      .userName(user.getUserName())
-      .fullName(user.getFullName())
-      .email(user.getEmail())
-      .phoneNumber(user.getPhoneNumber())
-      .gender(user.getGender())
-      .avatar(user.getAvatar())
-      .dob(user.getDob())
-      .code(user.getCode())
-      .status(user.getStatus())
-      .banReason(user.getBanReason())
-      .banDate(user.getBanDate())
-      .roles(roles)
-      .createdDate(user.getCreatedDate())
-      .createdBy(user.getCreatedBy())
-      .updatedDate(user.getUpdatedDate())
-      .updatedBy(user.getUpdatedBy())
-      .build();
+        .id(user.getId())
+        .userName(user.getUserName())
+        .fullName(user.getFullName())
+        .email(user.getEmail())
+        .phoneNumber(user.getPhoneNumber())
+        .gender(user.getGender())
+        .avatar(user.getAvatar())
+        .dob(user.getDob())
+        .code(user.getCode())
+        .status(user.getStatus())
+        .banReason(user.getBanReason())
+        .banDate(user.getBanDate())
+        .roles(roles)
+        .createdDate(user.getCreatedDate())
+        .createdBy(user.getCreatedBy())
+        .updatedDate(user.getUpdatedDate())
+        .updatedBy(user.getUpdatedBy())
+        .build();
   }
 }

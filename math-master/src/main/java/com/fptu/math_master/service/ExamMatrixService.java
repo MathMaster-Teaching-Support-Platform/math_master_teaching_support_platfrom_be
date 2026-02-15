@@ -2,7 +2,6 @@ package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.*;
 import com.fptu.math_master.dto.response.*;
-
 import java.util.List;
 import java.util.UUID;
 
@@ -16,6 +15,7 @@ public interface ExamMatrixService {
 
   // FR-EM-003: Fill Matrix Cells
   MatrixCellResponse createOrUpdateMatrixCell(UUID matrixId, MatrixCellRequest request);
+
   List<MatrixCellResponse> getMatrixCells(UUID matrixId);
 
   // FR-EM-004: Auto-Suggest Questions for Cells
@@ -35,9 +35,9 @@ public interface ExamMatrixService {
 
   // Get Matrix
   ExamMatrixResponse getExamMatrixById(UUID matrixId);
+
   ExamMatrixResponse getExamMatrixByAssessmentId(UUID assessmentId);
 
   // Delete Matrix
   void deleteExamMatrix(UUID matrixId);
 }
-

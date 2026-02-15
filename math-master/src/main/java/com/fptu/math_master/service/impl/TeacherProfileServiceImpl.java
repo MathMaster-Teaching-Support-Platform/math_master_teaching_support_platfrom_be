@@ -16,6 +16,10 @@ import com.fptu.math_master.repository.SchoolRepository;
 import com.fptu.math_master.repository.TeacherProfileRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.TeacherProfileService;
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -24,11 +28,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -47,8 +46,10 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     log.info("User {} submitting teacher profile", userId);
 
     // Check if user exists
-    User user = userRepository.findById(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     // Check if profile already exists
     if (teacherProfileRepository.existsByUserId(userId)) {
@@ -56,19 +57,22 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     }
 
     // Check if school exists
-    School school = schoolRepository.findById(request.getSchoolId())
-      .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
+    School school =
+        schoolRepository
+            .findById(request.getSchoolId())
+            .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
 
     // Create new profile
-    TeacherProfile profile = TeacherProfile.builder()
-      .user(user)
-      .school(school)
-      .position(request.getPosition())
-      .certificateUrl(request.getCertificateUrl())
-      .identificationDocumentUrl(request.getIdentificationDocumentUrl())
-      .description(request.getDescription())
-      .status(ProfileStatus.PENDING)
-      .build();
+    TeacherProfile profile =
+        TeacherProfile.builder()
+            .user(user)
+            .school(school)
+            .position(request.getPosition())
+            .certificateUrl(request.getCertificateUrl())
+            .identificationDocumentUrl(request.getIdentificationDocumentUrl())
+            .description(request.getDescription())
+            .status(ProfileStatus.PENDING)
+            .build();
 
     profile = teacherProfileRepository.save(profile);
     log.info("Teacher profile submitted successfully for user {}", userId);
@@ -81,8 +85,10 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   public TeacherProfileResponse updateProfile(TeacherProfileRequest request, UUID userId) {
     log.info("User {} updating teacher profile", userId);
 
-    TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile =
+        teacherProfileRepository
+            .findByUserId(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     // Only PENDING or REJECTED profiles can be updated
     if (profile.getStatus() == ProfileStatus.APPROVED) {
@@ -90,8 +96,10 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     }
 
     // Check if school exists
-    School school = schoolRepository.findById(request.getSchoolId())
-      .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
+    School school =
+        schoolRepository
+            .findById(request.getSchoolId())
+            .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
 
     // Update profile fields
     profile.setSchool(school);
@@ -116,35 +124,42 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
   @Override
   public TeacherProfileResponse getMyProfile(UUID userId) {
-    TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile =
+        teacherProfileRepository
+            .findByUserId(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     return mapToResponse(profile);
   }
 
   @Override
   public TeacherProfileResponse getProfileById(UUID profileId) {
-    TeacherProfile profile = teacherProfileRepository.findById(profileId)
-      .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile =
+        teacherProfileRepository
+            .findById(profileId)
+            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     return mapToResponse(profile);
   }
 
   @Override
   public Page<TeacherProfileResponse> getProfilesByStatus(ProfileStatus status, Pageable pageable) {
-    Page<TeacherProfile> profiles = teacherProfileRepository
-      .findByStatusOrderByCreatedAtDesc(status, pageable);
+    Page<TeacherProfile> profiles =
+        teacherProfileRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
 
     return profiles.map(this::mapToResponse);
   }
 
   @Override
   @Transactional
-  public TeacherProfileResponse reviewProfile(UUID profileId, ProfileReviewRequest request, UUID adminId) {
+  public TeacherProfileResponse reviewProfile(
+      UUID profileId, ProfileReviewRequest request, UUID adminId) {
     log.info("Admin {} reviewing profile {}", adminId, profileId);
 
-    TeacherProfile profile = teacherProfileRepository.findById(profileId)
-      .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile =
+        teacherProfileRepository
+            .findById(profileId)
+            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     // Check if profile is in PENDING status
     if (profile.getStatus() != ProfileStatus.PENDING) {
@@ -152,7 +167,8 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     }
 
     // Validate review status
-    if (request.getStatus() != ProfileStatus.APPROVED && request.getStatus() != ProfileStatus.REJECTED) {
+    if (request.getStatus() != ProfileStatus.APPROVED
+        && request.getStatus() != ProfileStatus.REJECTED) {
       throw new AppException(ErrorCode.INVALID_PROFILE_STATUS);
     }
 
@@ -165,8 +181,10 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     // If approved, upgrade user role to TEACHER
     if (request.getStatus() == ProfileStatus.APPROVED) {
       User user = profile.getUser();
-      Role teacherRole = roleRepository.findByName(PredefinedRole.TEACHER_ROLE)
-        .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+      Role teacherRole =
+          roleRepository
+              .findByName(PredefinedRole.TEACHER_ROLE)
+              .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
       Set<Role> roles = new HashSet<>(user.getRoles());
       roles.add(teacherRole);
@@ -190,8 +208,10 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   @Override
   @Transactional
   public void deleteMyProfile(UUID userId) {
-    TeacherProfile profile = teacherProfileRepository.findByUserId(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile =
+        teacherProfileRepository
+            .findByUserId(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     // Can only delete PENDING or REJECTED profiles
     if (profile.getStatus() == ProfileStatus.APPROVED) {
@@ -203,29 +223,31 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   }
 
   private TeacherProfileResponse mapToResponse(TeacherProfile profile) {
-    TeacherProfileResponse response = TeacherProfileResponse.builder()
-      .id(profile.getId())
-      .userId(profile.getUser().getId())
-      .userName(profile.getUser().getUserName())
-      .fullName(profile.getUser().getFullName())
-      .schoolId(profile.getSchool().getId())
-      .schoolName(profile.getSchool().getName())
-      .position(profile.getPosition())
-      .certificateUrl(profile.getCertificateUrl())
-      .identificationDocumentUrl(profile.getIdentificationDocumentUrl())
-      .description(profile.getDescription())
-      .status(profile.getStatus())
-      .adminComment(profile.getAdminComment())
-      .reviewedBy(profile.getReviewedBy())
-      .reviewedAt(profile.getReviewedAt())
-      .createdAt(profile.getCreatedAt())
-      .updatedAt(profile.getUpdatedAt())
-      .build();
+    TeacherProfileResponse response =
+        TeacherProfileResponse.builder()
+            .id(profile.getId())
+            .userId(profile.getUser().getId())
+            .userName(profile.getUser().getUserName())
+            .fullName(profile.getUser().getFullName())
+            .schoolId(profile.getSchool().getId())
+            .schoolName(profile.getSchool().getName())
+            .position(profile.getPosition())
+            .certificateUrl(profile.getCertificateUrl())
+            .identificationDocumentUrl(profile.getIdentificationDocumentUrl())
+            .description(profile.getDescription())
+            .status(profile.getStatus())
+            .adminComment(profile.getAdminComment())
+            .reviewedBy(profile.getReviewedBy())
+            .reviewedAt(profile.getReviewedAt())
+            .createdAt(profile.getCreatedAt())
+            .updatedAt(profile.getUpdatedAt())
+            .build();
 
     // Get reviewer name if available
     if (profile.getReviewedBy() != null) {
-      userRepository.findById(profile.getReviewedBy())
-        .ifPresent(reviewer -> response.setReviewedByName(reviewer.getFullName()));
+      userRepository
+          .findById(profile.getReviewedBy())
+          .ifPresent(reviewer -> response.setReviewedByName(reviewer.getFullName()));
     }
 
     return response;

@@ -5,4 +5,3 @@ public enum LessonDifficulty {
   INTERMEDIATE,
   ADVANCED
 }
-

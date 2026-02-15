@@ -2,10 +2,9 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
-import lombok.*;
-
 import java.time.Instant;
 import java.util.UUID;
+import lombok.*;
 
 @Builder
 @AllArgsConstructor
@@ -13,16 +12,17 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "matrix_question_mapping",
-  uniqueConstraints = {
-    @UniqueConstraint(name = "uq_matrix_question_mapping", columnNames = {"matrix_cell_id", "question_id"})
-  },
-  indexes = {
-    @Index(name = "idx_matrix_question_mapping_cell", columnList = "matrix_cell_id"),
-    @Index(name = "idx_matrix_question_mapping_question", columnList = "question_id"),
-    @Index(name = "idx_matrix_question_mapping_selected", columnList = "is_selected")
-  }
-)
+    name = "matrix_question_mapping",
+    uniqueConstraints = {
+      @UniqueConstraint(
+          name = "uq_matrix_question_mapping",
+          columnNames = {"matrix_cell_id", "question_id"})
+    },
+    indexes = {
+      @Index(name = "idx_matrix_question_mapping_cell", columnList = "matrix_cell_id"),
+      @Index(name = "idx_matrix_question_mapping_question", columnList = "question_id"),
+      @Index(name = "idx_matrix_question_mapping_selected", columnList = "is_selected")
+    })
 public class MatrixQuestionMapping {
 
   @Id
@@ -68,4 +68,3 @@ public class MatrixQuestionMapping {
     updatedAt = Instant.now();
   }
 }
-

@@ -2,10 +2,9 @@ package com.fptu.math_master.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.Set;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-
-import java.util.Set;
 
 @Data
 @Builder
@@ -20,4 +19,3 @@ public class RoleCreationRequest {
 
   Set<String> permissionCodes;
 }
-

@@ -2,13 +2,12 @@ package com.fptu.math_master.dto.response;
 
 import com.fptu.math_master.enums.Gender;
 import com.fptu.math_master.enums.Status;
-import lombok.*;
-import lombok.experimental.FieldDefaults;
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 @Data
 @Builder
@@ -51,4 +50,3 @@ public class UserResponse {
 
   String updatedBy;
 }
-
