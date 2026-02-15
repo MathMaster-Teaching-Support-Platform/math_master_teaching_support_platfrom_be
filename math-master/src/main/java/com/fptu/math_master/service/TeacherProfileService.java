@@ -4,10 +4,9 @@ import com.fptu.math_master.dto.request.ProfileReviewRequest;
 import com.fptu.math_master.dto.request.TeacherProfileRequest;
 import com.fptu.math_master.dto.response.TeacherProfileResponse;
 import com.fptu.math_master.enums.ProfileStatus;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import java.util.UUID;
 
 public interface TeacherProfileService {
 
@@ -15,7 +14,7 @@ public interface TeacherProfileService {
    * Submit teacher profile for approval
    *
    * @param request Profile information
-   * @param userId  Current user ID
+   * @param userId Current user ID
    * @return Created profile response
    */
   TeacherProfileResponse submitProfile(TeacherProfileRequest request, UUID userId);
@@ -24,7 +23,7 @@ public interface TeacherProfileService {
    * Update pending teacher profile
    *
    * @param request Updated profile information
-   * @param userId  Current user ID
+   * @param userId Current user ID
    * @return Updated profile response
    */
   TeacherProfileResponse updateProfile(TeacherProfileRequest request, UUID userId);
@@ -48,7 +47,7 @@ public interface TeacherProfileService {
   /**
    * Get all profiles by status
    *
-   * @param status   Profile status
+   * @param status Profile status
    * @param pageable Pagination info
    * @return Page of profiles
    */
@@ -58,8 +57,8 @@ public interface TeacherProfileService {
    * Admin review (approve/reject) teacher profile
    *
    * @param profileId Profile ID to review
-   * @param request   Review decision and comment
-   * @param adminId   Admin user ID
+   * @param request Review decision and comment
+   * @param adminId Admin user ID
    * @return Updated profile response
    */
   TeacherProfileResponse reviewProfile(UUID profileId, ProfileReviewRequest request, UUID adminId);

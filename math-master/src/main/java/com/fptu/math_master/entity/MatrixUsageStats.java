@@ -3,13 +3,12 @@ package com.fptu.math_master.entity;
 import com.fptu.math_master.util.UuidV7Generator;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.Type;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Type;
 
 @Builder
 @AllArgsConstructor
@@ -17,12 +16,11 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "matrix_usage_stats",
-  indexes = {
-    @Index(name = "idx_matrix_usage_stats_matrix", columnList = "matrix_id"),
-    @Index(name = "idx_matrix_usage_stats_assessment", columnList = "assessment_id")
-  }
-)
+    name = "matrix_usage_stats",
+    indexes = {
+      @Index(name = "idx_matrix_usage_stats_matrix", columnList = "matrix_id"),
+      @Index(name = "idx_matrix_usage_stats_assessment", columnList = "assessment_id")
+    })
 public class MatrixUsageStats {
 
   @Id
@@ -63,4 +61,3 @@ public class MatrixUsageStats {
     if (createdAt == null) createdAt = Instant.now();
   }
 }
-

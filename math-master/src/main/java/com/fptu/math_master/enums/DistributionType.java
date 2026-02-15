@@ -6,4 +6,3 @@ public enum DistributionType {
   BY_COGNITIVE_LEVEL,
   BY_QUESTION_TYPE
 }
-

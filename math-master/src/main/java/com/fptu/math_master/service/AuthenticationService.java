@@ -9,7 +9,6 @@ import com.fptu.math_master.dto.response.AuthenticationResponse;
 import com.fptu.math_master.dto.response.IntrospectResponse;
 import com.fptu.math_master.dto.response.UserResponse;
 import com.nimbusds.jose.JOSEException;
-
 import java.text.ParseException;
 
 public interface AuthenticationService {

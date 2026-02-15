@@ -2,10 +2,9 @@ package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.QuestionBankRequest;
 import com.fptu.math_master.dto.response.QuestionBankResponse;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import java.util.UUID;
 
 public interface QuestionBankService {
 
@@ -20,12 +19,7 @@ public interface QuestionBankService {
   Page<QuestionBankResponse> getMyQuestionBanks(Pageable pageable);
 
   Page<QuestionBankResponse> searchQuestionBanks(
-    String subject,
-    String gradeLevel,
-    Boolean isPublic,
-    String searchTerm,
-    Pageable pageable
-  );
+      String subject, String gradeLevel, Boolean isPublic, String searchTerm, Pageable pageable);
 
   QuestionBankResponse togglePublicStatus(UUID id);
 
@@ -33,4 +27,3 @@ public interface QuestionBankService {
 
   boolean canDeleteQuestionBank(UUID id);
 }
-

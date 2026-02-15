@@ -2,12 +2,11 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.SubmissionStatus;
 import jakarta.persistence.*;
-import lombok.*;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
 
 @Builder
 @AllArgsConstructor
@@ -15,17 +14,18 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "submissions",
-  uniqueConstraints = {
-    @UniqueConstraint(name = "uq_submissions", columnNames = {"assessment_id", "student_id"})
-  },
-  indexes = {
-    @Index(name = "idx_submissions_assessment", columnList = "assessment_id"),
-    @Index(name = "idx_submissions_student", columnList = "student_id"),
-    @Index(name = "idx_submissions_status", columnList = "status"),
-    @Index(name = "idx_submissions_student_status", columnList = "student_id, status")
-  }
-)
+    name = "submissions",
+    uniqueConstraints = {
+      @UniqueConstraint(
+          name = "uq_submissions",
+          columnNames = {"assessment_id", "student_id"})
+    },
+    indexes = {
+      @Index(name = "idx_submissions_assessment", columnList = "assessment_id"),
+      @Index(name = "idx_submissions_student", columnList = "student_id"),
+      @Index(name = "idx_submissions_status", columnList = "status"),
+      @Index(name = "idx_submissions_student_status", columnList = "student_id, status")
+    })
 public class Submission {
 
   @Id
@@ -128,4 +128,3 @@ public class Submission {
     updatedAt = Instant.now();
   }
 }
-

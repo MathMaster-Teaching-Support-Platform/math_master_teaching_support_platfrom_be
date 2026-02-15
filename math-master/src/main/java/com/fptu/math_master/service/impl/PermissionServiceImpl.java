@@ -8,6 +8,9 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.PermissionRepository;
 import com.fptu.math_master.service.PermissionService;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -16,10 +19,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,11 +37,12 @@ public class PermissionServiceImpl implements PermissionService {
       throw new AppException(ErrorCode.PERMISSION_ALREADY_EXISTS);
     }
 
-    Permission permission = Permission.builder()
-      .code(request.getCode())
-      .name(request.getName())
-      .description(request.getDescription())
-      .build();
+    Permission permission =
+        Permission.builder()
+            .code(request.getCode())
+            .name(request.getName())
+            .description(request.getDescription())
+            .build();
 
     permission = permissionRepository.save(permission);
 
@@ -55,11 +55,14 @@ public class PermissionServiceImpl implements PermissionService {
   public PermissionResponse updatePermission(UUID permissionId, PermissionUpdateRequest request) {
     log.info("Updating permission with id: {}", permissionId);
 
-    Permission permission = permissionRepository.findById(permissionId)
-      .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
+    Permission permission =
+        permissionRepository
+            .findById(permissionId)
+            .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
 
     if (request.getCode() != null) {
-      if (!permission.getCode().equals(request.getCode()) && permissionRepository.existsByCode(request.getCode())) {
+      if (!permission.getCode().equals(request.getCode())
+          && permissionRepository.existsByCode(request.getCode())) {
         throw new AppException(ErrorCode.PERMISSION_ALREADY_EXISTS);
       }
       permission.setCode(request.getCode());
@@ -84,8 +87,10 @@ public class PermissionServiceImpl implements PermissionService {
   public void deletePermission(UUID permissionId) {
     log.info("Deleting permission with id: {}", permissionId);
 
-    Permission permission = permissionRepository.findById(permissionId)
-      .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
+    Permission permission =
+        permissionRepository
+            .findById(permissionId)
+            .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
 
     permissionRepository.delete(permission);
 
@@ -96,8 +101,10 @@ public class PermissionServiceImpl implements PermissionService {
   public PermissionResponse getPermissionById(UUID permissionId) {
     log.info("Getting permission with id: {}", permissionId);
 
-    Permission permission = permissionRepository.findById(permissionId)
-      .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
+    Permission permission =
+        permissionRepository
+            .findById(permissionId)
+            .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
 
     return mapToPermissionResponse(permission);
   }
@@ -106,8 +113,10 @@ public class PermissionServiceImpl implements PermissionService {
   public PermissionResponse getPermissionByCode(String code) {
     log.info("Getting permission with code: {}", code);
 
-    Permission permission = permissionRepository.findByCode(code)
-      .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
+    Permission permission =
+        permissionRepository
+            .findByCode(code)
+            .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
 
     return mapToPermissionResponse(permission);
   }
@@ -118,9 +127,7 @@ public class PermissionServiceImpl implements PermissionService {
 
     List<Permission> permissions = permissionRepository.findAll();
 
-    return permissions.stream()
-      .map(this::mapToPermissionResponse)
-      .collect(Collectors.toList());
+    return permissions.stream().map(this::mapToPermissionResponse).collect(Collectors.toList());
   }
 
   @Override
@@ -134,10 +141,10 @@ public class PermissionServiceImpl implements PermissionService {
 
   private PermissionResponse mapToPermissionResponse(Permission permission) {
     return PermissionResponse.builder()
-      .id(permission.getId())
-      .code(permission.getCode())
-      .name(permission.getName())
-      .description(permission.getDescription())
-      .build();
+        .id(permission.getId())
+        .code(permission.getCode())
+        .name(permission.getName())
+        .description(permission.getDescription())
+        .build();
   }
 }

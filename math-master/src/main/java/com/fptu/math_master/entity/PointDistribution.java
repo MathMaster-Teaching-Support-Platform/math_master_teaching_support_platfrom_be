@@ -4,11 +4,10 @@ import com.fptu.math_master.enums.DistributionType;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.*;
 
 @Builder
 @AllArgsConstructor
@@ -16,16 +15,17 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "point_distribution",
-  uniqueConstraints = {
-    @UniqueConstraint(name = "uq_point_distribution", columnNames = {"matrix_id", "distribution_type", "category_key", "category_value"})
-  },
-  indexes = {
-    @Index(name = "idx_point_distribution_matrix", columnList = "matrix_id"),
-    @Index(name = "idx_point_distribution_type", columnList = "distribution_type"),
-    @Index(name = "idx_point_distribution_key", columnList = "category_key")
-  }
-)
+    name = "point_distribution",
+    uniqueConstraints = {
+      @UniqueConstraint(
+          name = "uq_point_distribution",
+          columnNames = {"matrix_id", "distribution_type", "category_key", "category_value"})
+    },
+    indexes = {
+      @Index(name = "idx_point_distribution_matrix", columnList = "matrix_id"),
+      @Index(name = "idx_point_distribution_type", columnList = "distribution_type"),
+      @Index(name = "idx_point_distribution_key", columnList = "category_key")
+    })
 public class PointDistribution {
 
   @Id
@@ -80,4 +80,3 @@ public class PointDistribution {
     updatedAt = Instant.now();
   }
 }
-

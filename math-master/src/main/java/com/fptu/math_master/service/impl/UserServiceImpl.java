@@ -13,6 +13,12 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.RoleRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.UserService;
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -23,13 +29,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -57,25 +56,28 @@ public class UserServiceImpl implements UserService {
     }
 
     // Build user entity
-    User user = User.builder()
-      .userName(request.getUserName())
-      .password(passwordEncoder.encode(request.getPassword()))
-      .fullName(request.getFullName())
-      .email(request.getEmail())
-      .phoneNumber(request.getPhoneNumber())
-      .gender(request.getGender())
-      .avatar(request.getAvatar())
-      .dob(request.getDob())
-      .code(request.getCode())
-      .status(Status.ACTIVE)
-      .build();
+    User user =
+        User.builder()
+            .userName(request.getUserName())
+            .password(passwordEncoder.encode(request.getPassword()))
+            .fullName(request.getFullName())
+            .email(request.getEmail())
+            .phoneNumber(request.getPhoneNumber())
+            .gender(request.getGender())
+            .avatar(request.getAvatar())
+            .dob(request.getDob())
+            .code(request.getCode())
+            .status(Status.ACTIVE)
+            .build();
 
     // Set roles if provided
     if (request.getRoles() != null && !request.getRoles().isEmpty()) {
       Set<Role> roles = new HashSet<>();
       for (String roleName : request.getRoles()) {
-        Role role = roleRepository.findByName(roleName)
-          .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+        Role role =
+            roleRepository
+                .findByName(roleName)
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
         roles.add(role);
       }
       user.setRoles(roles);
@@ -93,8 +95,10 @@ public class UserServiceImpl implements UserService {
   public UserResponse updateUser(UUID userId, UserUpdateRequest request) {
     log.info("Updating user with id: {}", userId);
 
-    User user = userRepository.findById(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     // Update password if provided
     if (request.getPassword() != null && !request.getPassword().isEmpty()) {
@@ -108,7 +112,8 @@ public class UserServiceImpl implements UserService {
 
     if (request.getEmail() != null) {
       // Check if email is being changed and if new email already exists
-      if (!user.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
+      if (!user.getEmail().equals(request.getEmail())
+          && userRepository.existsByEmail(request.getEmail())) {
         throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
       }
       user.setEmail(request.getEmail());
@@ -142,8 +147,10 @@ public class UserServiceImpl implements UserService {
     if (request.getRoles() != null) {
       Set<Role> roles = new HashSet<>();
       for (String roleName : request.getRoles()) {
-        Role role = roleRepository.findByName(roleName)
-          .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+        Role role =
+            roleRepository
+                .findByName(roleName)
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
         roles.add(role);
       }
       user.setRoles(roles);
@@ -160,8 +167,10 @@ public class UserServiceImpl implements UserService {
   public void deleteUser(UUID userId) {
     log.info("Soft deleting user with id: {}", userId);
 
-    User user = userRepository.findById(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     // Soft delete by setting status to DELETED
     user.setStatus(Status.DELETED);
@@ -174,8 +183,10 @@ public class UserServiceImpl implements UserService {
   public UserResponse getUserById(UUID userId) {
     log.info("Getting user with id: {}", userId);
 
-    User user = userRepository.findByIdWithRoles(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findByIdWithRoles(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     return mapToUserResponse(user);
   }
@@ -186,9 +197,7 @@ public class UserServiceImpl implements UserService {
 
     List<User> users = userRepository.findAll();
 
-    return users.stream()
-      .map(this::mapToUserResponse)
-      .collect(Collectors.toList());
+    return users.stream().map(this::mapToUserResponse).collect(Collectors.toList());
   }
 
   @Override
@@ -207,8 +216,10 @@ public class UserServiceImpl implements UserService {
     var context = SecurityContextHolder.getContext();
     String email = context.getAuthentication().getName();
 
-    User user = userRepository.findByEmail(email)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findByEmail(email)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     return mapToUserResponse(user);
   }
@@ -221,8 +232,10 @@ public class UserServiceImpl implements UserService {
     var context = SecurityContextHolder.getContext();
     String email = context.getAuthentication().getName();
 
-    User user = userRepository.findByEmail(email)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findByEmail(email)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     // Update password if provided
     if (request.getPassword() != null && !request.getPassword().isEmpty()) {
@@ -259,10 +272,9 @@ public class UserServiceImpl implements UserService {
   @Override
   public Page<UserResponse> searchUsers(UserSearchRequest request, Pageable pageable) {
     log.info("Searching users with criteria: {}", request);
-    Page<User> users = userRepository.findAll(
-        com.fptu.math_master.repository.UserSpecification.searchUsers(request), 
-        pageable
-    );
+    Page<User> users =
+        userRepository.findAll(
+            com.fptu.math_master.repository.UserSpecification.searchUsers(request), pageable);
     return users.map(this::mapToUserResponse);
   }
 
@@ -270,8 +282,10 @@ public class UserServiceImpl implements UserService {
   @Transactional
   public UserResponse banUser(UUID userId, String reason) {
     log.info("Banning user with id: {}", userId);
-    User user = userRepository.findById(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     if (user.getStatus() == Status.BANNED) {
       throw new AppException(ErrorCode.USER_ALREADY_BANNED);
     }
@@ -287,8 +301,10 @@ public class UserServiceImpl implements UserService {
   @Transactional
   public UserResponse unbanUser(UUID userId) {
     log.info("Unbanning user with id: {}", userId);
-    User user = userRepository.findById(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     if (user.getStatus() != Status.BANNED) {
       throw new AppException(ErrorCode.USER_NOT_BANNED);
     }
@@ -304,8 +320,10 @@ public class UserServiceImpl implements UserService {
   @Transactional
   public UserResponse disableUser(UUID userId) {
     log.info("Disabling user with id: {}", userId);
-    User user = userRepository.findById(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     if (user.getStatus() == Status.INACTIVE) {
       throw new AppException(ErrorCode.USER_ALREADY_DISABLED);
     }
@@ -319,8 +337,10 @@ public class UserServiceImpl implements UserService {
   @Transactional
   public UserResponse enableUser(UUID userId) {
     log.info("Enabling user with id: {}", userId);
-    User user = userRepository.findById(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     if (user.getStatus() == Status.ACTIVE) {
       throw new AppException(ErrorCode.USER_ALREADY_ENABLED);
     }
@@ -339,8 +359,10 @@ public class UserServiceImpl implements UserService {
     log.info("Changing password for current user");
     var context = SecurityContextHolder.getContext();
     String email = context.getAuthentication().getName();
-    User user = userRepository.findByEmail(email)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findByEmail(email)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
       throw new AppException(ErrorCode.INCORRECT_PASSWORD);
     }
@@ -355,30 +377,27 @@ public class UserServiceImpl implements UserService {
   private UserResponse mapToUserResponse(User user) {
     Set<String> roles = null;
     if (user.getRoles() != null) {
-      roles = user.getRoles().stream()
-        .map(Role::getName)
-        .collect(Collectors.toSet());
+      roles = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
     }
 
     return UserResponse.builder()
-      .id(user.getId())
-      .userName(user.getUserName())
-      .fullName(user.getFullName())
-      .email(user.getEmail())
-      .phoneNumber(user.getPhoneNumber())
-      .gender(user.getGender())
-      .avatar(user.getAvatar())
-      .dob(user.getDob())
-      .code(user.getCode())
-      .status(user.getStatus())
-      .banReason(user.getBanReason())
-      .banDate(user.getBanDate())
-      .roles(roles)
-      .createdDate(user.getCreatedDate())
-      .createdBy(user.getCreatedBy())
-      .updatedDate(user.getUpdatedDate())
-      .updatedBy(user.getUpdatedBy())
-      .build();
+        .id(user.getId())
+        .userName(user.getUserName())
+        .fullName(user.getFullName())
+        .email(user.getEmail())
+        .phoneNumber(user.getPhoneNumber())
+        .gender(user.getGender())
+        .avatar(user.getAvatar())
+        .dob(user.getDob())
+        .code(user.getCode())
+        .status(user.getStatus())
+        .banReason(user.getBanReason())
+        .banDate(user.getBanDate())
+        .roles(roles)
+        .createdDate(user.getCreatedDate())
+        .createdBy(user.getCreatedBy())
+        .updatedDate(user.getUpdatedDate())
+        .updatedBy(user.getUpdatedBy())
+        .build();
   }
 }
-

@@ -9,12 +9,11 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "centrifugo")
 public class CentrifugoProperties {
 
-    private String apiUrl;
+  private String apiUrl;
 
-    private String apiKey;
+  private String apiKey;
 
-    private String tokenHmacSecret;
+  private String tokenHmacSecret;
 
-    private String wsUrl;
+  private String wsUrl;
 }
-

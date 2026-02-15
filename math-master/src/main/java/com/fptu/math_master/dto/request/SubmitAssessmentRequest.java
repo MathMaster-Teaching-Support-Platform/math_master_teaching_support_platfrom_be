@@ -1,12 +1,11 @@
 package com.fptu.math_master.dto.request;
 
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 @Data
 @Builder
@@ -14,9 +13,8 @@ import java.util.UUID;
 @AllArgsConstructor
 public class SubmitAssessmentRequest {
 
-    @NotNull(message = "Attempt ID is required")
-    private UUID attemptId;
+  @NotNull(message = "Attempt ID is required")
+  private UUID attemptId;
 
-    private Boolean confirmed;
+  private Boolean confirmed;
 }
-

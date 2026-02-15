@@ -1,13 +1,12 @@
 package com.fptu.math_master.dto.response;
 
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
 
 @Data
 @Builder
@@ -38,4 +37,3 @@ public class MatrixValidationReport {
   private boolean difficultyBalanced;
   private boolean allCognitiveLevelsCovered;
 }
-
