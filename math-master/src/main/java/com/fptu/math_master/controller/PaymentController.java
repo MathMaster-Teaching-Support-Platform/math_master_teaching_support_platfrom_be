@@ -46,10 +46,18 @@ public class PaymentController {
     @PostMapping("/webhook")
     public ApiResponse<Void> handleWebhook(@RequestBody PayOSWebhookRequest webhookRequest) {
         log.info("Received webhook from PayOS: {}", webhookRequest);
-        paymentService.handleWebhook(webhookRequest);
-        return ApiResponse.<Void>builder()
-            .message("Webhook processed successfully")
-            .build();
+        try {
+            paymentService.handleWebhook(webhookRequest);
+            return ApiResponse.<Void>builder()
+                .message("Webhook processed successfully")
+                .build();
+        } catch (Exception e) {
+            log.error("Error processing webhook, but returning 200 OK to PayOS: {}", e.getMessage(), e);
+            // Always return 200 OK to PayOS to prevent retry storms
+            return ApiResponse.<Void>builder()
+                .message("Webhook received, processing failed but acknowledged")
+                .build();
+        }
     }
 
     @Operation(summary = "Manual confirm transaction (Admin/Dev only)",
