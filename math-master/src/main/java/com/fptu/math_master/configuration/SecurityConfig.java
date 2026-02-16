@@ -35,11 +35,17 @@ public class SecurityConfig {
     "/auth/introspect",
     "/auth/logout",
     "/auth/refresh",
-    "/api/payment/webhook"
+    "/api/payment/webhook",
+    "/ai/chat",
+    "/question-templates/import-from-file",
   };
 
   private static final String[] PUBLIC_GET_ENDPOINTS = {
-    "/api/schools/**", "/actuator/health", "/actuator/info", "/actuator/mappings"
+    "/api/schools/**",
+    "/actuator/health",
+    "/actuator/info",
+    "/actuator/mappings",
+    "/ai/test",
   };
 
   private static final String[] SWAGGER_WHITELIST = {
