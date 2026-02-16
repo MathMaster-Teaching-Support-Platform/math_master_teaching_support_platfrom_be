@@ -94,7 +94,10 @@ public enum ErrorCode {
   QUESTION_NOT_FOUND(1071, "Question not found", HttpStatus.NOT_FOUND),
   SUBMISSION_NOT_GRADED(1072, "Submission has not been graded yet", HttpStatus.BAD_REQUEST),
   GRADES_NOT_RELEASED(1073, "Grades have not been released yet", HttpStatus.BAD_REQUEST),
-  REGRADE_REQUEST_NOT_FOUND(1074, "Regrade request not found", HttpStatus.NOT_FOUND);
+  REGRADE_REQUEST_NOT_FOUND(1074, "Regrade request not found", HttpStatus.NOT_FOUND),
+  QUESTION_TEMPLATE_NOT_FOUND(1075, "Question template not found", HttpStatus.NOT_FOUND),
+  INVALID_TEMPLATE_SYNTAX(1076, "Invalid template syntax", HttpStatus.BAD_REQUEST),
+  TEMPLATE_GENERATION_FAILED(1077, "Failed to generate question from template", HttpStatus.INTERNAL_SERVER_ERROR);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

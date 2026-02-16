@@ -139,6 +139,20 @@
 			<artifactId>okhttp</artifactId>
 			<version>4.12.0</version>
 		</dependency>
+
+		<!-- Apache POI for Word document processing -->
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>5.2.5</version>
+		</dependency>
+
+		<!-- PDFBox for PDF processing -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>3.0.1</version>
+		</dependency>
 	</dependencies>
 
 	<build>
