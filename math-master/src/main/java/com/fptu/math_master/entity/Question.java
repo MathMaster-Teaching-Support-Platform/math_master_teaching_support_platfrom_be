@@ -30,7 +30,8 @@ import java.util.UUID;
     @Index(name = "idx_questions_created_by", columnList = "created_by"),
     @Index(name = "idx_questions_type", columnList = "question_type"),
     @Index(name = "idx_questions_difficulty", columnList = "difficulty"),
-    @Index(name = "idx_questions_cognitive_level", columnList = "cognitive_level")
+    @Index(name = "idx_questions_cognitive_level", columnList = "cognitive_level"),
+    @Index(name = "idx_questions_template", columnList = "template_id")
   }
 )
 public class Question {
@@ -95,6 +96,14 @@ public class Question {
   @Column(name = "tags", columnDefinition = "TEXT[]")
   private String[] tags;
 
+  @Column(name = "template_id")
+  private UUID templateId;
+
+  @Type(JsonBinaryType.class)
+  @Column(name = "generation_metadata", columnDefinition = "jsonb")
+  private Map<String, Object> generationMetadata;
+
+
   @Column(name = "created_at")
   private Instant createdAt;
 
@@ -115,6 +124,10 @@ public class Question {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by", insertable = false, updatable = false)
   private User creator;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "template_id", insertable = false, updatable = false)
+  private QuestionTemplate questionTemplate;
 
   @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<AssessmentQuestion> assessmentQuestions;

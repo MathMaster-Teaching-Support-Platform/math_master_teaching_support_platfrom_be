@@ -131,3 +131,10 @@ assessment:
     ttl: 86400  # 24 hours in seconds
     auto-save-interval: 2000  # milliseconds
 
+# ================================
+# Ollama API Configuration
+# ================================
+ollama:
+  base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+  model: ${OLLAMA_MODEL:llama3}
+  timeout-seconds: 600
