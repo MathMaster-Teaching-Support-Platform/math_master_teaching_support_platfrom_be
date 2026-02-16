@@ -6,13 +6,12 @@ import com.fptu.math_master.enums.QuestionType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.util.UUID;
 
 @Data
 @Builder
@@ -43,5 +42,3 @@ public class MatrixCellRequest {
 
   private String notes;
 }
-
-

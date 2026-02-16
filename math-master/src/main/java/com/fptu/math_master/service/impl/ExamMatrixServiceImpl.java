@@ -10,6 +10,11 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.ExamMatrixService;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.util.*;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -17,12 +22,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Instant;
-import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -51,8 +50,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
 
     // Get and validate assessment
-    Assessment assessment = assessmentRepository.findByIdAndNotDeleted(assessmentId)
-      .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    Assessment assessment =
+        assessmentRepository
+            .findByIdAndNotDeleted(assessmentId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
@@ -68,18 +69,19 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
 
     // Create matrix
-    ExamMatrix matrix = ExamMatrix.builder()
-      .assessmentId(assessmentId)
-      .lessonId(assessment.getLessonId())
-      .teacherId(assessment.getTeacherId())
-      .name(request.getName())
-      .description(request.getDescription())
-      .totalQuestions(request.getTotalQuestions())
-      .totalPoints(request.getTotalPoints())
-      .timeLimitMinutes(request.getTimeLimitMinutes())
-      .matrixConfig(new HashMap<>()) // Initialize empty config
-      .status(MatrixStatus.DRAFT)
-      .build();
+    ExamMatrix matrix =
+        ExamMatrix.builder()
+            .assessmentId(assessmentId)
+            .lessonId(assessment.getLessonId())
+            .teacherId(assessment.getTeacherId())
+            .name(request.getName())
+            .description(request.getDescription())
+            .totalQuestions(request.getTotalQuestions())
+            .totalPoints(request.getTotalPoints())
+            .timeLimitMinutes(request.getTimeLimitMinutes())
+            .matrixConfig(new HashMap<>()) // Initialize empty config
+            .status(MatrixStatus.DRAFT)
+            .build();
 
     matrix = examMatrixRepository.save(matrix);
 
@@ -89,7 +91,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
   @Override
   @Transactional
-  public ExamMatrixResponse configureMatrixDimensions(UUID matrixId, MatrixDimensionRequest request) {
+  public ExamMatrixResponse configureMatrixDimensions(
+      UUID matrixId, MatrixDimensionRequest request) {
     log.info("Configuring matrix dimensions for matrix: {}", matrixId);
 
     ExamMatrix matrix = getMatrixAndValidateAccess(matrixId);
@@ -111,16 +114,19 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       config = new HashMap<>();
     }
     config.put("selectedChapters", request.getChapterIds());
-    config.put("cognitiveLevels", request.getCognitiveLevels().stream()
-      .map(Enum::name).collect(Collectors.toList()));
+    config.put(
+        "cognitiveLevels",
+        request.getCognitiveLevels().stream().map(Enum::name).collect(Collectors.toList()));
     config.put("gridSize", request.getChapterIds().size() * request.getCognitiveLevels().size());
 
     matrix.setMatrixConfig(config);
     matrix = examMatrixRepository.save(matrix);
 
-    log.info("Matrix dimensions configured: {} chapters × {} cognitive levels = {} cells",
-      request.getChapterIds().size(), request.getCognitiveLevels().size(),
-      request.getChapterIds().size() * request.getCognitiveLevels().size());
+    log.info(
+        "Matrix dimensions configured: {} chapters × {} cognitive levels = {} cells",
+        request.getChapterIds().size(),
+        request.getCognitiveLevels().size(),
+        request.getChapterIds().size() * request.getCognitiveLevels().size());
 
     return mapToResponse(matrix);
   }
@@ -133,17 +139,18 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     ExamMatrix matrix = getMatrixAndValidateAccess(matrixId);
     validateNotLocked(matrix);
 
-    MatrixCell cell = MatrixCell.builder()
-      .matrixId(matrixId)
-      .chapterId(request.getChapterId())
-      .topic(request.getTopic())
-      .cognitiveLevel(request.getCognitiveLevel())
-      .difficulty(request.getDifficulty())
-      .questionType(request.getQuestionType())
-      .numQuestions(request.getNumQuestions())
-      .pointsPerQuestion(request.getPointsPerQuestion())
-      .notes(request.getNotes())
-      .build();
+    MatrixCell cell =
+        MatrixCell.builder()
+            .matrixId(matrixId)
+            .chapterId(request.getChapterId())
+            .topic(request.getTopic())
+            .cognitiveLevel(request.getCognitiveLevel())
+            .difficulty(request.getDifficulty())
+            .questionType(request.getQuestionType())
+            .numQuestions(request.getNumQuestions())
+            .pointsPerQuestion(request.getPointsPerQuestion())
+            .notes(request.getNotes())
+            .build();
 
     cell = matrixCellRepository.save(cell);
 
@@ -159,9 +166,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     ExamMatrix matrix = getMatrixAndValidateAccess(matrixId);
     List<MatrixCell> cells = matrixCellRepository.findByMatrixIdOrderByCreatedAt(matrixId);
 
-    return cells.stream()
-      .map(this::mapToCellResponse)
-      .collect(Collectors.toList());
+    return cells.stream().map(this::mapToCellResponse).collect(Collectors.toList());
   }
 
   @Override
@@ -169,58 +174,67 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   public SuggestedQuestionsResponse suggestQuestionsForCell(UUID matrixCellId, Integer limit) {
     log.info("Suggesting questions for matrix cell: {}, limit: {}", matrixCellId, limit);
 
-    MatrixCell cell = matrixCellRepository.findById(matrixCellId)
-      .orElseThrow(() -> new AppException(ErrorCode.MATRIX_CELL_NOT_FOUND));
+    MatrixCell cell =
+        matrixCellRepository
+            .findById(matrixCellId)
+            .orElseThrow(() -> new AppException(ErrorCode.MATRIX_CELL_NOT_FOUND));
 
     ExamMatrix matrix = getMatrixAndValidateAccess(cell.getMatrixId());
 
     // Get already selected questions for this matrix
-    List<UUID> excludedIds = matrixQuestionMappingRepository.findSelectedQuestionIdsByMatrixId(matrix.getId());
+    List<UUID> excludedIds =
+        matrixQuestionMappingRepository.findSelectedQuestionIdsByMatrixId(matrix.getId());
     if (excludedIds.isEmpty()) {
       excludedIds = List.of(UUID.randomUUID()); // Dummy UUID to avoid SQL error
     }
 
     // Find matching questions
-    List<Question> questions = questionRepository.findSuggestedQuestions(
-      cell.getChapterId(),
-      cell.getDifficulty().name(),
-      cell.getCognitiveLevel().name(),
-      cell.getQuestionType() != null ? cell.getQuestionType().name() : null,
-      excludedIds
-    );
+    List<Question> questions =
+        questionRepository.findSuggestedQuestions(
+            cell.getChapterId(),
+            cell.getDifficulty().name(),
+            cell.getCognitiveLevel().name(),
+            cell.getQuestionType() != null ? cell.getQuestionType().name() : null,
+            excludedIds);
 
     int requested = limit != null ? limit : cell.getNumQuestions();
-    List<Question> limitedQuestions = questions.stream()
-      .limit(requested)
-      .collect(Collectors.toList());
+    List<Question> limitedQuestions =
+        questions.stream().limit(requested).collect(Collectors.toList());
 
-    List<SuggestedQuestionsResponse.QuestionResponse> questionResponses = limitedQuestions.stream()
-      .map(q -> SuggestedQuestionsResponse.QuestionResponse.builder()
-        .id(q.getId())
-        .questionText(q.getQuestionText())
-        .questionType(q.getQuestionType())
-        .difficulty(q.getDifficulty())
-        .bloomTaxonomyTags(q.getBloomTaxonomyTags())
-        .points(q.getPoints())
-        .build())
-      .collect(Collectors.toList());
+    List<SuggestedQuestionsResponse.QuestionResponse> questionResponses =
+        limitedQuestions.stream()
+            .map(
+                q ->
+                    SuggestedQuestionsResponse.QuestionResponse.builder()
+                        .id(q.getId())
+                        .questionText(q.getQuestionText())
+                        .questionType(q.getQuestionType())
+                        .difficulty(q.getDifficulty())
+                        .bloomTaxonomyTags(q.getBloomTaxonomyTags())
+                        .points(q.getPoints())
+                        .build())
+            .collect(Collectors.toList());
 
     return SuggestedQuestionsResponse.builder()
-      .suggestedQuestions(questionResponses)
-      .totalAvailable(questions.size())
-      .requested(requested)
-      .returned(limitedQuestions.size())
-      .build();
+        .suggestedQuestions(questionResponses)
+        .totalAvailable(questions.size())
+        .requested(requested)
+        .returned(limitedQuestions.size())
+        .build();
   }
 
   @Override
   @Transactional
   public MatrixCellResponse selectQuestionsManually(ManualQuestionSelectionRequest request) {
-    log.info("Manually selecting {} questions for cell: {}",
-      request.getQuestionIds().size(), request.getMatrixCellId());
+    log.info(
+        "Manually selecting {} questions for cell: {}",
+        request.getQuestionIds().size(),
+        request.getMatrixCellId());
 
-    MatrixCell cell = matrixCellRepository.findById(request.getMatrixCellId())
-      .orElseThrow(() -> new AppException(ErrorCode.MATRIX_CELL_NOT_FOUND));
+    MatrixCell cell =
+        matrixCellRepository
+            .findById(request.getMatrixCellId())
+            .orElseThrow(() -> new AppException(ErrorCode.MATRIX_CELL_NOT_FOUND));
 
     ExamMatrix matrix = getMatrixAndValidateAccess(cell.getMatrixId());
     validateNotLocked(matrix);
@@ -231,12 +245,13 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     // Create new mappings
     int priority = 1;
     for (UUID questionId : request.getQuestionIds()) {
-      MatrixQuestionMapping mapping = MatrixQuestionMapping.builder()
-        .matrixCellId(cell.getId())
-        .questionId(questionId)
-        .isSelected(true)
-        .selectionPriority(priority++)
-        .build();
+      MatrixQuestionMapping mapping =
+          MatrixQuestionMapping.builder()
+              .matrixCellId(cell.getId())
+              .questionId(questionId)
+              .isSelected(true)
+              .selectionPriority(priority++)
+              .build();
       matrixQuestionMappingRepository.save(mapping);
     }
 
@@ -262,9 +277,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     if (actualQuestions == null) actualQuestions = 0;
 
     Double actualPointsDouble = matrixCellRepository.sumPointsByMatrixId(matrixId);
-    BigDecimal actualPoints = actualPointsDouble != null
-      ? BigDecimal.valueOf(actualPointsDouble).setScale(2, RoundingMode.HALF_UP)
-      : BigDecimal.ZERO;
+    BigDecimal actualPoints =
+        actualPointsDouble != null
+            ? BigDecimal.valueOf(actualPointsDouble).setScale(2, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
 
     // Check if all cells are filled
     long filledCells = cells.stream().filter(c -> c.getNumQuestions() > 0).count();
@@ -276,21 +292,29 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
     if (!questionsMatchTarget) {
       if (actualQuestions < matrix.getTotalQuestions()) {
-        errors.add(String.format("Total questions (%d) is less than target (%d)",
-          actualQuestions, matrix.getTotalQuestions()));
+        errors.add(
+            String.format(
+                "Total questions (%d) is less than target (%d)",
+                actualQuestions, matrix.getTotalQuestions()));
       } else {
-        warnings.add(String.format("Total questions (%d) exceeds target (%d)",
-          actualQuestions, matrix.getTotalQuestions()));
+        warnings.add(
+            String.format(
+                "Total questions (%d) exceeds target (%d)",
+                actualQuestions, matrix.getTotalQuestions()));
       }
     }
 
     if (!pointsMatchTarget) {
       if (actualPoints.compareTo(matrix.getTotalPoints()) < 0) {
-        warnings.add(String.format("Total points (%.2f) is less than target (%.2f)",
-          actualPoints, matrix.getTotalPoints()));
+        warnings.add(
+            String.format(
+                "Total points (%.2f) is less than target (%.2f)",
+                actualPoints, matrix.getTotalPoints()));
       } else {
-        warnings.add(String.format("Total points (%.2f) exceeds target (%.2f)",
-          actualPoints, matrix.getTotalPoints()));
+        warnings.add(
+            String.format(
+                "Total points (%.2f) exceeds target (%.2f)",
+                actualPoints, matrix.getTotalPoints()));
       }
     }
 
@@ -308,7 +332,9 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     boolean allCognitiveLevelsCovered = distinctLevels >= 3; // At least 3 levels
 
     if (!allCognitiveLevelsCovered) {
-      warnings.add(String.format("Only %d cognitive levels covered (recommended: at least 3)", distinctLevels));
+      warnings.add(
+          String.format(
+              "Only %d cognitive levels covered (recommended: at least 3)", distinctLevels));
     }
 
     // Chapter distribution
@@ -319,24 +345,24 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     boolean canApprove = errors.isEmpty();
 
     return MatrixValidationReport.builder()
-      .canApprove(canApprove)
-      .errors(errors)
-      .warnings(warnings)
-      .actualQuestions(actualQuestions)
-      .targetQuestions(matrix.getTotalQuestions())
-      .actualPoints(actualPoints)
-      .targetPoints(matrix.getTotalPoints())
-      .totalCells(cells.size())
-      .filledCells((int) filledCells)
-      .chapterDistribution(chapterDist)
-      .difficultyDistribution(difficultyDist)
-      .cognitiveLevelCoverage(cognitiveDist)
-      .allCellsFilled(allCellsFilled)
-      .questionsMatchTarget(questionsMatchTarget)
-      .pointsMatchTarget(pointsMatchTarget)
-      .difficultyBalanced(difficultyBalanced)
-      .allCognitiveLevelsCovered(allCognitiveLevelsCovered)
-      .build();
+        .canApprove(canApprove)
+        .errors(errors)
+        .warnings(warnings)
+        .actualQuestions(actualQuestions)
+        .targetQuestions(matrix.getTotalQuestions())
+        .actualPoints(actualPoints)
+        .targetPoints(matrix.getTotalPoints())
+        .totalCells(cells.size())
+        .filledCells((int) filledCells)
+        .chapterDistribution(chapterDist)
+        .difficultyDistribution(difficultyDist)
+        .cognitiveLevelCoverage(cognitiveDist)
+        .allCellsFilled(allCellsFilled)
+        .questionsMatchTarget(questionsMatchTarget)
+        .pointsMatchTarget(pointsMatchTarget)
+        .difficultyBalanced(difficultyBalanced)
+        .allCognitiveLevelsCovered(allCognitiveLevelsCovered)
+        .build();
   }
 
   @Override
@@ -371,8 +397,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   public void lockMatrix(UUID matrixId) {
     log.info("Locking matrix: {}", matrixId);
 
-    ExamMatrix matrix = examMatrixRepository.findByIdAndNotDeleted(matrixId)
-      .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+    ExamMatrix matrix =
+        examMatrixRepository
+            .findByIdAndNotDeleted(matrixId)
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
 
     if (matrix.getStatus() != MatrixStatus.APPROVED) {
       throw new AppException(ErrorCode.MATRIX_NOT_APPROVED);
@@ -398,11 +426,15 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   public ExamMatrixResponse getExamMatrixByAssessmentId(UUID assessmentId) {
     log.info("Getting exam matrix by assessment: {}", assessmentId);
 
-    ExamMatrix matrix = examMatrixRepository.findByAssessmentIdAndNotDeleted(assessmentId)
-      .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+    ExamMatrix matrix =
+        examMatrixRepository
+            .findByAssessmentIdAndNotDeleted(assessmentId)
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
 
-    Assessment assessment = assessmentRepository.findByIdAndNotDeleted(assessmentId)
-      .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    Assessment assessment =
+        assessmentRepository
+            .findByIdAndNotDeleted(assessmentId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
@@ -427,17 +459,20 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
   private UUID getCurrentUserId() {
     String username = SecurityContextHolder.getContext().getAuthentication().getName();
-    User user = userRepository.findByUserName(username)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findByUserName(username)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     return user.getId();
   }
 
   private boolean isAdmin(UUID userId) {
-    User user = userRepository.findByIdWithRoles(userId)
-      .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user =
+        userRepository
+            .findByIdWithRoles(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-    return user.getRoles().stream()
-      .anyMatch(role -> role.getName().equals("ADMIN"));
+    return user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
   }
 
   private void validateOwnerOrAdmin(UUID ownerId, UUID currentUserId) {
@@ -447,8 +482,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   }
 
   private ExamMatrix getMatrixAndValidateAccess(UUID matrixId) {
-    ExamMatrix matrix = examMatrixRepository.findByIdAndNotDeleted(matrixId)
-      .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+    ExamMatrix matrix =
+        examMatrixRepository
+            .findByIdAndNotDeleted(matrixId)
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
 
     validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
     return matrix;
@@ -460,7 +497,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
   }
 
-  private Map<String, Double> calculateDifficultyDistribution(UUID matrixId, Integer totalQuestions) {
+  private Map<String, Double> calculateDifficultyDistribution(
+      UUID matrixId, Integer totalQuestions) {
     List<Object[]> results = matrixCellRepository.getDifficultyDistribution(matrixId);
     Map<String, Double> distribution = new HashMap<>();
 
@@ -527,8 +565,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   private void validateChapterDistribution(Map<String, Double> dist, List<String> warnings) {
     for (Map.Entry<String, Double> entry : dist.entrySet()) {
       if (entry.getValue() < 15) {
-        warnings.add(String.format("Chapter '%s' only %.1f%% coverage (recommended: ≥15%%)",
-          entry.getKey(), entry.getValue()));
+        warnings.add(
+            String.format(
+                "Chapter '%s' only %.1f%% coverage (recommended: ≥15%%)",
+                entry.getKey(), entry.getValue()));
       }
     }
   }
@@ -536,16 +576,17 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   private void populateAssessmentQuestionsFromMatrix(ExamMatrix matrix) {
     log.info("Populating assessment questions from matrix: {}", matrix.getId());
 
-    List<UUID> selectedQuestions = matrixQuestionMappingRepository
-      .findSelectedQuestionIdsByMatrixId(matrix.getId());
+    List<UUID> selectedQuestions =
+        matrixQuestionMappingRepository.findSelectedQuestionIdsByMatrixId(matrix.getId());
 
     int orderIndex = 1;
     for (UUID questionId : selectedQuestions) {
-      AssessmentQuestion aq = AssessmentQuestion.builder()
-        .assessmentId(matrix.getAssessmentId())
-        .questionId(questionId)
-        .orderIndex(orderIndex++)
-        .build();
+      AssessmentQuestion aq =
+          AssessmentQuestion.builder()
+              .assessmentId(matrix.getAssessmentId())
+              .questionId(questionId)
+              .orderIndex(orderIndex++)
+              .build();
       assessmentQuestionRepository.save(aq);
     }
 
@@ -563,30 +604,29 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     Lesson lesson = lessonRepository.findById(matrix.getLessonId()).orElse(null);
     String lessonTitle = lesson != null ? lesson.getTitle() : null;
 
-    String teacherName = userRepository.findById(matrix.getTeacherId())
-      .map(User::getFullName)
-      .orElse("Unknown");
+    String teacherName =
+        userRepository.findById(matrix.getTeacherId()).map(User::getFullName).orElse("Unknown");
 
     return ExamMatrixResponse.builder()
-      .id(matrix.getId())
-      .assessmentId(matrix.getAssessmentId())
-      .assessmentTitle(assessmentTitle)
-      .lessonId(matrix.getLessonId())
-      .lessonTitle(lessonTitle)
-      .teacherId(matrix.getTeacherId())
-      .teacherName(teacherName)
-      .name(matrix.getName())
-      .description(matrix.getDescription())
-      .totalQuestions(matrix.getTotalQuestions())
-      .totalPoints(matrix.getTotalPoints())
-      .timeLimitMinutes(matrix.getTimeLimitMinutes())
-      .status(matrix.getStatus())
-      .cellCount(cellCount.intValue())
-      .filledCells(filledCells.intValue())
-      .selectedQuestions(selectedQuestions.intValue())
-      .createdAt(matrix.getCreatedAt())
-      .updatedAt(matrix.getUpdatedAt())
-      .build();
+        .id(matrix.getId())
+        .assessmentId(matrix.getAssessmentId())
+        .assessmentTitle(assessmentTitle)
+        .lessonId(matrix.getLessonId())
+        .lessonTitle(lessonTitle)
+        .teacherId(matrix.getTeacherId())
+        .teacherName(teacherName)
+        .name(matrix.getName())
+        .description(matrix.getDescription())
+        .totalQuestions(matrix.getTotalQuestions())
+        .totalPoints(matrix.getTotalPoints())
+        .timeLimitMinutes(matrix.getTimeLimitMinutes())
+        .status(matrix.getStatus())
+        .cellCount(cellCount.intValue())
+        .filledCells(filledCells.intValue())
+        .selectedQuestions(selectedQuestions.intValue())
+        .createdAt(matrix.getCreatedAt())
+        .updatedAt(matrix.getUpdatedAt())
+        .build();
   }
 
   private MatrixCellResponse mapToCellResponse(MatrixCell cell) {
@@ -596,22 +636,21 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     String chapterTitle = chapter != null ? chapter.getTitle() : null;
 
     return MatrixCellResponse.builder()
-      .id(cell.getId())
-      .matrixId(cell.getMatrixId())
-      .chapterId(cell.getChapterId())
-      .chapterTitle(chapterTitle)
-      .topic(cell.getTopic())
-      .cognitiveLevel(cell.getCognitiveLevel())
-      .difficulty(cell.getDifficulty())
-      .questionType(cell.getQuestionType())
-      .numQuestions(cell.getNumQuestions())
-      .pointsPerQuestion(cell.getPointsPerQuestion())
-      .totalPoints(cell.getTotalPoints())
-      .selectedQuestionCount(selectedCount.intValue())
-      .notes(cell.getNotes())
-      .createdAt(cell.getCreatedAt())
-      .updatedAt(cell.getUpdatedAt())
-      .build();
+        .id(cell.getId())
+        .matrixId(cell.getMatrixId())
+        .chapterId(cell.getChapterId())
+        .chapterTitle(chapterTitle)
+        .topic(cell.getTopic())
+        .cognitiveLevel(cell.getCognitiveLevel())
+        .difficulty(cell.getDifficulty())
+        .questionType(cell.getQuestionType())
+        .numQuestions(cell.getNumQuestions())
+        .pointsPerQuestion(cell.getPointsPerQuestion())
+        .totalPoints(cell.getTotalPoints())
+        .selectedQuestionCount(selectedCount.intValue())
+        .notes(cell.getNotes())
+        .createdAt(cell.getCreatedAt())
+        .updatedAt(cell.getUpdatedAt())
+        .build();
   }
 }
-

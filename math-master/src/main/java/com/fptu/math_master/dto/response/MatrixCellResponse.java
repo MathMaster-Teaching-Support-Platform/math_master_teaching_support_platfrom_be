@@ -3,14 +3,13 @@ package com.fptu.math_master.dto.response;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
 
 @Data
 @Builder
@@ -34,4 +33,3 @@ public class MatrixCellResponse {
   private Instant createdAt;
   private Instant updatedAt;
 }
-

@@ -3,15 +3,14 @@ package com.fptu.math_master.entity;
 import com.fptu.math_master.util.UuidV7Generator;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-import org.hibernate.annotations.Type;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
+import org.hibernate.annotations.Type;
 
 @Builder
 @AllArgsConstructor
@@ -19,15 +18,16 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "answers",
-  uniqueConstraints = {
-    @UniqueConstraint(name = "uq_answers", columnNames = {"submission_id", "question_id"})
-  },
-  indexes = {
-    @Index(name = "idx_answers_submission", columnList = "submission_id"),
-    @Index(name = "idx_answers_question", columnList = "question_id")
-  }
-)
+    name = "answers",
+    uniqueConstraints = {
+      @UniqueConstraint(
+          name = "uq_answers",
+          columnNames = {"submission_id", "question_id"})
+    },
+    indexes = {
+      @Index(name = "idx_answers_submission", columnList = "submission_id"),
+      @Index(name = "idx_answers_question", columnList = "question_id")
+    })
 public class Answer {
 
   @Id
@@ -92,4 +92,3 @@ public class Answer {
     updatedAt = Instant.now();
   }
 }
-

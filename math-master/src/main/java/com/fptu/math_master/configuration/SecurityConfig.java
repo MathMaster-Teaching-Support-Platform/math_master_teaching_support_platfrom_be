@@ -1,5 +1,9 @@
 package com.fptu.math_master.configuration;
 
+import java.util.Arrays;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -16,12 +20,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
-
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -29,7 +27,7 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class SecurityConfig {
 
-    CustomJwtDecoder customJwtDecoder;
+  CustomJwtDecoder customJwtDecoder;
 
   private static final String[] PUBLIC_POST_ENDPOINTS = {
     "/auth/register",
@@ -51,28 +49,31 @@ public class SecurityConfig {
   };
 
   private static final String[] SWAGGER_WHITELIST = {
-    "/v3/api-docs/**",
-    "/swagger-ui/**",
-    "/swagger-ui.html",
-    "/swagger-resources/**",
-    "/webjars/**"
+    "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/swagger-resources/**", "/webjars/**"
   };
 
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
     httpSecurity
-      .authorizeHttpRequests(request -> request
+.authorizeHttpRequests(request ->
+    request
+        .requestMatchers("/api/payment/webhook/**").permitAll()
         .requestMatchers(SWAGGER_WHITELIST).permitAll()
         .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
-        .anyRequest().authenticated())
-      .oauth2ResourceServer(oauth2 -> oauth2
-        .jwt(jwtConfigurer -> jwtConfigurer
-          .decoder(customJwtDecoder)
-          .jwtAuthenticationConverter(jwtAuthenticationConverter()))
-        .authenticationEntryPoint(new JwtAuthenticationEntryPoint()))
-      .csrf(AbstractHttpConfigurer::disable)
-      .cors(cors -> cors.configurationSource(corsConfigurationSource()));
+        .anyRequest().authenticated()
+)
+.oauth2ResourceServer(oauth2 ->
+    oauth2
+        .jwt(jwtConfigurer ->
+            jwtConfigurer
+                .decoder(customJwtDecoder)
+                .jwtAuthenticationConverter(jwtAuthenticationConverter())
+        )
+        .authenticationEntryPoint(new JwtAuthenticationEntryPoint())
+)
+.csrf(AbstractHttpConfigurer::disable)
+.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
     return httpSecurity.build();
   }
@@ -80,8 +81,16 @@ public class SecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
-    configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173", "http://localhost:3000"));
-    configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+configuration.setAllowedOrigins(Arrays.asList(
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://nhducminhqt.name.vn",
+    "http://nhducminhqt.name.vn"
+));
+
+configuration.setAllowedMethods(Arrays.asList(
+    "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"
+));
     configuration.setAllowedHeaders(Arrays.asList("*"));
     configuration.setAllowCredentials(true);
     configuration.setMaxAge(3600L);
@@ -93,7 +102,8 @@ public class SecurityConfig {
 
   @Bean
   public JwtAuthenticationConverter jwtAuthenticationConverter() {
-    JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
+    JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter =
+        new JwtGrantedAuthoritiesConverter();
     jwtGrantedAuthoritiesConverter.setAuthorityPrefix("");
 
     JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
@@ -107,4 +117,3 @@ public class SecurityConfig {
     return new BCryptPasswordEncoder(10);
   }
 }
-

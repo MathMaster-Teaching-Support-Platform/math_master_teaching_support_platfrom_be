@@ -3,11 +3,10 @@ package com.fptu.math_master.entity;
 import com.fptu.math_master.enums.SubmissionStatus;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
-import lombok.*;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.*;
 
 @Builder
 @AllArgsConstructor
@@ -15,18 +14,19 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "quiz_attempts",
-  uniqueConstraints = {
-    @UniqueConstraint(name = "uq_quiz_attempts", columnNames = {"submission_id", "attempt_number"})
-  },
-  indexes = {
-    @Index(name = "idx_quiz_attempts_submission", columnList = "submission_id"),
-    @Index(name = "idx_quiz_attempts_assessment", columnList = "assessment_id"),
-    @Index(name = "idx_quiz_attempts_student", columnList = "student_id"),
-    @Index(name = "idx_quiz_attempts_number", columnList = "attempt_number"),
-    @Index(name = "idx_quiz_attempts_status", columnList = "status")
-  }
-)
+    name = "quiz_attempts",
+    uniqueConstraints = {
+      @UniqueConstraint(
+          name = "uq_quiz_attempts",
+          columnNames = {"submission_id", "attempt_number"})
+    },
+    indexes = {
+      @Index(name = "idx_quiz_attempts_submission", columnList = "submission_id"),
+      @Index(name = "idx_quiz_attempts_assessment", columnList = "assessment_id"),
+      @Index(name = "idx_quiz_attempts_student", columnList = "student_id"),
+      @Index(name = "idx_quiz_attempts_number", columnList = "attempt_number"),
+      @Index(name = "idx_quiz_attempts_status", columnList = "status")
+    })
 public class QuizAttempt {
 
   @Id
@@ -102,4 +102,3 @@ public class QuizAttempt {
     updatedAt = Instant.now();
   }
 }
-

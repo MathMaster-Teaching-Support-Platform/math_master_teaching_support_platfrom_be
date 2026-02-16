@@ -1,41 +1,89 @@
-  version: '3.8'
+version: "3.8"
 
 services:
-  # Redis Service
   redis:
     image: redis:7-alpine
     container_name: math-master-redis
     ports:
       - "6379:6379"
-    command: redis-server --requirepass redis_password
+    command: >
+      redis-server --requirepass ${REDIS_PASSWORD:-redis_password_prod_change_me}
     volumes:
       - redis_data:/data
     networks:
       - math-master-network
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password_prod_change_me}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
 
-  # Centrifugo Service
   centrifugo:
     image: centrifugo/centrifugo:v5
     container_name: math-master-centrifugo
     ports:
       - "8000:8000"
     volumes:
-      - ./centrifugo-config.json:/centrifugo/config.json
-    command: centrifugo -c config.json
+      - ./centrifugo-config.json:/centrifugo/config.json:ro
+    command: centrifugo -c /centrifugo/config.json
     networks:
       - math-master-network
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8000/health || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
 
-  # Ollama Service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: math-master-app
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password_prod_change_me}
+
+      SERVER_PORT: 8080
+
+      JWT_SIGNERKEY: ${JWT_SIGNERKEY}
+      JWT_VALID_DURATION: ${JWT_VALID_DURATION:-3600}
+      JWT_REFRESHABLE_DURATION: ${JWT_REFRESHABLE_DURATION:-36000}
+
+      PAYOS_CLIENT_ID: ${PAYOS_CLIENT_ID}
+      PAYOS_API_KEY: ${PAYOS_API_KEY}
+      PAYOS_CHECKSUM_KEY: ${PAYOS_CHECKSUM_KEY}
+      PAYOS_RETURN_URL: ${PAYOS_RETURN_URL}
+      PAYOS_CANCEL_URL: ${PAYOS_CANCEL_URL}
+
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_GMAIL: ${ADMIN_GMAIL:-admin@mathmaster.com}
+      ADMIN_FULLNAME: ${ADMIN_FULLNAME:-System Administrator}
+
+      STUDENT_USERNAME: ${STUDENT_USERNAME:-student}
+      STUDENT_PASSWORD: ${STUDENT_PASSWORD}
+      STUDENT_GMAIL: ${STUDENT_GMAIL:-student@mathmaster.com}
+      STUDENT_FULLNAME: ${STUDENT_FULLNAME:-Student User}
+
+      TEACHER_USERNAME: ${TEACHER_USERNAME:-teacher}
+      TEACHER_PASSWORD: ${TEACHER_PASSWORD}
+      TEACHER_GMAIL: ${TEACHER_GMAIL:-teacher@mathmaster.com}
+      TEACHER_FULLNAME: ${TEACHER_FULLNAME:-Teacher User}
+
+      CENTRIFUGO_API_URL: http://centrifugo:8000/api
+      # local-friendly default
+      CENTRIFUGO_WS_URL: ${CENTRIFUGO_WS_URL:-ws://localhost:8000/connection/websocket}
+
+    depends_on:
+      redis:
+        condition: service_healthy
+      centrifugo:
+        condition: service_healthy
+    networks:
+      - math-master-network
+
   ollama:
     image: ollama/ollama:latest
     container_name: math-master-ollama
@@ -50,17 +98,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-    # Uncomment the following lines if you have GPU support
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
 
-  # Ollama Model Loader - pulls the llama3 model after Ollama starts
-  # Note: llama3 requires at least 6GB RAM. If you have limited memory, use tinyllama instead
   ollama-pull:
     image: ollama/ollama:latest
     container_name: math-master-ollama-pull
@@ -95,4 +133,3 @@ volumes:
     driver: local
   ollama_data:
     driver: local
-

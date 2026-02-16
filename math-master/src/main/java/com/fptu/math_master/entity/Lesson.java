@@ -5,12 +5,11 @@ import com.fptu.math_master.enums.LessonStatus;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
@@ -18,15 +17,14 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "lessons",
-  indexes = {
-    @Index(name = "idx_lessons_teacher_id", columnList = "teacher_id"),
-    @Index(name = "idx_lessons_status", columnList = "status"),
-    @Index(name = "idx_lessons_subject", columnList = "subject"),
-    @Index(name = "idx_lessons_grade_level", columnList = "grade_level"),
-    @Index(name = "idx_lessons_teacher_status", columnList = "teacher_id, status")
-  }
-)
+    name = "lessons",
+    indexes = {
+      @Index(name = "idx_lessons_teacher_id", columnList = "teacher_id"),
+      @Index(name = "idx_lessons_status", columnList = "status"),
+      @Index(name = "idx_lessons_subject", columnList = "subject"),
+      @Index(name = "idx_lessons_grade_level", columnList = "grade_level"),
+      @Index(name = "idx_lessons_teacher_status", columnList = "teacher_id, status")
+    })
 public class Lesson {
 
   @Id
@@ -97,4 +95,3 @@ public class Lesson {
     updatedAt = Instant.now();
   }
 }
-

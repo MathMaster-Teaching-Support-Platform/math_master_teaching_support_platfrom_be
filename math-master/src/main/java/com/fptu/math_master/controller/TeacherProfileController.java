@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -22,8 +23,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/teacher-profiles")
 @RequiredArgsConstructor
@@ -35,24 +34,30 @@ public class TeacherProfileController {
 
   TeacherProfileService teacherProfileService;
 
-  @Operation(summary = "Submit teacher profile", description = "Student submits profile to become a teacher")
+  @Operation(
+      summary = "Submit teacher profile",
+      description = "Student submits profile to become a teacher")
   @PostMapping("/submit")
   @PreAuthorize("hasRole('STUDENT')")
-  public ApiResponse<TeacherProfileResponse> submitProfile(@Valid @RequestBody TeacherProfileRequest request) {
+  public ApiResponse<TeacherProfileResponse> submitProfile(
+      @Valid @RequestBody TeacherProfileRequest request) {
     UUID userId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
-      .result(teacherProfileService.submitProfile(request, userId))
-      .build();
+        .result(teacherProfileService.submitProfile(request, userId))
+        .build();
   }
 
-  @Operation(summary = "Update my profile", description = "Update pending or rejected teacher profile")
+  @Operation(
+      summary = "Update my profile",
+      description = "Update pending or rejected teacher profile")
   @PutMapping("/my-profile")
   @PreAuthorize("hasRole('STUDENT')")
-  public ApiResponse<TeacherProfileResponse> updateMyProfile(@Valid @RequestBody TeacherProfileRequest request) {
+  public ApiResponse<TeacherProfileResponse> updateMyProfile(
+      @Valid @RequestBody TeacherProfileRequest request) {
     UUID userId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
-      .result(teacherProfileService.updateProfile(request, userId))
-      .build();
+        .result(teacherProfileService.updateProfile(request, userId))
+        .build();
   }
 
   @Operation(summary = "Get my profile", description = "Get current user's teacher profile")
@@ -61,8 +66,8 @@ public class TeacherProfileController {
   public ApiResponse<TeacherProfileResponse> getMyProfile() {
     UUID userId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
-      .result(teacherProfileService.getMyProfile(userId))
-      .build();
+        .result(teacherProfileService.getMyProfile(userId))
+        .build();
   }
 
   @Operation(summary = "Delete my profile", description = "Delete pending or rejected profile")
@@ -71,9 +76,7 @@ public class TeacherProfileController {
   public ApiResponse<Void> deleteMyProfile() {
     UUID userId = getCurrentUserId();
     teacherProfileService.deleteMyProfile(userId);
-    return ApiResponse.<Void>builder()
-      .message("Profile deleted successfully")
-      .build();
+    return ApiResponse.<Void>builder().message("Profile deleted successfully").build();
   }
 
   @Operation(summary = "Get profile by ID", description = "Admin gets specific profile details")
@@ -81,42 +84,43 @@ public class TeacherProfileController {
   @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<TeacherProfileResponse> getProfileById(@PathVariable UUID profileId) {
     return ApiResponse.<TeacherProfileResponse>builder()
-      .result(teacherProfileService.getProfileById(profileId))
-      .build();
+        .result(teacherProfileService.getProfileById(profileId))
+        .build();
   }
 
-  @Operation(summary = "Get profiles by status", description = "Admin gets all profiles with specific status")
+  @Operation(
+      summary = "Get profiles by status",
+      description = "Admin gets all profiles with specific status")
   @GetMapping("/status/{status}")
   @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<Page<TeacherProfileResponse>> getProfilesByStatus(
-    @PathVariable ProfileStatus status,
-    @RequestParam(defaultValue = "0") int page,
-    @RequestParam(defaultValue = "10") int size) {
+      @PathVariable ProfileStatus status,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size) {
     Pageable pageable = PageRequest.of(page, size);
     return ApiResponse.<Page<TeacherProfileResponse>>builder()
-      .result(teacherProfileService.getProfilesByStatus(status, pageable))
-      .build();
+        .result(teacherProfileService.getProfilesByStatus(status, pageable))
+        .build();
   }
 
   @Operation(summary = "Review profile", description = "Admin approves or rejects teacher profile")
   @PostMapping("/{profileId}/review")
   @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<TeacherProfileResponse> reviewProfile(
-    @PathVariable UUID profileId,
-    @Valid @RequestBody ProfileReviewRequest request) {
+      @PathVariable UUID profileId, @Valid @RequestBody ProfileReviewRequest request) {
     UUID adminId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
-      .result(teacherProfileService.reviewProfile(profileId, request, adminId))
-      .build();
+        .result(teacherProfileService.reviewProfile(profileId, request, adminId))
+        .build();
   }
 
-  @Operation(summary = "Count pending profiles", description = "Get number of profiles waiting for review")
+  @Operation(
+      summary = "Count pending profiles",
+      description = "Get number of profiles waiting for review")
   @GetMapping("/pending/count")
   @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<Long> countPendingProfiles() {
-    return ApiResponse.<Long>builder()
-      .result(teacherProfileService.countPendingProfiles())
-      .build();
+    return ApiResponse.<Long>builder().result(teacherProfileService.countPendingProfiles()).build();
   }
 
   private UUID getCurrentUserId() {

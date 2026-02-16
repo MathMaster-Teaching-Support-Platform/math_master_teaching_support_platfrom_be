@@ -3,13 +3,12 @@ package com.fptu.math_master.entity;
 import com.fptu.math_master.enums.AiReviewType;
 import io.hypersistence.utils.hibernate.type.array.StringArrayType;
 import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-import org.hibernate.annotations.Type;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
+import org.hibernate.annotations.Type;
 
 @Builder
 @AllArgsConstructor
@@ -17,13 +16,12 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "ai_reviews",
-  indexes = {
-    @Index(name = "idx_ai_reviews_submission", columnList = "submission_id"),
-    @Index(name = "idx_ai_reviews_answer", columnList = "answer_id"),
-    @Index(name = "idx_ai_reviews_type", columnList = "review_type")
-  }
-)
+    name = "ai_reviews",
+    indexes = {
+      @Index(name = "idx_ai_reviews_submission", columnList = "submission_id"),
+      @Index(name = "idx_ai_reviews_answer", columnList = "answer_id"),
+      @Index(name = "idx_ai_reviews_type", columnList = "review_type")
+    })
 public class AiReview {
 
   @Id
@@ -82,4 +80,3 @@ public class AiReview {
     updatedAt = Instant.now();
   }
 }
-

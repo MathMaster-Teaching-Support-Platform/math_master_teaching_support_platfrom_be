@@ -1,9 +1,8 @@
 package com.fptu.math_master.dto.response;
 
+import java.util.UUID;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-
-import java.util.UUID;
 
 @Data
 @Builder

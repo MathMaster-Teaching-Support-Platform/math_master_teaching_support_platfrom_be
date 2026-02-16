@@ -26,7 +26,5 @@ public class PredefinedPermission {
   public static final String QUIZ_DELETE = "QUIZ_DELETE";
   public static final String QUIZ_SUBMIT = "QUIZ_SUBMIT";
 
-  private PredefinedPermission() {
-  }
+  private PredefinedPermission() {}
 }
-

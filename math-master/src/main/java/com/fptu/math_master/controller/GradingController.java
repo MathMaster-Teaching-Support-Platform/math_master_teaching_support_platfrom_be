@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -20,8 +21,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/grading")
 @RequiredArgsConstructor
@@ -31,274 +30,234 @@ import java.util.UUID;
 @SecurityRequirement(name = "bearerAuth")
 public class GradingController {
 
-    GradingService gradingService;
+  GradingService gradingService;
 
-    // FR-GR-002: Manual Grade Subjective Questions
-    @Operation(
-        summary = "Get grading queue",
-        description = "Get list of submissions that need grading (SUBMITTED status)"
-    )
-    @GetMapping("/queue")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ApiResponse<Page<GradingSubmissionResponse>> getGradingQueue(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+  // FR-GR-002: Manual Grade Subjective Questions
+  @Operation(
+      summary = "Get grading queue",
+      description = "Get list of submissions that need grading (SUBMITTED status)")
+  @GetMapping("/queue")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<Page<GradingSubmissionResponse>> getGradingQueue(
+      @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
 
-        log.info("Getting grading queue - page: {}, size: {}", page, size);
+    log.info("Getting grading queue - page: {}, size: {}", page, size);
 
-        Pageable pageable = PageRequest.of(page, size);
-        Page<GradingSubmissionResponse> queue = gradingService.getGradingQueue(pageable);
+    Pageable pageable = PageRequest.of(page, size);
+    Page<GradingSubmissionResponse> queue = gradingService.getGradingQueue(pageable);
 
-        return ApiResponse.<Page<GradingSubmissionResponse>>builder()
-                .result(queue)
-                .build();
-    }
+    return ApiResponse.<Page<GradingSubmissionResponse>>builder().result(queue).build();
+  }
 
-    @Operation(
-        summary = "Get grading queue by teacher",
-        description = "Get submissions for grading filtered by teacher's assessments"
-    )
-    @GetMapping("/queue/teacher/{teacherId}")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ApiResponse<Page<GradingSubmissionResponse>> getGradingQueueByTeacher(
-            @PathVariable UUID teacherId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+  @Operation(
+      summary = "Get grading queue by teacher",
+      description = "Get submissions for grading filtered by teacher's assessments")
+  @GetMapping("/queue/teacher/{teacherId}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<Page<GradingSubmissionResponse>> getGradingQueueByTeacher(
+      @PathVariable UUID teacherId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
 
-        log.info("Getting grading queue for teacher: {} - page: {}, size: {}", teacherId, page, size);
+    log.info("Getting grading queue for teacher: {} - page: {}, size: {}", teacherId, page, size);
 
-        Pageable pageable = PageRequest.of(page, size);
-        Page<GradingSubmissionResponse> queue = gradingService.getGradingQueueByTeacher(teacherId, pageable);
+    Pageable pageable = PageRequest.of(page, size);
+    Page<GradingSubmissionResponse> queue =
+        gradingService.getGradingQueueByTeacher(teacherId, pageable);
 
-        return ApiResponse.<Page<GradingSubmissionResponse>>builder()
-                .result(queue)
-                .build();
-    }
+    return ApiResponse.<Page<GradingSubmissionResponse>>builder().result(queue).build();
+  }
 
-    @Operation(
-        summary = "Get submission for grading",
-        description = "Get detailed submission with all answers for grading"
-    )
-    @GetMapping("/submissions/{submissionId}")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ApiResponse<GradingSubmissionResponse> getSubmissionForGrading(
-            @PathVariable UUID submissionId) {
+  @Operation(
+      summary = "Get submission for grading",
+      description = "Get detailed submission with all answers for grading")
+  @GetMapping("/submissions/{submissionId}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<GradingSubmissionResponse> getSubmissionForGrading(
+      @PathVariable UUID submissionId) {
 
-        log.info("Getting submission for grading: {}", submissionId);
+    log.info("Getting submission for grading: {}", submissionId);
 
-        GradingSubmissionResponse response = gradingService.getSubmissionForGrading(submissionId);
+    GradingSubmissionResponse response = gradingService.getSubmissionForGrading(submissionId);
 
-        return ApiResponse.<GradingSubmissionResponse>builder()
-                .result(response)
-                .build();
-    }
+    return ApiResponse.<GradingSubmissionResponse>builder().result(response).build();
+  }
 
-    @Operation(
-        summary = "Complete grading",
-        description = "Complete manual grading for a submission with subjective questions"
-    )
-    @PostMapping("/complete")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ApiResponse<GradingSubmissionResponse> completeGrading(
-            @Valid @RequestBody CompleteGradingRequest request) {
+  @Operation(
+      summary = "Complete grading",
+      description = "Complete manual grading for a submission with subjective questions")
+  @PostMapping("/complete")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<GradingSubmissionResponse> completeGrading(
+      @Valid @RequestBody CompleteGradingRequest request) {
 
-        log.info("Completing grading for submission: {}", request.getSubmissionId());
+    log.info("Completing grading for submission: {}", request.getSubmissionId());
 
-        GradingSubmissionResponse response = gradingService.completeGrading(request);
+    GradingSubmissionResponse response = gradingService.completeGrading(request);
 
-        return ApiResponse.<GradingSubmissionResponse>builder()
-                .result(response)
-                .build();
-    }
+    return ApiResponse.<GradingSubmissionResponse>builder().result(response).build();
+  }
 
-    // FR-GR-004: Grade Override
-    @Operation(
-        summary = "Override grade",
-        description = "Override the grade for a specific answer with audit logging"
-    )
-    @PostMapping("/override")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ApiResponse<Void> overrideGrade(
-            @Valid @RequestBody GradeOverrideRequest request) {
+  // FR-GR-004: Grade Override
+  @Operation(
+      summary = "Override grade",
+      description = "Override the grade for a specific answer with audit logging")
+  @PostMapping("/override")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<Void> overrideGrade(@Valid @RequestBody GradeOverrideRequest request) {
 
-        log.info("Overriding grade for answer: {}", request.getAnswerId());
+    log.info("Overriding grade for answer: {}", request.getAnswerId());
 
-        gradingService.overrideGrade(request);
+    gradingService.overrideGrade(request);
 
-        return ApiResponse.<Void>builder()
-                .message("Grade overridden successfully")
-                .build();
-    }
+    return ApiResponse.<Void>builder().message("Grade overridden successfully").build();
+  }
 
-    // FR-GR-005: Add Manual Grade to Submission
-    @Operation(
-        summary = "Add manual adjustment",
-        description = "Add bonus or penalty points to a submission (not tied to specific answer)"
-    )
-    @PostMapping("/adjustment")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ApiResponse<Void> addManualAdjustment(
-            @Valid @RequestBody ManualAdjustmentRequest request) {
+  // FR-GR-005: Add Manual Grade to Submission
+  @Operation(
+      summary = "Add manual adjustment",
+      description = "Add bonus or penalty points to a submission (not tied to specific answer)")
+  @PostMapping("/adjustment")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<Void> addManualAdjustment(
+      @Valid @RequestBody ManualAdjustmentRequest request) {
 
-        log.info("Adding manual adjustment to submission: {}", request.getSubmissionId());
+    log.info("Adding manual adjustment to submission: {}", request.getSubmissionId());
 
-        gradingService.addManualAdjustment(request);
+    gradingService.addManualAdjustment(request);
 
-        return ApiResponse.<Void>builder()
-                .message("Manual adjustment added successfully")
-                .build();
-    }
+    return ApiResponse.<Void>builder().message("Manual adjustment added successfully").build();
+  }
 
-    // FR-GR-006: View Grading Analytics
-    @Operation(
-        summary = "Get grading analytics",
-        description = "Get statistical analytics for an assessment's grading"
-    )
-    @GetMapping("/analytics/{assessmentId}")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ApiResponse<GradingAnalyticsResponse> getGradingAnalytics(
-            @PathVariable UUID assessmentId) {
+  // FR-GR-006: View Grading Analytics
+  @Operation(
+      summary = "Get grading analytics",
+      description = "Get statistical analytics for an assessment's grading")
+  @GetMapping("/analytics/{assessmentId}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<GradingAnalyticsResponse> getGradingAnalytics(
+      @PathVariable UUID assessmentId) {
 
-        log.info("Getting grading analytics for assessment: {}", assessmentId);
+    log.info("Getting grading analytics for assessment: {}", assessmentId);
 
-        GradingAnalyticsResponse analytics = gradingService.getGradingAnalytics(assessmentId);
+    GradingAnalyticsResponse analytics = gradingService.getGradingAnalytics(assessmentId);
 
-        return ApiResponse.<GradingAnalyticsResponse>builder()
-                .result(analytics)
-                .build();
-    }
+    return ApiResponse.<GradingAnalyticsResponse>builder().result(analytics).build();
+  }
 
-    // FR-GR-007: Export Grades
-    @Operation(
-        summary = "Export grades",
-        description = "Export all grades for an assessment as CSV file"
-    )
-    @GetMapping("/export/{assessmentId}")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ResponseEntity<String> exportGrades(@PathVariable UUID assessmentId) {
+  // FR-GR-007: Export Grades
+  @Operation(
+      summary = "Export grades",
+      description = "Export all grades for an assessment as CSV file")
+  @GetMapping("/export/{assessmentId}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ResponseEntity<String> exportGrades(@PathVariable UUID assessmentId) {
 
-        log.info("Exporting grades for assessment: {}", assessmentId);
+    log.info("Exporting grades for assessment: {}", assessmentId);
 
-        String csvContent = gradingService.exportGrades(assessmentId);
+    String csvContent = gradingService.exportGrades(assessmentId);
 
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=grades_" + assessmentId + ".csv")
-                .contentType(MediaType.parseMediaType("text/csv"))
-                .body(csvContent);
-    }
+    return ResponseEntity.ok()
+        .header(
+            HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=grades_" + assessmentId + ".csv")
+        .contentType(MediaType.parseMediaType("text/csv"))
+        .body(csvContent);
+  }
 
-    // FR-GR-008: Release Grades
-    @Operation(
-        summary = "Release grades for assessment",
-        description = "Release all graded submissions for an assessment to students"
-    )
-    @PostMapping("/release/{assessmentId}")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ApiResponse<Void> releaseGrades(@PathVariable UUID assessmentId) {
+  // FR-GR-008: Release Grades
+  @Operation(
+      summary = "Release grades for assessment",
+      description = "Release all graded submissions for an assessment to students")
+  @PostMapping("/release/{assessmentId}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<Void> releaseGrades(@PathVariable UUID assessmentId) {
 
-        log.info("Releasing grades for assessment: {}", assessmentId);
+    log.info("Releasing grades for assessment: {}", assessmentId);
 
-        gradingService.releaseGrades(assessmentId);
+    gradingService.releaseGrades(assessmentId);
 
-        return ApiResponse.<Void>builder()
-                .message("Grades released successfully")
-                .build();
-    }
+    return ApiResponse.<Void>builder().message("Grades released successfully").build();
+  }
 
-    @Operation(
-        summary = "Release grades for submission",
-        description = "Release grades for a specific submission to the student"
-    )
-    @PostMapping("/release/submission/{submissionId}")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ApiResponse<Void> releaseGradesForSubmission(@PathVariable UUID submissionId) {
+  @Operation(
+      summary = "Release grades for submission",
+      description = "Release grades for a specific submission to the student")
+  @PostMapping("/release/submission/{submissionId}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<Void> releaseGradesForSubmission(@PathVariable UUID submissionId) {
 
-        log.info("Releasing grades for submission: {}", submissionId);
+    log.info("Releasing grades for submission: {}", submissionId);
 
-        gradingService.releaseGradesForSubmission(submissionId);
+    gradingService.releaseGradesForSubmission(submissionId);
 
-        return ApiResponse.<Void>builder()
-                .message("Grades released successfully")
-                .build();
-    }
+    return ApiResponse.<Void>builder().message("Grades released successfully").build();
+  }
 
-    // FR-GR-009: Request Regrade
-    @Operation(
-        summary = "Create regrade request",
-        description = "Student requests regrade for a specific question"
-    )
-    @PostMapping("/regrade/request")
-    @PreAuthorize("hasRole('STUDENT')")
-    public ApiResponse<RegradeRequestResponse> createRegradeRequest(
-            @Valid @RequestBody RegradeRequestCreationRequest request) {
+  // FR-GR-009: Request Regrade
+  @Operation(
+      summary = "Create regrade request",
+      description = "Student requests regrade for a specific question")
+  @PostMapping("/regrade/request")
+  @PreAuthorize("hasRole('STUDENT')")
+  public ApiResponse<RegradeRequestResponse> createRegradeRequest(
+      @Valid @RequestBody RegradeRequestCreationRequest request) {
 
-        log.info("Creating regrade request for submission: {}, question: {}",
-                request.getSubmissionId(), request.getQuestionId());
+    log.info(
+        "Creating regrade request for submission: {}, question: {}",
+        request.getSubmissionId(),
+        request.getQuestionId());
 
-        RegradeRequestResponse response = gradingService.createRegradeRequest(request);
+    RegradeRequestResponse response = gradingService.createRegradeRequest(request);
 
-        return ApiResponse.<RegradeRequestResponse>builder()
-                .result(response)
-                .build();
-    }
+    return ApiResponse.<RegradeRequestResponse>builder().result(response).build();
+  }
 
-    @Operation(
-        summary = "Respond to regrade request",
-        description = "Teacher responds to a student's regrade request"
-    )
-    @PostMapping("/regrade/respond")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ApiResponse<RegradeRequestResponse> respondToRegradeRequest(
-            @Valid @RequestBody RegradeResponseRequest request) {
+  @Operation(
+      summary = "Respond to regrade request",
+      description = "Teacher responds to a student's regrade request")
+  @PostMapping("/regrade/respond")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<RegradeRequestResponse> respondToRegradeRequest(
+      @Valid @RequestBody RegradeResponseRequest request) {
 
-        log.info("Responding to regrade request: {}", request.getRequestId());
+    log.info("Responding to regrade request: {}", request.getRequestId());
 
-        RegradeRequestResponse response = gradingService.respondToRegradeRequest(request);
+    RegradeRequestResponse response = gradingService.respondToRegradeRequest(request);
 
-        return ApiResponse.<RegradeRequestResponse>builder()
-                .result(response)
-                .build();
-    }
+    return ApiResponse.<RegradeRequestResponse>builder().result(response).build();
+  }
 
-    @Operation(
-        summary = "Get regrade requests",
-        description = "Get all pending regrade requests"
-    )
-    @GetMapping("/regrade/requests")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    public ApiResponse<Page<RegradeRequestResponse>> getRegradeRequests(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+  @Operation(summary = "Get regrade requests", description = "Get all pending regrade requests")
+  @GetMapping("/regrade/requests")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<Page<RegradeRequestResponse>> getRegradeRequests(
+      @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
 
-        log.info("Getting regrade requests - page: {}, size: {}", page, size);
+    log.info("Getting regrade requests - page: {}, size: {}", page, size);
 
-        Pageable pageable = PageRequest.of(page, size);
-        Page<RegradeRequestResponse> requests = gradingService.getRegradeRequests(pageable);
+    Pageable pageable = PageRequest.of(page, size);
+    Page<RegradeRequestResponse> requests = gradingService.getRegradeRequests(pageable);
 
-        return ApiResponse.<Page<RegradeRequestResponse>>builder()
-                .result(requests)
-                .build();
-    }
+    return ApiResponse.<Page<RegradeRequestResponse>>builder().result(requests).build();
+  }
 
-    @Operation(
-        summary = "Get student regrade requests",
-        description = "Get all regrade requests for a specific student"
-    )
-    @GetMapping("/regrade/student/{studentId}")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
-    public ApiResponse<Page<RegradeRequestResponse>> getStudentRegradeRequests(
-            @PathVariable UUID studentId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+  @Operation(
+      summary = "Get student regrade requests",
+      description = "Get all regrade requests for a specific student")
+  @GetMapping("/regrade/student/{studentId}")
+  @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
+  public ApiResponse<Page<RegradeRequestResponse>> getStudentRegradeRequests(
+      @PathVariable UUID studentId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
 
-        log.info("Getting regrade requests for student: {} - page: {}, size: {}", studentId, page, size);
+    log.info(
+        "Getting regrade requests for student: {} - page: {}, size: {}", studentId, page, size);
 
-        Pageable pageable = PageRequest.of(page, size);
-        Page<RegradeRequestResponse> requests = gradingService.getStudentRegradeRequests(studentId, pageable);
+    Pageable pageable = PageRequest.of(page, size);
+    Page<RegradeRequestResponse> requests =
+        gradingService.getStudentRegradeRequests(studentId, pageable);
 
-        return ApiResponse.<Page<RegradeRequestResponse>>builder()
-                .result(requests)
-                .build();
-    }
+    return ApiResponse.<Page<RegradeRequestResponse>>builder().result(requests).build();
+  }
 }
-

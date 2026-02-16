@@ -6,13 +6,12 @@ import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
@@ -20,14 +19,13 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "matrix_cells",
-  indexes = {
-    @Index(name = "idx_matrix_cells_matrix", columnList = "matrix_id"),
-    @Index(name = "idx_matrix_cells_chapter", columnList = "chapter_id"),
-    @Index(name = "idx_matrix_cells_cognitive", columnList = "cognitive_level"),
-    @Index(name = "idx_matrix_cells_difficulty", columnList = "difficulty")
-  }
-)
+    name = "matrix_cells",
+    indexes = {
+      @Index(name = "idx_matrix_cells_matrix", columnList = "matrix_id"),
+      @Index(name = "idx_matrix_cells_chapter", columnList = "chapter_id"),
+      @Index(name = "idx_matrix_cells_cognitive", columnList = "cognitive_level"),
+      @Index(name = "idx_matrix_cells_difficulty", columnList = "difficulty")
+    })
 public class MatrixCell {
 
   @Id
@@ -101,4 +99,3 @@ public class MatrixCell {
     updatedAt = Instant.now();
   }
 }
-

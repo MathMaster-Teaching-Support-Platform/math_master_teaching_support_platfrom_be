@@ -4,10 +4,9 @@ import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.UUID;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
-
-import java.util.UUID;
 
 @Builder
 @AllArgsConstructor
@@ -15,11 +14,8 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "permissions",
-  uniqueConstraints = {
-    @UniqueConstraint(name = "uk_permission_code", columnNames = "code")
-  }
-)
+    name = "permissions",
+    uniqueConstraints = {@UniqueConstraint(name = "uk_permission_code", columnNames = "code")})
 public class Permission {
 
   @Id
@@ -28,18 +24,14 @@ public class Permission {
   private UUID id;
 
   /**
-   * Unique permission key used by code checks.
-   * Example: "USER_READ", "USER_CREATE", "QUIZ_SUBMIT"
+   * Unique permission key used by code checks. Example: "USER_READ", "USER_CREATE", "QUIZ_SUBMIT"
    */
   @NotBlank
   @Size(max = 100)
   @Column(name = "code", length = 100, nullable = false)
   private String code;
 
-  /**
-   * Human readable name.
-   * Example: "Read user", "Create user"
-   */
+  /** Human readable name. Example: "Read user", "Create user" */
   @NotBlank
   @Size(max = 255)
   @Nationalized

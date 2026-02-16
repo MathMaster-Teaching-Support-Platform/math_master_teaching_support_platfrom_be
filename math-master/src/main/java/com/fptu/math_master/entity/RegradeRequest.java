@@ -3,11 +3,10 @@ package com.fptu.math_master.entity;
 import com.fptu.math_master.enums.RegradeRequestStatus;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-
 import java.time.Instant;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
@@ -15,14 +14,13 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "regrade_requests",
-  indexes = {
-    @Index(name = "idx_regrade_submission", columnList = "submission_id"),
-    @Index(name = "idx_regrade_student", columnList = "student_id"),
-    @Index(name = "idx_regrade_status", columnList = "status"),
-    @Index(name = "idx_regrade_question", columnList = "question_id")
-  }
-)
+    name = "regrade_requests",
+    indexes = {
+      @Index(name = "idx_regrade_submission", columnList = "submission_id"),
+      @Index(name = "idx_regrade_student", columnList = "student_id"),
+      @Index(name = "idx_regrade_status", columnList = "status"),
+      @Index(name = "idx_regrade_question", columnList = "question_id")
+    })
 public class RegradeRequest {
 
   @Id
@@ -93,4 +91,3 @@ public class RegradeRequest {
     updatedAt = Instant.now();
   }
 }
-

@@ -7,15 +7,14 @@ import io.hypersistence.utils.hibernate.type.array.StringArrayType;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-import org.hibernate.annotations.Type;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
+import org.hibernate.annotations.Type;
 
 @Builder
 @AllArgsConstructor
@@ -151,4 +150,3 @@ public class Question {
     updatedAt = Instant.now();
   }
 }
-
