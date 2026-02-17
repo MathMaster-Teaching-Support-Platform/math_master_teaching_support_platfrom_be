@@ -51,6 +51,11 @@ spring:
 
 server:
   port: 8080
+  forward-headers-strategy: framework
+  tomcat:
+    remoteip:
+      protocol-header: x-forwarded-proto
+      remote-ip-header: x-forwarded-for
 
 # ================================
 # JWT
@@ -78,6 +83,7 @@ springdoc:
     path: /swagger-ui
     operationsSorter: method
     tagsSorter: alpha
+  override-with-generic-response: false
 
 # ================================
 # Username and Password
@@ -128,9 +134,9 @@ centrifugo:
 # ================================
 assessment:
   draft:
-    ttl: 86400  # 24 hours in seconds
-    auto-save-interval: 2000  # milliseconds
-
+    ttl: 86400 # 24 hours in seconds
+    auto-save-interval: 2000 # milliseconds
+#happy-new-year-2026
 # ================================
 # Ollama API Configuration
 # ================================
