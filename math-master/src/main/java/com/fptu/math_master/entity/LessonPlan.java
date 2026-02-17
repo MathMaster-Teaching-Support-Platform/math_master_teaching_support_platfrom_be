@@ -3,12 +3,11 @@ package com.fptu.math_master.entity;
 import com.fptu.math_master.util.UuidV7Generator;
 import io.hypersistence.utils.hibernate.type.array.StringArrayType;
 import jakarta.persistence.*;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
 import org.hibernate.annotations.Type;
-
-import java.time.Instant;
-import java.util.UUID;
 
 @Builder
 @AllArgsConstructor
@@ -16,12 +15,11 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "lesson_plans",
-  indexes = {
-    @Index(name = "idx_lesson_plans_lesson_id", columnList = "lesson_id"),
-    @Index(name = "idx_lesson_plans_teacher_id", columnList = "teacher_id")
-  }
-)
+    name = "lesson_plans",
+    indexes = {
+      @Index(name = "idx_lesson_plans_lesson_id", columnList = "lesson_id"),
+      @Index(name = "idx_lesson_plans_teacher_id", columnList = "teacher_id")
+    })
 public class LessonPlan {
 
   @Id
@@ -83,4 +81,3 @@ public class LessonPlan {
     updatedAt = Instant.now();
   }
 }
-

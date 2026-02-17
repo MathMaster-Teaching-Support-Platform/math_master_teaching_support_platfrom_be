@@ -11,5 +11,4 @@ public class MathMasterApplication {
   public static void main(String[] args) {
     SpringApplication.run(MathMasterApplication.class, args);
   }
-
 }

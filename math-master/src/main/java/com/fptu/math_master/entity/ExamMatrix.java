@@ -5,15 +5,14 @@ import com.fptu.math_master.util.UuidV7Generator;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-import org.hibernate.annotations.Type;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
+import org.hibernate.annotations.Type;
 
 @Builder
 @AllArgsConstructor
@@ -21,14 +20,13 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "exam_matrices",
-  indexes = {
-    @Index(name = "idx_exam_matrices_assessment", columnList = "assessment_id"),
-    @Index(name = "idx_exam_matrices_lesson", columnList = "lesson_id"),
-    @Index(name = "idx_exam_matrices_teacher", columnList = "teacher_id"),
-    @Index(name = "idx_exam_matrices_status", columnList = "status")
-  }
-)
+    name = "exam_matrices",
+    indexes = {
+      @Index(name = "idx_exam_matrices_assessment", columnList = "assessment_id"),
+      @Index(name = "idx_exam_matrices_lesson", columnList = "lesson_id"),
+      @Index(name = "idx_exam_matrices_teacher", columnList = "teacher_id"),
+      @Index(name = "idx_exam_matrices_status", columnList = "status")
+    })
 public class ExamMatrix {
 
   @Id
@@ -116,4 +114,3 @@ public class ExamMatrix {
     updatedAt = Instant.now();
   }
 }
-

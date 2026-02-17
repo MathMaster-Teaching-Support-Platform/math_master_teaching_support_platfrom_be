@@ -3,13 +3,12 @@ package com.fptu.math_master.entity;
 import com.fptu.math_master.enums.ProfileStatus;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Getter
 @Setter

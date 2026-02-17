@@ -5,10 +5,9 @@ import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.enums.AssessmentStatus;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import java.util.UUID;
 
 public interface AssessmentService {
 
@@ -26,6 +25,7 @@ public interface AssessmentService {
 
   // FR-A-004: Publish Assessment
   AssessmentSummary getPublishSummary(UUID id);
+
   AssessmentResponse publishAssessment(UUID id);
 
   // FR-A-005: Unpublish Assessment
@@ -38,11 +38,13 @@ public interface AssessmentService {
   AssessmentResponse getAssessmentById(UUID id);
 
   // List Assessments
-  Page<AssessmentResponse> getMyAssessments(AssessmentStatus status, UUID lessonId, Pageable pageable);
+  Page<AssessmentResponse> getMyAssessments(
+      AssessmentStatus status, UUID lessonId, Pageable pageable);
 
   // Validation methods
   boolean canEditAssessment(UUID id);
+
   boolean canDeleteAssessment(UUID id);
+
   boolean canPublishAssessment(UUID id);
 }
-

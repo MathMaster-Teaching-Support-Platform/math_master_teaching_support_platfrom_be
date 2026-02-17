@@ -2,12 +2,11 @@ package com.fptu.math_master.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 @Data
 @Builder
@@ -15,13 +14,12 @@ import java.util.UUID;
 @AllArgsConstructor
 public class RegradeRequestCreationRequest {
 
-    @NotNull(message = "Submission ID is required")
-    private UUID submissionId;
+  @NotNull(message = "Submission ID is required")
+  private UUID submissionId;
 
-    @NotNull(message = "Question ID is required")
-    private UUID questionId;
+  @NotNull(message = "Question ID is required")
+  private UUID questionId;
 
-    @NotBlank(message = "Reason is required")
-    private String reason;
+  @NotBlank(message = "Reason is required")
+  private String reason;
 }
-

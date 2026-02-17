@@ -3,11 +3,10 @@ package com.fptu.math_master.service;
 import com.fptu.math_master.dto.request.PermissionCreationRequest;
 import com.fptu.math_master.dto.request.PermissionUpdateRequest;
 import com.fptu.math_master.dto.response.PermissionResponse;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface PermissionService {
 
@@ -25,4 +24,3 @@ public interface PermissionService {
 
   Page<PermissionResponse> getAllPermissions(Pageable pageable);
 }
-
