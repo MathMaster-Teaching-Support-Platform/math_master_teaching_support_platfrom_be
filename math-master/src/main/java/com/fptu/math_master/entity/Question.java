@@ -22,17 +22,16 @@ import org.hibernate.annotations.Type;
 @Data
 @Entity
 @Table(
-  name = "questions",
-  indexes = {
-    @Index(name = "idx_questions_bank", columnList = "question_bank_id"),
-    @Index(name = "idx_questions_chapter", columnList = "chapter_id"),
-    @Index(name = "idx_questions_created_by", columnList = "created_by"),
-    @Index(name = "idx_questions_type", columnList = "question_type"),
-    @Index(name = "idx_questions_difficulty", columnList = "difficulty"),
-    @Index(name = "idx_questions_cognitive_level", columnList = "cognitive_level"),
-    @Index(name = "idx_questions_template", columnList = "template_id")
-  }
-)
+    name = "questions",
+    indexes = {
+      @Index(name = "idx_questions_bank", columnList = "question_bank_id"),
+      @Index(name = "idx_questions_chapter", columnList = "chapter_id"),
+      @Index(name = "idx_questions_created_by", columnList = "created_by"),
+      @Index(name = "idx_questions_type", columnList = "question_type"),
+      @Index(name = "idx_questions_difficulty", columnList = "difficulty"),
+      @Index(name = "idx_questions_cognitive_level", columnList = "cognitive_level"),
+      @Index(name = "idx_questions_template", columnList = "template_id")
+    })
 public class Question {
 
   @Id
@@ -101,7 +100,6 @@ public class Question {
   @Type(JsonBinaryType.class)
   @Column(name = "generation_metadata", columnDefinition = "jsonb")
   private Map<String, Object> generationMetadata;
-
 
   @Column(name = "created_at")
   private Instant createdAt;

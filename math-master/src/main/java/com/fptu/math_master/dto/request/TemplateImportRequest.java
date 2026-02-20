@@ -12,17 +12,12 @@ import org.springframework.web.multipart.MultipartFile;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class TemplateImportRequest {
 
-    @NotNull(message = "File is required")
-    MultipartFile file;
+  @NotNull(message = "File is required")
+  MultipartFile file;
 
-    /**
-     * Optional hint for the subject/topic
-     */
-    String subjectHint;
+  /** Optional hint for the subject/topic */
+  String subjectHint;
 
-    /**
-     * Optional context to help AI understand the question type
-     */
-    String contextHint;
+  /** Optional context to help AI understand the question type */
+  String contextHint;
 }
-

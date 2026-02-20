@@ -41,11 +41,7 @@ public class SecurityConfig {
   };
 
   private static final String[] PUBLIC_GET_ENDPOINTS = {
-    "/api/schools/**",
-    "/actuator/health",
-    "/actuator/info",
-    "/actuator/mappings",
-    "/ai/test",
+    "/api/schools/**", "/actuator/health", "/actuator/info", "/actuator/mappings", "/ai/test",
   };
 
   private static final String[] SWAGGER_WHITELIST = {
@@ -55,25 +51,30 @@ public class SecurityConfig {
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
     httpSecurity
-.authorizeHttpRequests(request ->
-    request
-        .requestMatchers("/api/payment/webhook/**").permitAll()
-        .requestMatchers(SWAGGER_WHITELIST).permitAll()
-        .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
-        .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
-        .anyRequest().authenticated()
-)
-.oauth2ResourceServer(oauth2 ->
-    oauth2
-        .jwt(jwtConfigurer ->
-            jwtConfigurer
-                .decoder(customJwtDecoder)
-                .jwtAuthenticationConverter(jwtAuthenticationConverter())
-        )
-        .authenticationEntryPoint(new JwtAuthenticationEntryPoint())
-)
-.csrf(AbstractHttpConfigurer::disable)
-.cors(cors -> cors.configurationSource(corsConfigurationSource()));
+        .authorizeHttpRequests(
+            request ->
+                request
+                    .requestMatchers("/api/payment/webhook/**")
+                    .permitAll()
+                    .requestMatchers(SWAGGER_WHITELIST)
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS)
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS)
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated())
+        .oauth2ResourceServer(
+            oauth2 ->
+                oauth2
+                    .jwt(
+                        jwtConfigurer ->
+                            jwtConfigurer
+                                .decoder(customJwtDecoder)
+                                .jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                    .authenticationEntryPoint(new JwtAuthenticationEntryPoint()))
+        .csrf(AbstractHttpConfigurer::disable)
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
     return httpSecurity.build();
   }
@@ -81,16 +82,15 @@ public class SecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
-configuration.setAllowedOrigins(Arrays.asList(
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://nhducminhqt.name.vn",
-    "http://nhducminhqt.name.vn"
-));
+    configuration.setAllowedOrigins(
+        Arrays.asList(
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "https://nhducminhqt.name.vn",
+            "http://nhducminhqt.name.vn"));
 
-configuration.setAllowedMethods(Arrays.asList(
-    "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"
-));
+    configuration.setAllowedMethods(
+        Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
     configuration.setAllowedHeaders(Arrays.asList("*"));
     configuration.setAllowCredentials(true);
     configuration.setMaxAge(3600L);

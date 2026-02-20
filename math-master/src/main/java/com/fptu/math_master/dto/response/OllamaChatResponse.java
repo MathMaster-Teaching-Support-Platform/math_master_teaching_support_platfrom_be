@@ -10,44 +10,43 @@ import lombok.experimental.FieldDefaults;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class OllamaChatResponse {
-    String model;
+  String model;
 
-    @JsonProperty("created_at")
-    String createdAt;
+  @JsonProperty("created_at")
+  String createdAt;
 
-    Message message;
+  Message message;
 
-    @JsonProperty("done_reason")
-    String doneReason;
+  @JsonProperty("done_reason")
+  String doneReason;
 
-    Boolean done;
+  Boolean done;
 
-    @JsonProperty("total_duration")
-    Long totalDuration;
+  @JsonProperty("total_duration")
+  Long totalDuration;
 
-    @JsonProperty("load_duration")
-    Long loadDuration;
+  @JsonProperty("load_duration")
+  Long loadDuration;
 
-    @JsonProperty("prompt_eval_count")
-    Integer promptEvalCount;
+  @JsonProperty("prompt_eval_count")
+  Integer promptEvalCount;
 
-    @JsonProperty("prompt_eval_duration")
-    Long promptEvalDuration;
+  @JsonProperty("prompt_eval_duration")
+  Long promptEvalDuration;
 
-    @JsonProperty("eval_count")
-    Integer evalCount;
+  @JsonProperty("eval_count")
+  Integer evalCount;
 
-    @JsonProperty("eval_duration")
-    Long evalDuration;
+  @JsonProperty("eval_duration")
+  Long evalDuration;
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    @FieldDefaults(level = AccessLevel.PRIVATE)
-    public static class Message {
-        String role;
-        String content;
-    }
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  @Builder
+  @FieldDefaults(level = AccessLevel.PRIVATE)
+  public static class Message {
+    String role;
+    String content;
+  }
 }
-

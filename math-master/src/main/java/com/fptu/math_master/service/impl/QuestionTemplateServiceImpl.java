@@ -7,7 +7,6 @@ import com.fptu.math_master.dto.response.GeneratedQuestionSample;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
 import com.fptu.math_master.entity.QuestionTemplate;
-import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
@@ -17,6 +16,14 @@ import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AIEnhancementService;
 import com.fptu.math_master.service.QuestionTemplateService;
+import java.time.Instant;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import javax.script.ScriptEngine;
+import javax.script.ScriptEngineManager;
+import javax.script.ScriptException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -28,15 +35,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
-import javax.script.ScriptException;
-import java.time.Instant;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -63,22 +61,23 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       throw new AppException(ErrorCode.INVALID_TEMPLATE_SYNTAX);
     }
 
-    QuestionTemplate template = QuestionTemplate.builder()
-      .createdBy(currentUserId)
-      .name(request.getName())
-      .description(request.getDescription())
-      .templateType(request.getTemplateType())
-      .templateText(request.getTemplateText())
-      .parameters(request.getParameters())
-      .answerFormula(request.getAnswerFormula())
-      .optionsGenerator(request.getOptionsGenerator())
-      .difficultyRules(request.getDifficultyRules())
-      .constraints(request.getConstraints())
-      .cognitiveLevel(request.getCognitiveLevel())
-      .tags(request.getTags())
-      .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
-      .usageCount(0)
-      .build();
+    QuestionTemplate template =
+        QuestionTemplate.builder()
+            .createdBy(currentUserId)
+            .name(request.getName())
+            .description(request.getDescription())
+            .templateType(request.getTemplateType())
+            .templateText(request.getTemplateText())
+            .parameters(request.getParameters())
+            .answerFormula(request.getAnswerFormula())
+            .optionsGenerator(request.getOptionsGenerator())
+            .difficultyRules(request.getDifficultyRules())
+            .constraints(request.getConstraints())
+            .cognitiveLevel(request.getCognitiveLevel())
+            .tags(request.getTags())
+            .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
+            .usageCount(0)
+            .build();
 
     template = questionTemplateRepository.save(template);
 
@@ -91,9 +90,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   public QuestionTemplateResponse updateQuestionTemplate(UUID id, QuestionTemplateRequest request) {
     log.info("Updating question template with id: {}", id);
 
-    QuestionTemplate template = questionTemplateRepository.findById(id)
-      .filter(t -> t.getDeletedAt() == null)
-      .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findById(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
     UUID currentUserId = getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
@@ -131,9 +132,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   public void deleteQuestionTemplate(UUID id) {
     log.info("Deleting question template with id: {}", id);
 
-    QuestionTemplate template = questionTemplateRepository.findById(id)
-      .filter(t -> t.getDeletedAt() == null)
-      .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findById(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
     UUID currentUserId = getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
@@ -150,9 +153,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   public QuestionTemplateResponse getQuestionTemplateById(UUID id) {
     log.info("Getting question template with id: {}", id);
 
-    QuestionTemplate template = questionTemplateRepository.findById(id)
-      .filter(t -> t.getDeletedAt() == null)
-      .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findById(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
     UUID currentUserId = getCurrentUserId();
 
@@ -177,13 +182,12 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   @Override
   @Transactional(readOnly = true)
   public Page<QuestionTemplateResponse> searchQuestionTemplates(
-    QuestionType templateType,
-    CognitiveLevel cognitiveLevel,
-    Boolean isPublic,
-    String searchTerm,
-    String[] tags,
-    Pageable pageable
-  ) {
+      QuestionType templateType,
+      CognitiveLevel cognitiveLevel,
+      Boolean isPublic,
+      String searchTerm,
+      String[] tags,
+      Pageable pageable) {
     log.info("Searching question templates with filters");
 
     UUID currentUserId = getCurrentUserId();
@@ -197,9 +201,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   public TemplateTestResponse testTemplate(UUID id, Integer sampleCount) {
     log.info("Testing template with id: {}", id);
 
-    QuestionTemplate template = questionTemplateRepository.findById(id)
-      .filter(t -> t.getDeletedAt() == null)
-      .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findById(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
     UUID currentUserId = getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
@@ -209,31 +215,33 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
   @Override
   @Transactional(readOnly = true)
-  public TemplateTestResponse validateAndTestTemplate(QuestionTemplateRequest request, Integer sampleCount) {
+  public TemplateTestResponse validateAndTestTemplate(
+      QuestionTemplateRequest request, Integer sampleCount) {
     log.info("Validating and testing template: {}", request.getName());
 
     List<String> validationErrors = validateTemplateSyntax(request);
 
-    QuestionTemplate tempTemplate = QuestionTemplate.builder()
-      .name(request.getName())
-      .templateType(request.getTemplateType())
-      .templateText(request.getTemplateText())
-      .parameters(request.getParameters())
-      .answerFormula(request.getAnswerFormula())
-      .optionsGenerator(request.getOptionsGenerator())
-      .difficultyRules(request.getDifficultyRules())
-      .constraints(request.getConstraints())
-      .cognitiveLevel(request.getCognitiveLevel())
-      .tags(request.getTags())
-      .build();
+    QuestionTemplate tempTemplate =
+        QuestionTemplate.builder()
+            .name(request.getName())
+            .templateType(request.getTemplateType())
+            .templateText(request.getTemplateText())
+            .parameters(request.getParameters())
+            .answerFormula(request.getAnswerFormula())
+            .optionsGenerator(request.getOptionsGenerator())
+            .difficultyRules(request.getDifficultyRules())
+            .constraints(request.getConstraints())
+            .cognitiveLevel(request.getCognitiveLevel())
+            .tags(request.getTags())
+            .build();
 
     if (!validationErrors.isEmpty()) {
       return TemplateTestResponse.builder()
-        .templateName(request.getName())
-        .samples(new ArrayList<>())
-        .isValid(false)
-        .validationErrors(validationErrors)
-        .build();
+          .templateName(request.getName())
+          .samples(new ArrayList<>())
+          .isValid(false)
+          .validationErrors(validationErrors)
+          .build();
     }
 
     return generateTemplateTest(tempTemplate, sampleCount != null ? sampleCount : 5);
@@ -244,9 +252,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   public QuestionTemplateResponse togglePublicStatus(UUID id) {
     log.info("Toggling public status for template: {}", id);
 
-    QuestionTemplate template = questionTemplateRepository.findById(id)
-      .filter(t -> t.getDeletedAt() == null)
-      .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findById(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
     UUID currentUserId = getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
@@ -325,16 +335,17 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     }
 
     return TemplateTestResponse.builder()
-      .templateId(template.getId())
-      .templateName(template.getName())
-      .samples(samples)
-      .isValid(errors.isEmpty())
-      .validationErrors(errors)
-      .build();
+        .templateId(template.getId())
+        .templateName(template.getName())
+        .samples(samples)
+        .isValid(errors.isEmpty())
+        .validationErrors(errors)
+        .build();
   }
 
   @SuppressWarnings("unchecked")
-  private GeneratedQuestionSample generateQuestionSample(QuestionTemplate template) throws ScriptException {
+  private GeneratedQuestionSample generateQuestionSample(QuestionTemplate template)
+      throws ScriptException {
     Map<String, Object> usedParameters = new HashMap<>();
     ScriptEngine engine = scriptEngineManager.getEngineByName("JavaScript");
 
@@ -371,17 +382,18 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     Map<String, String> options = generateOptions(template, answer, engine);
 
     // Determine difficulty
-    QuestionDifficulty difficulty = calculateDifficulty(template.getDifficultyRules(), usedParameters, engine);
+    QuestionDifficulty difficulty =
+        calculateDifficulty(template.getDifficultyRules(), usedParameters, engine);
 
     return GeneratedQuestionSample.builder()
-      .questionText(questionText)
-      .options(options)
-      .correctAnswer(formatAnswer(answer))
-      .explanation("Based on the formula: " + template.getAnswerFormula())
-      .calculatedDifficulty(difficulty)
-      .usedParameters(usedParameters)
-      .answerCalculation(template.getAnswerFormula() + " = " + answer)
-      .build();
+        .questionText(questionText)
+        .options(options)
+        .correctAnswer(formatAnswer(answer))
+        .explanation("Based on the formula: " + template.getAnswerFormula())
+        .calculatedDifficulty(difficulty)
+        .usedParameters(usedParameters)
+        .answerCalculation(template.getAnswerFormula() + " = " + answer)
+        .build();
   }
 
   @SuppressWarnings("unchecked")
@@ -393,11 +405,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       case "integer":
         int min = ((Number) paramDef.getOrDefault("min", 1)).intValue();
         int max = ((Number) paramDef.getOrDefault("max", 10)).intValue();
-        List<Integer> exclude = paramDef.containsKey("exclude")
-          ? ((List<?>) paramDef.get("exclude")).stream()
-          .map(o -> ((Number) o).intValue())
-          .collect(Collectors.toList())
-          : new ArrayList<>();
+        List<Integer> exclude =
+            paramDef.containsKey("exclude")
+                ? ((List<?>) paramDef.get("exclude"))
+                    .stream().map(o -> ((Number) o).intValue()).collect(Collectors.toList())
+                : new ArrayList<>();
 
         int value;
         do {
@@ -415,7 +427,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     }
   }
 
-  private String generateQuestionText(Map<String, Object> templateText, Map<String, Object> parameters) {
+  private String generateQuestionText(
+      Map<String, Object> templateText, Map<String, Object> parameters) {
     String text = templateText.getOrDefault("vi", templateText.get("en")).toString();
 
     for (Map.Entry<String, Object> entry : parameters.entrySet()) {
@@ -427,7 +440,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   }
 
   @SuppressWarnings("unchecked")
-  private Map<String, String> generateOptions(QuestionTemplate template, double answer, ScriptEngine engine) throws ScriptException {
+  private Map<String, String> generateOptions(
+      QuestionTemplate template, double answer, ScriptEngine engine) throws ScriptException {
     Map<String, String> options = new LinkedHashMap<>();
 
     if (template.getTemplateType() == QuestionType.TRUE_FALSE) {
@@ -475,7 +489,9 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   }
 
   @SuppressWarnings("unchecked")
-  private QuestionDifficulty calculateDifficulty(Map<String, Object> rules, Map<String, Object> parameters, ScriptEngine engine) throws ScriptException {
+  private QuestionDifficulty calculateDifficulty(
+      Map<String, Object> rules, Map<String, Object> parameters, ScriptEngine engine)
+      throws ScriptException {
     // Set parameters in engine
     for (Map.Entry<String, Object> entry : parameters.entrySet()) {
       engine.put(entry.getKey(), entry.getValue());
@@ -502,10 +518,10 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   private boolean evaluateRule(ScriptEngine engine, String rule) {
     try {
       // Convert SQL-like operators to JavaScript
-      String jsRule = rule
-        .replaceAll("\\bAND\\b", "&&")
-        .replaceAll("\\bOR\\b", "||")
-        .replaceAll("\\babs\\(", "Math.abs(");
+      String jsRule =
+          rule.replaceAll("\\bAND\\b", "&&")
+              .replaceAll("\\bOR\\b", "||")
+              .replaceAll("\\babs\\(", "Math.abs(");
 
       Object result = engine.eval(jsRule);
       return result instanceof Boolean && (Boolean) result;
@@ -524,26 +540,27 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   }
 
   private QuestionTemplateResponse mapToResponse(QuestionTemplate template) {
-    QuestionTemplateResponse response = QuestionTemplateResponse.builder()
-      .id(template.getId())
-      .createdBy(template.getCreatedBy())
-      .name(template.getName())
-      .description(template.getDescription())
-      .templateType(template.getTemplateType())
-      .templateText(template.getTemplateText())
-      .parameters(template.getParameters())
-      .answerFormula(template.getAnswerFormula())
-      .optionsGenerator(template.getOptionsGenerator())
-      .difficultyRules(template.getDifficultyRules())
-      .constraints(template.getConstraints())
-      .cognitiveLevel(template.getCognitiveLevel())
-      .tags(template.getTags())
-      .isPublic(template.getIsPublic())
-      .usageCount(template.getUsageCount())
-      .avgSuccessRate(template.getAvgSuccessRate())
-      .createdAt(template.getCreatedAt())
-      .updatedAt(template.getUpdatedAt())
-      .build();
+    QuestionTemplateResponse response =
+        QuestionTemplateResponse.builder()
+            .id(template.getId())
+            .createdBy(template.getCreatedBy())
+            .name(template.getName())
+            .description(template.getDescription())
+            .templateType(template.getTemplateType())
+            .templateText(template.getTemplateText())
+            .parameters(template.getParameters())
+            .answerFormula(template.getAnswerFormula())
+            .optionsGenerator(template.getOptionsGenerator())
+            .difficultyRules(template.getDifficultyRules())
+            .constraints(template.getConstraints())
+            .cognitiveLevel(template.getCognitiveLevel())
+            .tags(template.getTags())
+            .isPublic(template.getIsPublic())
+            .usageCount(template.getUsageCount())
+            .avgSuccessRate(template.getAvgSuccessRate())
+            .createdAt(template.getCreatedAt())
+            .updatedAt(template.getUpdatedAt())
+            .build();
 
     if (template.getCreator() != null) {
       response.setCreatorName(template.getCreator().getFullName());
@@ -568,9 +585,9 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
   private boolean isAdmin() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    return authentication != null &&
-      authentication.getAuthorities().stream()
-        .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+    return authentication != null
+        && authentication.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
   }
 
   // AI Enhancement Methods
@@ -580,9 +597,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   public TemplateTestResponse testTemplateWithAI(UUID id, Integer sampleCount, Boolean useAI) {
     log.info("Testing template with AI={}: {}", useAI, id);
 
-    QuestionTemplate template = questionTemplateRepository.findById(id)
-      .filter(t -> t.getDeletedAt() == null)
-      .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findById(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
     UUID currentUserId = getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
@@ -599,9 +618,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   public AIEnhancedQuestionResponse generateAIEnhancedQuestion(UUID id) {
     log.info("Generating AI-enhanced question from template: {}", id);
 
-    QuestionTemplate template = questionTemplateRepository.findById(id)
-      .filter(t -> t.getDeletedAt() == null)
-      .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findById(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
     UUID currentUserId = getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
@@ -611,17 +632,18 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       GeneratedQuestionSample baseSample = generateQuestionSample(template);
 
       // Build AI enhancement request
-      AIEnhancementRequest aiRequest = AIEnhancementRequest.builder()
-        .rawQuestionText(baseSample.getQuestionText())
-        .questionType(template.getTemplateType())
-        .correctAnswer(baseSample.getCorrectAnswer())
-        .rawOptions(baseSample.getOptions())
-        .parameters(baseSample.getUsedParameters())
-        .answerFormula(template.getAnswerFormula())
-        .difficulty(baseSample.getCalculatedDifficulty())
-        .subject("Mathematics")
-        .context(template.getDescription())
-        .build();
+      AIEnhancementRequest aiRequest =
+          AIEnhancementRequest.builder()
+              .rawQuestionText(baseSample.getQuestionText())
+              .questionType(template.getTemplateType())
+              .correctAnswer(baseSample.getCorrectAnswer())
+              .rawOptions(baseSample.getOptions())
+              .parameters(baseSample.getUsedParameters())
+              .answerFormula(template.getAnswerFormula())
+              .difficulty(baseSample.getCalculatedDifficulty())
+              .subject("Mathematics")
+              .context(template.getDescription())
+              .build();
 
       // Enhance with AI
       return aiEnhancementService.enhanceQuestion(aiRequest);
@@ -632,7 +654,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     }
   }
 
-  private TemplateTestResponse generateTemplateTestWithAI(QuestionTemplate template, int sampleCount) {
+  private TemplateTestResponse generateTemplateTestWithAI(
+      QuestionTemplate template, int sampleCount) {
     List<GeneratedQuestionSample> samples = new ArrayList<>();
     List<String> errors = new ArrayList<>();
 
@@ -642,37 +665,54 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         GeneratedQuestionSample baseSample = generateQuestionSample(template);
 
         // Build AI enhancement request
-        AIEnhancementRequest aiRequest = AIEnhancementRequest.builder()
-          .rawQuestionText(baseSample.getQuestionText())
-          .questionType(template.getTemplateType())
-          .correctAnswer(baseSample.getCorrectAnswer())
-          .rawOptions(baseSample.getOptions())
-          .parameters(baseSample.getUsedParameters())
-          .answerFormula(template.getAnswerFormula())
-          .difficulty(baseSample.getCalculatedDifficulty())
-          .subject("Mathematics")
-          .context(template.getDescription())
-          .build();
+        AIEnhancementRequest aiRequest =
+            AIEnhancementRequest.builder()
+                .rawQuestionText(baseSample.getQuestionText())
+                .questionType(template.getTemplateType())
+                .correctAnswer(baseSample.getCorrectAnswer())
+                .rawOptions(baseSample.getOptions())
+                .parameters(baseSample.getUsedParameters())
+                .answerFormula(template.getAnswerFormula())
+                .difficulty(baseSample.getCalculatedDifficulty())
+                .subject("Mathematics")
+                .context(template.getDescription())
+                .build();
 
         // Enhance with AI
         AIEnhancedQuestionResponse aiResponse = aiEnhancementService.enhanceQuestion(aiRequest);
 
         // Convert to GeneratedQuestionSample for display
-        GeneratedQuestionSample enhancedSample = GeneratedQuestionSample.builder()
-          .questionText(aiResponse.isEnhanced() ? aiResponse.getEnhancedQuestionText() : baseSample.getQuestionText())
-          .options(aiResponse.isEnhanced() ? aiResponse.getEnhancedOptions() : baseSample.getOptions())
-          .correctAnswer(aiResponse.isEnhanced() ? aiResponse.getCorrectAnswerKey() : baseSample.getCorrectAnswer())
-          .explanation(aiResponse.isEnhanced() ? aiResponse.getExplanation() : baseSample.getExplanation())
-          .calculatedDifficulty(baseSample.getCalculatedDifficulty())
-          .usedParameters(baseSample.getUsedParameters())
-          .answerCalculation(baseSample.getAnswerCalculation())
-          .build();
+        GeneratedQuestionSample enhancedSample =
+            GeneratedQuestionSample.builder()
+                .questionText(
+                    aiResponse.isEnhanced()
+                        ? aiResponse.getEnhancedQuestionText()
+                        : baseSample.getQuestionText())
+                .options(
+                    aiResponse.isEnhanced()
+                        ? aiResponse.getEnhancedOptions()
+                        : baseSample.getOptions())
+                .correctAnswer(
+                    aiResponse.isEnhanced()
+                        ? aiResponse.getCorrectAnswerKey()
+                        : baseSample.getCorrectAnswer())
+                .explanation(
+                    aiResponse.isEnhanced()
+                        ? aiResponse.getExplanation()
+                        : baseSample.getExplanation())
+                .calculatedDifficulty(baseSample.getCalculatedDifficulty())
+                .usedParameters(baseSample.getUsedParameters())
+                .answerCalculation(baseSample.getAnswerCalculation())
+                .build();
 
         samples.add(enhancedSample);
 
         if (!aiResponse.isEnhanced()) {
-          errors.add("Sample " + (i + 1) + " AI enhancement failed (fallback used): " +
-            String.join(", ", aiResponse.getValidationErrors()));
+          errors.add(
+              "Sample "
+                  + (i + 1)
+                  + " AI enhancement failed (fallback used): "
+                  + String.join(", ", aiResponse.getValidationErrors()));
         }
 
       } catch (Exception e) {
@@ -682,12 +722,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     }
 
     return TemplateTestResponse.builder()
-      .templateId(template.getId())
-      .templateName(template.getName())
-      .samples(samples)
-      .isValid(samples.size() > 0)
-      .validationErrors(errors)
-      .build();
+        .templateId(template.getId())
+        .templateName(template.getName())
+        .samples(samples)
+        .isValid(samples.size() > 0)
+        .validationErrors(errors)
+        .build();
   }
 }
-
