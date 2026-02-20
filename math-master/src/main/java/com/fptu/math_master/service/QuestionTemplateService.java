@@ -1,16 +1,14 @@
 package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
-import com.fptu.math_master.dto.request.TestTemplateRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import java.util.UUID;
 
 public interface QuestionTemplateService {
 
@@ -25,17 +23,17 @@ public interface QuestionTemplateService {
   Page<QuestionTemplateResponse> getMyQuestionTemplates(Pageable pageable);
 
   Page<QuestionTemplateResponse> searchQuestionTemplates(
-    QuestionType templateType,
-    CognitiveLevel cognitiveLevel,
-    Boolean isPublic,
-    String searchTerm,
-    String[] tags,
-    Pageable pageable
-  );
+      QuestionType templateType,
+      CognitiveLevel cognitiveLevel,
+      Boolean isPublic,
+      String searchTerm,
+      String[] tags,
+      Pageable pageable);
 
   TemplateTestResponse testTemplate(UUID id, Integer sampleCount);
 
-  TemplateTestResponse validateAndTestTemplate(QuestionTemplateRequest request, Integer sampleCount);
+  TemplateTestResponse validateAndTestTemplate(
+      QuestionTemplateRequest request, Integer sampleCount);
 
   QuestionTemplateResponse togglePublicStatus(UUID id);
 
@@ -57,5 +55,3 @@ public interface QuestionTemplateService {
    */
   AIEnhancedQuestionResponse generateAIEnhancedQuestion(UUID id);
 }
-
-

@@ -16,13 +16,15 @@ import org.hibernate.generator.BeforeExecutionGenerator;
 import org.hibernate.generator.EventType;
 
 /**
- * Custom Hibernate UUID v7 generator. UUIDv7 is time-ordered, making it ideal for database
- * indexes and sorting by creation time.
+ * Custom Hibernate UUID v7 generator. UUIDv7 is time-ordered, making it ideal for database indexes
+ * and sorting by creation time.
  *
  * <p>Changes from v1:
+ *
  * <ul>
  *   <li>Fixed raw {@code EnumSet} → {@code EnumSet<EventType>}
- *   <li>Added monotonic counter to guarantee strict ordering within the same millisecond (RFC 9562 §6.2)
+ *   <li>Added monotonic counter to guarantee strict ordering within the same millisecond (RFC 9562
+ *       §6.2)
  *   <li>Reuses a {@code ThreadLocal} byte buffer to reduce per-call heap allocation
  * </ul>
  */
@@ -45,15 +47,15 @@ public class UuidV7Generator implements BeforeExecutionGenerator {
 
   /** Reusable 10-byte buffer per thread — avoids allocating new byte[] on every call. */
   private static final ThreadLocal<byte[]> RANDOM_BUFFER =
-    ThreadLocal.withInitial(() -> new byte[10]);
+      ThreadLocal.withInitial(() -> new byte[10]);
 
   /**
-   * Monotonic counter, guarded by MONO_LOCK.
-   * Incremented when two UUIDs are generated in the same millisecond.
-   * If counter overflows 12 bits, virtual timestamp is bumped by 1ms.
+   * Monotonic counter, guarded by MONO_LOCK. Incremented when two UUIDs are generated in the same
+   * millisecond. If counter overflows 12 bits, virtual timestamp is bumped by 1ms.
    */
   private static long lastTimestampMs = -1L;
-  private static long monoCounter     = 0L;
+
+  private static long monoCounter = 0L;
   private static final long MAX_COUNTER = 0xFFFL; // 12-bit max = 4095
   private static final Object MONO_LOCK = new Object();
 
@@ -63,10 +65,10 @@ public class UuidV7Generator implements BeforeExecutionGenerator {
 
   @Override
   public Object generate(
-    SharedSessionContractImplementor session,
-    Object owner,
-    Object currentValue,
-    EventType eventType) {
+      SharedSessionContractImplementor session,
+      Object owner,
+      Object currentValue,
+      EventType eventType) {
     return generateUuidV7();
   }
 
@@ -100,7 +102,7 @@ public class UuidV7Generator implements BeforeExecutionGenerator {
 
       if (now > lastTimestampMs) {
         lastTimestampMs = now;
-        monoCounter     = 0L;
+        monoCounter = 0L;
       } else {
         monoCounter++;
         if (monoCounter > MAX_COUNTER) {
@@ -110,7 +112,7 @@ public class UuidV7Generator implements BeforeExecutionGenerator {
         }
       }
 
-      tsMs    = lastTimestampMs;
+      tsMs = lastTimestampMs;
       counter = monoCounter;
     }
 
@@ -118,19 +120,21 @@ public class UuidV7Generator implements BeforeExecutionGenerator {
     RANDOM.nextBytes(rnd);
 
     // Most-significant 64 bits
-    long msb = (tsMs << 16)
-      | 0x7000L               // version nibble
-      | (counter & 0x0FFFL);  // rand_a = monotonic counter
+    long msb =
+        (tsMs << 16)
+            | 0x7000L // version nibble
+            | (counter & 0x0FFFL); // rand_a = monotonic counter
 
     // Least-significant 64 bits
-    long lsb = ((long) (rnd[2] & 0x3F) | 0x80L) << 56  // variant bits
-      | ((long) (rnd[3] & 0xFF)) << 48
-      | ((long) (rnd[4] & 0xFF)) << 40
-      | ((long) (rnd[5] & 0xFF)) << 32
-      | ((long) (rnd[6] & 0xFF)) << 24
-      | ((long) (rnd[7] & 0xFF)) << 16
-      | ((long) (rnd[8] & 0xFF)) <<  8
-      | ((long) (rnd[9] & 0xFF));
+    long lsb =
+        ((long) (rnd[2] & 0x3F) | 0x80L) << 56 // variant bits
+            | ((long) (rnd[3] & 0xFF)) << 48
+            | ((long) (rnd[4] & 0xFF)) << 40
+            | ((long) (rnd[5] & 0xFF)) << 32
+            | ((long) (rnd[6] & 0xFF)) << 24
+            | ((long) (rnd[7] & 0xFF)) << 16
+            | ((long) (rnd[8] & 0xFF)) << 8
+            | ((long) (rnd[9] & 0xFF));
 
     return new UUID(msb, lsb);
   }

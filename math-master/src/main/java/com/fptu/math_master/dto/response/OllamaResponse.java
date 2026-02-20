@@ -58,4 +58,3 @@ public class OllamaResponse {
     return response;
   }
 }
-
