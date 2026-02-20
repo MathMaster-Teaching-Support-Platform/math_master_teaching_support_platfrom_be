@@ -6,16 +6,15 @@ import com.fptu.math_master.util.UuidV7Generator;
 import io.hypersistence.utils.hibernate.type.array.StringArrayType;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-import org.hibernate.annotations.Type;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
+import org.hibernate.annotations.Type;
 
 @Builder
 @AllArgsConstructor
@@ -23,14 +22,13 @@ import java.util.UUID;
 @Data
 @Entity
 @Table(
-  name = "question_templates",
-  indexes = {
-    @Index(name = "idx_question_templates_created_by", columnList = "created_by"),
-    @Index(name = "idx_question_templates_tags", columnList = "tags"),
-    @Index(name = "idx_question_templates_cognitive", columnList = "cognitive_level"),
-    @Index(name = "idx_question_templates_public", columnList = "is_public")
-  }
-)
+    name = "question_templates",
+    indexes = {
+      @Index(name = "idx_question_templates_created_by", columnList = "created_by"),
+      @Index(name = "idx_question_templates_tags", columnList = "tags"),
+      @Index(name = "idx_question_templates_cognitive", columnList = "cognitive_level"),
+      @Index(name = "idx_question_templates_public", columnList = "is_public")
+    })
 public class QuestionTemplate {
 
   @Id
@@ -54,48 +52,42 @@ public class QuestionTemplate {
   private QuestionType templateType;
 
   /**
-   * Multi-language support for question template text
-   * Example: {"en": "What is {x} + {y}?", "vi": "{x} + {y} bằng bao nhiêu?"}
+   * Multi-language support for question template text Example: {"en": "What is {x} + {y}?", "vi":
+   * "{x} + {y} bằng bao nhiêu?"}
    */
   @Type(JsonBinaryType.class)
   @Column(name = "template_text", nullable = false, columnDefinition = "jsonb")
   private Map<String, Object> templateText;
 
   /**
-   * Parameters that can be substituted in the template
-   * Example: {"x": {"type": "integer", "min": 1, "max": 100}, "y": {"type": "integer", "min": 1, "max": 100}}
+   * Parameters that can be substituted in the template Example: {"x": {"type": "integer", "min": 1,
+   * "max": 100}, "y": {"type": "integer", "min": 1, "max": 100}}
    */
   @Type(JsonBinaryType.class)
   @Column(name = "parameters", nullable = false, columnDefinition = "jsonb")
   private Map<String, Object> parameters;
 
-  /**
-   * Formula to calculate the correct answer
-   * Example: "x + y" or "Math.sqrt(x^2 + y^2)"
-   */
+  /** Formula to calculate the correct answer Example: "x + y" or "Math.sqrt(x^2 + y^2)" */
   @Column(name = "answer_formula", nullable = false, columnDefinition = "TEXT")
   private String answerFormula;
 
   /**
-   * Configuration for generating multiple choice options
-   * Example: {"type": "around_answer", "count": 4, "range": 10}
+   * Configuration for generating multiple choice options Example: {"type": "around_answer",
+   * "count": 4, "range": 10}
    */
   @Type(JsonBinaryType.class)
   @Column(name = "options_generator", columnDefinition = "jsonb")
   private Map<String, Object> optionsGenerator;
 
   /**
-   * Rules for determining difficulty based on parameters
-   * Example: {"easy": "x < 10 AND y < 10", "medium": "x < 50 AND y < 50", "hard": "x >= 50 OR y >= 50"}
+   * Rules for determining difficulty based on parameters Example: {"easy": "x < 10 AND y < 10",
+   * "medium": "x < 50 AND y < 50", "hard": "x >= 50 OR y >= 50"}
    */
   @Type(JsonBinaryType.class)
   @Column(name = "difficulty_rules", nullable = false, columnDefinition = "jsonb")
   private Map<String, Object> difficultyRules;
 
-  /**
-   * Constraints for parameter generation
-   * Example: ["x < y", "x + y < 1000"]
-   */
+  /** Constraints for parameter generation Example: ["x < y", "x + y < 1000"] */
   @Type(StringArrayType.class)
   @Column(name = "constraints", columnDefinition = "TEXT[]")
   private String[] constraints;
@@ -147,25 +139,21 @@ public class QuestionTemplate {
     updatedAt = Instant.now();
   }
 
-  /**
-   * Increment usage count when template is used to generate a question
-   */
+  /** Increment usage count when template is used to generate a question */
   public void incrementUsageCount() {
     this.usageCount = (this.usageCount == null ? 0 : this.usageCount) + 1;
   }
 
-  /**
-   * Update average success rate based on student performance
-   */
+  /** Update average success rate based on student performance */
   public void updateSuccessRate(BigDecimal newRate) {
     if (this.avgSuccessRate == null) {
       this.avgSuccessRate = newRate;
     } else {
       // Weighted average: (current * usageCount + new) / (usageCount + 1)
-      BigDecimal total = this.avgSuccessRate.multiply(BigDecimal.valueOf(this.usageCount))
-                                             .add(newRate);
-      this.avgSuccessRate = total.divide(BigDecimal.valueOf(this.usageCount + 1), 2, RoundingMode.HALF_UP);
+      BigDecimal total =
+          this.avgSuccessRate.multiply(BigDecimal.valueOf(this.usageCount)).add(newRate);
+      this.avgSuccessRate =
+          total.divide(BigDecimal.valueOf(this.usageCount + 1), 2, RoundingMode.HALF_UP);
     }
   }
 }
-

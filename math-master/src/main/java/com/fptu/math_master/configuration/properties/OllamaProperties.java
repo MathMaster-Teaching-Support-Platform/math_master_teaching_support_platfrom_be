@@ -13,4 +13,3 @@ public class OllamaProperties {
   private String model;
   private Integer timeoutSeconds;
 }
-
