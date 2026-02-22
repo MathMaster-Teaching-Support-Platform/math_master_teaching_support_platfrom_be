@@ -98,7 +98,14 @@ public enum ErrorCode {
   QUESTION_TEMPLATE_NOT_FOUND(1075, "Question template not found", HttpStatus.NOT_FOUND),
   INVALID_TEMPLATE_SYNTAX(1076, "Invalid template syntax", HttpStatus.BAD_REQUEST),
   TEMPLATE_GENERATION_FAILED(
-      1077, "Failed to generate question from template", HttpStatus.INTERNAL_SERVER_ERROR);
+      1077, "Failed to generate question from template", HttpStatus.INTERNAL_SERVER_ERROR),
+  MINDMAP_NOT_FOUND(1078, "Mindmap not found", HttpStatus.NOT_FOUND),
+  MINDMAP_ACCESS_DENIED(
+      1079, "You do not have permission to access this mindmap", HttpStatus.FORBIDDEN),
+  MINDMAP_NODE_NOT_FOUND(1080, "Mindmap node not found", HttpStatus.NOT_FOUND),
+  MINDMAP_GENERATION_FAILED(
+      1081, "Failed to generate mindmap from AI", HttpStatus.INTERNAL_SERVER_ERROR),
+  INVALID_MINDMAP_STRUCTURE(1082, "Invalid mindmap structure", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
