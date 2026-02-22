@@ -1,6 +1,6 @@
 package com.fptu.math_master.configuration;
 
-import com.fptu.math_master.configuration.properties.OllamaProperties;
+import com.fptu.math_master.configuration.properties.GeminiProperties;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
@@ -18,20 +18,17 @@ import org.springframework.web.client.RestClient;
 @Configuration
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class OllamaConfig {
+public class GeminiConfig {
 
-  OllamaProperties ollamaProperties;
+  GeminiProperties geminiProperties;
 
-  @Bean(name = "ollamaRestClient")
-  public RestClient ollamaRestClient() {
+  @Bean(name = "geminiRestClient")
+  public RestClient geminiRestClient() {
     SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-    // SimpleClientHttpRequestFactory expects timeouts in milliseconds (int)
-    int timeoutMillis = (int) Duration.ofSeconds(ollamaProperties.getTimeoutSeconds()).toMillis();
+    int timeoutMillis = (int) Duration.ofSeconds(geminiProperties.getTimeoutSeconds()).toMillis();
     factory.setConnectTimeout(timeoutMillis);
     factory.setReadTimeout(timeoutMillis);
 
-    // Create a StringHttpMessageConverter that accepts all media types including
-    // application/octet-stream
     StringHttpMessageConverter stringConverter =
         new StringHttpMessageConverter(StandardCharsets.UTF_8);
     stringConverter.setSupportedMediaTypes(
@@ -41,7 +38,6 @@ public class OllamaConfig {
             MediaType.APPLICATION_OCTET_STREAM,
             MediaType.ALL));
 
-    // Create a JSON converter that also accepts application/octet-stream
     MappingJackson2HttpMessageConverter jsonConverter = new MappingJackson2HttpMessageConverter();
     jsonConverter.setSupportedMediaTypes(
         Arrays.asList(
@@ -50,7 +46,7 @@ public class OllamaConfig {
             new MediaType("application", "*+json")));
 
     return RestClient.builder()
-        .baseUrl(ollamaProperties.getBaseUrl())
+        .baseUrl(geminiProperties.getBaseUrl())
         .requestFactory(factory)
         .messageConverters(
             converters -> {
@@ -61,3 +57,4 @@ public class OllamaConfig {
         .build();
   }
 }
+

@@ -55,37 +55,21 @@ public class QuestionTemplateController {
         .build();
   }
 
-  @PostMapping("/validate-test")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Test Question Template Before Saving (FR-AI-002)",
-      description =
-          "Teacher tests template before saving. System generates sample questions "
-              + "with random parameters and shows preview with all options, correct answer, "
-              + "and calculated difficulty. Teacher can regenerate samples.")
-  public ApiResponse<TemplateTestResponse> validateAndTestTemplate(
-      @Valid @RequestBody QuestionTemplateRequest request,
-      @RequestParam(defaultValue = "5") Integer sampleCount) {
-    log.info("REST request to validate and test template: {}", request.getName());
-    return ApiResponse.<TemplateTestResponse>builder()
-        .message("Template validation and test completed")
-        .result(questionTemplateService.validateAndTestTemplate(request, sampleCount))
-        .build();
-  }
-
   @GetMapping("/{id}/test")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Test Existing Template (FR-AI-002)",
       description =
-          "Generate test samples for an existing template. "
+          "Generate test samples for an existing template using Gemini LLM. "
               + "Returns 5 sample questions by default or custom count.")
   public ApiResponse<TemplateTestResponse> testTemplate(
-      @PathVariable UUID id, @RequestParam(defaultValue = "5") Integer sampleCount) {
-    log.info("REST request to test template: {}", id);
+      @PathVariable UUID id,
+      @RequestParam(defaultValue = "5") Integer sampleCount,
+      @RequestParam(defaultValue = "true") Boolean useAI) {
+    log.info("REST request to test template: {} with AI={}", id, useAI);
     return ApiResponse.<TemplateTestResponse>builder()
-        .message("Template test generated successfully")
-        .result(questionTemplateService.testTemplate(id, sampleCount))
+        .message("AI-enhanced template test generated successfully. Distractors created by LLM based on common student mistakes.")
+        .result(questionTemplateService.testTemplate(id, sampleCount, useAI))
         .build();
   }
 
@@ -139,12 +123,9 @@ public class QuestionTemplateController {
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(defaultValue = "createdAt") String sortBy,
       @RequestParam(defaultValue = "DESC") String sortDirection) {
-
     log.info("REST request to get my question templates, page: {}, size: {}", page, size);
-
     Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
     Pageable pageable = PageRequest.of(page, size, sort);
-
     return ApiResponse.<Page<QuestionTemplateResponse>>builder()
         .result(questionTemplateService.getMyQuestionTemplates(pageable))
         .build();
@@ -167,12 +148,9 @@ public class QuestionTemplateController {
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(defaultValue = "createdAt") String sortBy,
       @RequestParam(defaultValue = "DESC") String sortDirection) {
-
     log.info("REST request to search question templates with filters");
-
     Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
     Pageable pageable = PageRequest.of(page, size, sort);
-
     return ApiResponse.<Page<QuestionTemplateResponse>>builder()
         .result(
             questionTemplateService.searchQuestionTemplates(
@@ -193,38 +171,14 @@ public class QuestionTemplateController {
         .build();
   }
 
-  // FR-AI-004: AI Enhancement Endpoints
-
-  @GetMapping("/{id}/test-with-ai")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Test Template with AI Enhancement (FR-AI-004)",
-      description =
-          "Generate test samples with optional AI enhancement. "
-              + "AI improves question wording, creates better distractors based on common mistakes, "
-              + "and provides detailed explanations. Teacher can compare AI-enhanced vs regular output.")
-  public ApiResponse<TemplateTestResponse> testTemplateWithAI(
-      @PathVariable UUID id,
-      @RequestParam(defaultValue = "3") Integer sampleCount,
-      @RequestParam(defaultValue = "false") Boolean useAI) {
-    log.info("REST request to test template with AI={}: {}", useAI, id);
-    return ApiResponse.<TemplateTestResponse>builder()
-        .message(useAI ? "AI-enhanced template test generated" : "Regular template test generated")
-        .result(questionTemplateService.testTemplateWithAI(id, sampleCount, useAI))
-        .build();
-  }
-
   @PostMapping("/{id}/generate-ai-enhanced")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Generate AI-Enhanced Question (FR-AI-004)",
       description =
           "Generate a single AI-enhanced question from template. "
-              + "System sends template + params + correct answer + difficulty to Ollama. "
-              + "Ollama returns: improved wording, better distractors reflecting common mistakes, "
+              + "Gemini returns: improved wording, better distractors reflecting common mistakes, "
               + "detailed explanation/solution steps, and optional alternative solutions. "
-              + "System validates: correct answer unchanged, proper MCQ schema (A/B/C/D), "
-              + "content stays within mathematics scope. "
               + "Teacher must review and approve before using.")
   public ApiResponse<AIEnhancedQuestionResponse> generateAIEnhancedQuestion(@PathVariable UUID id) {
     log.info("REST request to generate AI-enhanced question from template: {}", id);
@@ -247,44 +201,24 @@ public class QuestionTemplateController {
         .build();
   }
 
-  // FR-AI-013: Import Template from File
-
   @PostMapping(value = "/import-from-file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  //  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Import Template from File (FR-AI-013)",
       description =
           "Teacher uploads Word/PDF/Text file and system analyzes it with AI to suggest a question template. "
-              + "Steps: "
-              + "1. Extract text from file (Word, PDF, or plain text) "
-              + "2. AI analyzes: identifies question structure, detects repeating patterns, "
-              + "   suggests placeholders {{var}}, suggests parameter definitions, detects formulas "
-              + "3. System displays Template Draft for teacher review "
-              + "4. Teacher can edit the draft before saving "
-              + "5. Template is NOT automatically published - teacher must review and approve "
-              + "\n\n"
-              + "Supported formats: PDF (.pdf), Word (.docx), Plain Text (.txt) "
-              + "Max file size: 10MB")
+              + "Supported formats: PDF (.pdf), Word (.docx), Plain Text (.txt). Max file size: 10MB")
   public ApiResponse<TemplateImportResponse> importTemplateFromFile(
       @RequestParam("file") MultipartFile file,
       @RequestParam(required = false) String subjectHint,
       @RequestParam(required = false) String contextHint) {
-
     log.info("REST request to import template from file: {}", file.getOriginalFilename());
-
     TemplateImportResponse response =
         templateImportService.importTemplateFromFile(file, subjectHint, contextHint);
-
-    String message;
-    if (response.getAnalysisSuccessful()) {
-      message =
-          "Template analysis completed. Please review and edit the suggested template before saving.";
-    } else {
-      message =
-          "Template import completed with warnings. Please review carefully: "
-              + String.join(", ", response.getWarnings());
-    }
-
+    String message =
+        response.getAnalysisSuccessful()
+            ? "Template analysis completed. Please review and edit the suggested template before saving."
+            : "Template import completed with warnings. Please review carefully: "
+                + String.join(", ", response.getWarnings());
     return ApiResponse.<TemplateImportResponse>builder().message(message).result(response).build();
   }
 }

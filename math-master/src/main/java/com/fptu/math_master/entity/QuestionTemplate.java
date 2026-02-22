@@ -2,6 +2,7 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.util.UuidV7Generator;
 import io.hypersistence.utils.hibernate.type.array.StringArrayType;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
@@ -118,6 +119,10 @@ public class QuestionTemplate {
   @Column(name = "deleted_at")
   private Instant deletedAt;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "status", nullable = false)
+  private TemplateStatus status = TemplateStatus.DRAFT;
+
   // Relationships
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by", insertable = false, updatable = false)
@@ -132,8 +137,8 @@ public class QuestionTemplate {
     if (usageCount == null) usageCount = 0;
     if (createdAt == null) createdAt = Instant.now();
     if (updatedAt == null) updatedAt = Instant.now();
+    if (status == null) status = TemplateStatus.DRAFT;
   }
-
   @PreUpdate
   public void preUpdate() {
     updatedAt = Instant.now();

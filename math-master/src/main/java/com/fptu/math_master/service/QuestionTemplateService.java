@@ -18,6 +18,24 @@ public interface QuestionTemplateService {
 
   void deleteQuestionTemplate(UUID id);
 
+  /**
+   * Test template with AI enhancement
+   *
+   * @param id Template ID
+   * @param sampleCount Number of samples to generate
+   * @param useAI Whether to use AI enhancement
+   * @return Test response with AI-enhanced or regular samples
+   */
+  TemplateTestResponse testTemplate(UUID id, Integer sampleCount, Boolean useAI);
+
+  /**
+   * Generate a single AI-enhanced question from template
+   *
+   * @param id Template ID
+   * @return AI-enhanced question
+   */
+  AIEnhancedQuestionResponse generateAIEnhancedQuestion(UUID id);
+
   QuestionTemplateResponse getQuestionTemplateById(UUID id);
 
   Page<QuestionTemplateResponse> getMyQuestionTemplates(Pageable pageable);
@@ -30,28 +48,5 @@ public interface QuestionTemplateService {
       String[] tags,
       Pageable pageable);
 
-  TemplateTestResponse testTemplate(UUID id, Integer sampleCount);
-
-  TemplateTestResponse validateAndTestTemplate(
-      QuestionTemplateRequest request, Integer sampleCount);
-
   QuestionTemplateResponse togglePublicStatus(UUID id);
-
-  /**
-   * Test template with AI enhancement
-   *
-   * @param id Template ID
-   * @param sampleCount Number of samples to generate
-   * @param useAI Whether to use AI enhancement
-   * @return Test response with AI-enhanced or regular samples
-   */
-  TemplateTestResponse testTemplateWithAI(UUID id, Integer sampleCount, Boolean useAI);
-
-  /**
-   * Generate a single AI-enhanced question from template
-   *
-   * @param id Template ID
-   * @return AI-enhanced question
-   */
-  AIEnhancedQuestionResponse generateAIEnhancedQuestion(UUID id);
 }

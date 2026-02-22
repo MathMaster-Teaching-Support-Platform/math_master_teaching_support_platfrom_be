@@ -84,52 +84,10 @@ services:
     networks:
       - math-master-network
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: math-master-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - math-master-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  ollama-pull:
-    image: ollama/ollama:latest
-    container_name: math-master-ollama-pull
-    depends_on:
-      ollama:
-        condition: service_healthy
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - math-master-network
-    entrypoint: /bin/sh
-    command:
-      - -c
-      - |
-        echo "Waiting for Ollama service to be ready..."
-        sleep 10
-        MODEL=$${OLLAMA_MODEL:-llama3}
-        echo "Pulling $$MODEL model..."
-        OLLAMA_HOST=http://ollama:11434 ollama pull $$MODEL
-        echo "Model $$MODEL pulled successfully!"
-    restart: "no"
-
 networks:
   math-master-network:
     driver: bridge
 
 volumes:
   redis_data:
-    driver: local
-  ollama_data:
     driver: local

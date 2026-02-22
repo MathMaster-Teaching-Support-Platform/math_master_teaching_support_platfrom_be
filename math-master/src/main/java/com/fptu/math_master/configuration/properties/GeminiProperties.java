@@ -6,10 +6,12 @@ import org.springframework.context.annotation.Configuration;
 
 @Data
 @Configuration
-@ConfigurationProperties(prefix = "ollama")
-public class OllamaProperties {
+@ConfigurationProperties(prefix = "gemini")
+public class GeminiProperties {
 
-  private String baseUrl;
+  private String apiKey;
   private String model;
   private Integer timeoutSeconds;
+  private String baseUrl;
 }
+
