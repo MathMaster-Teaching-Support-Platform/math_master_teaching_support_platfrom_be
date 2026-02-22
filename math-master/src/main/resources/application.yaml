@@ -28,7 +28,7 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -136,11 +136,11 @@ assessment:
   draft:
     ttl: 86400 # 24 hours in seconds
     auto-save-interval: 2000 # milliseconds
-#happy-new-year-2026
 # ================================
-# Ollama API Configuration
+# Gemini API Configuration (Google AI Studio)
 # ================================
-ollama:
-  base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-  model: ${OLLAMA_MODEL:llama3}
-  timeout-seconds: 600
+gemini:
+  api-key: ${GEMINI_API_KEY:AIzaSyBwEptARTd1a28XEEAurkyX1UW0U5DXN6o}
+  model: ${GEMINI_MODEL:gemini-2.5-flash}
+  base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+  timeout-seconds: 60
