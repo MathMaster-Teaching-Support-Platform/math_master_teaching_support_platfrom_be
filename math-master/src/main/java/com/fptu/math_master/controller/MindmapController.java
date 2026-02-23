@@ -58,6 +58,7 @@ public class MindmapController {
       description =
           "Teacher provides a topic/prompt and AI (Gemini) generates a complete mindmap structure. "
               + "The AI creates a hierarchical node structure with colors, icons, and organized branches. "
+              + "You can specify the number of levels (depth) for the mindmap (2-6 levels, default is 3). "
               + "Generated mindmap is saved as DRAFT and can be edited afterwards.")
   public ApiResponse<MindmapDetailResponse> generateMindmap(
       @Valid @RequestBody GenerateMindmapRequest request) {
@@ -138,20 +139,33 @@ public class MindmapController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Get my mindmaps",
-      description = "Get all mindmaps created by the current teacher. Supports pagination and sorting.")
+      description = "Get all mindmaps created by the current teacher. Optionally filter by lessonId. Supports pagination and sorting.")
   public ApiResponse<Page<MindmapResponse>> getMyMindmaps(
+      @RequestParam(required = false) String lessonId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size,
       @RequestParam(defaultValue = "createdAt") String sortBy,
       @RequestParam(defaultValue = "DESC") String direction) {
-    log.info("REST request to get my mindmaps - page: {}, size: {}", page, size);
+
+    // Convert lessonId string to UUID if provided
+    UUID lessonUuid = null;
+    if (lessonId != null && !lessonId.trim().isEmpty()) {
+      try {
+        lessonUuid = UUID.fromString(lessonId);
+      } catch (IllegalArgumentException e) {
+        log.warn("Invalid lessonId format: {}", lessonId);
+        // lessonUuid remains null, which means no filtering by lesson
+      }
+    }
+
+    log.info("REST request to get my mindmaps - lessonId: {}, page: {}, size: {}", lessonUuid, page, size);
 
     Sort.Direction sortDirection =
         direction.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
     Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
 
     return ApiResponse.<Page<MindmapResponse>>builder()
-        .result(mindmapService.getMyMindmaps(pageable))
+        .result(mindmapService.getMyMindmaps(lessonUuid, pageable))
         .build();
   }
 

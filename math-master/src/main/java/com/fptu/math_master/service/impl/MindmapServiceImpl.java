@@ -79,8 +79,9 @@ public class MindmapServiceImpl implements MindmapService {
     UUID currentUserId = getCurrentUserId();
     validateTeacherRole(currentUserId);
 
-    // Build the AI prompt
-    String aiPrompt = buildMindmapGenerationPrompt(request.getPrompt());
+    // Build the AI prompt with levels
+    Integer levels = request.getLevels() != null ? request.getLevels() : 3;
+    String aiPrompt = buildMindmapGenerationPrompt(request.getPrompt(), levels);
 
     // Call Gemini AI to generate mindmap structure
     String aiResponse;
@@ -102,11 +103,17 @@ public class MindmapServiceImpl implements MindmapService {
     }
 
     // Create mindmap entity
-    UUID lessonId = request.getLessonId() != null ? UUID.fromString(request.getLessonId()) : null;
-    if (lessonId != null) {
-      lessonRepository
-          .findById(lessonId)
-          .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    UUID lessonId = null;
+    if (request.getLessonId() != null && !request.getLessonId().trim().isEmpty()) {
+      try {
+        lessonId = UUID.fromString(request.getLessonId());
+        lessonRepository
+            .findById(lessonId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+      } catch (IllegalArgumentException e) {
+        log.warn("Invalid lessonId format: {}", request.getLessonId());
+        // lessonId remains null, mindmap will be created without lesson link
+      }
     }
 
     Mindmap mindmap =
@@ -243,13 +250,21 @@ public class MindmapServiceImpl implements MindmapService {
 
   @Override
   @Transactional(readOnly = true)
-  public Page<MindmapResponse> getMyMindmaps(Pageable pageable) {
+  public Page<MindmapResponse> getMyMindmaps(UUID lessonId, Pageable pageable) {
     UUID currentUserId = getCurrentUserId();
-    log.info("Getting mindmaps for teacher: {}", currentUserId);
+    log.info("Getting mindmaps for teacher: {} with lessonId: {}", currentUserId, lessonId);
 
-    return mindmapRepository
-        .findByTeacherIdAndNotDeleted(currentUserId, pageable)
-        .map(this::mapToResponse);
+    if (lessonId != null) {
+      // Filter by both teacherId and lessonId
+      return mindmapRepository
+          .findByTeacherIdAndLessonIdAndNotDeleted(currentUserId, lessonId, pageable)
+          .map(this::mapToResponse);
+    } else {
+      // Get all mindmaps for the teacher
+      return mindmapRepository
+          .findByTeacherIdAndNotDeleted(currentUserId, pageable)
+          .map(this::mapToResponse);
+    }
   }
 
   @Override
@@ -404,11 +419,15 @@ public class MindmapServiceImpl implements MindmapService {
 
   // Helper methods
 
-  private String buildMindmapGenerationPrompt(String userPrompt) {
+  private String buildMindmapGenerationPrompt(String userPrompt, int levels) {
     return """
         You are an expert educational content creator. Generate a mindmap structure in JSON format based on the following topic/prompt:
         
         %s
+        
+        IMPORTANT: The mindmap must have EXACTLY %d levels deep (including the root node).
+        - Level 1: Root node
+        - Level 2-%d: Child nodes at each subsequent level
         
         Return ONLY valid JSON in the following format (no markdown, no code blocks, no additional text):
         {
@@ -442,12 +461,13 @@ public class MindmapServiceImpl implements MindmapService {
         
         Guidelines:
         - Create a hierarchical structure with 1 root node and multiple levels of children
+        - The structure MUST be exactly %d levels deep
         - Use colors: #4A90E2 (blue), #50C878 (green), #FF6B6B (red), #FFD93D (yellow), #A29BFE (purple)
         - Use appropriate icons: lightbulb, bookmark, star, brain, book, target, check-circle, info-circle
         - Keep content concise (max 100 characters per node)
-        - Create 3-7 main branches from root, each with 2-5 sub-nodes
+        - Create 3-7 main branches from root, each with 2-5 sub-nodes at each level
         - Ensure displayOrder is sequential (0, 1, 2, ...)
-        """.formatted(userPrompt);
+        """.formatted(userPrompt, levels, levels, levels);
   }
 
   private MindmapStructure parseMindmapFromAI(String aiResponse) throws Exception {
