@@ -72,10 +72,11 @@ public interface MindmapService {
   /**
    * Get all mindmaps by current teacher
    *
+   * @param lessonId optional lesson id filter
    * @param pageable pagination
    * @return page of mindmaps
    */
-  Page<MindmapResponse> getMyMindmaps(Pageable pageable);
+  Page<MindmapResponse> getMyMindmaps(UUID lessonId, Pageable pageable);
 
   /**
    * Get mindmaps by lesson id
