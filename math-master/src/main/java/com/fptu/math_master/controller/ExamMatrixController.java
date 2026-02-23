@@ -225,4 +225,177 @@ public class ExamMatrixController {
     examMatrixService.lockMatrix(matrixId);
     return ApiResponse.<Void>builder().message("Matrix locked successfully.").build();
   }
+
+  @GetMapping("/{matrixId}/cells/{cellId}/templates")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "List Matching Question Templates for a Matrix Cell",
+      description =
+          "Returns a ranked list of question templates that match the requirements of a given "
+              + "matrix cell (question type, cognitive level, tags/topic). "
+              + "Used when a teacher chooses 'Generate from Template' for a cell. "
+              + "\n\nFiltering rules:"
+              + "\n- templateType must match cell questionType (when cell has a type constraint)"
+              + "\n- cognitiveLevel must match cell cognitiveLevel"
+              + "\n- tags overlap with the cell's chapter title and topic"
+              + "\n- Only non-deleted templates (deletedAt IS NULL)"
+              + "\n- Only templates owned by the teacher OR public templates"
+              + "\n\nRanking (descending relevance score):"
+              + "\n1. templateType match (+40)"
+              + "\n2. cognitiveLevel match (+30)"
+              + "\n3. tag overlap with chapter/topic (+20 + up to +30)"
+              + "\n4. popularity (usageCount, capped +10)"
+              + "\n\nReturns 200 with empty list if no templates match (never 404).")
+  public ApiResponse<MatchingTemplatesResponse> listMatchingTemplatesForCell(
+      @PathVariable UUID matrixId,
+      @PathVariable UUID cellId,
+      @RequestParam(required = false) String q,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(defaultValue = "false") boolean onlyMine,
+      @RequestParam(defaultValue = "false") boolean publicOnly) {
+
+    log.info(
+        "REST request to list matching templates for matrixId={}, cellId={}", matrixId, cellId);
+
+    MatchingTemplatesResponse response =
+        examMatrixService.listMatchingTemplatesForCell(
+            matrixId, cellId, q, page, size, onlyMine, publicOnly);
+
+    String message =
+        response.getTotalTemplatesFound() == 0
+            ? "No matching templates found. You can create a new template or loosen filters."
+            : String.format(
+                "Found %d matching template(s) for this cell.", response.getTotalTemplatesFound());
+
+    return ApiResponse.<MatchingTemplatesResponse>builder()
+        .message(message)
+        .result(response)
+        .build();
+  }
+
+  @PostMapping("/{matrixId}/cells/{cellId}/generate-preview")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Generate Preview Questions for a Matrix Cell (No DB Persist)",
+      description =
+          "Teacher selects a Question Template for a matrix cell and requests the system to "
+              + "generate preview candidates to assess question quality before finalising.\n\n"
+              + "⚠️ This endpoint is PURE READ — it does NOT write to any table "
+              + "(no questions, assessment_questions, or matrix_question_mapping records are created).\n\n"
+              + "Request body:\n"
+              + "- templateId: UUID of the template to use (must not be soft-deleted; DRAFT status rejected)\n"
+              + "- count: number of candidates to generate (1–50)\n"
+              + "- difficulty: optional override (EASY/MEDIUM/HARD); null = determined by template rules\n"
+              + "- seed: optional long for reproducible results\n\n"
+              + "Response contains:\n"
+              + "- cellRequirements: summary of the cell constraints for UI display\n"
+              + "- candidates[]: questionText, options (A–D for MCQ), correctAnswerKey, "
+              + "usedParameters, answerCalculation, calculatedDifficulty, explanation\n"
+              + "- warnings[]: partial generation, difficulty override mismatch, type mismatch\n\n"
+              + "Validation errors returned as 400/403/404:\n"
+              + "- 404 if matrixId, cellId, or templateId not found\n"
+              + "- 403 if teacher does not own the matrix\n"
+              + "- 400 if cell does not belong to matrix, or request body constraints violated")
+  public ApiResponse<PreviewCandidatesResponse> generatePreview(
+      @PathVariable UUID matrixId,
+      @PathVariable UUID cellId,
+      @Valid @RequestBody GeneratePreviewRequest request) {
+
+    log.info(
+        "REST request to generate preview for matrixId={}, cellId={}, templateId={}, count={}",
+        matrixId, cellId, request.getTemplateId(), request.getCount());
+
+    PreviewCandidatesResponse response =
+        examMatrixService.generatePreview(matrixId, cellId, request);
+
+    String message;
+    if (response.getGeneratedCount() == 0) {
+      message =
+          "No questions could be generated. Template constraints may be too strict "
+              + "or parameter ranges too narrow. Please adjust the template or try a different one.";
+    } else if (response.getGeneratedCount() < response.getRequestedCount()) {
+      message =
+          String.format(
+              "Partial preview: generated %d of %d requested question(s). "
+                  + "Check warnings for details.",
+              response.getGeneratedCount(), response.getRequestedCount());
+    } else {
+      message =
+          String.format(
+              "Preview generated successfully: %d question(s). "
+                  + "Review candidates before finalising.",
+              response.getGeneratedCount());
+    }
+
+    return ApiResponse.<PreviewCandidatesResponse>builder()
+        .message(message)
+        .result(response)
+        .build();
+  }
+
+  @PostMapping("/{matrixId}/cells/{cellId}/finalize")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Finalize / Approve Generated Questions for a Matrix Cell (Persist to DB)",
+      description =
+          "Teacher submits selected preview questions to be permanently saved.\n\n"
+              + "This endpoint WRITES to 3 tables atomically inside a single transaction:\n"
+              + "1. **questions** — creates a new Question record for each item\n"
+              + "2. **assessment_questions** — attaches each question to the matrix's assessment\n"
+              + "3. **matrix_question_mapping** — maps each question to this matrix cell\n\n"
+              + "If ANY step fails the entire transaction is rolled back (no partial state).\n\n"
+              + "**Request body fields:**\n"
+              + "- `templateId` — UUID of the source template (must exist, not DRAFT)\n"
+              + "- `pointsPerQuestion` — points > 0 applied to each question\n"
+              + "- `replaceExisting` — when true: old cell mappings + assessment links are removed "
+              + "and old question records are soft-deleted before inserting new ones\n"
+              + "- `questionBankId` — optional; associates generated questions with a bank\n"
+              + "- `questions[]` — list of QuestionItem (from preview candidates):\n"
+              + "  - `questionText` (required, non-blank)\n"
+              + "  - `questionType` (required)\n"
+              + "  - `options` — required map A/B/C/D for MCQ\n"
+              + "  - `correctAnswer` — A/B/C/D key for MCQ; answer value for other types\n"
+              + "  - `difficulty`, `cognitiveLevel`, `tags`, `explanation`\n"
+              + "  - `generationMetadata` — paramsUsed, answerFormula, seed, etc.\n\n"
+              + "**Validation failures return 400/403/404.**\n\n"
+              + "**Soft skips (warnings, not errors):** duplicate questionText, "
+              + "difficulty/cognitiveLevel mismatch with cell.\n\n"
+              + "**Hard errors (400):** MCQ with invalid options/correctAnswer, all questions skipped.")
+  public ApiResponse<FinalizePreviewResponse> finalizePreview(
+      @PathVariable UUID matrixId,
+      @PathVariable UUID cellId,
+      @Valid @RequestBody FinalizePreviewRequest request) {
+
+    log.info(
+        "REST request to finalize preview for matrixId={}, cellId={}, templateId={}, "
+            + "count={}, replaceExisting={}",
+        matrixId, cellId, request.getTemplateId(),
+        request.getQuestions().size(), request.getReplaceExisting());
+
+    FinalizePreviewResponse response =
+        examMatrixService.finalizePreview(matrixId, cellId, request);
+
+    String message;
+    if (response.getSavedCount() == 0) {
+      message = "No questions were saved. All submitted questions were duplicates or invalid. "
+          + "Check warnings for details.";
+    } else if (response.getSavedCount() < response.getRequestedCount()) {
+      message = String.format(
+          "Partially saved: %d of %d question(s) committed to DB. "
+              + "Check warnings for skipped items.",
+          response.getSavedCount(), response.getRequestedCount());
+    } else {
+      message = String.format(
+          "Successfully finalised %d question(s) for cell. "
+              + "Questions saved to DB and linked to assessment.",
+          response.getSavedCount());
+    }
+
+    return ApiResponse.<FinalizePreviewResponse>builder()
+        .message(message)
+        .result(response)
+        .build();
+  }
 }
+

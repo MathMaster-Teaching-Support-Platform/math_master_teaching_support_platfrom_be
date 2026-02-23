@@ -105,7 +105,13 @@ public enum ErrorCode {
   MINDMAP_NODE_NOT_FOUND(1080, "Mindmap node not found", HttpStatus.NOT_FOUND),
   MINDMAP_GENERATION_FAILED(
       1081, "Failed to generate mindmap from AI", HttpStatus.INTERNAL_SERVER_ERROR),
-  INVALID_MINDMAP_STRUCTURE(1082, "Invalid mindmap structure", HttpStatus.BAD_REQUEST);
+  INVALID_MINDMAP_STRUCTURE(1082, "Invalid mindmap structure", HttpStatus.BAD_REQUEST),
+  FINALIZE_EMPTY_QUESTIONS(1083, "questions list must not be empty", HttpStatus.BAD_REQUEST),
+  QUESTION_TEXT_BLANK(1084, "questionText must not be blank for one or more questions", HttpStatus.BAD_REQUEST),
+  MCQ_INVALID_OPTIONS(1085, "MCQ questions must have exactly 4 options (A, B, C, D) with no duplicates", HttpStatus.BAD_REQUEST),
+  MCQ_INVALID_CORRECT_OPTION(1086, "correctAnswer for MCQ must be one of A, B, C, D", HttpStatus.BAD_REQUEST),
+  CELL_EXCEEDS_TARGET(1087, "Adding these questions would exceed the cell's target question count", HttpStatus.BAD_REQUEST),
+  TEMPLATE_NOT_USABLE(1088, "Template is in DRAFT status and cannot be used for finalisation", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
