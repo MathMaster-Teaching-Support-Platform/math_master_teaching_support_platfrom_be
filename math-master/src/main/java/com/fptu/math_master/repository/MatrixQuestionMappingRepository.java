@@ -32,4 +32,12 @@ public interface MatrixQuestionMappingRepository
   @Modifying
   @Query("DELETE FROM MatrixQuestionMapping mqm WHERE mqm.matrixCellId = :matrixCellId")
   void deleteByMatrixCellId(@Param("matrixCellId") UUID matrixCellId);
+
+  /** Returns all question IDs mapped to a given cell (regardless of isSelected). */
+  @Query("SELECT mqm.questionId FROM MatrixQuestionMapping mqm WHERE mqm.matrixCellId = :matrixCellId")
+  List<UUID> findQuestionIdsByMatrixCellId(@Param("matrixCellId") UUID matrixCellId);
+
+  /** Count all mappings (selected or not) for a cell — used for target-count check. */
+  @Query("SELECT COUNT(mqm) FROM MatrixQuestionMapping mqm WHERE mqm.matrixCellId = :matrixCellId")
+  Long countByMatrixCellId(@Param("matrixCellId") UUID matrixCellId);
 }
