@@ -389,7 +389,7 @@ public class MindmapServiceImpl implements MindmapService {
     validateOwnerOrAdmin(mindmap.getTeacherId(), getCurrentUserId());
 
     List<MindmapNode> allNodes = mindmapNodeRepository.findByMindmapIdOrderByDisplayOrder(mindmapId);
-    
+
     // Build hierarchical structure
     Map<UUID, MindmapNodeResponse> nodeMap = new HashMap<>();
     List<MindmapNodeResponse> rootNodes = new ArrayList<>();
@@ -422,13 +422,13 @@ public class MindmapServiceImpl implements MindmapService {
   private String buildMindmapGenerationPrompt(String userPrompt, int levels) {
     return """
         You are an expert educational content creator. Generate a mindmap structure in JSON format based on the following topic/prompt:
-        
+
         %s
-        
+
         IMPORTANT: The mindmap must have EXACTLY %d levels deep (including the root node).
         - Level 1: Root node
         - Level 2-%d: Child nodes at each subsequent level
-        
+
         Return ONLY valid JSON in the following format (no markdown, no code blocks, no additional text):
         {
           "title": "Main topic title",
@@ -458,7 +458,7 @@ public class MindmapServiceImpl implements MindmapService {
             }
           ]
         }
-        
+
         Guidelines:
         - Create a hierarchical structure with 1 root node and multiple levels of children
         - The structure MUST be exactly %d levels deep
@@ -571,8 +571,12 @@ public class MindmapServiceImpl implements MindmapService {
   }
 
   private UUID getCurrentUserId() {
-    String userId = SecurityContextHolder.getContext().getAuthentication().getName();
-    return UUID.fromString(userId);
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+      String sub = jwtAuth.getToken().getSubject();
+      return UUID.fromString(sub);
+    }
+    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 
   private void validateTeacherRole(UUID userId) {

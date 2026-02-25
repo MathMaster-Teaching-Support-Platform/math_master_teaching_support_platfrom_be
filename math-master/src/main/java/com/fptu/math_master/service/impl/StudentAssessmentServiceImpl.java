@@ -285,7 +285,12 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
   }
 
   private UUID getCurrentUserId() {
-    return UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName());
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+      String sub = jwtAuth.getToken().getSubject();
+      return UUID.fromString(sub);
+    }
+    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 
   private boolean isAssessmentAvailable(Assessment assessment, Instant now) {
