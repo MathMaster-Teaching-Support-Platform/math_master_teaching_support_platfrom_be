@@ -59,6 +59,14 @@ public enum ErrorCode {
       HttpStatus.BAD_REQUEST),
   ASSESSMENT_NO_QUESTIONS(
       1044, "Assessment must have at least one question to publish", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_ZERO_TOTAL_POINTS(
+      1044, "Total points across all questions must be greater than 0", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_IS_CLOSED(
+      1093, "Assessment is closed and cannot be modified or unpublished", HttpStatus.BAD_REQUEST),
+  MATRIX_CELL_FILL_INCOMPLETE(
+      1094,
+      "Not all matrix cells have their required question count filled in assessment_questions",
+      HttpStatus.BAD_REQUEST),
   ASSESSMENT_INVALID_SCHEDULE(1045, "Start date must be before end date", HttpStatus.BAD_REQUEST),
   ASSESSMENT_START_DATE_PAST(1046, "Start date cannot be in the past", HttpStatus.BAD_REQUEST),
   ASSESSMENT_NOT_PUBLISHED(1047, "Assessment is not published", HttpStatus.BAD_REQUEST),

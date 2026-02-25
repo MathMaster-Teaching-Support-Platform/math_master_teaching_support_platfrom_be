@@ -34,4 +34,20 @@ public interface ExamMatrixRepository extends JpaRepository<ExamMatrix, UUID> {
           + "JOIN MatrixCell mc ON mqm.matrixCellId = mc.id "
           + "WHERE mc.matrixId = :matrixId AND mqm.isSelected = true")
   Long countSelectedQuestionsByMatrixId(@Param("matrixId") UUID matrixId);
+
+  /**
+   * Returns the count of assessment_question rows that are traceable back to the
+   * given matrix through matrix_question_mapping.  Used at publish time to confirm
+   * that the question set in assessment_questions actually matches the matrix spec.
+   */
+  @Query(
+      "SELECT COUNT(aq) FROM AssessmentQuestion aq "
+          + "WHERE aq.questionId IN ("
+          + "  SELECT mqm.questionId FROM MatrixQuestionMapping mqm "
+          + "  JOIN MatrixCell mc ON mqm.matrixCellId = mc.id "
+          + "  WHERE mc.matrixId = :matrixId AND mqm.isSelected = true"
+          + ") AND aq.assessmentId = ("
+          + "  SELECT em.assessmentId FROM ExamMatrix em WHERE em.id = :matrixId"
+          + ")")
+  Long countAssessmentQuestionsFilledByMatrix(@Param("matrixId") UUID matrixId);
 }
