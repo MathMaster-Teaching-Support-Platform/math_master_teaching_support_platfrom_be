@@ -366,11 +366,12 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   }
 
   private UUID getCurrentUserId() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication == null || !authentication.isAuthenticated()) {
-      throw new AppException(ErrorCode.UNAUTHENTICATED);
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+      String sub = jwtAuth.getToken().getSubject();
+      return UUID.fromString(sub);
     }
-    return UUID.fromString(authentication.getName());
+    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 
   private void validateOwnerOrAdmin(UUID ownerId, UUID currentUserId) {

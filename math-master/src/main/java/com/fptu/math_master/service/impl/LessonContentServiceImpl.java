@@ -319,13 +319,15 @@ public class LessonContentServiceImpl implements LessonContentService {
         .build();
   }
 
-  // -------------------------------------------------------------------------
-  // Auth helpers
-  // -------------------------------------------------------------------------
-
   private UUID getCurrentUserId() {
-    String userId = SecurityContextHolder.getContext().getAuthentication().getName();
-    return UUID.fromString(userId);
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+
+    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+      String sub = jwtAuth.getToken().getSubject();
+      return UUID.fromString(sub);
+    }
+
+    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 
   private void validateTeacherRole(UUID userId) {

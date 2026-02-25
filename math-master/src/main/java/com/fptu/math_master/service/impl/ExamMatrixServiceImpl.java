@@ -462,12 +462,14 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   // Helper methods
 
   private UUID getCurrentUserId() {
-    String username = SecurityContextHolder.getContext().getAuthentication().getName();
-    User user =
-        userRepository
-            .findByUserName(username)
-            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-    return user.getId();
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+
+    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+      String sub = jwtAuth.getToken().getSubject();
+      return UUID.fromString(sub);
+    }
+
+    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 
   private boolean isAdmin(UUID userId) {

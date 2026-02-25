@@ -79,7 +79,11 @@ public class PaymentController {
   }
 
   private UUID getCurrentUserId() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    return UUID.fromString(authentication.getName());
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+      String sub = jwtAuth.getToken().getSubject();
+      return UUID.fromString(sub);
+    }
+    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 }
