@@ -15,4 +15,3 @@ public class GenerateLessonContentResponse {
   private int skippedLessons;
   private List<LessonResponse> lessons;
 }
-

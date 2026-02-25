@@ -139,6 +139,7 @@ public class QuestionTemplate {
     if (updatedAt == null) updatedAt = Instant.now();
     if (status == null) status = TemplateStatus.DRAFT;
   }
+
   @PreUpdate
   public void preUpdate() {
     updatedAt = Instant.now();

@@ -68,7 +68,8 @@ public class QuestionTemplateController {
       @RequestParam(defaultValue = "true") Boolean useAI) {
     log.info("REST request to test template: {} with AI={}", id, useAI);
     return ApiResponse.<TemplateTestResponse>builder()
-        .message("AI-enhanced template test generated successfully. Distractors created by LLM based on common student mistakes.")
+        .message(
+            "AI-enhanced template test generated successfully. Distractors created by LLM based on common student mistakes.")
         .result(questionTemplateService.testTemplate(id, sampleCount, useAI))
         .build();
   }

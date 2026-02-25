@@ -34,8 +34,8 @@ public interface AIEnhancementService {
   AIEnhancedQuestionResponse testEnhancement(AIEnhancementRequest request);
 
   /**
-   * Fully generate a question sample from a template using LLM.
-   * LLM will choose parameters, generate question text, options, answer and explanation.
+   * Fully generate a question sample from a template using LLM. LLM will choose parameters,
+   * generate question text, options, answer and explanation.
    *
    * @param template The question template
    * @param sampleIndex Index of the sample (for variety)

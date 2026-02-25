@@ -304,7 +304,10 @@ public class ExamMatrixController {
 
     log.info(
         "REST request to generate preview for matrixId={}, cellId={}, templateId={}, count={}",
-        matrixId, cellId, request.getTemplateId(), request.getCount());
+        matrixId,
+        cellId,
+        request.getTemplateId(),
+        request.getCount());
 
     PreviewCandidatesResponse response =
         examMatrixService.generatePreview(matrixId, cellId, request);
@@ -370,32 +373,33 @@ public class ExamMatrixController {
     log.info(
         "REST request to finalize preview for matrixId={}, cellId={}, templateId={}, "
             + "count={}, replaceExisting={}",
-        matrixId, cellId, request.getTemplateId(),
-        request.getQuestions().size(), request.getReplaceExisting());
+        matrixId,
+        cellId,
+        request.getTemplateId(),
+        request.getQuestions().size(),
+        request.getReplaceExisting());
 
-    FinalizePreviewResponse response =
-        examMatrixService.finalizePreview(matrixId, cellId, request);
+    FinalizePreviewResponse response = examMatrixService.finalizePreview(matrixId, cellId, request);
 
     String message;
     if (response.getSavedCount() == 0) {
-      message = "No questions were saved. All submitted questions were duplicates or invalid. "
-          + "Check warnings for details.";
+      message =
+          "No questions were saved. All submitted questions were duplicates or invalid. "
+              + "Check warnings for details.";
     } else if (response.getSavedCount() < response.getRequestedCount()) {
-      message = String.format(
-          "Partially saved: %d of %d question(s) committed to DB. "
-              + "Check warnings for skipped items.",
-          response.getSavedCount(), response.getRequestedCount());
+      message =
+          String.format(
+              "Partially saved: %d of %d question(s) committed to DB. "
+                  + "Check warnings for skipped items.",
+              response.getSavedCount(), response.getRequestedCount());
     } else {
-      message = String.format(
-          "Successfully finalised %d question(s) for cell. "
-              + "Questions saved to DB and linked to assessment.",
-          response.getSavedCount());
+      message =
+          String.format(
+              "Successfully finalised %d question(s) for cell. "
+                  + "Questions saved to DB and linked to assessment.",
+              response.getSavedCount());
     }
 
-    return ApiResponse.<FinalizePreviewResponse>builder()
-        .message(message)
-        .result(response)
-        .build();
+    return ApiResponse.<FinalizePreviewResponse>builder().message(message).result(response).build();
   }
 }
-

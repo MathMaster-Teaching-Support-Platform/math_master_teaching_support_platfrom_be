@@ -414,14 +414,16 @@ public class AssessmentServiceImpl implements AssessmentService {
   private UUID getCurrentUserId() {
     var auth = SecurityContextHolder.getContext().getAuthentication();
 
-    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+    if (auth
+        instanceof
+        org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+                jwtAuth) {
       String sub = jwtAuth.getToken().getSubject();
       return UUID.fromString(sub);
     }
 
     throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
-
 
   private void validateTeacherRole(UUID userId) {
     User user =

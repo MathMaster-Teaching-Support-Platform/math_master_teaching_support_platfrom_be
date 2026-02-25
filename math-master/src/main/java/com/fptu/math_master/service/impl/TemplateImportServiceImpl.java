@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.response.TemplateImportResponse;
 import com.fptu.math_master.entity.QuestionTemplate;
-import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
@@ -26,8 +25,6 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -86,7 +83,10 @@ public class TemplateImportServiceImpl implements TemplateImportService {
           if (response.getWarnings() == null) {
             response.setWarnings(new ArrayList<>());
           }
-          response.getWarnings().add("Warning: Failed to auto-save template as DRAFT. You can save it manually after review.");
+          response
+              .getWarnings()
+              .add(
+                  "Warning: Failed to auto-save template as DRAFT. You can save it manually after review.");
         }
       }
 
@@ -850,17 +850,17 @@ public class TemplateImportServiceImpl implements TemplateImportService {
    */
   private QuestionTemplate saveDraftTemplate(TemplateImportResponse response) {
     // Get current authenticated user
-//    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-//    if (authentication == null || !authentication.isAuthenticated()) {
-//      throw new RuntimeException("No authenticated user found");
-//    }
-//
-//    String username = authentication.getName();
-//    User currentUser = userRepository
-//        .findByUserName(username)
-//        .orElseThrow(() -> new RuntimeException("User not found: " + username));
-//
-//    log.info("Saving template as DRAFT for user: {}", username);
+    //    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    //    if (authentication == null || !authentication.isAuthenticated()) {
+    //      throw new RuntimeException("No authenticated user found");
+    //    }
+    //
+    //    String username = authentication.getName();
+    //    User currentUser = userRepository
+    //        .findByUserName(username)
+    //        .orElseThrow(() -> new RuntimeException("User not found: " + username));
+    //
+    //    log.info("Saving template as DRAFT for user: {}", username);
 
     TemplateImportResponse.TemplateDraft draft = response.getSuggestedTemplate();
 
@@ -871,35 +871,45 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     }
 
     // Build QuestionTemplate entity
-    QuestionTemplate template = QuestionTemplate.builder()
-        .createdBy(UUID.fromString("019c80ad-d33d-7000-b6f3-2a6f86ea290c"))
-        .name(draft.getName() != null ? draft.getName() : "Imported Template")
-        .description(draft.getDescription() != null ? draft.getDescription() : "Template imported from file - please review and edit")
-        .templateType(draft.getTemplateType() != null ? draft.getTemplateType() : QuestionType.SHORT_ANSWER)
-        .templateText(templateTextObj)
-        .parameters(draft.getParameters() != null ? draft.getParameters() : new HashMap<>())
-        .answerFormula(draft.getAnswerFormula() != null ? draft.getAnswerFormula() : "")
-        .optionsGenerator(draft.getOptionsGenerator())
-        .difficultyRules(convertDifficultyRules(draft.getDifficultyRules()))
-        .constraints(new String[0])
-        .cognitiveLevel(draft.getCognitiveLevel() != null ? draft.getCognitiveLevel() : CognitiveLevel.APPLY)
-        .tags(draft.getTags() != null ? draft.getTags() : new String[]{"imported"})
-        .status(TemplateStatus.DRAFT)
-        .isPublic(false)
-        .usageCount(0)
-        .build();
+    QuestionTemplate template =
+        QuestionTemplate.builder()
+            .createdBy(UUID.fromString("019c80ad-d33d-7000-b6f3-2a6f86ea290c"))
+            .name(draft.getName() != null ? draft.getName() : "Imported Template")
+            .description(
+                draft.getDescription() != null
+                    ? draft.getDescription()
+                    : "Template imported from file - please review and edit")
+            .templateType(
+                draft.getTemplateType() != null
+                    ? draft.getTemplateType()
+                    : QuestionType.SHORT_ANSWER)
+            .templateText(templateTextObj)
+            .parameters(draft.getParameters() != null ? draft.getParameters() : new HashMap<>())
+            .answerFormula(draft.getAnswerFormula() != null ? draft.getAnswerFormula() : "")
+            .optionsGenerator(draft.getOptionsGenerator())
+            .difficultyRules(convertDifficultyRules(draft.getDifficultyRules()))
+            .constraints(new String[0])
+            .cognitiveLevel(
+                draft.getCognitiveLevel() != null
+                    ? draft.getCognitiveLevel()
+                    : CognitiveLevel.APPLY)
+            .tags(draft.getTags() != null ? draft.getTags() : new String[] {"imported"})
+            .status(TemplateStatus.DRAFT)
+            .isPublic(false)
+            .usageCount(0)
+            .build();
 
     // Save to database
     QuestionTemplate savedTemplate = questionTemplateRepository.save(template);
-    log.info("Template saved successfully with ID: {} and status: {}",
-             savedTemplate.getId(), savedTemplate.getStatus());
+    log.info(
+        "Template saved successfully with ID: {} and status: {}",
+        savedTemplate.getId(),
+        savedTemplate.getStatus());
 
     return savedTemplate;
   }
 
-  /**
-   * Convert difficulty rules Map<String, String> to Map<String, Object> for JSONB
-   */
+  /** Convert difficulty rules Map<String, String> to Map<String, Object> for JSONB */
   private Map<String, Object> convertDifficultyRules(Map<String, String> rules) {
     if (rules == null) {
       return new HashMap<>();

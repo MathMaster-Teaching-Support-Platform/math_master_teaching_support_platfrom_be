@@ -30,8 +30,8 @@ public interface AssessmentQuestionRepository extends JpaRepository<AssessmentQu
   void deleteByAssessmentIdAndQuestionId(UUID assessmentId, UUID questionId);
 
   /**
-   * Bulk-delete all assessment_questions for a given assessment whose questionId
-   * is in the provided list. Used during replaceExisting to detach old cell questions.
+   * Bulk-delete all assessment_questions for a given assessment whose questionId is in the provided
+   * list. Used during replaceExisting to detach old cell questions.
    */
   @Modifying
   @Query(
@@ -39,16 +39,12 @@ public interface AssessmentQuestionRepository extends JpaRepository<AssessmentQu
           + "WHERE aq.assessmentId = :assessmentId "
           + "AND aq.questionId IN :questionIds")
   void deleteByAssessmentIdAndQuestionIdIn(
-      @Param("assessmentId") UUID assessmentId,
-      @Param("questionIds") List<UUID> questionIds);
+      @Param("assessmentId") UUID assessmentId, @Param("questionIds") List<UUID> questionIds);
 
-  /**
-   * Check existing question texts within an assessment to guard against duplicates.
-   */
+  /** Check existing question texts within an assessment to guard against duplicates. */
   @Query(
       "SELECT q.questionText FROM AssessmentQuestion aq "
           + "JOIN Question q ON aq.questionId = q.id "
           + "WHERE aq.assessmentId = :assessmentId AND q.deletedAt IS NULL")
-  List<String> findExistingQuestionTextsByAssessmentId(
-      @Param("assessmentId") UUID assessmentId);
+  List<String> findExistingQuestionTextsByAssessmentId(@Param("assessmentId") UUID assessmentId);
 }

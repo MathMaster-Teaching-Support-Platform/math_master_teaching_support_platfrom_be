@@ -15,9 +15,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Request body for POST /exam-matrices/{matrixId}/cells/{cellId}/finalize.
- * Persists selected preview candidates to questions, assessment_questions,
- * and matrix_question_mapping in a single atomic transaction.
+ * Request body for POST /exam-matrices/{matrixId}/cells/{cellId}/finalize. Persists selected
+ * preview candidates to questions, assessment_questions, and matrix_question_mapping in a single
+ * atomic transaction.
  */
 @Data
 @Builder
@@ -29,17 +29,14 @@ public class FinalizePreviewRequest {
   @NotNull(message = "templateId is required")
   private UUID templateId;
 
-  /**
-   * Points awarded per question in assessment_questions.pointsOverride.
-   * Must be > 0.
-   */
+  /** Points awarded per question in assessment_questions.pointsOverride. Must be > 0. */
   @NotNull(message = "pointsPerQuestion is required")
   @DecimalMin(value = "0.01", message = "pointsPerQuestion must be greater than 0")
   private BigDecimal pointsPerQuestion;
 
   /**
-   * When true: existing mappings for this cell are removed and replaced.
-   * When false: questions are appended (warns if total exceeds cell target).
+   * When true: existing mappings for this cell are removed and replaced. When false: questions are
+   * appended (warns if total exceeds cell target).
    */
   @NotNull(message = "replaceExisting is required")
   private Boolean replaceExisting;
@@ -72,15 +69,12 @@ public class FinalizePreviewRequest {
     private QuestionType questionType;
 
     /**
-     * MCQ options map: exactly keys A/B/C/D → option text.
-     * Required when questionType = MULTIPLE_CHOICE.
+     * MCQ options map: exactly keys A/B/C/D → option text. Required when questionType =
+     * MULTIPLE_CHOICE.
      */
     private Map<String, String> options;
 
-    /**
-     * For MCQ: one of A/B/C/D.
-     * For other types: the correct answer value as a string.
-     */
+    /** For MCQ: one of A/B/C/D. For other types: the correct answer value as a string. */
     @NotBlank(message = "correctAnswer is required")
     private String correctAnswer;
 
@@ -99,10 +93,9 @@ public class FinalizePreviewRequest {
     private String explanation;
 
     /**
-     * Generation metadata for traceability:
-     * paramsUsed, answerFormula, seed, generatedAt, answerCalculation, etc.
+     * Generation metadata for traceability: paramsUsed, answerFormula, seed, generatedAt,
+     * answerCalculation, etc.
      */
     private Map<String, Object> generationMetadata;
   }
 }
-

@@ -121,7 +121,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     return mapToResponse(template);
   }
 
-
   @Override
   @Transactional
   public void deleteQuestionTemplate(UUID id) {
@@ -200,7 +199,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     return generateWithLLM(template, sampleCount != null ? sampleCount : 3);
   }
 
-
   @Override
   @Transactional
   public QuestionTemplateResponse togglePublicStatus(UUID id) {
@@ -249,7 +247,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
               .build();
 
       // Step 3: call enhanceQuestion which calls Gemini with the richer prompt
-      AIEnhancedQuestionResponse enhanced = aiEnhancementService.enhanceQuestion(enhancementRequest);
+      AIEnhancedQuestionResponse enhanced =
+          aiEnhancementService.enhanceQuestion(enhancementRequest);
 
       // Always preserve original question data
       enhanced.setOriginalQuestionText(sample.getQuestionText());
@@ -311,7 +310,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     List<String> errors = new ArrayList<>();
 
     // Validate template text has placeholders matching parameters
-    String templateTextStr = request.getTemplateText() != null ? request.getTemplateText().toString() : "";
+    String templateTextStr =
+        request.getTemplateText() != null ? request.getTemplateText().toString() : "";
     Pattern pattern = Pattern.compile("\\{\\{(\\w+)\\}\\}");
     Matcher matcher = pattern.matcher(templateTextStr);
 
@@ -367,7 +367,10 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
   private UUID getCurrentUserId() {
     var auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+    if (auth
+        instanceof
+        org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+                jwtAuth) {
       String sub = jwtAuth.getToken().getSubject();
       return UUID.fromString(sub);
     }

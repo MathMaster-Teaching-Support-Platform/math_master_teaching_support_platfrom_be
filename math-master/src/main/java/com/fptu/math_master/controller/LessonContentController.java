@@ -44,7 +44,9 @@ public class LessonContentController {
   public ApiResponse<GenerateLessonContentResponse> generateContent(
       @Valid @RequestBody GenerateLessonContentRequest request) {
     log.info(
-        "POST /lessons/generate – gradeLevel={}, subject={}", request.getGradeLevel(), request.getSubject());
+        "POST /lessons/generate – gradeLevel={}, subject={}",
+        request.getGradeLevel(),
+        request.getSubject());
     GenerateLessonContentResponse result = lessonContentService.generateAndSaveContent(request);
     return ApiResponse.<GenerateLessonContentResponse>builder()
         .result(result)
@@ -111,4 +113,3 @@ public class LessonContentController {
     return ApiResponse.<Void>builder().message("Chapter deleted successfully").build();
   }
 }
-

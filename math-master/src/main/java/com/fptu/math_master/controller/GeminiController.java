@@ -16,7 +16,9 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
-@Tag(name = "AI - Gemini", description = "AI endpoints using Gemini Developer API (Google AI Studio)")
+@Tag(
+    name = "AI - Gemini",
+    description = "AI endpoints using Gemini Developer API (Google AI Studio)")
 public class GeminiController {
 
   GeminiService geminiService;
@@ -53,10 +55,7 @@ public class GeminiController {
       return ApiResponse.<String>builder().result(response).build();
     } catch (Exception e) {
       log.error("Error processing chat request", e);
-      return ApiResponse.<String>builder()
-          .code(500)
-          .message("Error: " + e.getMessage())
-          .build();
+      return ApiResponse.<String>builder().code(500).message("Error: " + e.getMessage()).build();
     }
   }
 
@@ -68,4 +67,3 @@ public class GeminiController {
     private String message;
   }
 }
-

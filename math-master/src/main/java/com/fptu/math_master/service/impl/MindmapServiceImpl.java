@@ -1,6 +1,5 @@
 package com.fptu.math_master.service.impl;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.request.GenerateMindmapRequest;
 import com.fptu.math_master.dto.request.MindmapNodeRequest;
@@ -17,7 +16,6 @@ import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.MindmapService;
 import java.time.Instant;
 import java.util.*;
-import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -156,10 +154,7 @@ public class MindmapServiceImpl implements MindmapService {
 
     List<MindmapNodeResponse> nodes = getNodesByMindmap(id);
 
-    return MindmapDetailResponse.builder()
-        .mindmap(mapToResponse(mindmap))
-        .nodes(nodes)
-        .build();
+    return MindmapDetailResponse.builder().mindmap(mapToResponse(mindmap)).nodes(nodes).build();
   }
 
   @Override
@@ -307,8 +302,7 @@ public class MindmapServiceImpl implements MindmapService {
             .content(request.getContent())
             .color(request.getColor())
             .icon(request.getIcon())
-            .displayOrder(
-                request.getDisplayOrder() != null ? request.getDisplayOrder() : 0)
+            .displayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : 0)
             .build();
 
     node = mindmapNodeRepository.save(node);
@@ -388,7 +382,8 @@ public class MindmapServiceImpl implements MindmapService {
 
     validateOwnerOrAdmin(mindmap.getTeacherId(), getCurrentUserId());
 
-    List<MindmapNode> allNodes = mindmapNodeRepository.findByMindmapIdOrderByDisplayOrder(mindmapId);
+    List<MindmapNode> allNodes =
+        mindmapNodeRepository.findByMindmapIdOrderByDisplayOrder(mindmapId);
 
     // Build hierarchical structure
     Map<UUID, MindmapNodeResponse> nodeMap = new HashMap<>();
@@ -467,7 +462,8 @@ public class MindmapServiceImpl implements MindmapService {
         - Keep content concise (max 100 characters per node)
         - Create 3-7 main branches from root, each with 2-5 sub-nodes at each level
         - Ensure displayOrder is sequential (0, 1, 2, ...)
-        """.formatted(userPrompt, levels, levels, levels);
+        """
+        .formatted(userPrompt, levels, levels, levels);
   }
 
   private MindmapStructure parseMindmapFromAI(String aiResponse) throws Exception {
@@ -572,7 +568,10 @@ public class MindmapServiceImpl implements MindmapService {
 
   private UUID getCurrentUserId() {
     var auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+    if (auth
+        instanceof
+        org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+                jwtAuth) {
       String sub = jwtAuth.getToken().getSubject();
       return UUID.fromString(sub);
     }

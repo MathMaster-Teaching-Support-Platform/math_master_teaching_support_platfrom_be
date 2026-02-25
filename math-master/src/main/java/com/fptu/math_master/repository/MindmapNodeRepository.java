@@ -12,22 +12,20 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface MindmapNodeRepository extends JpaRepository<MindmapNode, UUID> {
 
-  @Query(
-      "SELECT n FROM MindmapNode n WHERE n.mindmapId = :mindmapId ORDER BY n.displayOrder ASC")
+  @Query("SELECT n FROM MindmapNode n WHERE n.mindmapId = :mindmapId ORDER BY n.displayOrder ASC")
   List<MindmapNode> findByMindmapIdOrderByDisplayOrder(@Param("mindmapId") UUID mindmapId);
 
   @Query(
       "SELECT n FROM MindmapNode n WHERE n.mindmapId = :mindmapId AND n.parentId IS NULL ORDER BY n.displayOrder ASC")
   List<MindmapNode> findRootNodesByMindmapId(@Param("mindmapId") UUID mindmapId);
 
-  @Query(
-      "SELECT n FROM MindmapNode n WHERE n.parentId = :parentId ORDER BY n.displayOrder ASC")
+  @Query("SELECT n FROM MindmapNode n WHERE n.parentId = :parentId ORDER BY n.displayOrder ASC")
   List<MindmapNode> findByParentIdOrderByDisplayOrder(@Param("parentId") UUID parentId);
 
   @Query("SELECT COUNT(n) FROM MindmapNode n WHERE n.mindmapId = :mindmapId")
   long countByMindmapId(@Param("mindmapId") UUID mindmapId);
 
-  @Query(
-      "SELECT n FROM MindmapNode n WHERE n.id = :id AND n.mindmapId = :mindmapId")
-  Optional<MindmapNode> findByIdAndMindmapId(@Param("id") UUID id, @Param("mindmapId") UUID mindmapId);
+  @Query("SELECT n FROM MindmapNode n WHERE n.id = :id AND n.mindmapId = :mindmapId")
+  Optional<MindmapNode> findByIdAndMindmapId(
+      @Param("id") UUID id, @Param("mindmapId") UUID mindmapId);
 }

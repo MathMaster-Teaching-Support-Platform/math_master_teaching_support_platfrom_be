@@ -8,8 +8,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Response for POST /exam-matrices/{matrixId}/cells/{cellId}/finalize.
- * Summarises the result of atomically persisting generated questions to DB.
+ * Response for POST /exam-matrices/{matrixId}/cells/{cellId}/finalize. Summarises the result of
+ * atomically persisting generated questions to DB.
  */
 @Data
 @Builder
@@ -41,22 +41,15 @@ public class FinalizePreviewResponse {
   /** IDs of the newly created MatrixQuestionMapping records. */
   private List<UUID> mappingIds;
 
-  /**
-   * Updated count of questions currently mapped to this cell
-   * (after replace/append logic).
-   */
+  /** Updated count of questions currently mapped to this cell (after replace/append logic). */
   private int currentCellMappingCount;
 
   /** Target number of questions for this cell (from cell.numQuestions). */
   private int cellTargetCount;
 
   /**
-   * Non-fatal warnings, e.g.:
-   * - question skipped due to duplicate text
-   * - difficulty mismatch with cell
-   * - cognitiveLevel mismatch with cell
-   * - total now exceeds cell target
+   * Non-fatal warnings, e.g.: - question skipped due to duplicate text - difficulty mismatch with
+   * cell - cognitiveLevel mismatch with cell - total now exceeds cell target
    */
   private List<String> warnings;
 }
-

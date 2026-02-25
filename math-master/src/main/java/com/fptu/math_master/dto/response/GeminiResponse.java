@@ -7,9 +7,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Response DTO for Gemini Developer API (generateContent endpoint).
- */
+/** Response DTO for Gemini Developer API (generateContent endpoint). */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -30,9 +28,7 @@ public class GeminiResponse {
   @JsonProperty("promptFeedback")
   PromptFeedback promptFeedback;
 
-  /**
-   * Convenience method to extract the text content from the first candidate.
-   */
+  /** Convenience method to extract the text content from the first candidate. */
   public String getTextContent() {
     // Check for prompt-level block
     if (promptFeedback != null && promptFeedback.getBlockReason() != null) {
@@ -128,4 +124,3 @@ public class GeminiResponse {
     String blockReason;
   }
 }
-

@@ -464,7 +464,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   private UUID getCurrentUserId() {
     var auth = SecurityContextHolder.getContext().getAuthentication();
 
-    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+    if (auth
+        instanceof
+        org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+                jwtAuth) {
       String sub = jwtAuth.getToken().getSubject();
       return UUID.fromString(sub);
     }
@@ -665,12 +668,17 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   // ─────────────────────────────────────────────────────────────────────────
 
   @Override
-  @Transactional   // full write transaction – rollback on any failure
+  @Transactional // full write transaction – rollback on any failure
   public FinalizePreviewResponse finalizePreview(
       UUID matrixId, UUID cellId, FinalizePreviewRequest request) {
 
-    log.info("Finalizing preview for matrixId={}, cellId={}, templateId={}, count={}, replaceExisting={}",
-        matrixId, cellId, request.getTemplateId(), request.getQuestions().size(), request.getReplaceExisting());
+    log.info(
+        "Finalizing preview for matrixId={}, cellId={}, templateId={}, count={}, replaceExisting={}",
+        matrixId,
+        cellId,
+        request.getTemplateId(),
+        request.getQuestions().size(),
+        request.getReplaceExisting());
 
     // ── 1. Validate matrix + ownership ──────────────────────────────────
     ExamMatrix matrix = getMatrixAndValidateAccess(matrixId);
@@ -712,10 +720,11 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     // Collect existing question texts in this assessment for duplicate check
     List<String> existingTextsInAssessment =
         assessmentQuestionRepository.findExistingQuestionTextsByAssessmentId(assessmentId);
-    Set<String> existingTextSet = existingTextsInAssessment.stream()
-        .map(String::trim)
-        .map(String::toLowerCase)
-        .collect(Collectors.toSet());
+    Set<String> existingTextSet =
+        existingTextsInAssessment.stream()
+            .map(String::trim)
+            .map(String::toLowerCase)
+            .collect(Collectors.toSet());
 
     // Track texts seen within this request batch
     Set<String> batchTexts = new HashSet<>();
@@ -742,14 +751,17 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       // 5c. Duplicate in existing assessment (only relevant when replaceExisting=false,
       //     but if replaceExisting=true we cleared old ones so set will be empty for that cell)
       if (existingTextSet.contains(textKey)) {
-        warnings.add(labelPrefix + "skipped – question with same text already exists in assessment.");
+        warnings.add(
+            labelPrefix + "skipped – question with same text already exists in assessment.");
         continue;
       }
 
       // 5d. MCQ-specific validation
       if (item.getQuestionType() == QuestionType.MULTIPLE_CHOICE) {
         Map<String, String> opts = item.getOptions();
-        if (opts == null || !opts.keySet().containsAll(Set.of("A", "B", "C", "D")) || opts.size() != 4) {
+        if (opts == null
+            || !opts.keySet().containsAll(Set.of("A", "B", "C", "D"))
+            || opts.size() != 4) {
           throw new AppException(ErrorCode.MCQ_INVALID_OPTIONS);
         }
         // No duplicate option values
@@ -766,14 +778,25 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
       // 5e. Difficulty mismatch warning
       if (cell.getDifficulty() != null && !cell.getDifficulty().equals(item.getDifficulty())) {
-        warnings.add(labelPrefix + "difficulty '" + item.getDifficulty()
-            + "' differs from cell difficulty '" + cell.getDifficulty() + "'.");
+        warnings.add(
+            labelPrefix
+                + "difficulty '"
+                + item.getDifficulty()
+                + "' differs from cell difficulty '"
+                + cell.getDifficulty()
+                + "'.");
       }
 
       // 5f. CognitiveLevel mismatch warning
-      if (cell.getCognitiveLevel() != null && !cell.getCognitiveLevel().equals(item.getCognitiveLevel())) {
-        warnings.add(labelPrefix + "cognitiveLevel '" + item.getCognitiveLevel()
-            + "' differs from cell cognitiveLevel '" + cell.getCognitiveLevel() + "'.");
+      if (cell.getCognitiveLevel() != null
+          && !cell.getCognitiveLevel().equals(item.getCognitiveLevel())) {
+        warnings.add(
+            labelPrefix
+                + "cognitiveLevel '"
+                + item.getCognitiveLevel()
+                + "' differs from cell cognitiveLevel '"
+                + cell.getCognitiveLevel()
+                + "'.");
       }
 
       batchTexts.add(textKey);
@@ -794,15 +817,19 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
       if (!oldQuestionIds.isEmpty()) {
         // Remove from assessment_questions
-        assessmentQuestionRepository.deleteByAssessmentIdAndQuestionIdIn(assessmentId, oldQuestionIds);
+        assessmentQuestionRepository.deleteByAssessmentIdAndQuestionIdIn(
+            assessmentId, oldQuestionIds);
         // Detach from matrix cell (delete all mappings for this cell)
         matrixQuestionMappingRepository.deleteByMatrixCellId(cellId);
         // Soft-delete the question records themselves
         for (UUID qId : oldQuestionIds) {
-          questionRepository.findById(qId).ifPresent(q -> {
-            q.setDeletedAt(Instant.now());
-            questionRepository.save(q);
-          });
+          questionRepository
+              .findById(qId)
+              .ifPresent(
+                  q -> {
+                    q.setDeletedAt(Instant.now());
+                    questionRepository.save(q);
+                  });
         }
       }
 
@@ -814,9 +841,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         long currentCount = matrixQuestionMappingRepository.countByMatrixCellId(cellId);
         long afterAdd = currentCount + validItems.size();
         if (afterAdd > cell.getNumQuestions()) {
-          warnings.add(String.format(
-              "Appending %d question(s) to existing %d will exceed cell target of %d.",
-              validItems.size(), currentCount, cell.getNumQuestions()));
+          warnings.add(
+              String.format(
+                  "Appending %d question(s) to existing %d will exceed cell target of %d.",
+                  validItems.size(), currentCount, cell.getNumQuestions()));
         }
       }
     }
@@ -833,9 +861,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       FinalizePreviewRequest.QuestionItem item = validItems.get(i);
 
       // Build generation_metadata
-      Map<String, Object> metadata = item.getGenerationMetadata() != null
-          ? new HashMap<>(item.getGenerationMetadata())
-          : new HashMap<>();
+      Map<String, Object> metadata =
+          item.getGenerationMetadata() != null
+              ? new HashMap<>(item.getGenerationMetadata())
+              : new HashMap<>();
       metadata.put("generatedAt", Instant.now().toString());
       metadata.put("templateId", template.getId().toString());
       metadata.put("templateName", template.getName());
@@ -848,44 +877,48 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       }
 
       // (1) Insert into questions
-      Question question = Question.builder()
-          .questionBankId(request.getQuestionBankId())   // may be null
-          .chapterId(cell.getChapterId())
-          .createdBy(currentUserId)
-          .questionType(item.getQuestionType())
-          .questionText(item.getQuestionText())
-          .options(optionsJsonb)
-          .correctAnswer(item.getCorrectAnswer())
-          .explanation(item.getExplanation())
-          .points(request.getPointsPerQuestion())
-          .difficulty(item.getDifficulty())
-          .cognitiveLevel(item.getCognitiveLevel() != null ? item.getCognitiveLevel().name() : null)
-          .bloomTaxonomyTags(item.getTags())
-          .tags(item.getTags())
-          .templateId(template.getId())
-          .generationMetadata(metadata)
-          .build();
+      Question question =
+          Question.builder()
+              .questionBankId(request.getQuestionBankId()) // may be null
+              .chapterId(cell.getChapterId())
+              .createdBy(currentUserId)
+              .questionType(item.getQuestionType())
+              .questionText(item.getQuestionText())
+              .options(optionsJsonb)
+              .correctAnswer(item.getCorrectAnswer())
+              .explanation(item.getExplanation())
+              .points(request.getPointsPerQuestion())
+              .difficulty(item.getDifficulty())
+              .cognitiveLevel(
+                  item.getCognitiveLevel() != null ? item.getCognitiveLevel().name() : null)
+              .bloomTaxonomyTags(item.getTags())
+              .tags(item.getTags())
+              .templateId(template.getId())
+              .generationMetadata(metadata)
+              .build();
 
       question = questionRepository.save(question);
       savedQuestionIds.add(question.getId());
 
       // (2) Insert into assessment_questions
-      AssessmentQuestion aq = AssessmentQuestion.builder()
-          .assessmentId(assessmentId)
-          .questionId(question.getId())
-          .orderIndex(nextOrder + i)
-          .pointsOverride(request.getPointsPerQuestion())
-          .build();
+      AssessmentQuestion aq =
+          AssessmentQuestion.builder()
+              .assessmentId(assessmentId)
+              .questionId(question.getId())
+              .orderIndex(nextOrder + i)
+              .pointsOverride(request.getPointsPerQuestion())
+              .build();
 
       assessmentQuestionRepository.save(aq);
 
       // (3) Insert into matrix_question_mapping
-      MatrixQuestionMapping mapping = MatrixQuestionMapping.builder()
-          .matrixCellId(cellId)
-          .questionId(question.getId())
-          .isSelected(true)
-          .selectionPriority(i + 1)
-          .build();
+      MatrixQuestionMapping mapping =
+          MatrixQuestionMapping.builder()
+              .matrixCellId(cellId)
+              .questionId(question.getId())
+              .isSelected(true)
+              .selectionPriority(i + 1)
+              .build();
 
       mapping = matrixQuestionMappingRepository.save(mapping);
       savedMappingIds.add(mapping.getId());
@@ -896,13 +929,17 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     int cellTarget = cell.getNumQuestions() != null ? cell.getNumQuestions() : 0;
 
     if (cellTarget > 0 && currentCellMappingCount > cellTarget) {
-      warnings.add(String.format(
-          "Cell now has %d question(s), which exceeds the target of %d.",
-          currentCellMappingCount, cellTarget));
+      warnings.add(
+          String.format(
+              "Cell now has %d question(s), which exceeds the target of %d.",
+              currentCellMappingCount, cellTarget));
     }
 
-    log.info("Finalize complete: saved {} questions, {} mappings for cellId={}",
-        savedQuestionIds.size(), savedMappingIds.size(), cellId);
+    log.info(
+        "Finalize complete: saved {} questions, {} mappings for cellId={}",
+        savedQuestionIds.size(),
+        savedMappingIds.size(),
+        cellId);
 
     return FinalizePreviewResponse.builder()
         .cellId(cellId)
@@ -924,12 +961,16 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   // ─────────────────────────────────────────────────────────────────────────
 
   @Override
-  @Transactional(readOnly = true)   // readOnly = true guarantees no flush/writes
+  @Transactional(readOnly = true) // readOnly = true guarantees no flush/writes
   public PreviewCandidatesResponse generatePreview(
       UUID matrixId, UUID cellId, GeneratePreviewRequest request) {
 
-    log.info("Generating preview for matrixId={}, cellId={}, templateId={}, count={}",
-        matrixId, cellId, request.getTemplateId(), request.getCount());
+    log.info(
+        "Generating preview for matrixId={}, cellId={}, templateId={}, count={}",
+        matrixId,
+        cellId,
+        request.getTemplateId(),
+        request.getCount());
 
     // ── 1. Validate matrix + access ─────────────────────────────────────
     getMatrixAndValidateAccess(matrixId);
@@ -967,10 +1008,11 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     // 4a. Question type check
     if (cell.getQuestionType() != null
         && !cell.getQuestionType().equals(template.getTemplateType())) {
-      warnings.add(String.format(
-          "Template type '%s' does not match cell question type '%s'. "
-              + "Generated questions may not satisfy the cell constraint.",
-          template.getTemplateType(), cell.getQuestionType()));
+      warnings.add(
+          String.format(
+              "Template type '%s' does not match cell question type '%s'. "
+                  + "Generated questions may not satisfy the cell constraint.",
+              template.getTemplateType(), cell.getQuestionType()));
     }
 
     // 4b. Difficulty override vs. cell fixed difficulty
@@ -978,10 +1020,11 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     if (requestedDifficulty != null
         && cell.getDifficulty() != null
         && !requestedDifficulty.equals(cell.getDifficulty())) {
-      warnings.add(String.format(
-          "Requested difficulty '%s' differs from cell's fixed difficulty '%s'. "
-              + "Using requested difficulty for preview only.",
-          requestedDifficulty, cell.getDifficulty()));
+      warnings.add(
+          String.format(
+              "Requested difficulty '%s' differs from cell's fixed difficulty '%s'. "
+                  + "Using requested difficulty for preview only.",
+              requestedDifficulty, cell.getDifficulty()));
     }
 
     // 4c. Warn if count differs significantly from cell.numQuestions
@@ -989,17 +1032,19 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     if (cell.getNumQuestions() != null && cell.getNumQuestions() > 0) {
       int diff = Math.abs(targetCount - cell.getNumQuestions());
       if (diff > cell.getNumQuestions()) {
-        warnings.add(String.format(
-            "Requested count (%d) differs significantly from cell target (%d). "
-                + "Preview is for exploration only.",
-            targetCount, cell.getNumQuestions()));
+        warnings.add(
+            String.format(
+                "Requested count (%d) differs significantly from cell target (%d). "
+                    + "Preview is for exploration only.",
+                targetCount, cell.getNumQuestions()));
       }
     }
 
     // ── 5. Build cell info for UI ────────────────────────────────────────
-    Chapter chapter = cell.getChapterId() != null
-        ? chapterRepository.findById(cell.getChapterId()).orElse(null)
-        : null;
+    Chapter chapter =
+        cell.getChapterId() != null
+            ? chapterRepository.findById(cell.getChapterId()).orElse(null)
+            : null;
 
     PreviewCandidatesResponse.CellInfo cellInfo =
         PreviewCandidatesResponse.CellInfo.builder()
@@ -1050,37 +1095,45 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
           // Skip candidates that don't match the requested difficulty.
           // After many failed attempts we'll relax this constraint.
           if (attemptsMade < maxAttempts / 2) continue;
-          warnings.add(String.format(
-              "Could not generate enough questions with difficulty '%s'; "
-                  + "included '%s' question(s) to meet count.",
-              requestedDifficulty, sample.getCalculatedDifficulty()));
+          warnings.add(
+              String.format(
+                  "Could not generate enough questions with difficulty '%s'; "
+                      + "included '%s' question(s) to meet count.",
+                  requestedDifficulty, sample.getCalculatedDifficulty()));
         }
 
-        candidates.add(PreviewCandidatesResponse.CandidateQuestion.builder()
-            .index(candidates.size() + 1)
-            .questionText(sample.getQuestionText())
-            .options(sample.getOptions())
-            .correctAnswerKey(sample.getCorrectAnswer())
-            .usedParameters(sample.getUsedParameters())
-            .answerCalculation(sample.getAnswerCalculation())
-            .calculatedDifficulty(sample.getCalculatedDifficulty())
-            .explanation(sample.getExplanation())
-            .build());
+        candidates.add(
+            PreviewCandidatesResponse.CandidateQuestion.builder()
+                .index(candidates.size() + 1)
+                .questionText(sample.getQuestionText())
+                .options(sample.getOptions())
+                .correctAnswerKey(sample.getCorrectAnswer())
+                .usedParameters(sample.getUsedParameters())
+                .answerCalculation(sample.getAnswerCalculation())
+                .calculatedDifficulty(sample.getCalculatedDifficulty())
+                .explanation(sample.getExplanation())
+                .build());
 
       } catch (Exception e) {
-        log.warn("Error generating preview candidate (attempt {}): {}", attemptsMade, e.getMessage());
+        log.warn(
+            "Error generating preview candidate (attempt {}): {}", attemptsMade, e.getMessage());
       }
     }
 
     // ── 7. Partial result warnings ───────────────────────────────────────
     if (candidates.size() < targetCount) {
-      warnings.add(String.format(
-          "Only %d of %d requested questions could be generated. "
-              + "Template constraints may be too strict or parameter ranges too narrow.",
-          candidates.size(), targetCount));
+      warnings.add(
+          String.format(
+              "Only %d of %d requested questions could be generated. "
+                  + "Template constraints may be too strict or parameter ranges too narrow.",
+              candidates.size(), targetCount));
     }
 
-    log.info("Preview generated: {}/{} candidates for cellId={}", candidates.size(), targetCount, cellId);
+    log.info(
+        "Preview generated: {}/{} candidates for cellId={}",
+        candidates.size(),
+        targetCount,
+        cellId);
 
     return PreviewCandidatesResponse.builder()
         .templateId(template.getId())
@@ -1112,7 +1165,13 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
     log.info(
         "Listing matching templates for matrixId={}, cellId={}, q={}, page={}, size={}, onlyMine={}, publicOnly={}",
-        matrixId, cellId, q, page, size, onlyMine, publicOnly);
+        matrixId,
+        cellId,
+        q,
+        page,
+        size,
+        onlyMine,
+        publicOnly);
 
     // 1. Validate & authorise matrix (throws 404/403 if invalid)
     getMatrixAndValidateAccess(matrixId);
@@ -1130,7 +1189,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     UUID currentUserId = getCurrentUserId();
 
     // 3. Derive cell requirements
-    QuestionType requiredType = cell.getQuestionType();   // may be null → no filter
+    QuestionType requiredType = cell.getQuestionType(); // may be null → no filter
     CognitiveLevel requiredLevel = cell.getCognitiveLevel();
 
     // 4. Build chapter tags for tag-matching
@@ -1144,27 +1203,31 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     // 6. Apply search term filter (name or tags)
     String searchTerm = (q != null && !q.isBlank()) ? q.trim().toLowerCase() : null;
     if (searchTerm != null) {
-      candidates = candidates.stream()
-          .filter(t -> matchesSearchTerm(t, searchTerm))
-          .collect(Collectors.toList());
+      candidates =
+          candidates.stream()
+              .filter(t -> matchesSearchTerm(t, searchTerm))
+              .collect(Collectors.toList());
     }
 
     // 7. Apply onlyMine / publicOnly filter
     if (onlyMine) {
-      candidates = candidates.stream()
-          .filter(t -> t.getCreatedBy().equals(currentUserId))
-          .collect(Collectors.toList());
+      candidates =
+          candidates.stream()
+              .filter(t -> t.getCreatedBy().equals(currentUserId))
+              .collect(Collectors.toList());
     }
     if (publicOnly) {
-      candidates = candidates.stream()
-          .filter(t -> Boolean.TRUE.equals(t.getIsPublic()))
-          .collect(Collectors.toList());
+      candidates =
+          candidates.stream()
+              .filter(t -> Boolean.TRUE.equals(t.getIsPublic()))
+              .collect(Collectors.toList());
     }
 
     // 8. Score & rank
     candidates.sort(
         Comparator.comparingInt(
-                (QuestionTemplate t) -> computeRelevanceScore(t, requiredType, requiredLevel, chapterTags))
+                (QuestionTemplate t) ->
+                    computeRelevanceScore(t, requiredType, requiredLevel, chapterTags))
             .reversed());
 
     int total = candidates.size();
@@ -1200,14 +1263,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     // 11. Map to response items
     List<MatchingTemplatesResponse.TemplateItem> items =
         pageSlice.stream()
-            .map(
-                t ->
-                    mapToTemplateItem(
-                        t,
-                        currentUserId,
-                        requiredType,
-                        requiredLevel,
-                        chapterTags))
+            .map(t -> mapToTemplateItem(t, currentUserId, requiredType, requiredLevel, chapterTags))
             .collect(Collectors.toList());
 
     // 12. Build hint
@@ -1229,8 +1285,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Builds a set of lowercase tag strings derived from the cell's chapter title and topic,
-   * used for overlapping against template tags.
+   * Builds a set of lowercase tag strings derived from the cell's chapter title and topic, used for
+   * overlapping against template tags.
    */
   private Set<String> buildChapterTags(MatrixCell cell) {
     Set<String> tags = new HashSet<>();
@@ -1261,15 +1317,15 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   }
 
   /**
-   * Computes a relevance score for a template against cell requirements.
-   * Scoring breakdown:
+   * Computes a relevance score for a template against cell requirements. Scoring breakdown:
+   *
    * <ul>
-   *   <li>+40  – templateType exact match (when cell constrains question type)</li>
-   *   <li>+30  – cognitiveLevel exact match</li>
-   *   <li>+20  – at least one tag overlaps with chapter/topic tags</li>
-   *   <li>+10 extra per additional overlapping tag (capped at +30)</li>
-   *   <li>+5   – template is owned by current user (mine-first preference)</li>
-   *   <li>+usage_count / 10 (capped at +10) – popularity boost</li>
+   *   <li>+40 – templateType exact match (when cell constrains question type)
+   *   <li>+30 – cognitiveLevel exact match
+   *   <li>+20 – at least one tag overlaps with chapter/topic tags
+   *   <li>+10 extra per additional overlapping tag (capped at +30)
+   *   <li>+5 – template is owned by current user (mine-first preference)
+   *   <li>+usage_count / 10 (capped at +10) – popularity boost
    * </ul>
    */
   private int computeRelevanceScore(
@@ -1333,8 +1389,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       CognitiveLevel requiredLevel,
       Set<String> chapterTags) {
 
-    String creatorName =
-        t.getCreator() != null ? t.getCreator().getFullName() : null;
+    String creatorName = t.getCreator() != null ? t.getCreator().getFullName() : null;
 
     return MatchingTemplatesResponse.TemplateItem.builder()
         .templateId(t.getId())
@@ -1355,7 +1410,3 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .build();
   }
 }
-
-
-
-

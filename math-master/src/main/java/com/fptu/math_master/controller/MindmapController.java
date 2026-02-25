@@ -79,7 +79,9 @@ public class MindmapController {
               + "Returns mindmap details and complete node tree.")
   public ApiResponse<MindmapDetailResponse> getMindmapById(@PathVariable UUID id) {
     log.info("REST request to get mindmap: {}", id);
-    return ApiResponse.<MindmapDetailResponse>builder().result(mindmapService.getMindmapById(id)).build();
+    return ApiResponse.<MindmapDetailResponse>builder()
+        .result(mindmapService.getMindmapById(id))
+        .build();
   }
 
   @PutMapping("/{id}")
@@ -102,7 +104,8 @@ public class MindmapController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Delete mindmap",
-      description = "Soft delete a mindmap. The mindmap and all its nodes will be marked as deleted.")
+      description =
+          "Soft delete a mindmap. The mindmap and all its nodes will be marked as deleted.")
   public ApiResponse<Void> deleteMindmap(@PathVariable UUID id) {
     log.info("REST request to delete mindmap: {}", id);
     mindmapService.deleteMindmap(id);
@@ -113,7 +116,8 @@ public class MindmapController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Publish mindmap",
-      description = "Change mindmap status to PUBLISHED. Published mindmaps can be viewed by students.")
+      description =
+          "Change mindmap status to PUBLISHED. Published mindmaps can be viewed by students.")
   public ApiResponse<MindmapResponse> publishMindmap(@PathVariable UUID id) {
     log.info("REST request to publish mindmap: {}", id);
     return ApiResponse.<MindmapResponse>builder()
@@ -126,7 +130,8 @@ public class MindmapController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Archive mindmap",
-      description = "Change mindmap status to ARCHIVED. Archived mindmaps are hidden from active lists.")
+      description =
+          "Change mindmap status to ARCHIVED. Archived mindmaps are hidden from active lists.")
   public ApiResponse<MindmapResponse> archiveMindmap(@PathVariable UUID id) {
     log.info("REST request to archive mindmap: {}", id);
     return ApiResponse.<MindmapResponse>builder()
@@ -139,7 +144,8 @@ public class MindmapController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Get my mindmaps",
-      description = "Get all mindmaps created by the current teacher. Optionally filter by lessonId. Supports pagination and sorting.")
+      description =
+          "Get all mindmaps created by the current teacher. Optionally filter by lessonId. Supports pagination and sorting.")
   public ApiResponse<Page<MindmapResponse>> getMyMindmaps(
       @RequestParam(required = false) String lessonId,
       @RequestParam(defaultValue = "0") int page,
@@ -158,7 +164,11 @@ public class MindmapController {
       }
     }
 
-    log.info("REST request to get my mindmaps - lessonId: {}, page: {}, size: {}", lessonUuid, page, size);
+    log.info(
+        "REST request to get my mindmaps - lessonId: {}, page: {}, size: {}",
+        lessonUuid,
+        page,
+        size);
 
     Sort.Direction sortDirection =
         direction.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
@@ -234,7 +244,8 @@ public class MindmapController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN', 'STUDENT')")
   @Operation(
       summary = "Get all nodes of a mindmap",
-      description = "Get all nodes in hierarchical structure. Root nodes contain their children recursively.")
+      description =
+          "Get all nodes in hierarchical structure. Root nodes contain their children recursively.")
   public ApiResponse<List<MindmapNodeResponse>> getNodesByMindmap(@PathVariable UUID mindmapId) {
     log.info("REST request to get nodes for mindmap: {}", mindmapId);
     return ApiResponse.<List<MindmapNodeResponse>>builder()

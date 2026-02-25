@@ -13,8 +13,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Response payload for GET /exam-matrices/{matrixId}/cells/{cellId}/templates
- * Returns ranked list of matching question templates for a matrix cell.
+ * Response payload for GET /exam-matrices/{matrixId}/cells/{cellId}/templates Returns ranked list
+ * of matching question templates for a matrix cell.
  */
 @Data
 @Builder
@@ -85,10 +85,9 @@ public class MatchingTemplatesResponse {
     private Instant updatedAt;
 
     /**
-     * Relevance score used for ranking (higher = better match).
-     * Computed at service layer, not persisted.
+     * Relevance score used for ranking (higher = better match). Computed at service layer, not
+     * persisted.
      */
     private int relevanceScore;
   }
 }
-

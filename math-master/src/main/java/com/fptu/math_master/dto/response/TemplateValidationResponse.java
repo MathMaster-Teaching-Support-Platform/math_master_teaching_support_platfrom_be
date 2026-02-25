@@ -7,8 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * FR-TPL-002: Template Validation Response
- * Returns real-time validation results with severity levels
+ * FR-TPL-002: Template Validation Response Returns real-time validation results with severity
+ * levels
  */
 @Data
 @Builder
@@ -39,7 +39,10 @@ public class TemplateValidationResponse {
   @NoArgsConstructor
   @AllArgsConstructor
   public static class ValidationIssue {
-    /** Issue category: TEMPLATE_TEXT, PARAMETERS, FORMULA, CONSTRAINTS, DIFFICULTY_RULES, OPTIONS_GENERATOR, TAGS */
+    /**
+     * Issue category: TEMPLATE_TEXT, PARAMETERS, FORMULA, CONSTRAINTS, DIFFICULTY_RULES,
+     * OPTIONS_GENERATOR, TAGS
+     */
     private String category;
 
     /** Specific field that has the issue */
@@ -56,9 +59,8 @@ public class TemplateValidationResponse {
   }
 
   public enum IssueSeverity {
-    ERROR,   // Blocks saving
+    ERROR, // Blocks saving
     WARNING, // Can save but should review
-    INFO     // Informational only
+    INFO // Informational only
   }
 }
-

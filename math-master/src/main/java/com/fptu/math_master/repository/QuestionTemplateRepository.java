@@ -23,12 +23,11 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
   Page<QuestionTemplate> findAllWithCreator(Pageable pageable);
 
   /**
-   * Find active (non-deleted) templates visible to a teacher:
-   * - owned by the teacher, OR
-   * - public templates (when onlyMine = false)
+   * Find active (non-deleted) templates visible to a teacher: - owned by the teacher, OR - public
+   * templates (when onlyMine = false)
    *
-   * Additional optional filters: templateType, cognitiveLevel, name/tag search term.
-   * Excludes soft-deleted templates (deletedAt IS NULL).
+   * <p>Additional optional filters: templateType, cognitiveLevel, name/tag search term. Excludes
+   * soft-deleted templates (deletedAt IS NULL).
    */
   @Query(
       "SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator "
@@ -49,8 +48,8 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
       Pageable pageable);
 
   /**
-   * Find all active templates owned by a user or public, without pagination.
-   * Used internally for tag-based filtering and ranking.
+   * Find all active templates owned by a user or public, without pagination. Used internally for
+   * tag-based filtering and ranking.
    */
   @Query(
       "SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator "

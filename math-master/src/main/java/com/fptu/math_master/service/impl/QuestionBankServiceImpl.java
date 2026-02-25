@@ -207,7 +207,10 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
   private UUID getCurrentUserId() {
     var auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+    if (auth
+        instanceof
+        org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+                jwtAuth) {
       String sub = jwtAuth.getToken().getSubject();
       return UUID.fromString(sub);
     }

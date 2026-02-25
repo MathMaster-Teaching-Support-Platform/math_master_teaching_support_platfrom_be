@@ -13,8 +13,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * FR-TPL-002: Update Template (Edit Draft)
- * Enhanced request with validation and version tracking support
+ * FR-TPL-002: Update Template (Edit Draft) Enhanced request with validation and version tracking
+ * support
  */
 @Data
 @Builder
@@ -32,42 +32,39 @@ public class UpdateQuestionTemplateRequest {
   private QuestionType templateType;
 
   /**
-   * Multi-language template text with placeholders {{param}}
-   * Example: {"vi": "Giải phương trình: {{a}}x + {{b}} = {{c}}", "en": "Solve: {{a}}x + {{b}} = {{c}}"}
+   * Multi-language template text with placeholders {{param}} Example: {"vi": "Giải phương trình:
+   * {{a}}x + {{b}} = {{c}}", "en": "Solve: {{a}}x + {{b}} = {{c}}"}
    */
   @NotNull(message = "Template text is required")
   private Map<String, Object> templateText;
 
   /**
-   * Parameter definitions with type, min, max, step, exclude
-   * Example: {"a": {"type": "integer", "min": 1, "max": 10, "exclude": [0]}}
+   * Parameter definitions with type, min, max, step, exclude Example: {"a": {"type": "integer",
+   * "min": 1, "max": 10, "exclude": [0]}}
    */
   @NotNull(message = "Parameters are required")
   private Map<String, Object> parameters;
 
-  /**
-   * Answer formula using parameter names
-   * Example: "(c - b) / a"
-   */
+  /** Answer formula using parameter names Example: "(c - b) / a" */
   @NotBlank(message = "Answer formula is required")
   private String answerFormula;
 
   /**
-   * Options generator configuration for MCQ
-   * Example: {"count": 4, "distractors": [...], "correctAnswer": "Use answerFormula"}
+   * Options generator configuration for MCQ Example: {"count": 4, "distractors": [...],
+   * "correctAnswer": "Use answerFormula"}
    */
   private Map<String, Object> optionsGenerator;
 
   /**
-   * Difficulty rules mapping difficulty levels to conditions
-   * Example: {"easy": "a <= 3 AND b >= 0", "medium": "a <= 7 OR b < 0", "hard": "a > 7"}
+   * Difficulty rules mapping difficulty levels to conditions Example: {"easy": "a <= 3 AND b >= 0",
+   * "medium": "a <= 7 OR b < 0", "hard": "a > 7"}
    */
   @NotNull(message = "Difficulty rules are required")
   private Map<String, Object> difficultyRules;
 
   /**
-   * Mathematical constraints for parameter generation
-   * Example: ["a != 0", "answer > 0", "answer % 1 == 0"]
+   * Mathematical constraints for parameter generation Example: ["a != 0", "answer > 0", "answer % 1
+   * == 0"]
    */
   private String[] constraints;
 
@@ -80,8 +77,8 @@ public class UpdateQuestionTemplateRequest {
   private Boolean isPublic;
 
   /**
-   * If true and template is PUBLISHED, create a new DRAFT version instead of modifying the published one
+   * If true and template is PUBLISHED, create a new DRAFT version instead of modifying the
+   * published one
    */
   private Boolean createNewVersionIfPublished;
 }
-

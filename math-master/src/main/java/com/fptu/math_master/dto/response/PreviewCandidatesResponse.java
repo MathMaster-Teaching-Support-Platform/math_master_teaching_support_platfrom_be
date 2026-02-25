@@ -12,8 +12,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Response for POST /exam-matrices/{matrixId}/cells/{cellId}/generate-preview.
- * Contains in-memory generated question candidates — NOTHING is written to the DB.
+ * Response for POST /exam-matrices/{matrixId}/cells/{cellId}/generate-preview. Contains in-memory
+ * generated question candidates — NOTHING is written to the DB.
  */
 @Data
 @Builder
@@ -75,15 +75,12 @@ public class PreviewCandidatesResponse {
     /** Fully rendered question text (placeholders substituted). */
     private String questionText;
 
-    /**
-     * Option map for MCQ: keys A/B/C/D → option text.
-     * Null for non-MCQ types.
-     */
+    /** Option map for MCQ: keys A/B/C/D → option text. Null for non-MCQ types. */
     private Map<String, String> options;
 
     /**
-     * For MCQ: the key of the correct option (A/B/C/D).
-     * For non-MCQ: the correct answer value as a string.
+     * For MCQ: the key of the correct option (A/B/C/D). For non-MCQ: the correct answer value as a
+     * string.
      */
     private String correctAnswerKey;
 
@@ -100,4 +97,3 @@ public class PreviewCandidatesResponse {
     private String explanation;
   }
 }
-
