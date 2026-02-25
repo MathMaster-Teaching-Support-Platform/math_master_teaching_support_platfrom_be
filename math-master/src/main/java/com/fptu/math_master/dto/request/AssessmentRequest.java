@@ -43,4 +43,11 @@ public class AssessmentRequest {
   private Boolean showCorrectAnswers;
 
   private Boolean hasMatrix;
+
+  private Boolean allowMultipleAttempts;
+
+  @Min(value = 1, message = "Max attempts must be at least 1")
+  private Integer maxAttempts;
+
+  private Boolean showScoreImmediately;
 }

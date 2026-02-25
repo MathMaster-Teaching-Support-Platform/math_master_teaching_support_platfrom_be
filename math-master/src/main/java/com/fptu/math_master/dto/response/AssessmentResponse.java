@@ -31,6 +31,9 @@ public class AssessmentResponse {
   private Boolean randomizeQuestions;
   private Boolean showCorrectAnswers;
   private Boolean hasMatrix;
+  private Boolean allowMultipleAttempts;
+  private Integer maxAttempts;
+  private Boolean showScoreImmediately;
   private AssessmentStatus status;
   private Long totalQuestions;
   private BigDecimal totalPoints;

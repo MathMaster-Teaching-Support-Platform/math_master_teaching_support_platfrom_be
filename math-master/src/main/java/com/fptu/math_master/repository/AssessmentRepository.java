@@ -2,6 +2,8 @@ package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.enums.AssessmentStatus;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -38,6 +40,23 @@ public interface AssessmentRepository
           + "JOIN Question q ON aq.questionId = q.id "
           + "WHERE aq.assessmentId = :assessmentId")
   Double calculateTotalPoints(@Param("assessmentId") UUID assessmentId);
+
+  /**
+   * Bulk summary for a collection of assessment IDs.
+   * Returns Object[] rows: [assessmentId, questionCount, totalPoints, submissionCount]
+   * Used by mapToResponse to avoid N+1 queries when rendering a page of assessments.
+   */
+  @Query(
+      "SELECT aq.assessmentId, "
+          + "COUNT(DISTINCT aq.id), "
+          + "COALESCE(SUM(CASE WHEN aq.pointsOverride IS NOT NULL THEN aq.pointsOverride ELSE q.points END), 0), "
+          + "COUNT(DISTINCT s.id) "
+          + "FROM AssessmentQuestion aq "
+          + "JOIN Question q ON aq.questionId = q.id "
+          + "LEFT JOIN Submission s ON s.assessmentId = aq.assessmentId "
+          + "WHERE aq.assessmentId IN :ids "
+          + "GROUP BY aq.assessmentId")
+  List<Object[]> findBulkSummaryByIds(@Param("ids") Collection<UUID> ids);
 
   @Query(
       "SELECT a FROM Assessment a "

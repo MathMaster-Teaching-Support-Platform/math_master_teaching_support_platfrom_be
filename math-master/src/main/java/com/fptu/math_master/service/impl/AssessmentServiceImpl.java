@@ -1,30 +1,41 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentQuestion;
+import com.fptu.math_master.entity.ExamMatrix;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
+import com.fptu.math_master.enums.MatrixStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.AssessmentService;
 import com.fptu.math_master.service.ExamMatrixService;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,11 +77,19 @@ public class AssessmentServiceImpl implements AssessmentService {
             .showCorrectAnswers(
                 request.getShowCorrectAnswers() != null ? request.getShowCorrectAnswers() : false)
             .hasMatrix(request.getHasMatrix() != null ? request.getHasMatrix() : false)
+            .allowMultipleAttempts(
+                request.getAllowMultipleAttempts() != null
+                    ? request.getAllowMultipleAttempts()
+                    : false)
+            .maxAttempts(request.getMaxAttempts())
+            .showScoreImmediately(
+                request.getShowScoreImmediately() != null
+                    ? request.getShowScoreImmediately()
+                    : true)
             .status(AssessmentStatus.DRAFT)
             .build();
 
     assessment = assessmentRepository.save(assessment);
-
     log.info("Assessment created successfully with id: {}", assessment.getId());
     return mapToResponse(assessment);
   }
@@ -80,15 +99,12 @@ public class AssessmentServiceImpl implements AssessmentService {
   public AssessmentResponse updateAssessment(UUID id, AssessmentRequest request) {
     log.info("Updating assessment with id: {}", id);
 
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    Assessment assessment = loadAssessmentOrThrow(id);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
-    UUID currentUserId = getCurrentUserId();
-    validateOwnerOrAdmin(assessment.getTeacherId(), currentUserId);
-
-    // Cannot edit published assessments
+    if (assessment.getStatus().isTerminal()) {
+      throw new AppException(ErrorCode.ASSESSMENT_IS_CLOSED);
+    }
     if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
       throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
     }
@@ -113,9 +129,17 @@ public class AssessmentServiceImpl implements AssessmentService {
     if (request.getHasMatrix() != null) {
       assessment.setHasMatrix(request.getHasMatrix());
     }
+    if (request.getAllowMultipleAttempts() != null) {
+      assessment.setAllowMultipleAttempts(request.getAllowMultipleAttempts());
+    }
+    if (request.getMaxAttempts() != null) {
+      assessment.setMaxAttempts(request.getMaxAttempts());
+    }
+    if (request.getShowScoreImmediately() != null) {
+      assessment.setShowScoreImmediately(request.getShowScoreImmediately());
+    }
 
     assessment = assessmentRepository.save(assessment);
-
     log.info("Assessment updated successfully: {}", id);
     return mapToResponse(assessment);
   }
@@ -128,11 +152,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         assessmentId,
         request.getQuestionId());
 
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(assessmentId)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
     if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
@@ -147,6 +167,21 @@ public class AssessmentServiceImpl implements AssessmentService {
     aq.setPointsOverride(request.getPointsOverride());
     assessmentQuestionRepository.save(aq);
 
+    if (Boolean.TRUE.equals(assessment.getHasMatrix())) {
+      examMatrixRepository
+          .findByAssessmentIdAndNotDeleted(assessmentId)
+          .ifPresent(
+              matrix -> {
+                if (matrix.getStatus() == MatrixStatus.APPROVED) {
+                  matrix.setStatus(MatrixStatus.DRAFT);
+                  examMatrixRepository.save(matrix);
+                  log.warn(
+                      "Matrix {} demoted to DRAFT because points override invalidates its cached distribution",
+                      matrix.getId());
+                }
+              });
+    }
+
     log.info("Points override set successfully");
     return mapToResponse(assessment);
   }
@@ -156,13 +191,8 @@ public class AssessmentServiceImpl implements AssessmentService {
   public AssessmentResponse getAssessmentPreview(UUID id) {
     log.info("Getting assessment preview: {}", id);
 
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
+    Assessment assessment = loadAssessmentOrThrow(id);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
-
     return mapToResponse(assessment);
   }
 
@@ -171,19 +201,12 @@ public class AssessmentServiceImpl implements AssessmentService {
   public AssessmentSummary getPublishSummary(UUID id) {
     log.info("Getting publish summary for assessment: {}", id);
 
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
+    Assessment assessment = loadAssessmentOrThrow(id);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
     Long totalQuestions = assessmentRepository.countQuestionsByAssessmentId(id);
-    Double totalPointsDouble = assessmentRepository.calculateTotalPoints(id);
-    BigDecimal totalPoints =
-        totalPointsDouble != null ? BigDecimal.valueOf(totalPointsDouble) : BigDecimal.ZERO;
+    BigDecimal totalPoints = safeTotalPoints(assessmentRepository.calculateTotalPoints(id));
 
-    // Validation
     boolean canPublish = true;
     String validationMessage = "";
 
@@ -207,7 +230,8 @@ public class AssessmentServiceImpl implements AssessmentService {
         .timeLimitMinutes(assessment.getTimeLimitMinutes())
         .startDate(
             assessment.getStartDate() != null ? formatter.format(assessment.getStartDate()) : null)
-        .endDate(assessment.getEndDate() != null ? formatter.format(assessment.getEndDate()) : null)
+        .endDate(
+            assessment.getEndDate() != null ? formatter.format(assessment.getEndDate()) : null)
         .hasSchedule(assessment.getStartDate() != null || assessment.getEndDate() != null)
         .canPublish(canPublish)
         .validationMessage(validationMessage)
@@ -219,50 +243,53 @@ public class AssessmentServiceImpl implements AssessmentService {
   public AssessmentResponse publishAssessment(UUID id) {
     log.info("Publishing assessment: {}", id);
 
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
+    Assessment assessment = loadAssessmentOrThrow(id);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
     if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
       throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
     }
+    if (assessment.getStatus().isTerminal()) {
+      throw new AppException(ErrorCode.ASSESSMENT_IS_CLOSED);
+    }
 
-    // Validation
+    Instant now = Instant.now();
+
     Long totalQuestions = assessmentRepository.countQuestionsByAssessmentId(id);
     if (totalQuestions == 0) {
       throw new AppException(ErrorCode.ASSESSMENT_NO_QUESTIONS);
     }
 
-    Double totalPointsDouble = assessmentRepository.calculateTotalPoints(id);
-    BigDecimal totalPoints =
-        totalPointsDouble != null ? BigDecimal.valueOf(totalPointsDouble) : BigDecimal.ZERO;
+    BigDecimal totalPoints = safeTotalPoints(assessmentRepository.calculateTotalPoints(id));
     if (totalPoints.compareTo(BigDecimal.ZERO) <= 0) {
-      throw new AppException(ErrorCode.ASSESSMENT_NO_QUESTIONS);
+      throw new AppException(ErrorCode.ASSESSMENT_ZERO_TOTAL_POINTS);
     }
 
-    if (assessment.getStartDate() != null && assessment.getStartDate().isBefore(Instant.now())) {
+    if (assessment.getStartDate() != null && assessment.getStartDate().isBefore(now)) {
       throw new AppException(ErrorCode.ASSESSMENT_START_DATE_PAST);
     }
 
-    // If assessment has a matrix, lock it
-    if (assessment.getHasMatrix()) {
-      examMatrixRepository
-          .findByAssessmentIdAndNotDeleted(id)
-          .ifPresent(
-              matrix -> {
-                if (matrix.getStatus() != com.fptu.math_master.enums.MatrixStatus.APPROVED) {
-                  throw new AppException(ErrorCode.MATRIX_NOT_APPROVED);
-                }
-                examMatrixService.lockMatrix(matrix.getId());
-              });
+    if (Boolean.TRUE.equals(assessment.getHasMatrix())) {
+      ExamMatrix matrix =
+          examMatrixRepository
+              .findByAssessmentIdAndNotDeleted(id)
+              .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+
+      if (matrix.getStatus() != MatrixStatus.APPROVED) {
+        throw new AppException(ErrorCode.MATRIX_NOT_APPROVED);
+      }
+
+      Long filledInAssessment =
+          examMatrixRepository.countAssessmentQuestionsFilledByMatrix(matrix.getId());
+      if (!filledInAssessment.equals((long) matrix.getTotalQuestions())) {
+        throw new AppException(ErrorCode.MATRIX_CELL_FILL_INCOMPLETE);
+      }
+
+      examMatrixService.lockMatrix(matrix.getId());
     }
 
     assessment.setStatus(AssessmentStatus.PUBLISHED);
     assessment = assessmentRepository.save(assessment);
-
     log.info("Assessment published successfully: {}", id);
     return mapToResponse(assessment);
   }
@@ -272,25 +299,38 @@ public class AssessmentServiceImpl implements AssessmentService {
   public AssessmentResponse unpublishAssessment(UUID id) {
     log.info("Unpublishing assessment: {}", id);
 
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
+    Assessment assessment = loadAssessmentOrThrow(id);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
+    if (assessment.getStatus().isTerminal()) {
+      throw new AppException(ErrorCode.ASSESSMENT_IS_CLOSED);
+    }
     if (assessment.getStatus() != AssessmentStatus.PUBLISHED) {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_PUBLISHED);
     }
 
-    // Check for submissions
     Long submissionCount = assessmentRepository.countSubmissionsByAssessmentId(id);
     if (submissionCount > 0) {
       throw new AppException(ErrorCode.ASSESSMENT_HAS_SUBMISSIONS);
     }
 
     assessment.setStatus(AssessmentStatus.DRAFT);
-    assessment = assessmentRepository.save(assessment);
+    assessmentRepository.save(assessment);
+
+    if (Boolean.TRUE.equals(assessment.getHasMatrix())) {
+      examMatrixRepository
+          .findByAssessmentIdAndNotDeleted(id)
+          .ifPresent(
+              matrix -> {
+                if (matrix.getStatus() == MatrixStatus.LOCKED) {
+                  matrix.setStatus(MatrixStatus.APPROVED);
+                  examMatrixRepository.save(matrix);
+                  log.info(
+                      "Matrix {} reset from LOCKED to APPROVED after assessment unpublish",
+                      matrix.getId());
+                }
+              });
+    }
 
     log.info("Assessment unpublished successfully: {}", id);
     return mapToResponse(assessment);
@@ -301,14 +341,12 @@ public class AssessmentServiceImpl implements AssessmentService {
   public void deleteAssessment(UUID id) {
     log.info("Deleting assessment: {}", id);
 
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
+    Assessment assessment = loadAssessmentOrThrow(id);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
-    // Can only delete DRAFT with no submissions
+    if (assessment.getStatus().isTerminal()) {
+      throw new AppException(ErrorCode.ASSESSMENT_IS_CLOSED);
+    }
     if (assessment.getStatus() != AssessmentStatus.DRAFT) {
       throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
     }
@@ -318,9 +356,19 @@ public class AssessmentServiceImpl implements AssessmentService {
       throw new AppException(ErrorCode.ASSESSMENT_HAS_SUBMISSIONS);
     }
 
-    // Soft delete
-    assessment.setDeletedAt(Instant.now());
+    Instant now = Instant.now();
+    assessment.setDeletedAt(now);
     assessmentRepository.save(assessment);
+
+    examMatrixRepository
+        .findByAssessmentIdAndNotDeleted(id)
+        .ifPresent(
+            matrix -> {
+              matrix.setDeletedAt(now);
+              examMatrixRepository.save(matrix);
+              log.info(
+                  "Soft-deleted orphaned ExamMatrix {} along with Assessment {}", matrix.getId(), id);
+            });
 
     log.info("Assessment soft deleted successfully: {}", id);
   }
@@ -330,15 +378,15 @@ public class AssessmentServiceImpl implements AssessmentService {
   public AssessmentResponse getAssessmentById(UUID id) {
     log.info("Getting assessment: {}", id);
 
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
+    Assessment assessment = loadAssessmentOrThrow(id);
     UUID currentUserId = getCurrentUserId();
 
-    // Check access
-    if (!assessment.getTeacherId().equals(currentUserId) && !isAdmin(currentUserId)) {
+    boolean isOwnerOrAdmin =
+        assessment.getTeacherId().equals(currentUserId) || hasRole(PredefinedRole.ADMIN_ROLE);
+    boolean isPublishedAndAnyUser =
+        assessment.getStatus() == AssessmentStatus.PUBLISHED && !isOwnerOrAdmin;
+
+    if (!isOwnerOrAdmin && !isPublishedAndAnyUser) {
       throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
     }
 
@@ -352,42 +400,42 @@ public class AssessmentServiceImpl implements AssessmentService {
     log.info("Getting my assessments - status: {}, lessonId: {}", status, lessonId);
 
     UUID currentUserId = getCurrentUserId();
-    Page<Assessment> assessments =
+    Page<Assessment> assessmentsPage =
         assessmentRepository.findWithFilters(currentUserId, status, lessonId, pageable);
 
-    return assessments.map(this::mapToResponse);
+    // FIX: eliminate N+1 — fetch bulk summary for all IDs on this page in one query
+    List<UUID> ids =
+        assessmentsPage.getContent().stream().map(Assessment::getId).collect(Collectors.toList());
+
+    Map<UUID, long[]> summaryMap = buildSummaryMap(ids);
+
+    // Pre-fetch teacher name once (all assessments on this page share the same teacher)
+    String teacherName =
+        userRepository
+            .findById(currentUserId)
+            .map(User::getFullName)
+            .orElse("Unknown");
+
+    return assessmentsPage.map(
+        a -> mapToResponseWithSummary(a, teacherName, summaryMap.getOrDefault(a.getId(), new long[]{0L, 0L, 0L})));
   }
 
   @Override
   @Transactional(readOnly = true)
   public boolean canEditAssessment(UUID id) {
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
+    Assessment assessment = loadAssessmentOrThrow(id);
     UUID currentUserId = getCurrentUserId();
-    boolean isOwnerOrAdmin =
-        assessment.getTeacherId().equals(currentUserId) || isAdmin(currentUserId);
-
-    return isOwnerOrAdmin && assessment.getStatus() == AssessmentStatus.DRAFT;
+    return (assessment.getTeacherId().equals(currentUserId) || hasRole(PredefinedRole.ADMIN_ROLE))
+        && assessment.getStatus() == AssessmentStatus.DRAFT;
   }
 
   @Override
   @Transactional(readOnly = true)
   public boolean canDeleteAssessment(UUID id) {
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
+    Assessment assessment = loadAssessmentOrThrow(id);
     UUID currentUserId = getCurrentUserId();
-    boolean isOwnerOrAdmin =
-        assessment.getTeacherId().equals(currentUserId) || isAdmin(currentUserId);
-
     Long submissionCount = assessmentRepository.countSubmissionsByAssessmentId(id);
-
-    return isOwnerOrAdmin
+    return (assessment.getTeacherId().equals(currentUserId) || hasRole(PredefinedRole.ADMIN_ROLE))
         && assessment.getStatus() == AssessmentStatus.DRAFT
         && submissionCount == 0;
   }
@@ -395,62 +443,57 @@ public class AssessmentServiceImpl implements AssessmentService {
   @Override
   @Transactional(readOnly = true)
   public boolean canPublishAssessment(UUID id) {
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
+    Assessment assessment = loadAssessmentOrThrow(id);
     UUID currentUserId = getCurrentUserId();
-    boolean isOwnerOrAdmin =
-        assessment.getTeacherId().equals(currentUserId) || isAdmin(currentUserId);
-
     Long totalQuestions = assessmentRepository.countQuestionsByAssessmentId(id);
-
-    return isOwnerOrAdmin && assessment.getStatus() == AssessmentStatus.DRAFT && totalQuestions > 0;
+    return (assessment.getTeacherId().equals(currentUserId) || hasRole(PredefinedRole.ADMIN_ROLE))
+        && assessment.getStatus() == AssessmentStatus.DRAFT
+        && totalQuestions > 0;
   }
 
-  // Helper methods
+  private Assessment loadAssessmentOrThrow(UUID id) {
+    return assessmentRepository
+        .findByIdAndNotDeleted(id)
+        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+  }
 
   private UUID getCurrentUserId() {
     var auth = SecurityContextHolder.getContext().getAuthentication();
-
-    if (auth
-        instanceof
-        org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
-                jwtAuth) {
-      String sub = jwtAuth.getToken().getSubject();
-      return UUID.fromString(sub);
+    if (auth instanceof JwtAuthenticationToken jwtAuth) {
+      return UUID.fromString(jwtAuth.getToken().getSubject());
     }
-
     throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 
+  private boolean hasRole(String roleName) {
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth == null) return false;
+    String prefixed = "ROLE_" + roleName;
+    return auth.getAuthorities().stream()
+        .map(GrantedAuthority::getAuthority)
+        .anyMatch(a -> a.equals(roleName) || a.equals(prefixed));
+  }
+
   private void validateTeacherRole(UUID userId) {
-    User user =
-        userRepository
-            .findByIdWithRoles(userId)
-            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
-    boolean isTeacher =
-        user.getRoles().stream()
-            .anyMatch(role -> role.getName().equals("TEACHER") || role.getName().equals("ADMIN"));
-
-    if (!isTeacher) {
-      throw new AppException(ErrorCode.NOT_A_TEACHER);
+    if (!hasRole(PredefinedRole.TEACHER_ROLE) && !hasRole(PredefinedRole.ADMIN_ROLE)) {
+      User user =
+          userRepository
+              .findByIdWithRoles(userId)
+              .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+      boolean isTeacher =
+          user.getRoles().stream()
+              .anyMatch(
+                  role ->
+                      PredefinedRole.TEACHER_ROLE.equals(role.getName())
+                          || PredefinedRole.ADMIN_ROLE.equals(role.getName()));
+      if (!isTeacher) {
+        throw new AppException(ErrorCode.NOT_A_TEACHER);
+      }
     }
   }
 
-  private boolean isAdmin(UUID userId) {
-    User user =
-        userRepository
-            .findByIdWithRoles(userId)
-            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
-    return user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
-  }
-
   private void validateOwnerOrAdmin(UUID ownerId, UUID currentUserId) {
-    if (!ownerId.equals(currentUserId) && !isAdmin(currentUserId)) {
+    if (!ownerId.equals(currentUserId) && !hasRole(PredefinedRole.ADMIN_ROLE)) {
       throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
     }
   }
@@ -461,11 +504,36 @@ public class AssessmentServiceImpl implements AssessmentService {
     }
   }
 
+  private BigDecimal safeTotalPoints(Double raw) {
+    if (raw == null) return BigDecimal.ZERO;
+    return new BigDecimal(raw.toString());
+  }
+
+  /**
+   * FIX: build a UUID → [questionCount, totalPoints*100, submissionCount] map from a single bulk
+   * query so mapToResponse doesn't fire 3 extra queries per assessment (N+1 fix).
+   * totalPoints is stored ×100 as long to avoid Double; divided back when building the response.
+   */
+  private Map<UUID, long[]> buildSummaryMap(Collection<UUID> ids) {
+    Map<UUID, long[]> map = new HashMap<>();
+    if (ids.isEmpty()) return map;
+    List<Object[]> rows = assessmentRepository.findBulkSummaryByIds(ids);
+    for (Object[] row : rows) {
+      UUID aid = (UUID) row[0];
+      long qCount = row[1] == null ? 0L : ((Number) row[1]).longValue();
+      // row[2] is a Double from COALESCE(SUM(...))
+      long pointsCents = row[2] == null ? 0L :
+          new BigDecimal(row[2].toString()).multiply(BigDecimal.valueOf(100)).longValue();
+      long subCount = row[3] == null ? 0L : ((Number) row[3]).longValue();
+      map.put(aid, new long[]{qCount, pointsCents, subCount});
+    }
+    return map;
+  }
+
+  /** Single-assessment response — fires individual queries (used by write methods). */
   private AssessmentResponse mapToResponse(Assessment assessment) {
     Long totalQuestions = assessmentRepository.countQuestionsByAssessmentId(assessment.getId());
-    Double totalPointsDouble = assessmentRepository.calculateTotalPoints(assessment.getId());
-    BigDecimal totalPoints =
-        totalPointsDouble != null ? BigDecimal.valueOf(totalPointsDouble) : BigDecimal.ZERO;
+    BigDecimal totalPoints = safeTotalPoints(assessmentRepository.calculateTotalPoints(assessment.getId()));
     Long submissionCount = assessmentRepository.countSubmissionsByAssessmentId(assessment.getId());
 
     String teacherName =
@@ -477,6 +545,32 @@ public class AssessmentServiceImpl implements AssessmentService {
           lessonRepository.findById(assessment.getLessonId()).map(Lesson::getTitle).orElse(null);
     }
 
+    return buildResponse(assessment, teacherName, lessonTitle, totalQuestions, totalPoints, submissionCount);
+  }
+
+  /** Bulk-list response — uses pre-fetched summary row to avoid N+1. */
+  private AssessmentResponse mapToResponseWithSummary(
+      Assessment assessment, String teacherName, long[] summary) {
+    long qCount = summary[0];
+    BigDecimal totalPoints = BigDecimal.valueOf(summary[1]).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    long subCount = summary[2];
+
+    String lessonTitle = null;
+    if (assessment.getLessonId() != null) {
+      lessonTitle =
+          lessonRepository.findById(assessment.getLessonId()).map(Lesson::getTitle).orElse(null);
+    }
+
+    return buildResponse(assessment, teacherName, lessonTitle, qCount, totalPoints, subCount);
+  }
+
+  private AssessmentResponse buildResponse(
+      Assessment assessment,
+      String teacherName,
+      String lessonTitle,
+      long totalQuestions,
+      BigDecimal totalPoints,
+      long submissionCount) {
     return AssessmentResponse.builder()
         .id(assessment.getId())
         .teacherId(assessment.getTeacherId())
@@ -493,6 +587,9 @@ public class AssessmentServiceImpl implements AssessmentService {
         .randomizeQuestions(assessment.getRandomizeQuestions())
         .showCorrectAnswers(assessment.getShowCorrectAnswers())
         .hasMatrix(assessment.getHasMatrix())
+        .allowMultipleAttempts(assessment.getAllowMultipleAttempts())
+        .maxAttempts(assessment.getMaxAttempts())
+        .showScoreImmediately(assessment.getShowScoreImmediately())
         .status(assessment.getStatus())
         .totalQuestions(totalQuestions)
         .totalPoints(totalPoints)
