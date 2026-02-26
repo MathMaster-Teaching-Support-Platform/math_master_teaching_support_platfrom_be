@@ -1,8 +1,6 @@
 package com.fptu.math_master.service;
 
-/**
- * Service for communicating with the Gemini Developer API (Google AI Studio).
- */
+/** Service for communicating with the Gemini Developer API (Google AI Studio). */
 public interface GeminiService {
 
   /**
@@ -20,4 +18,3 @@ public interface GeminiService {
    */
   boolean testConnection();
 }
-

@@ -14,4 +14,3 @@ public class GeminiProperties {
   private Integer timeoutSeconds;
   private String baseUrl;
 }
-

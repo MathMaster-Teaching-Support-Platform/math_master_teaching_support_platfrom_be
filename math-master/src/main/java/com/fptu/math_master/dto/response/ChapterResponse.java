@@ -1,6 +1,5 @@
 package com.fptu.math_master.dto.response;
 
-import java.util.List;
 import java.util.UUID;
 import lombok.*;
 
@@ -15,4 +14,3 @@ public class ChapterResponse {
   private String description;
   private Integer orderIndex;
 }
-

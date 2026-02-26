@@ -5,8 +5,8 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 /**
- * Request DTO for Gemini Developer API (generateContent endpoint).
- * POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}
+ * Request DTO for Gemini Developer API (generateContent endpoint). POST
+ * https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}
  */
 @Data
 @NoArgsConstructor
@@ -60,4 +60,3 @@ public class GeminiRequest {
     String threshold;
   }
 }
-

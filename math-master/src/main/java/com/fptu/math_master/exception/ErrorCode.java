@@ -59,6 +59,14 @@ public enum ErrorCode {
       HttpStatus.BAD_REQUEST),
   ASSESSMENT_NO_QUESTIONS(
       1044, "Assessment must have at least one question to publish", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_ZERO_TOTAL_POINTS(
+      1044, "Total points across all questions must be greater than 0", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_IS_CLOSED(
+      1093, "Assessment is closed and cannot be modified or unpublished", HttpStatus.BAD_REQUEST),
+  MATRIX_CELL_FILL_INCOMPLETE(
+      1094,
+      "Not all matrix cells have their required question count filled in assessment_questions",
+      HttpStatus.BAD_REQUEST),
   ASSESSMENT_INVALID_SCHEDULE(1045, "Start date must be before end date", HttpStatus.BAD_REQUEST),
   ASSESSMENT_START_DATE_PAST(1046, "Start date cannot be in the past", HttpStatus.BAD_REQUEST),
   ASSESSMENT_NOT_PUBLISHED(1047, "Assessment is not published", HttpStatus.BAD_REQUEST),
@@ -107,15 +115,52 @@ public enum ErrorCode {
       1081, "Failed to generate mindmap from AI", HttpStatus.INTERNAL_SERVER_ERROR),
   INVALID_MINDMAP_STRUCTURE(1082, "Invalid mindmap structure", HttpStatus.BAD_REQUEST),
   FINALIZE_EMPTY_QUESTIONS(1083, "questions list must not be empty", HttpStatus.BAD_REQUEST),
-  QUESTION_TEXT_BLANK(1084, "questionText must not be blank for one or more questions", HttpStatus.BAD_REQUEST),
-  MCQ_INVALID_OPTIONS(1085, "MCQ questions must have exactly 4 options (A, B, C, D) with no duplicates", HttpStatus.BAD_REQUEST),
-  MCQ_INVALID_CORRECT_OPTION(1086, "correctAnswer for MCQ must be one of A, B, C, D", HttpStatus.BAD_REQUEST),
-  CELL_EXCEEDS_TARGET(1087, "Adding these questions would exceed the cell's target question count", HttpStatus.BAD_REQUEST),
-  TEMPLATE_NOT_USABLE(1088, "Template is in DRAFT status and cannot be used for finalisation", HttpStatus.BAD_REQUEST),
+  QUESTION_TEXT_BLANK(
+      1084, "questionText must not be blank for one or more questions", HttpStatus.BAD_REQUEST),
+  MCQ_INVALID_OPTIONS(
+      1085,
+      "MCQ questions must have exactly 4 options (A, B, C, D) with no duplicates",
+      HttpStatus.BAD_REQUEST),
+  MCQ_INVALID_CORRECT_OPTION(
+      1086, "correctAnswer for MCQ must be one of A, B, C, D", HttpStatus.BAD_REQUEST),
+  CELL_EXCEEDS_TARGET(
+      1087,
+      "Adding these questions would exceed the cell's target question count",
+      HttpStatus.BAD_REQUEST),
+  TEMPLATE_NOT_USABLE(
+      1088,
+      "Template is in DRAFT status and cannot be used for finalisation",
+      HttpStatus.BAD_REQUEST),
+  TEMPLATE_ALREADY_PUBLISHED(
+      1093, "Template is already published", HttpStatus.BAD_REQUEST),
+  TEMPLATE_ALREADY_ARCHIVED(
+      1094, "Template is already archived", HttpStatus.BAD_REQUEST),
+  TEMPLATE_ACCESS_DENIED(
+      1100, "You do not have permission to access this template", HttpStatus.FORBIDDEN),
   LESSON_NOT_FOUND(1089, "Lesson not found", HttpStatus.NOT_FOUND),
   CHAPTER_NOT_FOUND(1090, "Chapter not found", HttpStatus.NOT_FOUND),
-  LESSON_GENERATION_FAILED(1091, "Failed to generate lesson content from AI", HttpStatus.INTERNAL_SERVER_ERROR),
-  LESSON_ACCESS_DENIED(1092, "You do not have permission to access this lesson", HttpStatus.FORBIDDEN);
+  LESSON_GENERATION_FAILED(
+      1091, "Failed to generate lesson content from AI", HttpStatus.INTERNAL_SERVER_ERROR),
+  LESSON_ACCESS_DENIED(
+      1092, "You do not have permission to access this lesson", HttpStatus.FORBIDDEN),
+  EXAM_MATRIX_APPROVED(
+      1095,
+      "Exam matrix is already approved and cannot be modified. Reset the matrix first.",
+      HttpStatus.BAD_REQUEST),
+  CHAPTER_NOT_IN_LESSON(
+      1096, "The specified chapter does not belong to this lesson", HttpStatus.BAD_REQUEST),
+  CELL_QUESTION_COUNT_MISMATCH(
+      1097,
+      "Number of selected questions does not match the cell's required count",
+      HttpStatus.BAD_REQUEST),
+  CELL_QUESTION_DIMENSION_MISMATCH(
+      1098,
+      "One or more questions do not match the cell's difficulty or cognitive level",
+      HttpStatus.BAD_REQUEST),
+  ASSESSMENT_MATRIX_APPROVED_WHILE_PUBLISHED(
+      1099,
+      "Cannot approve matrix while assessment is already published or closed",
+      HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

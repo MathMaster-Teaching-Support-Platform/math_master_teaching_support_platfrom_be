@@ -22,4 +22,3 @@ public class LessonResponse {
   private LessonStatus status;
   private List<ChapterResponse> chapters;
 }
-

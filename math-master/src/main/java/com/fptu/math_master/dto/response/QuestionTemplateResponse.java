@@ -2,6 +2,7 @@ package com.fptu.math_master.dto.response;
 
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.enums.TemplateStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
@@ -32,6 +33,7 @@ public class QuestionTemplateResponse {
   private CognitiveLevel cognitiveLevel;
   private String[] tags;
   private Boolean isPublic;
+  private TemplateStatus status;
   private Integer usageCount;
   private BigDecimal avgSuccessRate;
   private Instant createdAt;

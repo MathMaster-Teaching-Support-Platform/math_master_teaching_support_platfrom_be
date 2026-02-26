@@ -40,8 +40,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       String aiContent = geminiService.sendMessage(prompt);
 
       // Parse the response
-      AIEnhancedQuestionResponse enhancedResponse =
-          parseAIResponse(aiContent, request);
+      AIEnhancedQuestionResponse enhancedResponse = parseAIResponse(aiContent, request);
 
       // Validate the AI output
       boolean isValid = validateAIOutput(request, enhancedResponse);
@@ -120,44 +119,55 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     // Strong “JSON only” instruction up front
     prompt.append("OUTPUT RULE: Return ONLY valid JSON. No markdown, no extra text.\n");
-    prompt.append("You are a mathematics education expert. Your task is to enhance this math question.\n\n");
+    prompt.append(
+        "You are a mathematics education expert. Your task is to enhance this math question.\n\n");
 
     prompt.append("CRITICAL RULES (MUST FOLLOW):\n");
-    prompt.append("1. DO NOT change the correct answer value - it must remain: ")
-      .append(request.getCorrectAnswer())
-      .append("\n");
+    prompt
+        .append("1. DO NOT change the correct answer value - it must remain: ")
+        .append(request.getCorrectAnswer())
+        .append("\n");
     prompt.append("2. Keep all content strictly about mathematics\n");
-    prompt.append("3. For multiple choice questions, provide exactly 4 options labeled A, B, C, D\n");
+    prompt.append(
+        "3. For multiple choice questions, provide exactly 4 options labeled A, B, C, D\n");
 
     prompt.append("4. IMPORTANT: Option values MUST contain ONLY the numeric answer\n");
     prompt.append("   - ❌ WRONG: \"5 (assuming 8 = 10)\" or \"6 (ignoring the constant term)\"\n");
     prompt.append("   - ✅ CORRECT: \"5\" or \"6\" or \"3.14\"\n");
-    prompt.append("   - NO explanatory text, NO parentheses, NO units, NO words in option values\n");
+    prompt.append(
+        "   - NO explanatory text, NO parentheses, NO units, NO words in option values\n");
 
-    prompt.append("5. Put all explanations in the 'distractorExplanations' field, NOT in option values\n");
-    prompt.append("6. Make distractors reflect common student mistakes but explain mistakes only in distractorExplanations\n");
+    prompt.append(
+        "5. Put all explanations in the 'distractorExplanations' field, NOT in option values\n");
+    prompt.append(
+        "6. Make distractors reflect common student mistakes but explain mistakes only in distractorExplanations\n");
 
     // New rule to prevent “Wait / self-correction / wrong steps”
     prompt.append("7. IMPORTANT: In 'explanation', include ONLY correct solution steps.\n");
-    prompt.append("   - DO NOT include self-talk or self-correction (e.g., \"Wait\", \"That's not correct\", \"Let's try again\")\n");
-    prompt.append("   - DO NOT include any incorrect intermediate work, even if you later correct it\n");
+    prompt.append(
+        "   - DO NOT include self-talk or self-correction (e.g., \"Wait\", \"That's not correct\", \"Let's try again\")\n");
+    prompt.append(
+        "   - DO NOT include any incorrect intermediate work, even if you later correct it\n");
     prompt.append("   - Keep explanation concise: 2–5 sentences, only correct math steps\n");
 
     // Ensure correctAnswerKey matches the preserved correct answer value
-    prompt.append("8. correctAnswerKey MUST be the key whose option value equals the preserved correct answer value.\n\n");
+    prompt.append(
+        "8. correctAnswerKey MUST be the key whose option value equals the preserved correct answer value.\n\n");
 
     prompt.append("ORIGINAL QUESTION:\n");
     prompt.append(request.getRawQuestionText()).append("\n\n");
 
-    prompt.append("CORRECT ANSWER VALUE (must be preserved exactly): ")
-      .append(request.getCorrectAnswer())
-      .append("\n\n");
+    prompt
+        .append("CORRECT ANSWER VALUE (must be preserved exactly): ")
+        .append(request.getCorrectAnswer())
+        .append("\n\n");
 
-    if (request.getQuestionType() == QuestionType.MULTIPLE_CHOICE && request.getRawOptions() != null) {
+    if (request.getQuestionType() == QuestionType.MULTIPLE_CHOICE
+        && request.getRawOptions() != null) {
       prompt.append("ORIGINAL OPTIONS (notice they contain only numeric values):\n");
-      request.getRawOptions().forEach((key, value) ->
-        prompt.append(key).append(". ").append(value).append("\n")
-      );
+      request
+          .getRawOptions()
+          .forEach((key, value) -> prompt.append(key).append(". ").append(value).append("\n"));
       prompt.append("\n");
     }
 
@@ -170,9 +180,12 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     prompt.append("\nYour task:\n");
     prompt.append("1. Rewrite the question with clearer, more natural Vietnamese wording\n");
     prompt.append("2. For MCQ: Create 4 options with ONLY numeric values (no text descriptions)\n");
-    prompt.append("3. Provide an explanation (2–5 sentences) with ONLY correct steps (no self-correction)\n");
-    prompt.append("4. (Optional) Suggest alternative solution methods (short bullet-style strings)\n");
-    prompt.append("5. Explain what mistake each wrong option represents in distractorExplanations\n\n");
+    prompt.append(
+        "3. Provide an explanation (2–5 sentences) with ONLY correct steps (no self-correction)\n");
+    prompt.append(
+        "4. (Optional) Suggest alternative solution methods (short bullet-style strings)\n");
+    prompt.append(
+        "5. Explain what mistake each wrong option represents in distractorExplanations\n\n");
 
     prompt.append("OUTPUT FORMAT (strict JSON only):\n");
     prompt.append("{\n");
@@ -184,8 +197,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     prompt.append("    \"D\": \"12.56\"\n");
     prompt.append("  },\n");
     prompt.append("  \"correctAnswerKey\": \"A\",\n");
-    prompt.append("  \"explanation\": \"Step-by-step solution in Vietnamese (2–5 sentences, only correct steps)\",\n");
-    prompt.append("  \"alternativeSolutions\": [\"Alternative method 1\", \"Alternative method 2\"],\n");
+    prompt.append(
+        "  \"explanation\": \"Step-by-step solution in Vietnamese (2–5 sentences, only correct steps)\",\n");
+    prompt.append(
+        "  \"alternativeSolutions\": [\"Alternative method 1\", \"Alternative method 2\"],\n");
     prompt.append("  \"distractorExplanations\": {\n");
     prompt.append("    \"B\": \"Common mistake explanation (in Vietnamese)\",\n");
     prompt.append("    \"C\": \"Common mistake explanation (in Vietnamese)\",\n");
@@ -196,13 +211,17 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     prompt.append("VALIDATION CHECKLIST (MUST SATISFY ALL):\n");
     prompt.append("✓ Output is ONLY JSON (no extra text)\n");
     prompt.append("✓ Exactly 4 options: A, B, C, D\n");
-    prompt.append("✓ Option values contain ONLY numbers (e.g., \"5\", \"3.14\", \"0.5\", \"-2\")\n");
+    prompt.append(
+        "✓ Option values contain ONLY numbers (e.g., \"5\", \"3.14\", \"0.5\", \"-2\")\n");
     prompt.append("✓ Each option value must match regex: ^-?\\d+(\\.\\d+)?$\n");
-    prompt.append("✓ NO text in option values like \"(assuming...)\" or \"(ignoring...)\" or any words\n");
-    prompt.append("✓ correctAnswerKey points to the option whose value equals: ")
-      .append(request.getCorrectAnswer())
-      .append("\n");
-    prompt.append("✓ Explanation is 2–5 sentences, ONLY correct steps, NO self-correction words (Wait/try again/not correct)\n");
+    prompt.append(
+        "✓ NO text in option values like \"(assuming...)\" or \"(ignoring...)\" or any words\n");
+    prompt
+        .append("✓ correctAnswerKey points to the option whose value equals: ")
+        .append(request.getCorrectAnswer())
+        .append("\n");
+    prompt.append(
+        "✓ Explanation is 2–5 sentences, ONLY correct steps, NO self-correction words (Wait/try again/not correct)\n");
     prompt.append("✓ All mistake descriptions are only in 'distractorExplanations'\n");
 
     return prompt.toString();
@@ -361,11 +380,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   }
 
   /**
-   * Clean option value by removing explanatory text in parentheses.
-   * Examples:
-   * "5 (assuming 8 = 10)" -> "5"
-   * "6 (ignoring the constant term)" -> "6"
-   * "3.14" -> "3.14"
+   * Clean option value by removing explanatory text in parentheses. Examples: "5 (assuming 8 = 10)"
+   * -> "5" "6 (ignoring the constant term)" -> "6" "3.14" -> "3.14"
    */
   private String cleanOptionValue(String value) {
     if (value == null || value.trim().isEmpty()) {
@@ -380,7 +396,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     // If result is empty or invalid, return original
     if (cleaned.isEmpty()) {
-      log.warn("cleanOptionValue resulted in empty string for input '{}', returning original", value);
+      log.warn(
+          "cleanOptionValue resulted in empty string for input '{}', returning original", value);
       return value;
     }
 
@@ -389,7 +406,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       Double.parseDouble(cleaned);
       return cleaned;
     } catch (NumberFormatException e) {
-      log.warn("cleanOptionValue could not parse '{}' (from '{}') as number, returning original", cleaned, value);
+      log.warn(
+          "cleanOptionValue could not parse '{}' (from '{}') as number, returning original",
+          cleaned,
+          value);
       return value;
     }
   }
@@ -539,7 +559,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
   @Override
   public GeneratedQuestionSample generateQuestion(QuestionTemplate template, int sampleIndex) {
-    log.info("Generating question from template '{}' using LLM (sample #{})", template.getName(), sampleIndex + 1);
+    log.info(
+        "Generating question from template '{}' using LLM (sample #{})",
+        template.getName(),
+        sampleIndex + 1);
 
     // Step 1: always compute params + answer in Java first (guaranteed correct)
     Map<String, Object> params = pickParameters(template, sampleIndex);
@@ -549,13 +572,16 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     try {
       // Step 2: ask LLM only for question wording + 3 distractors
-      String prompt = buildGenerationPrompt(template, params, correctAnswerStr, questionTextBase, sampleIndex);
+      String prompt =
+          buildGenerationPrompt(template, params, correctAnswerStr, questionTextBase, sampleIndex);
       String aiContent = geminiService.sendMessage(prompt);
       return parseGeneratedQuestion(
-          aiContent, template,
-          params, correctAnswerStr, difficulty, questionTextBase);
+          aiContent, template, params, correctAnswerStr, difficulty, questionTextBase);
     } catch (Exception e) {
-      log.error("LLM call failed for template '{}', returning Java-computed fallback: {}", template.getName(), e.getMessage());
+      log.error(
+          "LLM call failed for template '{}', returning Java-computed fallback: {}",
+          template.getName(),
+          e.getMessage());
       // Return a valid question using only Java-computed values (no LLM dependency)
       Map<String, String> fallbackOptions = buildFallbackOptions(correctAnswerStr, params);
       String correctKey = findKeyByValue(fallbackOptions, correctAnswerStr);
@@ -563,8 +589,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       return GeneratedQuestionSample.builder()
           .questionText(questionTextBase)
           .options(fallbackOptions)
-          .correctAnswer(correctKey)      // KEY (A/B/C/D)
-          .explanation("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr)
+          .correctAnswer(correctKey) // KEY (A/B/C/D)
+          .explanation(
+              "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr)
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
           .answerCalculation(template.getAnswerFormula() + " = " + correctAnswerStr)
@@ -582,7 +609,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     for (Map.Entry<String, Object> entry : template.getParameters().entrySet()) {
       String name = entry.getKey();
       Object defObj = entry.getValue();
-      if (!(defObj instanceof Map)) { result.put(name, 1); continue; }
+      if (!(defObj instanceof Map)) {
+        result.put(name, 1);
+        continue;
+      }
       Map<String, Object> def = (Map<String, Object>) defObj;
 
       String type = def.getOrDefault("type", "integer").toString();
@@ -604,8 +634,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       if ("integer".equalsIgnoreCase(type)) {
         int v;
         int tries = 0;
-        do { v = rnd.nextInt(maxVal - minVal + 1) + minVal; tries++; }
-        while (exclude.contains(v) && tries < 50);
+        do {
+          v = rnd.nextInt(maxVal - minVal + 1) + minVal;
+          tries++;
+        } while (exclude.contains(v) && tries < 50);
         result.put(name, v);
       } else {
         double minD = ((Number) def.getOrDefault("min", 1.0)).doubleValue();
@@ -642,8 +674,11 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   /** Fill template text placeholders with actual parameter values */
   private String fillTemplateText(Map<String, Object> templateText, Map<String, Object> params) {
     if (templateText == null || templateText.isEmpty()) return "";
-    String text = templateText.getOrDefault("vi",
-        templateText.getOrDefault("en", templateText.values().iterator().next())).toString();
+    String text =
+        templateText
+            .getOrDefault(
+                "vi", templateText.getOrDefault("en", templateText.values().iterator().next()))
+            .toString();
     for (Map.Entry<String, Object> e : params.entrySet()) {
       text = text.replace("{{" + e.getKey() + "}}", e.getValue().toString());
     }
@@ -656,7 +691,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   }
 
   /** Determine difficulty from rules by simple keyword evaluation */
-  private QuestionDifficulty determineDifficulty(Map<String, Object> rules, Map<String, Object> params) {
+  private QuestionDifficulty determineDifficulty(
+      Map<String, Object> rules, Map<String, Object> params) {
     if (rules == null || rules.isEmpty()) return QuestionDifficulty.MEDIUM;
     try {
       javax.script.ScriptEngineManager mgr = new javax.script.ScriptEngineManager();
@@ -664,25 +700,33 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       if (engine == null) engine = mgr.getEngineByName("graal.js");
       for (Map.Entry<String, Object> e : params.entrySet()) engine.put(e.getKey(), e.getValue());
 
-      for (String level : new String[]{"easy", "EASY", "medium", "MEDIUM", "hard", "HARD"}) {
+      for (String level : new String[] {"easy", "EASY", "medium", "MEDIUM", "hard", "HARD"}) {
         Object rule = rules.get(level);
         if (rule == null) continue;
-        String jsRule = rule.toString()
-            .replaceAll("\\bAND\\b", "&&").replaceAll("\\bOR\\b", "||")
-            .replaceAll("\\bABS\\(", "Math.abs(");
+        String jsRule =
+            rule.toString()
+                .replaceAll("\\bAND\\b", "&&")
+                .replaceAll("\\bOR\\b", "||")
+                .replaceAll("\\bABS\\(", "Math.abs(");
         try {
           Object res = engine.eval(jsRule);
           if (res instanceof Boolean && (Boolean) res) {
             return QuestionDifficulty.valueOf(level.toUpperCase());
           }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
       }
-    } catch (Exception ignored) {}
+    } catch (Exception ignored) {
+    }
     return QuestionDifficulty.MEDIUM;
   }
 
-  private String buildGenerationPrompt(QuestionTemplate template, Map<String, Object> params,
-      String correctAnswer, String baseQuestionText, int sampleIndex) {
+  private String buildGenerationPrompt(
+      QuestionTemplate template,
+      Map<String, Object> params,
+      String correctAnswer,
+      String baseQuestionText,
+      int sampleIndex) {
     StringBuilder p = new StringBuilder();
     p.append("Return ONLY a JSON object. No markdown, no explanation outside JSON.\n\n");
     p.append("Task: Generate a math question in Vietnamese with 4 options (A,B,C,D).\n\n");
@@ -696,32 +740,58 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("Sample #: ").append(sampleIndex + 1).append("\n\n");
 
     p.append("Rules:\n");
-    p.append("1. Place ").append(correctAnswer).append(" as one of A/B/C/D (vary position each sample, sample #").append(sampleIndex + 1).append(" → prefer key ").append(new String[]{"B","C","D","A","B"}[sampleIndex % 5]).append(").\n");
-    p.append("2. Create 3 wrong options representing common student mistakes. Numeric values only (e.g. \"5\", \"-3.14\"). NO text.\n");
+    p.append("1. Place ")
+        .append(correctAnswer)
+        .append(" as one of A/B/C/D (vary position each sample, sample #")
+        .append(sampleIndex + 1)
+        .append(" → prefer key ")
+        .append(new String[] {"B", "C", "D", "A", "B"}[sampleIndex % 5])
+        .append(").\n");
+    p.append(
+        "2. Create 3 wrong options representing common student mistakes. Numeric values only (e.g. \"5\", \"-3.14\"). NO text.\n");
     p.append("3. All 4 option values must be distinct numbers.\n");
-    p.append("4. correctAnswer field MUST be the LETTER KEY (A, B, C, or D) — NOT the numeric value.\n");
-    p.append("5. The letter key in correctAnswer must map to value ").append(correctAnswer).append(" in options.\n");
-    p.append("6. explanation = correct solution steps in Vietnamese, 2-3 sentences, no self-correction.\n");
-    p.append("7. answerCalculation = simple expression like \"(c - b) / a = ").append(correctAnswer).append("\".\n\n");
+    p.append(
+        "4. correctAnswer field MUST be the LETTER KEY (A, B, C, or D) — NOT the numeric value.\n");
+    p.append("5. The letter key in correctAnswer must map to value ")
+        .append(correctAnswer)
+        .append(" in options.\n");
+    p.append(
+        "6. explanation = correct solution steps in Vietnamese, 2-3 sentences, no self-correction.\n");
+    p.append("7. answerCalculation = simple expression like \"(c - b) / a = ")
+        .append(correctAnswer)
+        .append("\".\n\n");
 
     p.append("JSON format:\n");
-    p.append("{\"questionText\":\"...\",\"options\":{\"A\":\"n\",\"B\":\"n\",\"C\":\"n\",\"D\":\"n\"},");
-    p.append("\"correctAnswer\":\"X\",\"explanation\":\"...\",\"difficulty\":\"EASY|MEDIUM|HARD\",");
+    p.append(
+        "{\"questionText\":\"...\",\"options\":{\"A\":\"n\",\"B\":\"n\",\"C\":\"n\",\"D\":\"n\"},");
+    p.append(
+        "\"correctAnswer\":\"X\",\"explanation\":\"...\",\"difficulty\":\"EASY|MEDIUM|HARD\",");
     p.append("\"usedParameters\":{");
     // inline params so LLM just copies them back
     StringBuilder paramStr = new StringBuilder();
-    params.forEach((k, v) -> { if (paramStr.length() > 0) paramStr.append(","); paramStr.append("\"").append(k).append("\":").append(v); });
+    params.forEach(
+        (k, v) -> {
+          if (paramStr.length() > 0) paramStr.append(",");
+          paramStr.append("\"").append(k).append("\":").append(v);
+        });
     p.append(paramStr);
-    p.append("},\"answerCalculation\":\"").append(template.getAnswerFormula() != null ? template.getAnswerFormula() : "").append(" = ").append(correctAnswer).append("\"}\n");
+    p.append("},\"answerCalculation\":\"")
+        .append(template.getAnswerFormula() != null ? template.getAnswerFormula() : "")
+        .append(" = ")
+        .append(correctAnswer)
+        .append("\"}\n");
 
     return p.toString();
   }
 
   @SuppressWarnings("unchecked")
   private GeneratedQuestionSample parseGeneratedQuestion(
-      String aiContent, QuestionTemplate template,
-      Map<String, Object> params, String correctAnswer,
-      QuestionDifficulty difficulty, String baseQuestionText) {
+      String aiContent,
+      QuestionTemplate template,
+      Map<String, Object> params,
+      String correctAnswer,
+      QuestionDifficulty difficulty,
+      String baseQuestionText) {
     try {
       String json = extractJSON(aiContent);
       // Attempt to repair truncated JSON
@@ -736,7 +806,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       // Difficulty from LLM or pre-computed
       String diffStr = root.path("difficulty").asText("").trim().toUpperCase();
       if (!diffStr.isBlank()) {
-        try { difficulty = QuestionDifficulty.valueOf(diffStr); } catch (Exception ignored) {}
+        try {
+          difficulty = QuestionDifficulty.valueOf(diffStr);
+        } catch (Exception ignored) {
+        }
       }
 
       // Parse options
@@ -759,17 +832,19 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         // LLM didn't put the correct answer in options — inject it at key A and shift others
         options.put("A", correctAnswer);
         correctKey = "A";
-        log.warn("LLM did not include correct answer '{}' in options — injected at A", correctAnswer);
+        log.warn(
+            "LLM did not include correct answer '{}' in options — injected at A", correctAnswer);
       }
 
-      String answerCalc = template.getAnswerFormula() != null
-          ? template.getAnswerFormula() + " = " + correctAnswer
-          : "= " + correctAnswer;
+      String answerCalc =
+          template.getAnswerFormula() != null
+              ? template.getAnswerFormula() + " = " + correctAnswer
+              : "= " + correctAnswer;
 
       return GeneratedQuestionSample.builder()
           .questionText(questionText)
           .options(options)
-          .correctAnswer(correctKey)       // KEY (A/B/C/D), not numeric value
+          .correctAnswer(correctKey) // KEY (A/B/C/D), not numeric value
           .explanation(explanation)
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
@@ -785,7 +860,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       return GeneratedQuestionSample.builder()
           .questionText(baseQuestionText)
           .options(fallbackOptions)
-          .correctAnswer(correctKey)      // KEY (A/B/C/D)
+          .correctAnswer(correctKey) // KEY (A/B/C/D)
           .explanation("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
@@ -804,9 +879,18 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     boolean inString = false;
     boolean escaped = false;
     for (char c : trimmed.toCharArray()) {
-      if (escaped) { escaped = false; continue; }
-      if (c == '\\') { escaped = true; continue; }
-      if (c == '"') { inString = !inString; continue; }
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (c == '\\') {
+        escaped = true;
+        continue;
+      }
+      if (c == '"') {
+        inString = !inString;
+        continue;
+      }
       if (!inString) {
         if (c == '{') braces++;
         else if (c == '}') braces--;
@@ -823,11 +907,15 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   }
 
   /** Ensure options map has exactly A,B,C,D. Fill missing keys with distractor values. */
-  private void ensureFourOptions(Map<String, String> options, String correctAnswer, Map<String, Object> params) {
+  private void ensureFourOptions(
+      Map<String, String> options, String correctAnswer, Map<String, Object> params) {
     String[] keys = {"A", "B", "C", "D"};
     double base;
-    try { base = Double.parseDouble(correctAnswer.replaceAll("[^0-9.\\-]", "")); }
-    catch (Exception e) { base = 1.0; }
+    try {
+      base = Double.parseDouble(correctAnswer.replaceAll("[^0-9.\\-]", ""));
+    } catch (Exception e) {
+      base = 1.0;
+    }
 
     int offset = 1;
     for (String k : keys) {
@@ -846,11 +934,15 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   }
 
   /** Build simple fallback options with Java-computed correct answer + 3 numeric distractors */
-  private Map<String, String> buildFallbackOptions(String correctAnswer, Map<String, Object> params) {
+  private Map<String, String> buildFallbackOptions(
+      String correctAnswer, Map<String, Object> params) {
     Map<String, String> opts = new LinkedHashMap<>();
     double base;
-    try { base = Double.parseDouble(correctAnswer.replaceAll("[^0-9.\\-]", "")); }
-    catch (Exception e) { base = 1.0; }
+    try {
+      base = Double.parseDouble(correctAnswer.replaceAll("[^0-9.\\-]", ""));
+    } catch (Exception e) {
+      base = 1.0;
+    }
 
     List<String> vals = new ArrayList<>();
     vals.add(correctAnswer);

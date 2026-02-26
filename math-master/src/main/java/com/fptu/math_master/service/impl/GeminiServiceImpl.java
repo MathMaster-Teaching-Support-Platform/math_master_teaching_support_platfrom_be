@@ -10,7 +10,6 @@ import com.fptu.math_master.dto.response.GeminiResponse;
 import com.fptu.math_master.service.GeminiService;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
@@ -138,4 +137,3 @@ public class GeminiServiceImpl implements GeminiService {
     }
   }
 }
-

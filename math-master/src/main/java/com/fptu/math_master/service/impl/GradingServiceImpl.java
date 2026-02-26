@@ -694,13 +694,18 @@ public class GradingServiceImpl implements GradingService {
     return requests.map(this::mapToRegradeRequestResponse);
   }
 
-  // Helper methods
   private UUID getCurrentUserId() {
-    String username = SecurityContextHolder.getContext().getAuthentication().getName();
-    return userRepository
-        .findByUserName(username)
-        .map(User::getId)
-        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+
+    if (auth
+        instanceof
+        org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+                jwtAuth) {
+      String sub = jwtAuth.getToken().getSubject();
+      return UUID.fromString(sub);
+    }
+
+    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 
   private GradingSubmissionResponse mapToGradingResponse(Submission submission) {

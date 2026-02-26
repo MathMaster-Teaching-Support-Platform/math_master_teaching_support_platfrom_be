@@ -19,16 +19,44 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
   @Query("SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator WHERE t.id = :id")
   Optional<QuestionTemplate> findByIdWithCreator(@Param("id") UUID id);
 
+  // Kept for backward-compat with any callers that still use the unfiltered page
   @Query("SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator")
   Page<QuestionTemplate> findAllWithCreator(Pageable pageable);
 
   /**
-   * Find active (non-deleted) templates visible to a teacher:
-   * - owned by the teacher, OR
-   * - public templates (when onlyMine = false)
-   *
-   * Additional optional filters: templateType, cognitiveLevel, name/tag search term.
-   * Excludes soft-deleted templates (deletedAt IS NULL).
+   * Fix #2: fetch only the calling teacher's own non-deleted templates.
+   * Replaces the broken getMyQuestionTemplates that used findAllWithCreator.
+   */
+  @Query(
+      "SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator "
+          + "WHERE t.deletedAt IS NULL AND t.createdBy = :createdBy")
+  Page<QuestionTemplate> findByCreatedByAndNotDeleted(
+      @Param("createdBy") UUID createdBy, Pageable pageable);
+
+  /**
+   * Fix #3: search query with all filters properly applied.
+   * Returns templates owned by the caller OR public templates.
+   * Used by searchQuestionTemplates — was previously ignoring every param.
+   */
+  @Query(
+      "SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator "
+          + "WHERE t.deletedAt IS NULL "
+          + "AND (t.createdBy = :currentUserId OR t.isPublic = true) "
+          + "AND (:isPublic IS NULL OR t.isPublic = :isPublic) "
+          + "AND (:templateType IS NULL OR t.templateType = :templateType) "
+          + "AND (:cognitiveLevel IS NULL OR t.cognitiveLevel = :cognitiveLevel) "
+          + "AND (:searchTerm IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+  Page<QuestionTemplate> searchTemplates(
+      @Param("currentUserId") UUID currentUserId,
+      @Param("isPublic") Boolean isPublic,
+      @Param("templateType") QuestionType templateType,
+      @Param("cognitiveLevel") CognitiveLevel cognitiveLevel,
+      @Param("searchTerm") String searchTerm,
+      Pageable pageable);
+
+  /**
+   * Find active (non-deleted) templates visible to a teacher: owned by the teacher OR public,
+   * with optional type/level/keyword filtering. Used by ExamMatrixServiceImpl cell matching.
    */
   @Query(
       "SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator "
@@ -50,7 +78,7 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
 
   /**
    * Find all active templates owned by a user or public, without pagination.
-   * Used internally for tag-based filtering and ranking.
+   * Used internally by ExamMatrixServiceImpl for tag-based filtering and ranking.
    */
   @Query(
       "SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator "

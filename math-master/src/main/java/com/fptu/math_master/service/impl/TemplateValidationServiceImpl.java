@@ -17,8 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * FR-TPL-002: Template Validation Service Implementation
- * Comprehensive validation with ERROR/WARNING/INFO severity levels
+ * FR-TPL-002: Template Validation Service Implementation Comprehensive validation with
+ * ERROR/WARNING/INFO severity levels
  */
 @Service
 @RequiredArgsConstructor
@@ -162,8 +162,7 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
               ValidationIssue.builder()
                   .category("TEMPLATE_TEXT")
                   .field("templateText." + lang)
-                  .message(
-                      "Mixed usage of minus sign '−' and hyphen '-'. Consider standardizing.")
+                  .message("Mixed usage of minus sign '−' and hyphen '-'. Consider standardizing.")
                   .severity(IssueSeverity.WARNING)
                   .suggestion("Use consistent minus sign format")
                   .build());
@@ -435,7 +434,8 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
               ValidationIssue.builder()
                   .category("FORMULA")
                   .field("answerFormula")
-                  .message("Cannot validate formula: JavaScript engine not available. Add GraalVM JavaScript dependency.")
+                  .message(
+                      "Cannot validate formula: JavaScript engine not available. Add GraalVM JavaScript dependency.")
                   .severity(IssueSeverity.WARNING)
                   .build());
           return;
@@ -460,7 +460,10 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
               ValidationIssue.builder()
                   .category("FORMULA")
                   .field("answerFormula")
-                  .message("Formula result is not a number (got: " + result.getClass().getSimpleName() + ")")
+                  .message(
+                      "Formula result is not a number (got: "
+                          + result.getClass().getSimpleName()
+                          + ")")
                   .severity(IssueSeverity.WARNING)
                   .build());
         }
@@ -516,7 +519,8 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
           ValidationIssue.builder()
               .category("CONSTRAINTS")
               .field("constraints")
-              .message("No constraints defined. Consider adding constraints for better question quality.")
+              .message(
+                  "No constraints defined. Consider adding constraints for better question quality.")
               .severity(IssueSeverity.WARNING)
               .suggestion("Add constraints like 'a != 0', 'answer > 0', 'answer % 1 == 0'")
               .build());
@@ -641,7 +645,10 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
             ValidationIssue.builder()
                 .category("DIFFICULTY_RULES")
                 .field("difficultyRules." + level)
-                .message("Difficulty rule for '" + level + "' is always false - this level will never match")
+                .message(
+                    "Difficulty rule for '"
+                        + level
+                        + "' is always false - this level will never match")
                 .severity(IssueSeverity.WARNING)
                 .build());
       }
@@ -670,7 +677,8 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
                 .message(
                     "Difficulty rules may overlap. Ensure rules are mutually exclusive or define priority.")
                 .severity(IssueSeverity.WARNING)
-                .suggestion("Use exclusive conditions like: easy: 'x <= 3', medium: 'x > 3 AND x <= 7', hard: 'x > 7'")
+                .suggestion(
+                    "Use exclusive conditions like: easy: 'x <= 3', medium: 'x > 3 AND x <= 7', hard: 'x > 7'")
                 .build());
       }
     }
@@ -885,6 +893,7 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
 
   /**
    * Get JavaScript engine with fallback options for GraalVM
+   *
    * @return ScriptEngine or null if not available
    */
   private ScriptEngine getJavaScriptEngine() {
@@ -899,4 +908,3 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
     return engine;
   }
 }
-

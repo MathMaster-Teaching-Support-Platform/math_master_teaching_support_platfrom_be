@@ -21,8 +21,7 @@ public interface MindmapRepository
 
   @Query(
       "SELECT m FROM Mindmap m WHERE m.teacherId = :teacherId AND m.deletedAt IS NULL ORDER BY m.createdAt DESC")
-  Page<Mindmap> findByTeacherIdAndNotDeleted(
-      @Param("teacherId") UUID teacherId, Pageable pageable);
+  Page<Mindmap> findByTeacherIdAndNotDeleted(@Param("teacherId") UUID teacherId, Pageable pageable);
 
   @Query(
       "SELECT m FROM Mindmap m WHERE m.lessonId = :lessonId AND m.deletedAt IS NULL ORDER BY m.createdAt DESC")
@@ -30,8 +29,7 @@ public interface MindmapRepository
 
   @Query(
       "SELECT m FROM Mindmap m WHERE m.status = :status AND m.deletedAt IS NULL ORDER BY m.createdAt DESC")
-  Page<Mindmap> findByStatusAndNotDeleted(
-      @Param("status") MindmapStatus status, Pageable pageable);
+  Page<Mindmap> findByStatusAndNotDeleted(@Param("status") MindmapStatus status, Pageable pageable);
 
   @Query(
       "SELECT m FROM Mindmap m WHERE m.teacherId = :teacherId AND m.lessonId = :lessonId AND m.deletedAt IS NULL")

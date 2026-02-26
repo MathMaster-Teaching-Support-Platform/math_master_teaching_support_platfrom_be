@@ -16,37 +16,26 @@ import java.util.UUID;
 public interface LessonContentService {
 
   /**
-   * Use Gemini to auto-generate a full lesson curriculum (lessons + chapters) for the given
-   * math subject and grade level, then persist it to the database.
+   * Use Gemini to auto-generate a full lesson curriculum (lessons + chapters) for the given math
+   * subject and grade level, then persist it to the database.
    *
    * @param request generation parameters
    * @return summary of what was created
    */
   GenerateLessonContentResponse generateAndSaveContent(GenerateLessonContentRequest request);
 
-  /**
-   * List all lessons for a given gradeLevel + subject.
-   */
+  /** List all lessons for a given gradeLevel + subject. */
   List<LessonResponse> getLessonsByGradeAndSubject(String gradeLevel, String subject);
 
-  /**
-   * Get a single lesson with its chapters.
-   */
+  /** Get a single lesson with its chapters. */
   LessonResponse getLessonById(UUID lessonId);
 
-  /**
-   * List chapters of a lesson.
-   */
+  /** List chapters of a lesson. */
   List<ChapterResponse> getChaptersByLessonId(UUID lessonId);
 
-  /**
-   * Delete a lesson and all its chapters (soft-delete).
-   */
+  /** Delete a lesson and all its chapters (soft-delete). */
   void deleteLesson(UUID lessonId);
 
-  /**
-   * Delete a single chapter (soft-delete).
-   */
+  /** Delete a single chapter (soft-delete). */
   void deleteChapter(UUID chapterId);
 }
-
