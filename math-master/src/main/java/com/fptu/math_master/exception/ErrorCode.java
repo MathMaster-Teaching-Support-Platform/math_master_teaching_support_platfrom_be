@@ -136,7 +136,25 @@ public enum ErrorCode {
   LESSON_GENERATION_FAILED(
       1091, "Failed to generate lesson content from AI", HttpStatus.INTERNAL_SERVER_ERROR),
   LESSON_ACCESS_DENIED(
-      1092, "You do not have permission to access this lesson", HttpStatus.FORBIDDEN);
+      1092, "You do not have permission to access this lesson", HttpStatus.FORBIDDEN),
+  EXAM_MATRIX_APPROVED(
+      1095,
+      "Exam matrix is already approved and cannot be modified. Reset the matrix first.",
+      HttpStatus.BAD_REQUEST),
+  CHAPTER_NOT_IN_LESSON(
+      1096, "The specified chapter does not belong to this lesson", HttpStatus.BAD_REQUEST),
+  CELL_QUESTION_COUNT_MISMATCH(
+      1097,
+      "Number of selected questions does not match the cell's required count",
+      HttpStatus.BAD_REQUEST),
+  CELL_QUESTION_DIMENSION_MISMATCH(
+      1098,
+      "One or more questions do not match the cell's difficulty or cognitive level",
+      HttpStatus.BAD_REQUEST),
+  ASSESSMENT_MATRIX_APPROVED_WHILE_PUBLISHED(
+      1099,
+      "Cannot approve matrix while assessment is already published or closed",
+      HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

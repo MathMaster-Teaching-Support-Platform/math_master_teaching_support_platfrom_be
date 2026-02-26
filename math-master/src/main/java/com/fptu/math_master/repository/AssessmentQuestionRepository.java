@@ -29,6 +29,11 @@ public interface AssessmentQuestionRepository extends JpaRepository<AssessmentQu
 
   void deleteByAssessmentIdAndQuestionId(UUID assessmentId, UUID questionId);
 
+  /** Remove ALL question entries for an assessment — used before re-populating from matrix. */
+  @Modifying
+  @Query("DELETE FROM AssessmentQuestion aq WHERE aq.assessmentId = :assessmentId")
+  void deleteAllByAssessmentId(@Param("assessmentId") UUID assessmentId);
+
   /**
    * Bulk-delete all assessment_questions for a given assessment whose questionId is in the provided
    * list. Used during replaceExisting to detach old cell questions.
