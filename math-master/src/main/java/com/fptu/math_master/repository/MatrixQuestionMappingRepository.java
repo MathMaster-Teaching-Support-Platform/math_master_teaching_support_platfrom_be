@@ -41,4 +41,17 @@ public interface MatrixQuestionMappingRepository
   /** Count all mappings (selected or not) for a cell — used for target-count check. */
   @Query("SELECT COUNT(mqm) FROM MatrixQuestionMapping mqm WHERE mqm.matrixCellId = :matrixCellId")
   Long countByMatrixCellId(@Param("matrixCellId") UUID matrixCellId);
+
+  /**
+   * Fetch all selected mappings for a matrix together with their parent cell.
+   * Used by populateAssessmentQuestionsFromMatrix to carry pointsPerQuestion across.
+   */
+  @Query(
+      "SELECT mqm FROM MatrixQuestionMapping mqm "
+          + "JOIN FETCH mqm.matrixCell "
+          + "JOIN MatrixCell mc ON mqm.matrixCellId = mc.id "
+          + "WHERE mc.matrixId = :matrixId AND mqm.isSelected = true "
+          + "ORDER BY mqm.selectionPriority")
+  List<MatrixQuestionMapping> findSelectedMappingsWithCellByMatrixId(
+      @Param("matrixId") UUID matrixId);
 }

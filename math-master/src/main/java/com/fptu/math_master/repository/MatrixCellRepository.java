@@ -1,7 +1,10 @@
 package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.MatrixCell;
+import com.fptu.math_master.enums.CognitiveLevel;
+import com.fptu.math_master.enums.QuestionDifficulty;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +16,22 @@ public interface MatrixCellRepository extends JpaRepository<MatrixCell, UUID> {
 
   @Query("SELECT mc FROM MatrixCell mc WHERE mc.matrixId = :matrixId ORDER BY mc.createdAt")
   List<MatrixCell> findByMatrixIdOrderByCreatedAt(@Param("matrixId") UUID matrixId);
+
+  /**
+   * BUG 12 fix: look up an existing cell by its business key so createOrUpdateMatrixCell
+   * can update rather than always inserting a duplicate row.
+   */
+  @Query(
+      "SELECT mc FROM MatrixCell mc "
+          + "WHERE mc.matrixId = :matrixId "
+          + "AND mc.chapterId = :chapterId "
+          + "AND mc.cognitiveLevel = :cognitiveLevel "
+          + "AND mc.difficulty = :difficulty")
+  Optional<MatrixCell> findByMatrixIdAndChapterIdAndCognitiveLevelAndDifficulty(
+      @Param("matrixId") UUID matrixId,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") CognitiveLevel cognitiveLevel,
+      @Param("difficulty") QuestionDifficulty difficulty);
 
   @Query("SELECT SUM(mc.numQuestions) FROM MatrixCell mc WHERE mc.matrixId = :matrixId")
   Integer sumQuestionsByMatrixId(@Param("matrixId") UUID matrixId);
