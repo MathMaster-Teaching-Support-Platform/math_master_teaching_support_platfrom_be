@@ -131,6 +131,12 @@ public enum ErrorCode {
       1088,
       "Template is in DRAFT status and cannot be used for finalisation",
       HttpStatus.BAD_REQUEST),
+  TEMPLATE_ALREADY_PUBLISHED(
+      1093, "Template is already published", HttpStatus.BAD_REQUEST),
+  TEMPLATE_ALREADY_ARCHIVED(
+      1094, "Template is already archived", HttpStatus.BAD_REQUEST),
+  TEMPLATE_ACCESS_DENIED(
+      1100, "You do not have permission to access this template", HttpStatus.FORBIDDEN),
   LESSON_NOT_FOUND(1089, "Lesson not found", HttpStatus.NOT_FOUND),
   CHAPTER_NOT_FOUND(1090, "Chapter not found", HttpStatus.NOT_FOUND),
   LESSON_GENERATION_FAILED(

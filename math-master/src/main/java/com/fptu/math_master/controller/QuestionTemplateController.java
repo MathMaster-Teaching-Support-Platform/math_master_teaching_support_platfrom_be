@@ -172,6 +172,38 @@ public class QuestionTemplateController {
         .build();
   }
 
+  @PatchMapping("/{id}/publish")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Publish Question Template",
+      description =
+          "Promote a DRAFT template to PUBLISHED status. "
+              + "Only PUBLISHED templates can be used for question generation (Step 5 of the authoring flow). "
+              + "A published template cannot be structurally edited — archive it first if changes are needed.")
+  public ApiResponse<QuestionTemplateResponse> publishTemplate(@PathVariable UUID id) {
+    log.info("REST request to publish template: {}", id);
+    return ApiResponse.<QuestionTemplateResponse>builder()
+        .message("Template published successfully")
+        .result(questionTemplateService.publishTemplate(id))
+        .build();
+  }
+
+  @PatchMapping("/{id}/archive")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Archive Question Template",
+      description =
+          "Move a template to ARCHIVED status. "
+              + "Archived templates can no longer be used for question generation. "
+              + "Existing questions generated from this template are not affected.")
+  public ApiResponse<QuestionTemplateResponse> archiveTemplate(@PathVariable UUID id) {
+    log.info("REST request to archive template: {}", id);
+    return ApiResponse.<QuestionTemplateResponse>builder()
+        .message("Template archived successfully")
+        .result(questionTemplateService.archiveTemplate(id))
+        .build();
+  }
+
   @PostMapping("/{id}/generate-ai-enhanced")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
