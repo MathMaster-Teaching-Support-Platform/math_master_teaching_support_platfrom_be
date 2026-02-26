@@ -1,6 +1,7 @@
 package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.Question;
+import com.fptu.math_master.enums.QuestionDifficulty;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -30,6 +31,12 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       @Param("questionType") String questionType,
       @Param("excludedIds") List<UUID> excludedIds);
 
+  @Query(
+      "SELECT q FROM Question q WHERE q.chapterId = :chapterId "
+          + "AND q.difficulty = :difficulty AND q.deletedAt IS NULL "
+          + "ORDER BY q.createdAt DESC")
+  List<Question> findByChapterIdAndDifficultyOrderByCreatedAt(
+      @Param("chapterId") UUID chapterId, @Param("difficulty") QuestionDifficulty difficulty);
   /**
    * Detaches all questions that are NOT currently referenced by any assessment from the given bank.
    * Called during bank soft-deletion so that free questions are not silently orphaned behind a

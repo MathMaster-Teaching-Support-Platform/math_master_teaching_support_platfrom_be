@@ -31,4 +31,10 @@ public interface LessonRepository
       "SELECT l FROM Lesson l WHERE l.teacherId = :teacherId AND l.deletedAt IS NULL"
           + " ORDER BY l.createdAt DESC")
   List<Lesson> findByTeacherIdAndNotDeleted(@Param("teacherId") UUID teacherId);
+
+  @Query(
+      "SELECT DISTINCT l FROM Lesson l INNER JOIN Chapter c ON l.id = c.lessonId "
+          + "WHERE c.id = :chapterId AND l.gradeLevel = :gradeLevel AND l.deletedAt IS NULL")
+  List<Lesson> findByChapterIdAndGradeLevel(
+      @Param("chapterId") UUID chapterId, @Param("gradeLevel") String gradeLevel);
 }
