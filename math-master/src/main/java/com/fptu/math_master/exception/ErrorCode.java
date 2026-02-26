@@ -160,7 +160,17 @@ public enum ErrorCode {
   ASSESSMENT_MATRIX_APPROVED_WHILE_PUBLISHED(
       1099,
       "Cannot approve matrix while assessment is already published or closed",
-      HttpStatus.BAD_REQUEST);
+      HttpStatus.BAD_REQUEST),
+  SUBMISSION_ALREADY_GRADED(
+      1101, "Submission has already been graded", HttpStatus.BAD_REQUEST),
+  ANSWER_SUBMISSION_MISMATCH(
+      1102, "Answer does not belong to the specified submission", HttpStatus.BAD_REQUEST),
+  GRADING_ACCESS_DENIED(
+      1103, "You do not have permission to grade this submission", HttpStatus.FORBIDDEN),
+  REGRADE_REQUEST_ALREADY_PENDING(
+      1104, "A regrade request for this question is already pending", HttpStatus.BAD_REQUEST),
+  REGRADE_REQUEST_NOT_PENDING(
+      1105, "Regrade request is not in PENDING status and cannot be responded to", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
