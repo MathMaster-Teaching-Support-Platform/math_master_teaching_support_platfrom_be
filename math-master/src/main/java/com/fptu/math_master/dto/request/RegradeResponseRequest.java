@@ -2,6 +2,7 @@ package com.fptu.math_master.dto.request;
 
 import com.fptu.math_master.enums.RegradeRequestStatus;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,4 +22,10 @@ public class RegradeResponseRequest {
   private RegradeRequestStatus status;
 
   private String teacherResponse;
+
+  /**
+   * Points to assign to the answer when status = APPROVED.
+   * Required when approving; ignored when rejecting.
+   */
+  private BigDecimal newPoints;
 }
