@@ -4,6 +4,7 @@ import com.fptu.math_master.entity.Question;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -28,4 +29,24 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       @Param("cognitiveLevel") String cognitiveLevel,
       @Param("questionType") String questionType,
       @Param("excludedIds") List<UUID> excludedIds);
+
+  /**
+   * Detaches all questions that are NOT currently referenced by any assessment from the given bank.
+   * Called during bank soft-deletion so that free questions are not silently orphaned behind a
+   * deleted bank reference. Questions already used in an assessment are left untouched (deletion
+   * is blocked upstream before this is reached).
+   */
+  @Modifying
+  @Query(
+      "UPDATE Question q SET q.questionBankId = NULL "
+          + "WHERE q.questionBankId = :bankId "
+          + "AND q.deletedAt IS NULL "
+          + "AND q.id NOT IN ("
+          + "  SELECT aq.questionId FROM AssessmentQuestion aq "
+          + "  JOIN Question qq ON aq.questionId = qq.id "
+          + "  WHERE qq.questionBankId = :bankId AND qq.deletedAt IS NULL"
+          + ")")
+  int detachFreeQuestionsFromBank(@Param("bankId") UUID bankId);
 }
+
+
