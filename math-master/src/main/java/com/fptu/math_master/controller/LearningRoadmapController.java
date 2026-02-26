@@ -85,6 +85,30 @@ public class LearningRoadmapController {
         .build();
   }
 
+  @PostMapping("/generate-from-wish/{wishId}")
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Generate AI-powered roadmap from student wish",
+      description = "Generate a personalized learning roadmap based on student's learning wishes "
+          + "and goals using AI analysis")
+  public ApiResponse<RoadmapDetailResponse> generateRoadmapFromWish(
+      @Parameter(description = "Student Wish ID", example = "550e8400-e29b-41d4-a716-446655440000")
+      @PathVariable UUID wishId) {
+    String userId = SecurityContextHolder.getContext().getAuthentication().getName();
+    UUID studentId = UUID.fromString(userId);
+
+    log.info("POST /roadmaps/generate-from-wish/{} – studentId={}", wishId, studentId);
+
+    RoadmapDetailResponse result = roadmapService.generateRoadmapFromWish(wishId);
+
+    return ApiResponse.<RoadmapDetailResponse>builder()
+        .code(201)
+        .message("AI-powered roadmap generated successfully from student wish")
+        .result(result)
+        .build();
+  }
+
   @GetMapping("/{roadmapId}")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")

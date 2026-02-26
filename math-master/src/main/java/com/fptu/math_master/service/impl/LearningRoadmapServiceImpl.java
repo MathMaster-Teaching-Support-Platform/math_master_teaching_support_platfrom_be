@@ -13,6 +13,7 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.LearningRoadmapService;
+import com.fptu.math_master.service.RoadmapAIPlannerService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -57,6 +58,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   ChapterRepository chapterRepository;
   UserRepository userRepository;
   QuestionRepository questionRepository;
+  StudentWishRepository studentWishRepository;
+
+  // Services
+  RoadmapAIPlannerService roadmapAIPlannerService;
 
   // ============================================================================
   // ROADMAP GENERATION & RETRIEVAL
@@ -130,6 +135,42 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
 
     log.info("Roadmap generated successfully: roadmapId={}", roadmap.getId());
     return getRoadmapById(roadmap.getId());
+  }
+
+  @Override
+  @Transactional
+  public RoadmapDetailResponse generateRoadmapFromWish(UUID wishId) {
+    log.info("Generating AI-powered roadmap from wish: {}", wishId);
+    
+    // Extract studentId from JWT token
+    String userId = SecurityContextHolder.getContext().getAuthentication().getName();
+    UUID studentId = UUID.fromString(userId);
+
+    // Get the wish
+    StudentWish wish = studentWishRepository.findById(wishId)
+        .orElseThrow(() -> {
+          log.error("Wish not found: {}", wishId);
+          return new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+        });
+
+    // Verify the wish belongs to the student
+    if (!wish.getStudentId().equals(studentId)) {
+      log.warn("Unauthorized access attempt to wish={} by student={}", wishId, studentId);
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    }
+
+    // Check if active roadmap already exists
+    if (existsActiveRoadmap(studentId, wish.getSubject())) {
+      log.warn("Roadmap already exists for student={}, subject={}", studentId, wish.getSubject());
+      return getActiveRoadmapBySubject(studentId, wish.getSubject());
+    }
+
+    // Generate roadmap using AI planner
+    RoadmapDetailResponse result = roadmapAIPlannerService.generateRoadmapFromWish(
+        studentId, wish, wish.getSubject());
+
+    log.info("AI-powered roadmap generated successfully: {}", result.getId());
+    return result;
   }
 
   /**
