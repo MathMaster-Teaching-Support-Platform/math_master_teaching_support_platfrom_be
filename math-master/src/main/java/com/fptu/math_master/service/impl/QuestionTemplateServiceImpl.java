@@ -9,12 +9,13 @@ import com.fptu.math_master.dto.response.TemplateTestResponse;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
-import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AIEnhancementService;
 import com.fptu.math_master.service.QuestionTemplateService;
+import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -25,9 +26,6 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,7 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
   QuestionTemplateRepository questionTemplateRepository;
-  UserRepository userRepository;
   AIEnhancementService aiEnhancementService;
 
   @Override
@@ -46,9 +43,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   public QuestionTemplateResponse createQuestionTemplate(QuestionTemplateRequest request) {
     log.info("Creating question template: {}", request.getName());
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
-    // Validate template syntax
     List<String> validationErrors = validateTemplateSyntax(request);
     if (!validationErrors.isEmpty()) {
       log.error("Template validation failed: {}", validationErrors);
@@ -70,19 +66,20 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .cognitiveLevel(request.getCognitiveLevel())
             .tags(request.getTags())
             .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
+            .status(TemplateStatus.DRAFT)
             .usageCount(0)
             .build();
 
     template = questionTemplateRepository.save(template);
 
-    log.info("Question template created successfully with id: {}", template.getId());
+    log.info("Question template created with id: {}", template.getId());
     return mapToResponse(template);
   }
 
   @Override
   @Transactional
   public QuestionTemplateResponse updateQuestionTemplate(UUID id, QuestionTemplateRequest request) {
-    log.info("Updating question template with id: {}", id);
+    log.info("Updating question template: {}", id);
 
     QuestionTemplate template =
         questionTemplateRepository
@@ -90,10 +87,13 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .filter(t -> t.getDeletedAt() == null)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
 
-    // Validate template syntax
+    if (template.getStatus() == TemplateStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.TEMPLATE_ALREADY_PUBLISHED);
+    }
+
     List<String> validationErrors = validateTemplateSyntax(request);
     if (!validationErrors.isEmpty()) {
       log.error("Template validation failed: {}", validationErrors);
@@ -117,35 +117,39 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
     template = questionTemplateRepository.save(template);
 
-    log.info("Question template updated successfully: {}", id);
+    log.info("Question template updated: {}", id);
     return mapToResponse(template);
   }
 
   @Override
   @Transactional
   public void deleteQuestionTemplate(UUID id) {
-    log.info("Deleting question template with id: {}", id);
-
+    log.info("Deleting question template: {}", id);
     QuestionTemplate template =
         questionTemplateRepository
-            .findById(id)
+            .findByIdWithCreator(id)
             .filter(t -> t.getDeletedAt() == null)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
 
-    // Soft delete
+    if (template.getStatus() == TemplateStatus.PUBLISHED) {
+      log.warn("Template {} is PUBLISHED — archiving instead of soft-deleting to preserve audit trail", id);
+      template.setStatus(TemplateStatus.ARCHIVED);
+      questionTemplateRepository.save(template);
+      return;
+    }
+
     template.setDeletedAt(Instant.now());
     questionTemplateRepository.save(template);
-
-    log.info("Question template soft deleted successfully: {}", id);
+    log.info("Question template soft-deleted: {}", id);
   }
 
   @Override
-  @Transactional(readOnly = true)
-  public QuestionTemplateResponse getQuestionTemplateById(UUID id) {
-    log.info("Getting question template with id: {}", id);
+  @Transactional
+  public QuestionTemplateResponse publishTemplate(UUID id) {
+    log.info("Publishing template: {}", id);
 
     QuestionTemplate template =
         questionTemplateRepository
@@ -153,10 +157,65 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .filter(t -> t.getDeletedAt() == null)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
 
-    if (!template.getIsPublic() && !template.getCreatedBy().equals(currentUserId) && !isAdmin()) {
-      throw new AccessDeniedException("You don't have permission to access this template");
+    if (template.getStatus() == TemplateStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.TEMPLATE_ALREADY_PUBLISHED);
+    }
+    if (template.getStatus() == TemplateStatus.ARCHIVED) {
+      throw new AppException(ErrorCode.TEMPLATE_ALREADY_ARCHIVED);
+    }
+
+    template.setStatus(TemplateStatus.PUBLISHED);
+    template = questionTemplateRepository.save(template);
+
+    log.info("Template {} published", id);
+    return mapToResponse(template);
+  }
+
+  @Override
+  @Transactional
+  public QuestionTemplateResponse archiveTemplate(UUID id) {
+    log.info("Archiving template: {}", id);
+
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findByIdWithCreator(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
+
+    if (template.getStatus() == TemplateStatus.ARCHIVED) {
+      throw new AppException(ErrorCode.TEMPLATE_ALREADY_ARCHIVED);
+    }
+
+    template.setStatus(TemplateStatus.ARCHIVED);
+    template = questionTemplateRepository.save(template);
+
+    log.info("Template {} archived", id);
+    return mapToResponse(template);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public QuestionTemplateResponse getQuestionTemplateById(UUID id) {
+    log.info("Getting question template: {}", id);
+
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findByIdWithCreator(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    if (!template.getIsPublic()
+        && !template.getCreatedBy().equals(currentUserId)
+        && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.TEMPLATE_ACCESS_DENIED);
     }
 
     return mapToResponse(template);
@@ -165,11 +224,12 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   @Override
   @Transactional(readOnly = true)
   public Page<QuestionTemplateResponse> getMyQuestionTemplates(Pageable pageable) {
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
     log.info("Getting question templates for user: {}", currentUserId);
 
-    Page<QuestionTemplate> templates = questionTemplateRepository.findAllWithCreator(pageable);
-    return templates.map(this::mapToResponse);
+    return questionTemplateRepository
+        .findByCreatedByAndNotDeleted(currentUserId, pageable)
+        .map(this::mapToResponse);
   }
 
   @Override
@@ -181,22 +241,15 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       String searchTerm,
       String[] tags,
       Pageable pageable) {
-    log.info("Searching question templates with filters");
+    log.info(
+        "Searching question templates – type: {}, cognitive: {}, isPublic: {}, term: {}",
+        templateType, cognitiveLevel, isPublic, searchTerm);
 
-    Page<QuestionTemplate> templates = questionTemplateRepository.findAllWithCreator(pageable);
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
-    return templates.map(this::mapToResponse);
-  }
-
-  // =====================================================================
-  // Test / Validate — always via LLM
-  // =====================================================================
-
-  @Override
-  public TemplateTestResponse testTemplate(UUID id, Integer sampleCount, Boolean useAI) {
-    log.info("Testing template with id: {} (LLM-based)", id);
-    QuestionTemplate template = fetchTemplateForTesting(id);
-    return generateWithLLM(template, sampleCount != null ? sampleCount : 3);
+    return questionTemplateRepository
+        .searchTemplates(currentUserId, isPublic, templateType, cognitiveLevel, searchTerm, pageable)
+        .map(this::mapToResponse);
   }
 
   @Override
@@ -210,27 +263,38 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .filter(t -> t.getDeletedAt() == null)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
+
+    if (template.getStatus() == TemplateStatus.DRAFT && !template.getIsPublic()) {
+      throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+    }
 
     template.setIsPublic(!template.getIsPublic());
     template = questionTemplateRepository.save(template);
 
-    log.info("Template public status toggled to: {}", template.getIsPublic());
+    log.info("Template {} public status toggled to: {}", id, template.getIsPublic());
     return mapToResponse(template);
   }
 
   @Override
+  @Transactional
+  public TemplateTestResponse testTemplate(UUID id, Integer sampleCount, Boolean useAI) {
+    log.info("Testing template: {} (LLM-based)", id);
+    QuestionTemplate template = fetchTemplateForTesting(id);
+    return generateWithLLM(template, sampleCount != null ? sampleCount : 3);
+  }
+
+  @Override
+  @Transactional
   public AIEnhancedQuestionResponse generateAIEnhancedQuestion(UUID id) {
     log.info("Generating AI-enhanced question from template: {}", id);
 
     QuestionTemplate template = fetchTemplateForTesting(id);
 
     try {
-      // Step 1: generate a base question (params + correct answer) via LLM
       GeneratedQuestionSample sample = aiEnhancementService.generateQuestion(template, 0);
 
-      // Step 2: build a full AIEnhancementRequest so enhanceQuestion can enrich it
       AIEnhancementRequest enhancementRequest =
           AIEnhancementRequest.builder()
               .rawQuestionText(sample.getQuestionText())
@@ -246,11 +310,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
               .context(template.getDescription())
               .build();
 
-      // Step 3: call enhanceQuestion which calls Gemini with the richer prompt
-      AIEnhancedQuestionResponse enhanced =
-          aiEnhancementService.enhanceQuestion(enhancementRequest);
+      AIEnhancedQuestionResponse enhanced = aiEnhancementService.enhanceQuestion(enhancementRequest);
 
-      // Always preserve original question data
       enhanced.setOriginalQuestionText(sample.getQuestionText());
       enhanced.setOriginalOptions(sample.getOptions());
 
@@ -261,10 +322,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
     }
   }
-
-  // =====================================================================
-  // Private helpers
-  // =====================================================================
 
   private TemplateTestResponse generateWithLLM(QuestionTemplate template, int sampleCount) {
     List<GeneratedQuestionSample> samples = new ArrayList<>();
@@ -293,15 +350,29 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         .build();
   }
 
+  /**
+   * access extended to public templates (was owner-only).
+   * only PUBLISHED templates may generate questions.
+   */
   protected QuestionTemplate fetchTemplateForTesting(UUID id) {
     QuestionTemplate template =
         questionTemplateRepository
-            .findById(id)
+            .findByIdWithCreator(id)
             .filter(t -> t.getDeletedAt() == null)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
-    validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    boolean isOwner = template.getCreatedBy().equals(currentUserId);
+    boolean isAdmin = SecurityUtils.hasRole("ADMIN");
+    boolean isPublicTemplate = Boolean.TRUE.equals(template.getIsPublic());
+
+    if (!isOwner && !isAdmin && !isPublicTemplate) {
+      throw new AppException(ErrorCode.TEMPLATE_ACCESS_DENIED);
+    }
+
+    if (template.getStatus() != TemplateStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+    }
 
     return template;
   }
@@ -309,10 +380,9 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   private List<String> validateTemplateSyntax(QuestionTemplateRequest request) {
     List<String> errors = new ArrayList<>();
 
-    // Validate template text has placeholders matching parameters
     String templateTextStr =
         request.getTemplateText() != null ? request.getTemplateText().toString() : "";
-    Pattern pattern = Pattern.compile("\\{\\{(\\w+)\\}\\}");
+    Pattern pattern = Pattern.compile("\\{\\{(\\w+)}}");
     Matcher matcher = pattern.matcher(templateTextStr);
 
     Set<String> placeholders = new HashSet<>();
@@ -352,6 +422,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .cognitiveLevel(template.getCognitiveLevel())
             .tags(template.getTags())
             .isPublic(template.getIsPublic())
+            .status(template.getStatus())
             .usageCount(template.getUsageCount())
             .avgSuccessRate(template.getAvgSuccessRate())
             .createdAt(template.getCreatedAt())
@@ -365,28 +436,9 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     return response;
   }
 
-  private UUID getCurrentUserId() {
-    var auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth
-        instanceof
-        org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
-                jwtAuth) {
-      String sub = jwtAuth.getToken().getSubject();
-      return UUID.fromString(sub);
-    }
-    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
-  }
-
   private void validateOwnerOrAdmin(UUID ownerId, UUID currentUserId) {
-    if (!ownerId.equals(currentUserId) && !isAdmin()) {
-      throw new AccessDeniedException("You don't have permission to perform this action");
+    if (!ownerId.equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.TEMPLATE_ACCESS_DENIED);
     }
-  }
-
-  private boolean isAdmin() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    return authentication != null
-        && authentication.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
   }
 }
