@@ -27,4 +27,15 @@ public interface RegradeRequestRepository extends JpaRepository<RegradeRequest, 
 
   @Query("SELECT COUNT(r) FROM RegradeRequest r WHERE r.status = :status")
   Long countByStatus(@Param("status") RegradeRequestStatus status);
+
+  @Query(
+      "SELECT COUNT(r) > 0 FROM RegradeRequest r "
+          + "WHERE r.submissionId = :submissionId "
+          + "AND r.questionId = :questionId "
+          + "AND r.studentId = :studentId "
+          + "AND r.status = 'PENDING'")
+  boolean existsPendingRequest(
+      @Param("submissionId") UUID submissionId,
+      @Param("questionId") UUID questionId,
+      @Param("studentId") UUID studentId);
 }
