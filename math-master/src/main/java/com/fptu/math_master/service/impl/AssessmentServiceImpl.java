@@ -1,7 +1,9 @@
 package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.constant.PredefinedRole;
+import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
+import com.fptu.math_master.dto.request.CloneAssessmentRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
@@ -11,6 +13,7 @@ import com.fptu.math_master.entity.ExamMatrix;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
+import com.fptu.math_master.enums.AttemptScoringPolicy;
 import com.fptu.math_master.enums.MatrixStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
@@ -51,6 +54,7 @@ public class AssessmentServiceImpl implements AssessmentService {
   LessonRepository lessonRepository;
   ExamMatrixRepository examMatrixRepository;
   ExamMatrixService examMatrixService;
+  QuestionRepository questionRepository;
 
   @Override
   @Transactional
@@ -82,6 +86,10 @@ public class AssessmentServiceImpl implements AssessmentService {
                     ? request.getAllowMultipleAttempts()
                     : false)
             .maxAttempts(request.getMaxAttempts())
+            .attemptScoringPolicy(
+                request.getAttemptScoringPolicy() != null
+                    ? request.getAttemptScoringPolicy()
+                    : AttemptScoringPolicy.BEST)
             .showScoreImmediately(
                 request.getShowScoreImmediately() != null
                     ? request.getShowScoreImmediately()
@@ -134,6 +142,9 @@ public class AssessmentServiceImpl implements AssessmentService {
     }
     if (request.getMaxAttempts() != null) {
       assessment.setMaxAttempts(request.getMaxAttempts());
+    }
+    if (request.getAttemptScoringPolicy() != null) {
+      assessment.setAttemptScoringPolicy(request.getAttemptScoringPolicy());
     }
     if (request.getShowScoreImmediately() != null) {
       assessment.setShowScoreImmediately(request.getShowScoreImmediately());
@@ -451,6 +462,165 @@ public class AssessmentServiceImpl implements AssessmentService {
         && totalQuestions > 0;
   }
 
+  @Override
+  @Transactional
+  public AssessmentResponse closeAssessment(UUID id) {
+    log.info("Closing assessment: {}", id);
+
+    Assessment assessment = loadAssessmentOrThrow(id);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() == AssessmentStatus.CLOSED) {
+      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_CLOSED);
+    }
+    if (assessment.getStatus() != AssessmentStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_PUBLISHED);
+    }
+
+    assessment.setStatus(AssessmentStatus.CLOSED);
+    assessment = assessmentRepository.save(assessment);
+    log.info("Assessment {} closed", id);
+    return mapToResponse(assessment);
+  }
+
+  @Override
+  @Transactional
+  public AssessmentResponse cloneAssessment(
+      UUID sourceId, CloneAssessmentRequest request) {
+    log.info("Cloning assessment: {}", sourceId);
+
+    Assessment source = loadAssessmentOrThrow(sourceId);
+    UUID currentUserId = getCurrentUserId();
+    validateTeacherRole(currentUserId);
+
+    String newTitle =
+        (request.getNewTitle() != null && !request.getNewTitle().isBlank())
+            ? request.getNewTitle()
+            : "Copy of " + source.getTitle();
+
+    Assessment clone =
+        Assessment.builder()
+            .teacherId(currentUserId)
+            .lessonId(source.getLessonId())
+            .title(newTitle)
+            .description(source.getDescription())
+            .assessmentType(source.getAssessmentType())
+            .timeLimitMinutes(source.getTimeLimitMinutes())
+            .passingScore(source.getPassingScore())
+            .randomizeQuestions(source.getRandomizeQuestions())
+            .showCorrectAnswers(source.getShowCorrectAnswers())
+            // Matrix is NOT cloned — teacher must rebuild if needed
+            .hasMatrix(false)
+            .allowMultipleAttempts(source.getAllowMultipleAttempts())
+            .maxAttempts(source.getMaxAttempts())
+            .attemptScoringPolicy(source.getAttemptScoringPolicy())
+            .showScoreImmediately(source.getShowScoreImmediately())
+            .status(AssessmentStatus.DRAFT)
+            .build();
+
+    clone = assessmentRepository.save(clone);
+
+    // Clone questions only for non-matrix path and when explicitly requested
+    boolean shouldCloneQuestions =
+        !Boolean.TRUE.equals(source.getHasMatrix())
+            && Boolean.TRUE.equals(request.getCloneQuestions());
+
+    if (shouldCloneQuestions) {
+      java.util.List<AssessmentQuestion> sourceQuestions =
+          assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(source.getId());
+      for (AssessmentQuestion aq : sourceQuestions) {
+        AssessmentQuestion cloned =
+            AssessmentQuestion.builder()
+                .assessmentId(clone.getId())
+                .questionId(aq.getQuestionId())
+                .orderIndex(aq.getOrderIndex())
+                .pointsOverride(aq.getPointsOverride())
+                .build();
+        assessmentQuestionRepository.save(cloned);
+      }
+      log.info("Cloned {} question(s) into assessment {}", sourceQuestions.size(), clone.getId());
+    }
+
+    log.info("Assessment {} cloned to {}", sourceId, clone.getId());
+    return mapToResponse(clone);
+  }
+
+  @Override
+  @Transactional
+  public AssessmentResponse addQuestion(
+      UUID assessmentId,
+      AddQuestionToAssessmentRequest request) {
+    log.info("Adding question {} to assessment {}", request.getQuestionId(), assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() != AssessmentStatus.DRAFT) {
+      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
+    }
+    if (Boolean.TRUE.equals(assessment.getHasMatrix())) {
+      // Matrix-path: questions are managed through the matrix flow
+      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
+    }
+
+    // Verify the question exists and is not deleted
+    questionRepository
+        .findByIdAndNotDeleted(request.getQuestionId())
+        .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+    if (assessmentQuestionRepository
+        .findByAssessmentIdAndQuestionId(assessmentId, request.getQuestionId())
+        .isPresent()) {
+      throw new AppException(ErrorCode.QUESTION_ALREADY_IN_ASSESSMENT);
+    }
+
+    // Determine order index
+    int nextOrder;
+    if (request.getOrderIndex() != null) {
+      nextOrder = request.getOrderIndex();
+    } else {
+      Integer maxOrder = assessmentQuestionRepository.findMaxOrderIndex(assessmentId);
+      nextOrder = (maxOrder != null ? maxOrder : 0) + 1;
+    }
+
+    AssessmentQuestion aq =
+        AssessmentQuestion.builder()
+            .assessmentId(assessmentId)
+            .questionId(request.getQuestionId())
+            .orderIndex(nextOrder)
+            .pointsOverride(request.getPointsOverride())
+            .build();
+    assessmentQuestionRepository.save(aq);
+
+    log.info("Question {} added to assessment {} at index {}", request.getQuestionId(), assessmentId, nextOrder);
+    return mapToResponse(assessment);
+  }
+
+  @Override
+  @Transactional
+  public AssessmentResponse removeQuestion(UUID assessmentId, UUID questionId) {
+    log.info("Removing question {} from assessment {}", questionId, assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() != AssessmentStatus.DRAFT) {
+      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
+    }
+    if (Boolean.TRUE.equals(assessment.getHasMatrix())) {
+      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
+    }
+
+    assessmentQuestionRepository
+        .findByAssessmentIdAndQuestionId(assessmentId, questionId)
+        .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_IN_ASSESSMENT));
+
+    assessmentQuestionRepository.deleteByAssessmentIdAndQuestionId(assessmentId, questionId);
+
+    log.info("Question {} removed from assessment {}", questionId, assessmentId);
+    return mapToResponse(assessment);
+  }
+
   private Assessment loadAssessmentOrThrow(UUID id) {
     return assessmentRepository
         .findByIdAndNotDeleted(id)
@@ -589,6 +759,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         .hasMatrix(assessment.getHasMatrix())
         .allowMultipleAttempts(assessment.getAllowMultipleAttempts())
         .maxAttempts(assessment.getMaxAttempts())
+        .attemptScoringPolicy(assessment.getAttemptScoringPolicy())
         .showScoreImmediately(assessment.getShowScoreImmediately())
         .status(assessment.getStatus())
         .totalQuestions(totalQuestions)

@@ -1,6 +1,8 @@
 package com.fptu.math_master.controller;
 
+import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
+import com.fptu.math_master.dto.request.CloneAssessmentRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
@@ -248,4 +250,55 @@ public class AssessmentController {
         .result(assessmentService.canPublishAssessment(id))
         .build();
   }
+
+  @PostMapping("/{id}/close")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(summary = "Close assessment", description = "Permanently close a PUBLISHED assessment. No further attempts are allowed.")
+  public ApiResponse<AssessmentResponse> closeAssessment(@PathVariable UUID id) {
+    log.info("REST request to close assessment: {}", id);
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Assessment closed successfully.")
+        .result(assessmentService.closeAssessment(id))
+        .build();
+  }
+
+  @PostMapping("/{id}/clone")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(summary = "Clone assessment", description = "Create a DRAFT copy of an existing assessment. Matrix is NOT cloned.")
+  public ApiResponse<AssessmentResponse> cloneAssessment(
+      @PathVariable UUID id,
+      @Valid @RequestBody CloneAssessmentRequest request) {
+    log.info("REST request to clone assessment: {}", id);
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Assessment cloned successfully.")
+        .result(assessmentService.cloneAssessment(id, request))
+        .build();
+  }
+
+  @PostMapping("/{assessmentId}/questions")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(summary = "Add question to assessment", description = "Add an existing question to a non-matrix DRAFT assessment.")
+  public ApiResponse<AssessmentResponse> addQuestion(
+      @PathVariable UUID assessmentId,
+      @Valid @RequestBody AddQuestionToAssessmentRequest request) {
+    log.info("REST request to add question {} to assessment {}", request.getQuestionId(), assessmentId);
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Question added to assessment.")
+        .result(assessmentService.addQuestion(assessmentId, request))
+        .build();
+  }
+
+  @DeleteMapping("/{assessmentId}/questions/{questionId}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(summary = "Remove question from assessment", description = "Remove a question from a non-matrix DRAFT assessment.")
+  public ApiResponse<AssessmentResponse> removeQuestion(
+      @PathVariable UUID assessmentId,
+      @PathVariable UUID questionId) {
+    log.info("REST request to remove question {} from assessment {}", questionId, assessmentId);
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Question removed from assessment.")
+        .result(assessmentService.removeQuestion(assessmentId, questionId))
+        .build();
+  }
 }
+

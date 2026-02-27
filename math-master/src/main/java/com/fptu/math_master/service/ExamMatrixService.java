@@ -98,4 +98,6 @@ public interface ExamMatrixService {
    */
   FinalizePreviewResponse finalizePreview(
       UUID matrixId, UUID cellId, FinalizePreviewRequest request);
+
+  ExamMatrixResponse resetMatrix(UUID matrixId);
 }

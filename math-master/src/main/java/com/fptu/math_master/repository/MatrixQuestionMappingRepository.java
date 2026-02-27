@@ -54,4 +54,12 @@ public interface MatrixQuestionMappingRepository
           + "ORDER BY mqm.selectionPriority")
   List<MatrixQuestionMapping> findSelectedMappingsWithCellByMatrixId(
       @Param("matrixId") UUID matrixId);
+
+  @Modifying
+  @Query(
+      "UPDATE MatrixQuestionMapping mqm SET mqm.isSelected = false "
+          + "WHERE mqm.matrixCellId IN ("
+          + "  SELECT mc.id FROM MatrixCell mc WHERE mc.matrixId = :matrixId"
+          + ")")
+  void clearSelectionsByMatrixId(@Param("matrixId") UUID matrixId);
 }

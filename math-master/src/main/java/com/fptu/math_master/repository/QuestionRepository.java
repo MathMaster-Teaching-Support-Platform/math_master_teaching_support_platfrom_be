@@ -54,6 +54,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
           + "  WHERE qq.questionBankId = :bankId AND qq.deletedAt IS NULL"
           + ")")
   int detachFreeQuestionsFromBank(@Param("bankId") UUID bankId);
+
+  @Query("SELECT q FROM Question q WHERE q.id = :id AND q.deletedAt IS NULL")
+  java.util.Optional<Question> findByIdAndNotDeleted(@Param("id") UUID id);
 }
-
-

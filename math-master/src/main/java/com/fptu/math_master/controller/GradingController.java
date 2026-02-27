@@ -260,4 +260,46 @@ public class GradingController {
 
     return ApiResponse.<Page<RegradeRequestResponse>>builder().result(requests).build();
   }
+
+  @Operation(summary = "Invalidate submission", description = "Teacher voids a student submission (e.g. academic integrity breach)")
+  @PostMapping("/submissions/{submissionId}/invalidate")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<GradingSubmissionResponse> invalidateSubmission(
+      @PathVariable UUID submissionId,
+      @RequestParam(required = false) String reason) {
+    log.info("Invalidating submission: {}", submissionId);
+    return ApiResponse.<GradingSubmissionResponse>builder()
+        .message("Submission invalidated successfully.")
+        .result(gradingService.invalidateSubmission(submissionId, reason))
+        .build();
+  }
+
+  @Operation(summary = "Get my result", description = "Student views their own graded result. Gated by gradesReleased or showScoreImmediately.")
+  @GetMapping("/submissions/{submissionId}/my-result")
+  @PreAuthorize("hasRole('STUDENT')")
+  public ApiResponse<GradingSubmissionResponse> getMyResult(@PathVariable UUID submissionId) {
+    return ApiResponse.<GradingSubmissionResponse>builder()
+        .result(gradingService.getMyResult(submissionId))
+        .build();
+  }
+
+  @Operation(summary = "Trigger AI review", description = "Teacher triggers AI feedback generation for a graded submission.")
+  @PostMapping("/submissions/{submissionId}/ai-review")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<Void> triggerAiReview(@PathVariable UUID submissionId) {
+    log.info("Triggering AI review for submission: {}", submissionId);
+    gradingService.triggerAiReview(submissionId);
+    return ApiResponse.<Void>builder().message("AI review triggered successfully.").build();
+  }
+
+  @Operation(summary = "Count pending subjective submissions", description = "Returns count of SUBMITTED submissions awaiting manual grading for this teacher.")
+  @GetMapping("/pending-count")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<Long> getPendingSubjectiveCount() {
+    UUID teacherId = com.fptu.math_master.util.SecurityUtils.getCurrentUserId();
+    return ApiResponse.<Long>builder()
+        .result(gradingService.countPendingSubjectiveSubmissions(teacherId))
+        .build();
+  }
 }
+

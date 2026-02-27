@@ -1,6 +1,7 @@
 package com.fptu.math_master.dto.request;
 
 import com.fptu.math_master.enums.AssessmentType;
+import com.fptu.math_master.enums.AttemptScoringPolicy;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -48,6 +49,8 @@ public class AssessmentRequest {
 
   @Min(value = 1, message = "Max attempts must be at least 1")
   private Integer maxAttempts;
+
+  private AttemptScoringPolicy attemptScoringPolicy;
 
   private Boolean showScoreImmediately;
 }

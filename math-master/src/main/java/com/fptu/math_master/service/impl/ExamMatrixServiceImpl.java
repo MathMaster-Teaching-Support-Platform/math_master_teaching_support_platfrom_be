@@ -1599,4 +1599,37 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .relevanceScore(computeRelevanceScore(t, requiredType, requiredLevel, chapterTags))
         .build();
   }
+
+  @Override
+  @Transactional
+  public ExamMatrixResponse resetMatrix(UUID matrixId) {
+    log.info("Resetting matrix to DRAFT: {}", matrixId);
+
+    ExamMatrix matrix = getMatrixAndValidateAccess(matrixId);
+
+    if (matrix.getStatus() != MatrixStatus.APPROVED) {
+      throw new AppException(ErrorCode.MATRIX_NOT_APPROVED_FOR_RESET);
+    }
+
+    Assessment assessment =
+        assessmentRepository
+            .findByIdAndNotDeleted(matrix.getAssessmentId())
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+    if (assessment.getStatus() != AssessmentStatus.DRAFT) {
+      throw new AppException(ErrorCode.ASSESSMENT_MATRIX_APPROVED_WHILE_PUBLISHED);
+    }
+
+    assessmentQuestionRepository.deleteAllByAssessmentId(matrix.getAssessmentId());
+
+    matrixQuestionMappingRepository.clearSelectionsByMatrixId(matrixId);
+
+    matrix.setStatus(MatrixStatus.DRAFT);
+    matrix = examMatrixRepository.save(matrix);
+
+    log.info("Matrix {} reset to DRAFT, assessment_questions cleared", matrixId);
+    return mapToResponse(matrix);
+  }
 }
+
+

@@ -2,6 +2,7 @@ package com.fptu.math_master.dto.response;
 
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AssessmentType;
+import com.fptu.math_master.enums.AttemptScoringPolicy;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -33,6 +34,7 @@ public class AssessmentResponse {
   private Boolean hasMatrix;
   private Boolean allowMultipleAttempts;
   private Integer maxAttempts;
+  private AttemptScoringPolicy attemptScoringPolicy;
   private Boolean showScoreImmediately;
   private AssessmentStatus status;
   private Long totalQuestions;

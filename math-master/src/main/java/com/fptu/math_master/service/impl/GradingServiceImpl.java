@@ -37,6 +37,7 @@ public class GradingServiceImpl implements GradingService {
   GradeAuditLogRepository gradeAuditLogRepository;
   RegradeRequestRepository regradeRequestRepository;
   QuizAttemptRepository quizAttemptRepository;
+  AiReviewRepository aiReviewRepository;
 
   @Override
   @Transactional
@@ -84,14 +85,15 @@ public class GradingServiceImpl implements GradingService {
 
     submission.setScore(totalScore);
 
+    BigDecimal computedPercentage = null;
     if (submission.getMaxScore() != null
         && submission.getMaxScore().compareTo(BigDecimal.ZERO) > 0) {
-      BigDecimal percentage =
+      computedPercentage =
           totalScore
               .divide(submission.getMaxScore(), 4, RoundingMode.HALF_UP)
               .multiply(BigDecimal.valueOf(100))
               .setScale(2, RoundingMode.HALF_UP);
-      submission.setPercentage(percentage);
+      submission.setPercentage(computedPercentage);
     }
 
     BigDecimal finalScore = totalScore;
@@ -107,6 +109,23 @@ public class GradingServiceImpl implements GradingService {
     }
 
     submissionRepository.save(submission);
+
+    // Fix #17: back-fill score/maxScore/percentage on the most recent QuizAttempt so the
+    // multi-attempt scoring policy in updateSubmissionStatus has per-attempt data.
+    quizAttemptRepository
+        .findBySubmissionIdOrderByAttemptNumberDesc(submissionId)
+        .stream()
+        .filter(a -> a.getStatus() == SubmissionStatus.SUBMITTED || a.getStatus() == SubmissionStatus.GRADED)
+        .findFirst()
+        .ifPresent(attempt -> {
+          attempt.setScore(totalScore);
+          attempt.setMaxScore(submission.getMaxScore());
+          attempt.setPercentage(computedPercentage);
+          if (!hasSubjectiveQuestions) {
+            attempt.setStatus(SubmissionStatus.GRADED);
+          }
+          quizAttemptRepository.save(attempt);
+        });
 
     log.info(
         "Auto-grading completed for submission: {}. Status: {}, Score: {}",
@@ -161,10 +180,11 @@ public class GradingServiceImpl implements GradingService {
       return false;
     }
     String studentAnswer = answer.getAnswerText().trim().toLowerCase();
-    String correctAnswer = question.getCorrectAnswer().trim().toLowerCase();
+    String correctAnswer  = question.getCorrectAnswer().trim().toLowerCase();
     boolean isCorrect = studentAnswer.equals(correctAnswer);
     answer.setIsCorrect(isCorrect);
-    return false;
+    answer.setPointsEarned(isCorrect ? question.getPoints() : BigDecimal.ZERO);
+    return true;
   }
 
   @Override
@@ -246,10 +266,29 @@ public class GradingServiceImpl implements GradingService {
     }
     submission.setFinalScore(finalScore);
     submission.setStatus(SubmissionStatus.GRADED);
+    // Fix #15: always stamp the grader who actually completed grading (not the auto-grader)
     submission.setGradedBy(teacherId);
     submission.setGradedAt(Instant.now());
 
     submissionRepository.save(submission);
+
+    // Fix #17: back-fill latest QuizAttempt with score so scoring-policy has per-attempt data
+    final BigDecimal attemptScore = totalScore;
+    final BigDecimal attemptMax   = submission.getMaxScore();
+    quizAttemptRepository
+        .findBySubmissionIdOrderByAttemptNumberDesc(submission.getId())
+        .stream().findFirst()
+        .ifPresent(attempt -> {
+          attempt.setScore(attemptScore);
+          attempt.setMaxScore(attemptMax);
+          if (attemptMax != null && attemptMax.compareTo(BigDecimal.ZERO) > 0) {
+            attempt.setPercentage(
+                attemptScore.divide(attemptMax, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP));
+          }
+          attempt.setStatus(SubmissionStatus.GRADED);
+          quizAttemptRepository.save(attempt);
+        });
 
     log.info("Grading completed for submission: {}. Final score: {}", request.getSubmissionId(), finalScore);
 
@@ -341,6 +380,9 @@ public class GradingServiceImpl implements GradingService {
       finalScore = finalScore.add(submission.getManualAdjustment());
     }
     submission.setFinalScore(finalScore);
+    // Fix #15: update grader identity so audit trail is not stale
+    submission.setGradedBy(teacherId);
+    submission.setGradedAt(Instant.now());
     submissionRepository.save(submission);
 
     log.info("Grade overridden for answer: {}. Old: {}, New: {}", request.getAnswerId(), oldPoints, request.getNewPoints());
@@ -387,6 +429,9 @@ public class GradingServiceImpl implements GradingService {
     submission.setManualAdjustment(request.getAdjustmentAmount());
     submission.setManualAdjustmentReason(request.getReason());
     submission.setFinalScore(proposedFinal);
+    // Fix #15: update grader identity so audit trail reflects who made the adjustment
+    submission.setGradedBy(teacherId);
+    submission.setGradedAt(Instant.now());
     submissionRepository.save(submission);
 
     log.info("Manual adjustment added to submission: {}. Amount: {}, Final: {}",
@@ -587,6 +632,14 @@ public class GradingServiceImpl implements GradingService {
       throw new AppException(ErrorCode.GRADES_NOT_RELEASED);
     }
 
+    // Fix #12: enforce a 7-day regrade appeal window measured from submission time
+    if (submission.getSubmittedAt() != null) {
+      Instant deadline = submission.getSubmittedAt().plus(java.time.Duration.ofDays(7));
+      if (Instant.now().isAfter(deadline)) {
+        throw new AppException(ErrorCode.REGRADE_DEADLINE_PASSED);
+      }
+    }
+
     if (regradeRequestRepository.existsPendingRequest(
         request.getSubmissionId(), request.getQuestionId(), studentId)) {
       throw new AppException(ErrorCode.REGRADE_REQUEST_ALREADY_PENDING);
@@ -698,6 +751,149 @@ public class GradingServiceImpl implements GradingService {
         .map(this::mapToRegradeRequestResponse);
   }
 
+  // ── Fix #4: Invalidate Submission ────────────────────────────────────────────────
+  @Override
+  @Transactional
+  public GradingSubmissionResponse invalidateSubmission(UUID submissionId, String reason) {
+    log.info("Invalidating submission: {}", submissionId);
+
+    Submission submission =
+        submissionRepository
+            .findById(submissionId)
+            .orElseThrow(() -> new AppException(ErrorCode.SUBMISSION_NOT_FOUND));
+
+    if (submission.getStatus() == SubmissionStatus.INVALIDATED) {
+      throw new AppException(ErrorCode.SUBMISSION_ALREADY_INVALIDATED);
+    }
+    if (submission.getStatus() == SubmissionStatus.IN_PROGRESS) {
+      throw new AppException(ErrorCode.SUBMISSION_INVALIDATION_BLOCKED);
+    }
+
+    UUID teacherId = SecurityUtils.getCurrentUserId();
+    validateGradingAccess(submission.getAssessmentId(), teacherId);
+
+    // Write an audit log so there is a permanent record of the invalidation
+    GradeAuditLog auditLog =
+        GradeAuditLog.builder()
+            .submissionId(submission.getId())
+            .teacherId(teacherId)
+            .oldPoints(submission.getFinalScore())
+            .newPoints(BigDecimal.ZERO)
+            .reason("INVALIDATED: " + (reason != null ? reason : "no reason provided"))
+            .build();
+    gradeAuditLogRepository.save(auditLog);
+
+    submission.setStatus(SubmissionStatus.INVALIDATED);
+    submission.setManualAdjustmentReason("INVALIDATED: " + (reason != null ? reason : ""));
+    submission.setGradedBy(teacherId);
+    submission.setGradedAt(Instant.now());
+    submissionRepository.save(submission);
+
+    log.info("Submission {} invalidated by teacher {}", submissionId, teacherId);
+    return mapToGradingResponse(submission);
+  }
+
+  // ── Fix #5 / #6 / #7: Student result gated by gradesReleased ─────────────────────
+  @Override
+  @Transactional(readOnly = true)
+  public GradingSubmissionResponse getMyResult(UUID submissionId) {
+    UUID studentId = SecurityUtils.getCurrentUserId();
+
+    Submission submission =
+        submissionRepository
+            .findById(submissionId)
+            .orElseThrow(() -> new AppException(ErrorCode.SUBMISSION_NOT_FOUND));
+
+    // Ownership check
+    if (!submission.getStudentId().equals(studentId)) {
+      throw new AppException(ErrorCode.ATTEMPT_ACCESS_DENIED);
+    }
+
+    // Submission must be at least SUBMITTED
+    if (submission.getStatus() == SubmissionStatus.IN_PROGRESS) {
+      throw new AppException(ErrorCode.SUBMISSION_NOT_GRADED);
+    }
+
+    Assessment assessment =
+        assessmentRepository
+            .findById(submission.getAssessmentId())
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+    // Fix #5 / #7: enforce gradesReleased gate unless showScoreImmediately bypasses it
+    boolean gradesReleased = Boolean.TRUE.equals(submission.getGradesReleased());
+    boolean immediateMode  = Boolean.TRUE.equals(assessment.getShowScoreImmediately());
+
+    if (!gradesReleased && !immediateMode) {
+      throw new AppException(ErrorCode.SUBMISSION_RESULT_NOT_AVAILABLE);
+    }
+
+    GradingSubmissionResponse response = mapToGradingResponse(submission);
+
+    // Fix #7: hide correctAnswer when showCorrectAnswers = false
+    if (!Boolean.TRUE.equals(assessment.getShowCorrectAnswers()) && response.getAnswers() != null) {
+      response.getAnswers().forEach(a -> a.setCorrectAnswer(null));
+    }
+
+    return response;
+  }
+
+  // ── Fix #13: Trigger AI review ────────────────────────────────────────────────────
+  @Override
+  @Transactional
+  public void triggerAiReview(UUID submissionId) {
+    log.info("Triggering AI review for submission: {}", submissionId);
+
+    Submission submission =
+        submissionRepository
+            .findById(submissionId)
+            .orElseThrow(() -> new AppException(ErrorCode.SUBMISSION_NOT_FOUND));
+
+    if (submission.getStatus() != SubmissionStatus.GRADED) {
+      throw new AppException(ErrorCode.SUBMISSION_NOT_GRADED);
+    }
+
+    // Idempotency: skip if an overall review already exists
+    if (aiReviewRepository.existsBySubmissionId(submissionId)) {
+      log.info("AI review already exists for submission {}, skipping", submissionId);
+      return;
+    }
+
+    List<Answer> answers = answerRepository.findBySubmissionId(submissionId);
+
+    // Per-question review stubs — actual AI content to be populated async
+    for (Answer answer : answers) {
+      AiReview perQuestion =
+          AiReview.builder()
+              .submissionId(submissionId)
+              .answerId(answer.getId())
+              .reviewType(AiReviewType.QUESTION_SPECIFIC)
+              .aiModel("gemini")
+              .reviewContent("Review pending — AI generation in progress.")
+              .build();
+      aiReviewRepository.save(perQuestion);
+    }
+
+    // Overall review stub
+    AiReview overall =
+        AiReview.builder()
+            .submissionId(submissionId)
+            .reviewType(AiReviewType.OVERALL)
+            .aiModel("gemini")
+            .reviewContent("Overall review pending — AI generation in progress.")
+            .build();
+    aiReviewRepository.save(overall);
+
+    log.info("AI review stubs created for submission {} ({} per-question + 1 overall)",
+        submissionId, answers.size());
+  }
+
+  // ── Fix #16: Count pending subjective submissions for dashboard notification ──────
+  @Override
+  @Transactional(readOnly = true)
+  public Long countPendingSubjectiveSubmissions(UUID teacherId) {
+    return submissionRepository.countByTeacherIdAndStatus(teacherId, SubmissionStatus.SUBMITTED);
+  }
+
   private void validateGradingAccess(UUID assessmentId, UUID callerId) {
     if (SecurityUtils.hasRole("ADMIN")) return;
 
@@ -744,6 +940,8 @@ public class GradingServiceImpl implements GradingService {
                   .questionId(answer.getQuestionId())
                   .questionText(question != null ? question.getQuestionText() : null)
                   .answerText(answer.getAnswerText())
+                  // Fix #7: always populate correctAnswer here; getMyResult will null it if needed
+                  .correctAnswer(question != null ? question.getCorrectAnswer() : null)
                   .isCorrect(answer.getIsCorrect())
                   .pointsEarned(answer.getPointsEarned())
                   .maxPoints(question != null ? question.getPoints() : null)

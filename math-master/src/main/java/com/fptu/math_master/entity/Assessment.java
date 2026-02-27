@@ -2,6 +2,7 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AssessmentType;
+import com.fptu.math_master.enums.AttemptScoringPolicy;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
@@ -79,6 +80,10 @@ public class Assessment {
 
   @Column(name = "max_attempts")
   private Integer maxAttempts;
+
+  @Column(name = "attempt_scoring_policy")
+  @Enumerated(EnumType.STRING)
+  private AttemptScoringPolicy attemptScoringPolicy;
 
   @Column(name = "show_score_immediately")
   private Boolean showScoreImmediately;

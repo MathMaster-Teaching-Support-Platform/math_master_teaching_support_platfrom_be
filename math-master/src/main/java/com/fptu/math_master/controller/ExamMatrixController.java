@@ -402,4 +402,21 @@ public class ExamMatrixController {
 
     return ApiResponse.<FinalizePreviewResponse>builder().message(message).result(response).build();
   }
+
+  @PostMapping("/{matrixId}/reset")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Reset matrix to DRAFT",
+      description =
+          "Reset an APPROVED matrix back to DRAFT so cells and questions can be re-edited. "
+              + "All assessment_questions linked via this matrix will be cleared. "
+              + "Only allowed when the parent assessment is still in DRAFT status.")
+  public ApiResponse<ExamMatrixResponse> resetMatrix(@PathVariable UUID matrixId) {
+    log.info("REST request to reset matrix: {}", matrixId);
+    return ApiResponse.<ExamMatrixResponse>builder()
+        .message("Matrix reset to DRAFT. You can now edit cells and regenerate questions.")
+        .result(examMatrixService.resetMatrix(matrixId))
+        .build();
+  }
 }
+

@@ -2,6 +2,7 @@ package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.enums.AssessmentStatus;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -69,4 +70,12 @@ public interface AssessmentRepository
       @Param("status") AssessmentStatus status,
       @Param("lessonId") UUID lessonId,
       Pageable pageable);
+
+  @Query(
+      "SELECT a FROM Assessment a "
+          + "WHERE a.status = 'PUBLISHED' "
+          + "AND a.endDate IS NOT NULL "
+          + "AND a.endDate < :now "
+          + "AND a.deletedAt IS NULL")
+  List<Assessment> findPublishedAssessmentsWithExpiredEndDate(@Param("now") Instant now);
 }
