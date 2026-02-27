@@ -127,16 +127,17 @@ public class LearningRoadmapController {
         .build();
   }
 
-  @GetMapping("/student/{studentId}")
+  @GetMapping
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
   @Operation(
-      summary = "Get all roadmaps for a student",
-      description = "List all roadmaps for a specific student with pagination")
+      summary = "Get all roadmaps for current student",
+      description = "List all roadmaps for the current authenticated student with pagination")
   public ApiResponse<Page<RoadmapSummaryResponse>> getStudentRoadmaps(
-      @Parameter(description = "Student ID") @PathVariable UUID studentId,
       @Parameter(description = "Pagination parameters") Pageable pageable) {
-    log.info("GET /roadmaps/student/{} – listing roadmaps", studentId);
+    String userId = SecurityContextHolder.getContext().getAuthentication().getName();
+    UUID studentId = UUID.fromString(userId);
+    log.info("GET /roadmaps – listing roadmaps for studentId={}", studentId);
 
     Page<RoadmapSummaryResponse> result = roadmapService.getStudentRoadmaps(studentId, pageable);
 
@@ -147,16 +148,17 @@ public class LearningRoadmapController {
         .build();
   }
 
-  @GetMapping("/student/{studentId}/subject/{subject}")
+  @GetMapping("/subject/{subject}")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
   @Operation(
       summary = "Get active roadmap by subject",
-      description = "Retrieve the active (most recent) roadmap for a student in a specific subject")
+      description = "Retrieve the active (most recent) roadmap for the current student in a specific subject")
   public ApiResponse<RoadmapDetailResponse> getActiveRoadmapBySubject(
-      @Parameter(description = "Student ID") @PathVariable UUID studentId,
       @Parameter(description = "Subject name") @PathVariable String subject) {
-    log.info("GET /roadmaps/student/{}/subject/{} – getting active roadmap", studentId, subject);
+    String userId = SecurityContextHolder.getContext().getAuthentication().getName();
+    UUID studentId = UUID.fromString(userId);
+    log.info("GET /roadmaps/subject/{} – getting active roadmap for studentId={}", subject, studentId);
 
     RoadmapDetailResponse result = roadmapService.getActiveRoadmapBySubject(studentId, subject);
 
@@ -167,13 +169,14 @@ public class LearningRoadmapController {
         .build();
   }
 
-  @GetMapping("/student/{studentId}/list")
+  @GetMapping("/list")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "List all student roadmaps", description = "Get all roadmaps for a student without pagination")
-  public ApiResponse<List<RoadmapSummaryResponse>> getStudentRoadmapsList(
-      @Parameter(description = "Student ID") @PathVariable UUID studentId) {
-    log.info("GET /roadmaps/student/{}/list – listing all roadmaps", studentId);
+  @Operation(summary = "List all student roadmaps", description = "Get all roadmaps for the current student without pagination")
+  public ApiResponse<List<RoadmapSummaryResponse>> getStudentRoadmapsList() {
+    String userId = SecurityContextHolder.getContext().getAuthentication().getName();
+    UUID studentId = UUID.fromString(userId);
+    log.info("GET /roadmaps/list – listing all roadmaps for studentId={}", studentId);
 
     List<RoadmapSummaryResponse> result = roadmapService.getStudentRoadmapsList(studentId);
 

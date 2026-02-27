@@ -1,5 +1,6 @@
 package com.fptu.math_master.service.impl;
 
+import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.response.RoadmapDetailResponse;
 import com.fptu.math_master.dto.response.RoadmapTopicResponse;
@@ -179,8 +180,10 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
       // Extract JSON from response (handle markdown code blocks)
       String jsonStr = extractJsonFromResponse(aiResponse);
 
-      // Parse JSON
-      Map<String, Object> parsed = objectMapper.readValue(jsonStr, Map.class);
+      // Parse JSON with support for leading plus signs in numbers (e.g., +2, +1)
+      ObjectMapper mapper = new ObjectMapper();
+      mapper.enable(JsonReadFeature.ALLOW_LEADING_PLUS_SIGN_FOR_NUMBERS.mappedFeature());
+      Map<String, Object> parsed = mapper.readValue(jsonStr, Map.class);
 
       // Parse topics
       if (parsed.containsKey("topics")) {
@@ -438,11 +441,33 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
   }
 
   /**
-   * Get roadmap detail response
+   * Get roadmap detail response with topics fetched from database
    */
   private RoadmapDetailResponse getRoadmapDetailResponse(LearningRoadmap roadmap) {
-    // This would delegate to the existing mapping logic in LearningRoadmapService
-    // For now, return a basic structure
+    // Fetch topics from database
+    List<RoadmapTopic> topics = topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmap.getId());
+    
+    // Map topics to response DTOs
+    List<RoadmapTopicResponse> topicResponses = topics.stream()
+        .map(topic -> RoadmapTopicResponse.builder()
+            .id(topic.getId())
+            .title(topic.getTitle())
+            .description(topic.getDescription())
+            .status(topic.getStatus())
+            .difficulty(topic.getDifficulty())
+            .sequenceOrder(topic.getSequenceOrder())
+            .priority(topic.getPriority())
+            .progressPercentage(topic.getProgressPercentage())
+            .completedSubTopics(topic.getCompletedSubTopics())
+            .totalSubTopics(topic.getTotalSubTopics())
+            .estimatedHours(topic.getEstimatedHours())
+            .startedAt(topic.getStartedAt())
+            .completedAt(topic.getCompletedAt())
+            .subtopics(new ArrayList<>()) // Subtopics not loaded for performance
+            .materials(new ArrayList<>()) // Materials not loaded for performance
+            .build())
+        .collect(Collectors.toList());
+    
     return RoadmapDetailResponse.builder()
         .id(roadmap.getId())
         .studentId(roadmap.getStudentId())
@@ -454,7 +479,7 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
         .completedTopicsCount(roadmap.getCompletedTopicsCount())
         .totalTopicsCount(roadmap.getTotalTopicsCount())
         .estimatedCompletionDays(roadmap.getEstimatedCompletionDays())
-        .topics(new ArrayList<>()) // Will be populated by caller
+        .topics(topicResponses)
         .build();
   }
 }
