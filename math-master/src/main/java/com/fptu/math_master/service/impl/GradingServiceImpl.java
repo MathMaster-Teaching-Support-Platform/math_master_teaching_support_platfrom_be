@@ -110,18 +110,19 @@ public class GradingServiceImpl implements GradingService {
 
     submissionRepository.save(submission);
 
-    // Fix #17: back-fill score/maxScore/percentage on the most recent QuizAttempt so the
-    // multi-attempt scoring policy in updateSubmissionStatus has per-attempt data.
+    final BigDecimal finalTotalScore = totalScore;
+    final BigDecimal finalComputedPercentage = computedPercentage;
+    final boolean finalHasSubjectiveQuestions = hasSubjectiveQuestions;
     quizAttemptRepository
         .findBySubmissionIdOrderByAttemptNumberDesc(submissionId)
         .stream()
         .filter(a -> a.getStatus() == SubmissionStatus.SUBMITTED || a.getStatus() == SubmissionStatus.GRADED)
         .findFirst()
         .ifPresent(attempt -> {
-          attempt.setScore(totalScore);
+          attempt.setScore(finalTotalScore);
           attempt.setMaxScore(submission.getMaxScore());
-          attempt.setPercentage(computedPercentage);
-          if (!hasSubjectiveQuestions) {
+          attempt.setPercentage(finalComputedPercentage);
+          if (!finalHasSubjectiveQuestions) {
             attempt.setStatus(SubmissionStatus.GRADED);
           }
           quizAttemptRepository.save(attempt);
@@ -131,7 +132,7 @@ public class GradingServiceImpl implements GradingService {
         "Auto-grading completed for submission: {}. Status: {}, Score: {}",
         submissionId,
         submission.getStatus(),
-        totalScore);
+        finalTotalScore);
   }
 
   private boolean autoGradeAnswer(Answer answer, Question question) {
