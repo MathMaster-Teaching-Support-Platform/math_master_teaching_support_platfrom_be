@@ -25,6 +25,16 @@ public interface MindmapNodeRepository extends JpaRepository<MindmapNode, UUID> 
   @Query("SELECT COUNT(n) FROM MindmapNode n WHERE n.mindmapId = :mindmapId")
   long countByMindmapId(@Param("mindmapId") UUID mindmapId);
 
+  @Query(
+      "SELECT n.mindmapId as mindmapId, COUNT(n) as count FROM MindmapNode n WHERE n.mindmapId IN :mindmapIds GROUP BY n.mindmapId")
+  List<NodeCountProjection> countByMindmapIds(@Param("mindmapIds") List<UUID> mindmapIds);
+
+  interface NodeCountProjection {
+    UUID getMindmapId();
+
+    Long getCount();
+  }
+
   @Query("SELECT n FROM MindmapNode n WHERE n.id = :id AND n.mindmapId = :mindmapId")
   Optional<MindmapNode> findByIdAndMindmapId(
       @Param("id") UUID id, @Param("mindmapId") UUID mindmapId);
