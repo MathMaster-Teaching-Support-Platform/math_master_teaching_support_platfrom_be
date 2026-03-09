@@ -140,7 +140,8 @@ assessment:
 # Gemini API Configuration (Google AI Studio)
 # ================================
 gemini:
-  api-key: ${GEMINI_API_KEY:AIzaSyBwEptARTd1a28XEEAurkyX1UW0U5DXN6o}
+  api-key: ${GEMINI_API_KEY:AIzaSyC80Q3fDX-n3-XmcT04KbWI5B72RZwiWWc}
   model: ${GEMINI_MODEL:gemini-2.5-flash}
   base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
   timeout-seconds: 60
+  

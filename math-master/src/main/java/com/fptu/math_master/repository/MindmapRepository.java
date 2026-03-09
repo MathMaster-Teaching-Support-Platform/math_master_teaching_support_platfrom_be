@@ -20,12 +20,35 @@ public interface MindmapRepository
   Optional<Mindmap> findByIdAndNotDeleted(@Param("id") UUID id);
 
   @Query(
+      "SELECT m FROM Mindmap m "
+          + "LEFT JOIN FETCH m.teacher "
+          + "LEFT JOIN FETCH m.lesson "
+          + "WHERE m.id = :id AND m.deletedAt IS NULL")
+  Optional<Mindmap> findByIdWithDetailsAndNotDeleted(@Param("id") UUID id);
+
+  @Query(
       "SELECT m FROM Mindmap m WHERE m.teacherId = :teacherId AND m.deletedAt IS NULL ORDER BY m.createdAt DESC")
   Page<Mindmap> findByTeacherIdAndNotDeleted(@Param("teacherId") UUID teacherId, Pageable pageable);
 
   @Query(
+      "SELECT m FROM Mindmap m "
+          + "LEFT JOIN FETCH m.teacher "
+          + "LEFT JOIN FETCH m.lesson "
+          + "WHERE m.teacherId = :teacherId AND m.deletedAt IS NULL ORDER BY m.createdAt DESC")
+  Page<Mindmap> findByTeacherIdWithDetailsAndNotDeleted(
+      @Param("teacherId") UUID teacherId, Pageable pageable);
+
+  @Query(
       "SELECT m FROM Mindmap m WHERE m.lessonId = :lessonId AND m.deletedAt IS NULL ORDER BY m.createdAt DESC")
   Page<Mindmap> findByLessonIdAndNotDeleted(@Param("lessonId") UUID lessonId, Pageable pageable);
+
+  @Query(
+      "SELECT m FROM Mindmap m "
+          + "LEFT JOIN FETCH m.teacher "
+          + "LEFT JOIN FETCH m.lesson "
+          + "WHERE m.lessonId = :lessonId AND m.deletedAt IS NULL ORDER BY m.createdAt DESC")
+  Page<Mindmap> findByLessonIdWithDetailsAndNotDeleted(
+      @Param("lessonId") UUID lessonId, Pageable pageable);
 
   @Query(
       "SELECT m FROM Mindmap m WHERE m.status = :status AND m.deletedAt IS NULL ORDER BY m.createdAt DESC")

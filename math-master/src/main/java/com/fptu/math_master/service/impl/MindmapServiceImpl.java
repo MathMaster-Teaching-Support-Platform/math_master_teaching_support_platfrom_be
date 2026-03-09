@@ -127,8 +127,8 @@ public class MindmapServiceImpl implements MindmapService {
 
     mindmap = mindmapRepository.save(mindmap);
 
-    // Create nodes from the structure
-    List<MindmapNode> nodes = createNodesFromStructure(mindmap.getId(), structure.getNodes(), null);
+    // Create nodes from the structure with level-based colors
+    List<MindmapNode> nodes = createNodesFromStructure(mindmap.getId(), structure.getNodes(), null, 1);
     mindmapNodeRepository.saveAll(nodes);
 
     log.info(
@@ -145,16 +145,25 @@ public class MindmapServiceImpl implements MindmapService {
   public MindmapDetailResponse getMindmapById(UUID id) {
     log.info("Getting mindmap by id: {}", id);
 
+    // Use optimized query with JOIN FETCH to load teacher and lesson in one query
     Mindmap mindmap =
         mindmapRepository
-            .findByIdAndNotDeleted(id)
+            .findByIdWithDetailsAndNotDeleted(id)
             .orElseThrow(() -> new AppException(ErrorCode.MINDMAP_NOT_FOUND));
 
     validateOwnerOrAdmin(mindmap.getTeacherId(), getCurrentUserId());
 
-    List<MindmapNodeResponse> nodes = getNodesByMindmap(id);
+    // Fetch all nodes in one query
+    List<MindmapNode> allNodes =
+        mindmapNodeRepository.findByMindmapIdOrderByDisplayOrder(mindmap.getId());
 
-    return MindmapDetailResponse.builder().mindmap(mapToResponse(mindmap)).nodes(nodes).build();
+    // Build hierarchical structure
+    List<MindmapNodeResponse> nodes = buildNodeHierarchy(allNodes);
+
+    // Pass node count directly instead of querying again
+    MindmapResponse mindmapResponse = mapToResponseWithNodeCount(mindmap, allNodes.size());
+
+    return MindmapDetailResponse.builder().mindmap(mindmapResponse).nodes(nodes).build();
   }
 
   @Override
@@ -249,17 +258,22 @@ public class MindmapServiceImpl implements MindmapService {
     UUID currentUserId = getCurrentUserId();
     log.info("Getting mindmaps for teacher: {} with lessonId: {}", currentUserId, lessonId);
 
+    Page<Mindmap> mindmaps;
     if (lessonId != null) {
       // Filter by both teacherId and lessonId
-      return mindmapRepository
-          .findByTeacherIdAndLessonIdAndNotDeleted(currentUserId, lessonId, pageable)
-          .map(this::mapToResponse);
+      mindmaps =
+          mindmapRepository.findByTeacherIdAndLessonIdAndNotDeleted(
+              currentUserId, lessonId, pageable);
     } else {
-      // Get all mindmaps for the teacher
-      return mindmapRepository
-          .findByTeacherIdAndNotDeleted(currentUserId, pageable)
-          .map(this::mapToResponse);
+      // Get all mindmaps for the teacher with optimized query
+      mindmaps = mindmapRepository.findByTeacherIdWithDetailsAndNotDeleted(currentUserId, pageable);
     }
+
+    // Batch fetch node counts to avoid N+1
+    List<UUID> mindmapIds = mindmaps.getContent().stream().map(Mindmap::getId).toList();
+    Map<UUID, Long> nodeCounts = getNodeCountsForMindmaps(mindmapIds);
+
+    return mindmaps.map(m -> mapToResponseWithNodeCount(m, nodeCounts.getOrDefault(m.getId(), 0L).intValue()));
   }
 
   @Override
@@ -271,9 +285,15 @@ public class MindmapServiceImpl implements MindmapService {
         .findById(lessonId)
         .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
-    return mindmapRepository
-        .findByLessonIdAndNotDeleted(lessonId, pageable)
-        .map(this::mapToResponse);
+    Page<Mindmap> mindmaps =
+        mindmapRepository.findByLessonIdWithDetailsAndNotDeleted(lessonId, pageable);
+
+    // Batch fetch node counts to avoid N+1
+    List<UUID> mindmapIds = mindmaps.getContent().stream().map(Mindmap::getId).toList();
+    Map<UUID, Long> nodeCounts = getNodeCountsForMindmaps(mindmapIds);
+
+    return mindmaps.map(
+        m -> mapToResponseWithNodeCount(m, nodeCounts.getOrDefault(m.getId(), 0L).intValue()));
   }
 
   @Override
@@ -421,8 +441,17 @@ public class MindmapServiceImpl implements MindmapService {
         %s
 
         IMPORTANT: The mindmap must have EXACTLY %d levels deep (including the root node).
-        - Level 1: Root node
-        - Level 2-%d: Child nodes at each subsequent level
+        - Level 1: Root node (will use blue color)
+        - Level 2: Child nodes (will use green color)
+        - Level 3+: Subsequent levels (will use red, yellow, purple colors)
+
+        CRITICAL: All nodes at the SAME LEVEL must have the SAME COLOR.
+        - Level 1 (root): #4A90E2 (blue)
+        - Level 2 (main branches): #50C878 (green)
+        - Level 3: #FF6B6B (red)
+        - Level 4: #FFD93D (yellow)
+        - Level 5: #A29BFE (purple)
+        - Level 6+: #FF8C94 (pink)
 
         Return ONLY valid JSON in the following format (no markdown, no code blocks, no additional text):
         {
@@ -444,7 +473,7 @@ public class MindmapServiceImpl implements MindmapService {
                 },
                 {
                   "content": "Sub-topic 2",
-                  "color": "#FF6B6B",
+                  "color": "#50C878",
                   "icon": "star",
                   "displayOrder": 1,
                   "children": []
@@ -457,13 +486,13 @@ public class MindmapServiceImpl implements MindmapService {
         Guidelines:
         - Create a hierarchical structure with 1 root node and multiple levels of children
         - The structure MUST be exactly %d levels deep
-        - Use colors: #4A90E2 (blue), #50C878 (green), #FF6B6B (red), #FFD93D (yellow), #A29BFE (purple)
+        - IMPORTANT: All nodes at the same level MUST have the same color
         - Use appropriate icons: lightbulb, bookmark, star, brain, book, target, check-circle, info-circle
         - Keep content concise (max 100 characters per node)
         - Create 3-7 main branches from root, each with 2-5 sub-nodes at each level
         - Ensure displayOrder is sequential (0, 1, 2, ...)
         """
-        .formatted(userPrompt, levels, levels, levels);
+        .formatted(userPrompt, levels, levels);
   }
 
   private MindmapStructure parseMindmapFromAI(String aiResponse) throws Exception {
@@ -482,9 +511,26 @@ public class MindmapServiceImpl implements MindmapService {
     return objectMapper.readValue(cleanedResponse, MindmapStructure.class);
   }
 
+  /**
+   * Color palette for each level to ensure consistent coloring
+   */
+  private static final String[] LEVEL_COLORS = {
+    "#4A90E2", // Level 1 - Blue (root)
+    "#50C878", // Level 2 - Green (main branches)
+    "#FF6B6B", // Level 3 - Red
+    "#FFD93D", // Level 4 - Yellow
+    "#A29BFE", // Level 5 - Purple
+    "#FF8C94"  // Level 6+ - Pink
+  };
+
   private List<MindmapNode> createNodesFromStructure(
-      UUID mindmapId, List<NodeStructure> structures, UUID parentId) {
+      UUID mindmapId, List<NodeStructure> structures, UUID parentId, int level) {
     List<MindmapNode> nodes = new ArrayList<>();
+
+    // Get color for this level (use last color if exceeds array length)
+    String levelColor = level <= LEVEL_COLORS.length 
+        ? LEVEL_COLORS[level - 1] 
+        : LEVEL_COLORS[LEVEL_COLORS.length - 1];
 
     for (NodeStructure structure : structures) {
       MindmapNode node =
@@ -492,7 +538,7 @@ public class MindmapServiceImpl implements MindmapService {
               .mindmapId(mindmapId)
               .parentId(parentId)
               .content(structure.getContent())
-              .color(structure.getColor())
+              .color(levelColor) // Override with level-based color
               .icon(structure.getIcon())
               .displayOrder(structure.getDisplayOrder())
               .build();
@@ -500,10 +546,10 @@ public class MindmapServiceImpl implements MindmapService {
       node = mindmapNodeRepository.save(node);
       nodes.add(node);
 
-      // Recursively create children
+      // Recursively create children with incremented level
       if (structure.getChildren() != null && !structure.getChildren().isEmpty()) {
         List<MindmapNode> children =
-            createNodesFromStructure(mindmapId, structure.getChildren(), node.getId());
+            createNodesFromStructure(mindmapId, structure.getChildren(), node.getId(), level + 1);
         nodes.addAll(children);
       }
     }
@@ -549,6 +595,77 @@ public class MindmapServiceImpl implements MindmapService {
         .createdAt(mindmap.getCreatedAt())
         .updatedAt(mindmap.getUpdatedAt())
         .build();
+  }
+
+  /**
+   * Optimized version that accepts node count to avoid extra query
+   */
+  private MindmapResponse mapToResponseWithNodeCount(Mindmap mindmap, int nodeCount) {
+    String teacherName = null;
+    if (mindmap.getTeacher() != null) {
+      User teacher = mindmap.getTeacher();
+      teacherName = teacher.getFullName() != null ? teacher.getFullName() : "Unknown";
+    } else {
+      teacherName =
+          userRepository
+              .findById(mindmap.getTeacherId())
+              .map(u -> u.getFullName() != null ? u.getFullName() : "Unknown")
+              .orElse("Unknown");
+    }
+
+    String lessonTitle = null;
+    if (mindmap.getLesson() != null) {
+      lessonTitle = mindmap.getLesson().getTitle();
+    } else if (mindmap.getLessonId() != null) {
+      lessonTitle =
+          lessonRepository.findById(mindmap.getLessonId()).map(Lesson::getTitle).orElse(null);
+    }
+
+    return MindmapResponse.builder()
+        .id(mindmap.getId())
+        .teacherId(mindmap.getTeacherId())
+        .teacherName(teacherName)
+        .lessonId(mindmap.getLessonId())
+        .lessonTitle(lessonTitle)
+        .title(mindmap.getTitle())
+        .description(mindmap.getDescription())
+        .aiGenerated(mindmap.getAiGenerated())
+        .generationPrompt(mindmap.getGenerationPrompt())
+        .status(mindmap.getStatus())
+        .nodeCount(nodeCount)
+        .createdAt(mindmap.getCreatedAt())
+        .updatedAt(mindmap.getUpdatedAt())
+        .build();
+  }
+
+  /**
+   * Build node hierarchy from flat list without additional queries
+   */
+  private List<MindmapNodeResponse> buildNodeHierarchy(List<MindmapNode> allNodes) {
+    Map<UUID, MindmapNodeResponse> nodeMap = new HashMap<>();
+    List<MindmapNodeResponse> rootNodes = new ArrayList<>();
+
+    // First pass: create all node responses
+    for (MindmapNode node : allNodes) {
+      MindmapNodeResponse response = mapNodeToResponse(node);
+      response.setChildren(new ArrayList<>());
+      nodeMap.put(node.getId(), response);
+    }
+
+    // Second pass: build hierarchy
+    for (MindmapNode node : allNodes) {
+      MindmapNodeResponse response = nodeMap.get(node.getId());
+      if (node.getParentId() == null) {
+        rootNodes.add(response);
+      } else {
+        MindmapNodeResponse parent = nodeMap.get(node.getParentId());
+        if (parent != null) {
+          parent.getChildren().add(response);
+        }
+      }
+    }
+
+    return rootNodes;
   }
 
   private MindmapNodeResponse mapNodeToResponse(MindmapNode node) {
@@ -614,6 +731,21 @@ public class MindmapServiceImpl implements MindmapService {
     if (!isAdmin) {
       throw new AppException(ErrorCode.MINDMAP_ACCESS_DENIED);
     }
+  }
+
+  /**
+   * Batch fetch node counts for multiple mindmaps in one query to avoid N+1
+   */
+  private Map<UUID, Long> getNodeCountsForMindmaps(List<UUID> mindmapIds) {
+    if (mindmapIds == null || mindmapIds.isEmpty()) {
+      return new HashMap<>();
+    }
+
+    return mindmapNodeRepository.countByMindmapIds(mindmapIds).stream()
+        .collect(
+            java.util.stream.Collectors.toMap(
+                MindmapNodeRepository.NodeCountProjection::getMindmapId,
+                MindmapNodeRepository.NodeCountProjection::getCount));
   }
 
   // Inner classes for AI response parsing

@@ -13,7 +13,8 @@ import org.hibernate.annotations.Nationalized;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
 @Entity
 @Table(
     name = "mindmaps",
@@ -68,13 +69,19 @@ public class Mindmap {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
+  @ToString.Exclude
+  @EqualsAndHashCode.Exclude
   private User teacher;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
+  @ToString.Exclude
+  @EqualsAndHashCode.Exclude
   private Lesson lesson;
 
   @OneToMany(mappedBy = "mindmap", cascade = CascadeType.ALL, orphanRemoval = true)
+  @ToString.Exclude
+  @EqualsAndHashCode.Exclude
   private Set<MindmapNode> nodes;
 
   @PrePersist
