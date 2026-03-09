@@ -46,12 +46,6 @@ public class RoadmapTopicResponse {
   @Schema(description = "Progress percentage for this topic")
   private BigDecimal progressPercentage;
 
-  @Schema(description = "Number of completed subtopics")
-  private Integer completedSubTopics;
-
-  @Schema(description = "Total subtopics in this topic")
-  private Integer totalSubTopics;
-
   @Schema(description = "Estimated hours to complete")
   private Integer estimatedHours;
 
@@ -61,9 +55,9 @@ public class RoadmapTopicResponse {
   @Schema(description = "When topic was completed")
   private Instant completedAt;
 
-  @Schema(description = "Subtopics under this topic")
-  private List<RoadmapSubtopicResponse> subtopics;
+  @Schema(description = "Assessments for this topic (from linked lesson)")
+  private List<AssessmentResponse> assessments;
 
-  @Schema(description = "Learning materials for this topic")
-  private List<TopicMaterialResponse> materials;
+  @Schema(description = "Mindmaps for this topic (from linked lesson)")
+  private List<MindmapResponse> mindmaps;
 }

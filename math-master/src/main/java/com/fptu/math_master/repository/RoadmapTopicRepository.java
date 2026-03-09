@@ -50,11 +50,6 @@ public interface RoadmapTopicRepository extends JpaRepository<RoadmapTopic, UUID
   Long countByRoadmapIdAndStatus(UUID roadmapId, TopicStatus status);
 
   /**
-   * Find topics linked to specific chapter
-   */
-  List<RoadmapTopic> findByRoadmapIdAndChapterId(UUID roadmapId, UUID chapterId);
-
-  /**
    * Check if all prerequisites for a topic are completed
    */
   @Query("SELECT CASE WHEN COUNT(t) = 0 THEN true ELSE false END "

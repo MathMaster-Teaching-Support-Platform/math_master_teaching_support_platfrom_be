@@ -6,7 +6,6 @@ import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Set;
 import java.util.UUID;
 
 import jakarta.validation.constraints.Size;
@@ -17,12 +16,12 @@ import org.hibernate.annotations.Nationalized;
  * Represents a topic/module within a learning roadmap
  *
  * <p>Topics are organized by:
- * - Chapter (from the curriculum lessons)
+ * - Lesson (from the curriculum)
  * - Difficulty level
  * - Status (not started, in progress, completed, locked)
  * - Progress tracking
  *
- * <p>Topics may have subtopics for finer-grained learning paths.
+ * <p>Topics have assessments and mindmaps organized by lessons.
  */
 @Builder
 @AllArgsConstructor
@@ -33,7 +32,7 @@ import org.hibernate.annotations.Nationalized;
     name = "roadmap_topics",
     indexes = {
       @Index(name = "idx_roadmap_topics_roadmap", columnList = "roadmap_id"),
-      @Index(name = "idx_roadmap_topics_chapter", columnList = "chapter_id"),
+      @Index(name = "idx_roadmap_topics_lesson", columnList = "lesson_id"),
       @Index(name = "idx_roadmap_topics_status", columnList = "status"),
       @Index(name = "idx_roadmap_topics_sequence", columnList = "sequence_order")
     })
@@ -47,8 +46,8 @@ public class RoadmapTopic {
   @Column(name = "roadmap_id", nullable = false)
   private UUID roadmapId;
 
-  @Column(name = "chapter_id")
-  private UUID chapterId; // Reference to existing Chapter entity
+  @Column(name = "lesson_id")
+  private UUID lessonId; // Reference to lesson entity
 
   @Size(max = 255)
   @Nationalized
@@ -77,12 +76,6 @@ public class RoadmapTopic {
   @Column(name = "progress_percentage", nullable = false, precision = 5, scale = 2)
   private BigDecimal progressPercentage; // 0-100%
 
-  @Column(name = "completed_sub_topics", nullable = false)
-  private Integer completedSubTopics = 0;
-
-  @Column(name = "total_sub_topics", nullable = false)
-  private Integer totalSubTopics = 0;
-
   @Column(name = "estimated_hours", nullable = false)
   private Integer estimatedHours = 1; // Estimated time to complete
 
@@ -104,21 +97,13 @@ public class RoadmapTopic {
   private LearningRoadmap roadmap;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "chapter_id", insertable = false, updatable = false)
-  private Chapter chapter;
-
-  @OneToMany(mappedBy = "topic", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-  private Set<RoadmapSubtopic> subtopics;
-
-  @OneToMany(mappedBy = "topic", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-  private Set<TopicLearningMaterial> learningMaterials;
+  @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
+  private Lesson lesson;
 
   @PrePersist
   public void prePersist() {
     if (status == null) status = TopicStatus.NOT_STARTED;
     if (progressPercentage == null) progressPercentage = BigDecimal.ZERO;
-    if (completedSubTopics == null) completedSubTopics = 0;
-    if (totalSubTopics == null) totalSubTopics = 0;
     if (estimatedHours == null) estimatedHours = 1;
     if (priority == null) priority = 0;
     if (createdAt == null) createdAt = Instant.now();
