@@ -1,6 +1,5 @@
 package com.fptu.math_master.controller;
 
-import com.fptu.math_master.dto.request.CompleteSubtopicRequest;
 import com.fptu.math_master.dto.request.UpdateTopicProgressRequest;
 import com.fptu.math_master.dto.response.*;
 import com.fptu.math_master.service.LearningRoadmapService;
@@ -193,25 +192,6 @@ public class LearningRoadmapController {
     return ApiResponse.<RoadmapTopicResponse>builder()
         .code(1000)
         .message("Topic progress updated successfully")
-        .result(result)
-        .build();
-  }
-
-  @PostMapping("/subtopics/{subtopicId}/complete")
-  @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
-  @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Complete a subtopic", description = "Mark a subtopic as completed and update parent topic progress")
-  public ApiResponse<RoadmapSubtopicResponse> completeSubtopic(
-      @Parameter(description = "Subtopic ID") @PathVariable UUID subtopicId,
-      @Valid @RequestBody CompleteSubtopicRequest request) {
-    log.info("POST /roadmaps/subtopics/{}/complete – completing subtopic", subtopicId);
-
-    request.setSubtopicId(subtopicId);
-    RoadmapSubtopicResponse result = roadmapService.completeSubtopic(request);
-
-    return ApiResponse.<RoadmapSubtopicResponse>builder()
-        .code(1000)
-        .message("Subtopic completed successfully")
         .result(result)
         .build();
   }

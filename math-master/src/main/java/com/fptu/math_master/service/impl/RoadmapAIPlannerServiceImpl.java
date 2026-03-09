@@ -18,10 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,8 +44,8 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
   private final GeminiService geminiService;
   private final LearningRoadmapRepository roadmapRepository;
   private final RoadmapTopicRepository topicRepository;
-  private final RoadmapSubtopicRepository subtopicRepository;
-  private final TopicLearningMaterialRepository materialRepository;
+  private final AssessmentRepository assessmentRepository;
+  private final MindmapRepository mindmapRepository;
   private final LessonRepository lessonRepository;
   private final ChapterRepository chapterRepository;
   private final QuestionRepository questionRepository;
@@ -320,14 +318,14 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
 
     int sequenceOrder = 1;
     for (AIPlannerResponse.PrioritizedTopic aiTopic : sortedTopics) {
-      // Find matching chapter
-      Chapter chapter = findChapterByTitle(aiTopic.title, roadmap.getGradeLevel());
+      // Find matching lesson
+      Lesson lesson = findLessonByTitle(aiTopic.title, roadmap.getGradeLevel());
 
       QuestionDifficulty difficulty = QuestionDifficulty.valueOf(aiTopic.difficulty);
 
       RoadmapTopic topic = RoadmapTopic.builder()
           .roadmapId(roadmap.getId())
-          .chapterId(chapter != null ? chapter.getId() : null)
+          .lessonId(lesson != null ? lesson.getId() : null)
           .title(aiTopic.title)
           .description("AI-recommended: " + aiTopic.rationale)
           .status(TopicStatus.NOT_STARTED)
@@ -335,28 +333,20 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
           .sequenceOrder(sequenceOrder++)
           .priority(aiTopic.priority)
           .progressPercentage(BigDecimal.ZERO)
-          .completedSubTopics(0)
-          .totalSubTopics(0)
           .estimatedHours(aiTopic.estimatedHours)
           .build();
 
       topic = topicRepository.save(topic);
       createdTopics.add(topic);
-
-      // Generate subtopics and link materials
-      if (chapter != null) {
-        generateSubtopicsForTopic(topic);
-        linkMaterialsForTopic(topic, chapter, difficulty);
-      }
     }
 
     return createdTopics;
   }
 
   /**
-   * Find chapter by title (best effort matching)
+   * Find lesson by title (best effort matching)
    */
-  private Chapter findChapterByTitle(String title, String gradeLevel) {
+  private Lesson findLessonByTitle(String title, String gradeLevel) {
     try {
       // Convert to lowercase for case-insensitive search
       String searchTitle = title.toLowerCase();
@@ -365,79 +355,15 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
       List<Lesson> lessons = lessonRepository.findByGradeLevelAndNotDeleted(gradeLevel);
 
       for (Lesson lesson : lessons) {
-        List<Chapter> chapters = chapterRepository.findByLessonIdAndNotDeleted(lesson.getId());
-        for (Chapter chapter : chapters) {
-          if (chapter.getTitle().toLowerCase().contains(searchTitle)
-              || searchTitle.contains(chapter.getTitle().toLowerCase())) {
-            return chapter;
-          }
+        if (lesson.getTitle().toLowerCase().contains(searchTitle)
+            || searchTitle.contains(lesson.getTitle().toLowerCase())) {
+          return lesson;
         }
       }
     } catch (Exception e) {
-      log.warn("Error finding chapter by title '{}': {}", title, e.getMessage());
+      log.warn("Error finding lesson by title '{}': {}", title, e.getMessage());
     }
     return null;
-  }
-
-  /**
-   * Generate subtopics for a topic
-   */
-  private void generateSubtopicsForTopic(RoadmapTopic topic) {
-    for (int i = 1; i <= 3; i++) {
-      RoadmapSubtopic subtopic = RoadmapSubtopic.builder()
-          .topicId(topic.getId())
-          .title(topic.getTitle() + " - Part " + i)
-          .description("Subtopic " + i + " of " + topic.getTitle())
-          .status(TopicStatus.NOT_STARTED)
-          .sequenceOrder(i)
-          .progressPercentage(BigDecimal.ZERO)
-          .estimatedMinutes(30)
-          .build();
-
-      subtopicRepository.save(subtopic);
-    }
-
-    topic.setTotalSubTopics(3);
-    topicRepository.save(topic);
-  }
-
-  /**
-   * Link learning materials to topic
-   */
-  private void linkMaterialsForTopic(RoadmapTopic topic, Chapter chapter, QuestionDifficulty difficulty) {
-    int sequenceOrder = 1;
-
-    // Link lessons
-    List<Lesson> lessons = lessonRepository.findByChapterIdAndNotDeleted(chapter.getId());
-    for (Lesson lesson : lessons.stream().limit(2).collect(Collectors.toList())) {
-      TopicLearningMaterial material = TopicLearningMaterial.builder()
-          .topicId(topic.getId())
-          .lessonId(lesson.getId())
-          .resourceTitle(lesson.getTitle())
-          .resourceType("LESSON")
-          .sequenceOrder(sequenceOrder++)
-          .isRequired(true)
-          .build();
-
-      materialRepository.save(material);
-    }
-
-    // Link practice questions
-    List<Question> questions = questionRepository.findByChapterIdAndDifficultyOrderByCreatedAt(
-        chapter.getId(), difficulty);
-
-    for (Question question : questions.stream().limit(5).collect(Collectors.toList())) {
-      TopicLearningMaterial material = TopicLearningMaterial.builder()
-          .topicId(topic.getId())
-          .questionId(question.getId())
-          .resourceTitle("Practice: " + question.getQuestionText().substring(0, Math.min(50, question.getQuestionText().length())))
-          .resourceType("PRACTICE")
-          .sequenceOrder(sequenceOrder++)
-          .isRequired(true)
-          .build();
-
-      materialRepository.save(material);
-    }
   }
 
   /**
@@ -446,7 +372,7 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
   private RoadmapDetailResponse getRoadmapDetailResponse(LearningRoadmap roadmap) {
     // Fetch topics from database
     List<RoadmapTopic> topics = topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmap.getId());
-    
+
     // Map topics to response DTOs
     List<RoadmapTopicResponse> topicResponses = topics.stream()
         .map(topic -> RoadmapTopicResponse.builder()
@@ -458,16 +384,12 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
             .sequenceOrder(topic.getSequenceOrder())
             .priority(topic.getPriority())
             .progressPercentage(topic.getProgressPercentage())
-            .completedSubTopics(topic.getCompletedSubTopics())
-            .totalSubTopics(topic.getTotalSubTopics())
             .estimatedHours(topic.getEstimatedHours())
             .startedAt(topic.getStartedAt())
             .completedAt(topic.getCompletedAt())
-            .subtopics(new ArrayList<>()) // Subtopics not loaded for performance
-            .materials(new ArrayList<>()) // Materials not loaded for performance
             .build())
         .collect(Collectors.toList());
-    
+
     return RoadmapDetailResponse.builder()
         .id(roadmap.getId())
         .studentId(roadmap.getStudentId())

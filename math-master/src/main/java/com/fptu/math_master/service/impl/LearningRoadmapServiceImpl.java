@@ -1,6 +1,5 @@
 package com.fptu.math_master.service.impl;
 
-import com.fptu.math_master.dto.request.CompleteSubtopicRequest;
 import com.fptu.math_master.dto.request.UpdateTopicProgressRequest;
 import com.fptu.math_master.dto.response.*;
 import com.fptu.math_master.entity.*;
@@ -51,12 +50,11 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   LearningRoadmapRepository roadmapRepository;
   RoadmapTopicRepository topicRepository;
   GradeRepository gradeRepository;
-  RoadmapSubtopicRepository subtopicRepository;
+  AssessmentRepository assessmentRepository;
+  MindmapRepository mindmapRepository;
   TopicLearningMaterialRepository materialRepository;
   LessonRepository lessonRepository;
-  ChapterRepository chapterRepository;
   UserRepository userRepository;
-  QuestionRepository questionRepository;
   StudentWishRepository studentWishRepository;
 
   // Services
@@ -182,45 +180,6 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
 
     log.info("Topic progress updated successfully: topicId={}", topic.getId());
     return mapToTopicResponse(topic);
-  }
-
-  @Override
-  @Transactional
-  public RoadmapSubtopicResponse completeSubtopic(CompleteSubtopicRequest request) {
-    log.info("Completing subtopic: subtopicId={}", request.getSubtopicId());
-
-    RoadmapSubtopic subtopic = subtopicRepository.findById(request.getSubtopicId())
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
-    subtopic.setStatus(TopicStatus.COMPLETED);
-    subtopic.setProgressPercentage(BigDecimal.valueOf(100));
-    subtopic.setCompletedAt(Instant.now());
-    subtopic = subtopicRepository.save(subtopic);
-
-    // Update parent topic's completed count
-    RoadmapTopic topic = subtopic.getTopic();
-    Long completedCount = subtopicRepository.countByTopicIdAndStatus(topic.getId(), TopicStatus.COMPLETED);
-    topic.setCompletedSubTopics(completedCount.intValue());
-
-    // Calculate topic progress
-    BigDecimal topicProgress = BigDecimal.valueOf(completedCount.doubleValue() / topic.getTotalSubTopics() * 100)
-        .setScale(2, RoundingMode.HALF_UP);
-    topic.setProgressPercentage(topicProgress);
-
-    // If all subtopics completed, mark topic as completed
-    if (completedCount >= topic.getTotalSubTopics()) {
-      topic.setStatus(TopicStatus.COMPLETED);
-      topic.setProgressPercentage(BigDecimal.valueOf(100));
-      topic.setCompletedAt(Instant.now());
-    }
-
-    topic = topicRepository.save(topic);
-
-    // Update roadmap progress
-    updateRoadmapProgress(topic.getRoadmapId());
-
-    log.info("Subtopic completed successfully: subtopicId={}", subtopic.getId());
-    return mapToSubtopicResponse(subtopic);
   }
 
   @Override
@@ -499,15 +458,23 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   }
 
   private RoadmapTopicResponse mapToTopicResponse(RoadmapTopic topic) {
-    List<RoadmapSubtopic> subtopics = subtopicRepository.findByTopicIdOrderBySequenceOrder(topic.getId());
-    List<RoadmapSubtopicResponse> subtopicResponses = subtopics.stream()
-        .map(this::mapToSubtopicResponse)
-        .collect(Collectors.toList());
-
-    List<TopicLearningMaterial> materials = materialRepository.findByTopicIdOrderBySequenceOrder(topic.getId());
-    List<TopicMaterialResponse> materialResponses = materials.stream()
-        .map(this::mapToMaterialResponse)
-        .collect(Collectors.toList());
+    List<AssessmentResponse> assessmentResponses = new ArrayList<>();
+    List<MindmapResponse> mindmapResponses = new ArrayList<>();
+    
+    // Load assessments and mindmaps from the linked lesson
+    if (topic.getLessonId() != null) {
+      // Fetch assessments for the lesson
+      Page<Assessment> assessmentsPage = assessmentRepository.findByLessonIdAndNotDeleted(topic.getLessonId(), Pageable.unpaged());
+      assessmentResponses = assessmentsPage.getContent().stream()
+          .map(this::mapToAssessmentResponse)
+          .collect(Collectors.toList());
+      
+      // Fetch mindmaps for the lesson
+      Page<Mindmap> mindmapsPage = mindmapRepository.findByLessonIdAndNotDeleted(topic.getLessonId(), Pageable.unpaged());
+      mindmapResponses = mindmapsPage.getContent().stream()
+          .map(this::mapToMindmapResponse)
+          .collect(Collectors.toList());
+    }
 
     return RoadmapTopicResponse.builder()
         .id(topic.getId())
@@ -518,27 +485,51 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .sequenceOrder(topic.getSequenceOrder())
         .priority(topic.getPriority())
         .progressPercentage(topic.getProgressPercentage())
-        .completedSubTopics(topic.getCompletedSubTopics())
-        .totalSubTopics(topic.getTotalSubTopics())
         .estimatedHours(topic.getEstimatedHours())
         .startedAt(topic.getStartedAt())
         .completedAt(topic.getCompletedAt())
-        .subtopics(subtopicResponses)
-        .materials(materialResponses)
+        .assessments(assessmentResponses)
+        .mindmaps(mindmapResponses)
         .build();
   }
 
-  private RoadmapSubtopicResponse mapToSubtopicResponse(RoadmapSubtopic subtopic) {
-    return RoadmapSubtopicResponse.builder()
-        .id(subtopic.getId())
-        .title(subtopic.getTitle())
-        .description(subtopic.getDescription())
-        .status(subtopic.getStatus())
-        .sequenceOrder(subtopic.getSequenceOrder())
-        .progressPercentage(subtopic.getProgressPercentage())
-        .estimatedMinutes(subtopic.getEstimatedMinutes())
-        .startedAt(subtopic.getStartedAt())
-        .completedAt(subtopic.getCompletedAt())
+  private AssessmentResponse mapToAssessmentResponse(Assessment assessment) {
+    return AssessmentResponse.builder()
+        .id(assessment.getId())
+        .teacherId(assessment.getTeacherId())
+        .lessonId(assessment.getLessonId())
+        .title(assessment.getTitle())
+        .description(assessment.getDescription())
+        .assessmentType(assessment.getAssessmentType())
+        .timeLimitMinutes(assessment.getTimeLimitMinutes())
+        .passingScore(assessment.getPassingScore())
+        .startDate(assessment.getStartDate())
+        .endDate(assessment.getEndDate())
+        .randomizeQuestions(assessment.getRandomizeQuestions())
+        .showCorrectAnswers(assessment.getShowCorrectAnswers())
+        .hasMatrix(assessment.getHasMatrix())
+        .allowMultipleAttempts(assessment.getAllowMultipleAttempts())
+        .maxAttempts(assessment.getMaxAttempts())
+        .attemptScoringPolicy(assessment.getAttemptScoringPolicy())
+        .showScoreImmediately(assessment.getShowScoreImmediately())
+        .status(assessment.getStatus())
+        .createdAt(assessment.getCreatedAt())
+        .updatedAt(assessment.getUpdatedAt())
+        .build();
+  }
+
+  private MindmapResponse mapToMindmapResponse(Mindmap mindmap) {
+    return MindmapResponse.builder()
+        .id(mindmap.getId())
+        .teacherId(mindmap.getTeacherId())
+        .lessonId(mindmap.getLessonId())
+        .title(mindmap.getTitle())
+        .description(mindmap.getDescription())
+        .aiGenerated(mindmap.getAiGenerated())
+        .generationPrompt(mindmap.getGenerationPrompt())
+        .status(mindmap.getStatus())
+        .createdAt(mindmap.getCreatedAt())
+        .updatedAt(mindmap.getUpdatedAt())
         .build();
   }
 

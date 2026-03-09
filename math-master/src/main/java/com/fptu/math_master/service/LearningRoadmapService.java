@@ -1,6 +1,5 @@
 package com.fptu.math_master.service;
 
-import com.fptu.math_master.dto.request.CompleteSubtopicRequest;
 import com.fptu.math_master.dto.request.UpdateTopicProgressRequest;
 import com.fptu.math_master.dto.response.*;
 import java.util.List;
@@ -14,7 +13,7 @@ import org.springframework.data.domain.Pageable;
  * <p>Responsibilities:
  * - Generate personalized learning roadmaps based on student performance
  * - Create default grade-based roadmaps when needed
- * - Track student progress through topics and subtopics
+ * - Track student progress through topics
  * - Link learning materials (lessons, questions) to roadmap topics
  * - Calculate roadmap completion statistics
  *
@@ -89,20 +88,6 @@ public interface LearningRoadmapService {
    * @return updated topic response
    */
   RoadmapTopicResponse updateTopicProgress(UpdateTopicProgressRequest request);
-
-  /**
-   * Mark a subtopic as completed
-   *
-   * <p>Logic:
-   * - Update subtopic status to COMPLETED
-   * - Update parent topic completion count
-   * - Recalculate parent topic progress percentage
-   * - Check if topic should transition to COMPLETED
-   *
-   * @param request completion details
-   * @return updated subtopic response
-   */
-  RoadmapSubtopicResponse completeSubtopic(CompleteSubtopicRequest request);
 
   /**
    * Get next recommended topic to learn
