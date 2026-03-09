@@ -1,7 +1,6 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.CompleteSubtopicRequest;
-import com.fptu.math_master.dto.request.GenerateRoadmapRequest;
 import com.fptu.math_master.dto.request.UpdateTopicProgressRequest;
 import com.fptu.math_master.dto.response.*;
 import com.fptu.math_master.service.LearningRoadmapService;
@@ -55,35 +54,6 @@ public class LearningRoadmapController {
   // ============================================================================
   // ROADMAP GENERATION & RETRIEVAL
   // ============================================================================
-
-  @PostMapping("/generate")
-  @ResponseStatus(HttpStatus.CREATED)
-  @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Generate a learning roadmap for a student",
-      description =
-          "Generate a personalized learning roadmap based on student performance, "
-              + "or create a default grade-based roadmap. "
-              + "Supports PERSONALIZED, DEFAULT, and TEACHER_ASSIGNED generation types.")
-
-  public ApiResponse<RoadmapDetailResponse> generateRoadmap(
-      @Valid @RequestBody GenerateRoadmapRequest request) {
-    // Extract studentId from JWT token
-    String userId = SecurityContextHolder.getContext().getAuthentication().getName();
-    UUID studentId = UUID.fromString(userId);
-
-    log.info("POST /roadmaps/generate – studentId={}, subject={}, type={}",
-        studentId, request.getSubject(), request.getGenerationType());
-
-
-    RoadmapDetailResponse result = roadmapService.generateRoadmap(request);
-
-    return ApiResponse.<RoadmapDetailResponse>builder()
-        .code(201)
-        .message("Roadmap generated successfully")
-        .result(result)
-        .build();
-  }
 
   @PostMapping("/generate-from-wish/{wishId}")
   @ResponseStatus(HttpStatus.CREATED)
@@ -384,44 +354,6 @@ public class LearningRoadmapController {
   // WEAK AREA ANALYSIS
   // ============================================================================
 
-  @GetMapping("/analysis/weak-topics")
-  @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
-  @SecurityRequirement(name = "bearerAuth")
-  @Operation(
-      summary = "Analyze weak topics",
-      description = "Identify and analyze weak topics for a student based on performance data")
-  public ApiResponse<List<RoadmapTopicResponse>> analyzeWeakTopics(
-      @Parameter(description = "Student ID") @RequestParam UUID studentId,
-      @Parameter(description = "Subject name") @RequestParam String subject) {
-    log.info("GET /roadmaps/analysis/weak-topics – analyzing student={}, subject={}", studentId, subject);
-
-    List<RoadmapTopicResponse> result = roadmapService.analyzeWeakTopics(studentId, subject);
-
-    return ApiResponse.<List<RoadmapTopicResponse>>builder()
-        .code(1000)
-        .message("Analysis complete")
-        .result(result)
-        .build();
-  }
-
-  @PutMapping("/{roadmapId}/refresh-with-performance")
-  @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
-  @SecurityRequirement(name = "bearerAuth")
-  @Operation(
-      summary = "Refresh roadmap with performance data",
-      description = "Re-analyze and update roadmap priorities based on latest performance data")
-  public ApiResponse<RoadmapDetailResponse> refreshRoadmapWithPerformanceData(
-      @Parameter(description = "Roadmap ID") @PathVariable UUID roadmapId) {
-    log.info("PUT /roadmaps/{}/refresh-with-performance – refreshing roadmap", roadmapId);
-
-    RoadmapDetailResponse result = roadmapService.refreshRoadmapWithPerformanceData(roadmapId);
-
-    return ApiResponse.<RoadmapDetailResponse>builder()
-        .code(1000)
-        .message("Roadmap refreshed with updated priorities")
-        .result(result)
-        .build();
-  }
 
   // ============================================================================
   // UTILITY & ADMINISTRATION
