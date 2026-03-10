@@ -27,7 +27,7 @@ public class LessonPlan {
   @Column(name = "id", updatable = false, nullable = false)
   private UUID id;
 
-  @Column(name = "lesson_id", nullable = false, unique = true)
+  @Column(name = "lesson_id", nullable = false)
   private UUID lessonId;
 
   @Column(name = "teacher_id", nullable = false)
@@ -62,7 +62,7 @@ public class LessonPlan {
   @Column(name = "updated_at")
   private Instant updatedAt;
 
-  @OneToOne(fetch = FetchType.LAZY)
+  @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
   private Lesson lesson;
 

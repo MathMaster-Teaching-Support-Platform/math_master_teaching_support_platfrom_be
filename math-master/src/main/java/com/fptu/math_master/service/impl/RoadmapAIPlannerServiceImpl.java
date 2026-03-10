@@ -252,8 +252,8 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
     stats.topicStats = new ArrayList<>();
 
     try {
-      // Get grades for this student in this subject
-      List<Grade> grades = gradeRepository.findByStudentIdAndLessonSubject(studentId, subject);
+      // Get grades for this student
+      List<Grade> grades = gradeRepository.findByStudentId(studentId);
 
       if (!grades.isEmpty()) {
         stats.totalAssessmentsCompleted = grades.size();
@@ -319,7 +319,7 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
     int sequenceOrder = 1;
     for (AIPlannerResponse.PrioritizedTopic aiTopic : sortedTopics) {
       // Find matching lesson
-      Lesson lesson = findLessonByTitle(aiTopic.title, roadmap.getGradeLevel());
+      Lesson lesson = findLessonByTitle(aiTopic.title);
 
       QuestionDifficulty difficulty = QuestionDifficulty.valueOf(aiTopic.difficulty);
 
@@ -345,21 +345,34 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
 
   /**
    * Find lesson by title (best effort matching)
+   * Searches across all active lessons for a title match
    */
-  private Lesson findLessonByTitle(String title, String gradeLevel) {
+  private Lesson findLessonByTitle(String title) {
     try {
       // Convert to lowercase for case-insensitive search
-      String searchTitle = title.toLowerCase();
+      String searchTitle = title.toLowerCase().trim();
 
-      // Get lessons for grade level
-      List<Lesson> lessons = lessonRepository.findByGradeLevelAndNotDeleted(gradeLevel);
+      // Get all active lessons and find best match by title
+      List<Lesson> allLessons = lessonRepository.findAll();
 
-      for (Lesson lesson : lessons) {
-        if (lesson.getTitle().toLowerCase().contains(searchTitle)
-            || searchTitle.contains(lesson.getTitle().toLowerCase())) {
-          return lesson;
-        }
+      // First try exact title match
+      Lesson exactMatch = allLessons.stream()
+          .filter(l -> l.getDeletedAt() == null && l.getTitle().toLowerCase().equals(searchTitle))
+          .findFirst()
+          .orElse(null);
+
+      if (exactMatch != null) {
+        return exactMatch;
       }
+
+      // Then try contains match
+      Lesson containsMatch = allLessons.stream()
+          .filter(l -> l.getDeletedAt() == null && (l.getTitle().toLowerCase().contains(searchTitle)
+              || searchTitle.contains(l.getTitle().toLowerCase())))
+          .findFirst()
+          .orElse(null);
+
+      return containsMatch;
     } catch (Exception e) {
       log.warn("Error finding lesson by title '{}': {}", title, e.getMessage());
     }
