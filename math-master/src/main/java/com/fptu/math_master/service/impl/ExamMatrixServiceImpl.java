@@ -66,11 +66,6 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       throw new AppException(ErrorCode.ASSESSMENT_MUST_HAVE_LESSON);
     }
 
-    Long chapterCount = chapterRepository.countByLessonIdAndNotDeleted(assessment.getLessonId());
-    if (chapterCount == 0) {
-      throw new AppException(ErrorCode.LESSON_HAS_NO_CHAPTERS);
-    }
-
     ExamMatrix matrix =
         ExamMatrix.builder()
             .assessmentId(assessmentId)
@@ -100,6 +95,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     ExamMatrix matrix = getMatrixAndValidateAccess(matrixId);
     validateNotApprovedOrLocked(matrix);
 
+    // With new structure: Get the chapter(s) that contain the lesson
     List<Chapter> chapters = chapterRepository.findByLessonIdAndNotDeleted(matrix.getLessonId());
     Set<UUID> validChapterIds = chapters.stream().map(Chapter::getId).collect(Collectors.toSet());
 

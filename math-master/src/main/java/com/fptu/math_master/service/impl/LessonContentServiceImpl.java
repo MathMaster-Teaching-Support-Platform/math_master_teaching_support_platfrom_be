@@ -7,13 +7,16 @@ import com.fptu.math_master.dto.response.ChapterResponse;
 import com.fptu.math_master.dto.response.GenerateLessonContentResponse;
 import com.fptu.math_master.dto.response.LessonResponse;
 import com.fptu.math_master.entity.Chapter;
+import com.fptu.math_master.entity.Curriculum;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.User;
+import com.fptu.math_master.enums.CurriculumCategory;
 import com.fptu.math_master.enums.LessonDifficulty;
 import com.fptu.math_master.enums.LessonStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ChapterRepository;
+import com.fptu.math_master.repository.CurriculumRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.GeminiService;
@@ -42,6 +45,7 @@ public class LessonContentServiceImpl implements LessonContentService {
 
   LessonRepository lessonRepository;
   ChapterRepository chapterRepository;
+  CurriculumRepository curriculumRepository;
   UserRepository userRepository;
   GeminiService geminiService;
   ObjectMapper objectMapper;
@@ -55,12 +59,39 @@ public class LessonContentServiceImpl implements LessonContentService {
   public GenerateLessonContentResponse generateAndSaveContent(
       GenerateLessonContentRequest request) {
     log.info(
-        "Generating lesson content for gradeLevel={}, subject={}",
+        "Generating lesson content for gradeLevel={}, category={}",
         request.getGradeLevel(),
         request.getSubject());
 
     UUID currentUserId = getCurrentUserId();
-    validateTeacherRole(currentUserId);
+    validateAdminRole(currentUserId);
+
+    // Parse grade from gradeLevel if needed and determine category
+    Integer grade = parseGrade(request.getGradeLevel());
+    CurriculumCategory category = parseCategory(request.getSubject());
+
+    // Create or get curriculum
+    String curriculumName = buildCurriculumName(request.getGradeLevel(), request.getSubject());
+    Curriculum curriculum =
+        curriculumRepository
+            .findByNameAndGradeAndCategoryAndNotDeleted(curriculumName, grade, category)
+            .orElseGet(
+                () -> {
+                  Curriculum newCurriculum =
+                      Curriculum.builder()
+                          .name(curriculumName)
+                          .grade(grade)
+                          .category(category)
+                          .description(
+                              "Auto-generated curriculum for "
+                                  + request.getGradeLevel()
+                                  + " - "
+                                  + request.getSubject())
+                          .build();
+                  return curriculumRepository.save(newCurriculum);
+                });
+
+    log.info("Using curriculum: {} (id={})", curriculum.getName(), curriculum.getId());
 
     String prompt = buildGenerationPrompt(request);
 
@@ -87,52 +118,67 @@ public class LessonContentServiceImpl implements LessonContentService {
     List<LessonResponse> savedLessons = new ArrayList<>();
 
     for (AiLessonData aiLesson : aiLessons) {
-      // Idempotency: skip if lesson with same title already exists for this grade+subject
+      // Idempotency: skip if lesson with same title already exists for this curriculum
       if (request.isSkipIfExists()) {
-        long count =
-            lessonRepository.countByGradeLevelAndSubjectAndTitle(
-                request.getGradeLevel(), request.getSubject(), aiLesson.getTitle());
-        if (count > 0) {
+        // Check if a lesson with this title exists in any chapter of the curriculum
+        boolean exists =
+            curriculum.getChapters() != null
+                && curriculum.getChapters().stream()
+                    .anyMatch(
+                        c ->
+                            c.getLessons() != null
+                                && c.getLessons().stream()
+                                    .anyMatch(
+                                        l ->
+                                            l.getTitle().equals(aiLesson.getTitle())
+                                                && l.getDeletedAt() == null));
+        if (exists) {
           log.info("Skipping existing lesson: {}", aiLesson.getTitle());
           skippedLessons++;
           continue;
         }
       }
 
-      Lesson lesson =
-          Lesson.builder()
-              .teacherId(currentUserId)
-              .title(aiLesson.getTitle())
-              .description(aiLesson.getDescription())
-              .subject(request.getSubject())
-              .gradeLevel(request.getGradeLevel())
-              .durationMinutes(
-                  aiLesson.getDurationMinutes() != null ? aiLesson.getDurationMinutes() : 45)
-              .difficulty(parseDifficulty(aiLesson.getDifficulty()))
-              .status(LessonStatus.PUBLISHED)
-              .build();
-
-      lesson = lessonRepository.save(lesson);
-      log.info("Saved lesson: {} (id={})", lesson.getTitle(), lesson.getId());
-      totalLessonsCreated++;
-
       List<Chapter> savedChapters = new ArrayList<>();
-      if (aiLesson.getChapters() != null) {
+      if (aiLesson.getChapters() != null && !aiLesson.getChapters().isEmpty()) {
         for (int i = 0; i < aiLesson.getChapters().size(); i++) {
           AiChapterData aiChapter = aiLesson.getChapters().get(i);
           Chapter chapter =
               Chapter.builder()
-                  .lessonId(lesson.getId())
+                  .curriculumId(curriculum.getId())
                   .title(aiChapter.getTitle())
                   .description(aiChapter.getDescription())
                   .orderIndex(i + 1)
                   .build();
-          savedChapters.add(chapterRepository.save(chapter));
+          Chapter savedChapter = chapterRepository.save(chapter);
+          log.info("Saved chapter: {} (id={})", chapter.getTitle(), chapter.getId());
+
+          // Create lesson under this chapter
+          Lesson lesson =
+              Lesson.builder()
+                  .chapterId(savedChapter.getId())
+                  .title(aiLesson.getTitle())
+                  .learningObjectives(buildLearningObjectives(aiLesson.getTitle()))
+                  .lessonContent(aiLesson.getDescription())
+                  .summary(buildSummary(aiLesson.getDescription()))
+                  .orderIndex(i + 1)
+                  .durationMinutes(
+                      aiLesson.getDurationMinutes() != null ? aiLesson.getDurationMinutes() : 45)
+                  .difficulty(parseDifficulty(aiLesson.getDifficulty()))
+                  .status(LessonStatus.PUBLISHED)
+                  .build();
+
+          lesson = lessonRepository.save(lesson);
+          log.info("Saved lesson: {} (id={})", lesson.getTitle(), lesson.getId());
+          totalLessonsCreated++;
           totalChaptersCreated++;
+          savedChapters.add(savedChapter);
         }
       }
 
-      savedLessons.add(mapToLessonResponse(lesson, savedChapters));
+      if (!savedChapters.isEmpty()) {
+        savedLessons.add(mapToLessonResponse(savedChapters));
+      }
     }
 
     log.info(
@@ -159,11 +205,19 @@ public class LessonContentServiceImpl implements LessonContentService {
   @Transactional(readOnly = true)
   public List<LessonResponse> getLessonsByGradeAndSubject(String gradeLevel, String subject) {
     log.info("Fetching lessons for gradeLevel={}, subject={}", gradeLevel, subject);
-    List<Lesson> lessons =
-        lessonRepository.findByGradeLevelAndSubjectAndNotDeleted(gradeLevel, subject);
-    return lessons.stream()
-        .map(l -> mapToLessonResponse(l, chapterRepository.findByLessonIdAndNotDeleted(l.getId())))
-        .collect(Collectors.toList());
+    Integer grade = parseGrade(gradeLevel);
+    CurriculumCategory category = parseCategory(subject);
+    List<Curriculum> curricula =
+        curriculumRepository.findByGradeAndCategoryAndNotDeleted(grade, category);
+    List<LessonResponse> lessons = new ArrayList<>();
+    for (Curriculum curriculum : curricula) {
+      for (Chapter chapter : curriculum.getChapters()) {
+        if (chapter.getDeletedAt() == null) {
+          lessons.addAll(mapToLessonResponseList(chapter.getLessons()));
+        }
+      }
+    }
+    return lessons;
   }
 
   @Override
@@ -171,23 +225,25 @@ public class LessonContentServiceImpl implements LessonContentService {
   public LessonResponse getLessonById(UUID lessonId) {
     Lesson lesson =
         lessonRepository
-            .findById(lessonId)
-            .filter(l -> l.getDeletedAt() == null)
+            .findByIdAndNotDeleted(lessonId)
             .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
-    List<Chapter> chapters = chapterRepository.findByLessonIdAndNotDeleted(lessonId);
-    return mapToLessonResponse(lesson, chapters);
+    return mapToLessonResponse(lesson);
   }
 
   @Override
   @Transactional(readOnly = true)
   public List<ChapterResponse> getChaptersByLessonId(UUID lessonId) {
-    lessonRepository
-        .findById(lessonId)
-        .filter(l -> l.getDeletedAt() == null)
-        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
-    return chapterRepository.findByLessonIdAndNotDeleted(lessonId).stream()
-        .map(this::mapToChapterResponse)
-        .collect(Collectors.toList());
+    Lesson lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(lessonId)
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+    Chapter chapter =
+        chapterRepository
+            .findById(lesson.getChapterId())
+            .filter(c -> c.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.CHAPTER_NOT_FOUND));
+    // Return the chapter that contains this lesson
+    return List.of(mapToChapterResponse(chapter));
   }
 
   // -------------------------------------------------------------------------
@@ -200,22 +256,15 @@ public class LessonContentServiceImpl implements LessonContentService {
     UUID currentUserId = getCurrentUserId();
     Lesson lesson =
         lessonRepository
-            .findById(lessonId)
-            .filter(l -> l.getDeletedAt() == null)
+            .findByIdAndNotDeleted(lessonId)
             .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
 
-    validateLessonOwner(lesson.getTeacherId(), currentUserId);
+    validateAdminRole(currentUserId);
 
     lesson.setDeletedAt(Instant.now());
     lessonRepository.save(lesson);
 
-    // soft-delete all chapters of this lesson
-    List<Chapter> chapters = chapterRepository.findByLessonIdAndNotDeleted(lessonId);
-    Instant now = Instant.now();
-    chapters.forEach(c -> c.setDeletedAt(now));
-    chapterRepository.saveAll(chapters);
-
-    log.info("Soft-deleted lesson {} and {} chapters", lessonId, chapters.size());
+    log.info("Soft-deleted lesson {}", lessonId);
   }
 
   @Override
@@ -228,21 +277,40 @@ public class LessonContentServiceImpl implements LessonContentService {
             .filter(c -> c.getDeletedAt() == null)
             .orElseThrow(() -> new AppException(ErrorCode.CHAPTER_NOT_FOUND));
 
-    Lesson lesson =
-        lessonRepository
-            .findById(chapter.getLessonId())
-            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
-
-    validateLessonOwner(lesson.getTeacherId(), currentUserId);
+    validateAdminRole(currentUserId);
 
     chapter.setDeletedAt(Instant.now());
     chapterRepository.save(chapter);
-    log.info("Soft-deleted chapter {}", chapterId);
+
+    // soft-delete all lessons of this chapter
+    if (chapter.getLessons() != null) {
+      Instant now = Instant.now();
+      chapter.getLessons().stream()
+          .filter(l -> l.getDeletedAt() == null)
+          .forEach(l -> l.setDeletedAt(now));
+      lessonRepository.saveAll(
+          chapter.getLessons().stream()
+              .filter(l -> l.getDeletedAt() != null)
+              .collect(Collectors.toList()));
+    }
+
+    log.info("Soft-deleted chapter {} and associated lessons", chapterId);
   }
 
   // -------------------------------------------------------------------------
   // Prompt builder
   // -------------------------------------------------------------------------
+
+  private String buildLearningObjectives(String lessonTitle) {
+    return "Students will understand and be able to apply concepts related to " + lessonTitle;
+  }
+
+  private String buildSummary(String description) {
+    if (description == null || description.length() <= 100) {
+      return description;
+    }
+    return description.substring(0, 100) + "...";
+  }
 
   private String buildGenerationPrompt(GenerateLessonContentRequest req) {
     String extra =
@@ -314,25 +382,57 @@ public class LessonContentServiceImpl implements LessonContentService {
   // Mappers
   // -------------------------------------------------------------------------
 
-  private LessonResponse mapToLessonResponse(Lesson lesson, List<Chapter> chapters) {
+  private LessonResponse mapToLessonResponse(Lesson lesson) {
     return LessonResponse.builder()
         .id(lesson.getId())
-        .teacherId(lesson.getTeacherId())
+        .chapterId(lesson.getChapterId())
         .title(lesson.getTitle())
-        .description(lesson.getDescription())
-        .subject(lesson.getSubject())
-        .gradeLevel(lesson.getGradeLevel())
+        .learningObjectives(lesson.getLearningObjectives())
+        .lessonContent(lesson.getLessonContent())
+        .summary(lesson.getSummary())
+        .orderIndex(lesson.getOrderIndex())
         .durationMinutes(lesson.getDurationMinutes())
         .difficulty(lesson.getDifficulty())
         .status(lesson.getStatus())
-        .chapters(chapters.stream().map(this::mapToChapterResponse).collect(Collectors.toList()))
+        .createdAt(lesson.getCreatedAt())
+        .updatedAt(lesson.getUpdatedAt())
         .build();
+  }
+
+  private List<LessonResponse> mapToLessonResponseList(java.util.Collection<Lesson> lessons) {
+    if (lessons == null) {
+      return List.of();
+    }
+    return lessons.stream()
+        .filter(l -> l.getDeletedAt() == null)
+        .map(this::mapToLessonResponse)
+        .collect(Collectors.toList());
+  }
+
+  private LessonResponse mapToLessonResponse(List<Chapter> chapters) {
+    if (chapters == null || chapters.isEmpty()) {
+      return LessonResponse.builder()
+          .build();
+    }
+    Chapter first = chapters.get(0);
+    if (first.getLessons() == null || first.getLessons().isEmpty()) {
+      return LessonResponse.builder()
+          .build();
+    }
+    Lesson firstLesson = first.getLessons().stream()
+        .filter(l -> l.getDeletedAt() == null)
+        .findFirst()
+        .orElse(null);
+    if (firstLesson == null) {
+      return LessonResponse.builder()
+          .build();
+    }
+    return mapToLessonResponse(firstLesson);
   }
 
   private ChapterResponse mapToChapterResponse(Chapter chapter) {
     return ChapterResponse.builder()
         .id(chapter.getId())
-        .lessonId(chapter.getLessonId())
         .title(chapter.getTitle())
         .description(chapter.getDescription())
         .orderIndex(chapter.getOrderIndex())
@@ -353,28 +453,44 @@ public class LessonContentServiceImpl implements LessonContentService {
     throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 
-  private void validateTeacherRole(UUID userId) {
+  private void validateAdminRole(UUID userId) {
     User user =
         userRepository
             .findById(userId)
             .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-    boolean isTeacherOrAdmin =
-        user.getRoles().stream()
-            .anyMatch(r -> r.getName().equals("TEACHER") || r.getName().equals("ADMIN"));
-    if (!isTeacherOrAdmin) {
+    boolean isAdmin =
+        user.getRoles().stream().anyMatch(r -> r.getName().equals("ADMIN"));
+    if (!isAdmin) {
       throw new AppException(ErrorCode.NOT_A_TEACHER);
     }
   }
 
-  private void validateLessonOwner(UUID ownerId, UUID currentUserId) {
-    User current =
-        userRepository
-            .findById(currentUserId)
-            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-    boolean isAdmin = current.getRoles().stream().anyMatch(r -> r.getName().equals("ADMIN"));
-    if (!isAdmin && !ownerId.equals(currentUserId)) {
-      throw new AppException(ErrorCode.LESSON_ACCESS_DENIED);
+  private Integer parseGrade(String gradeLevelStr) {
+    if (gradeLevelStr == null) return 10;
+    try {
+      // Try to extract number from strings like "Grade 10", "10", etc.
+      String numStr = gradeLevelStr.replaceAll("[^0-9]", "");
+      if (numStr.isEmpty()) return 10;
+      Integer grade = Integer.parseInt(numStr);
+      if (grade < 1) return 1;
+      if (grade > 12) return 12;
+      return grade;
+    } catch (Exception e) {
+      return 10;
     }
+  }
+
+  private CurriculumCategory parseCategory(String subject) {
+    if (subject == null) return CurriculumCategory.NUMERICAL;
+    String lower = subject.toLowerCase();
+    if (lower.contains("geometry") || lower.contains("hình")) {
+      return CurriculumCategory.GEOMETRY;
+    }
+    return CurriculumCategory.NUMERICAL;
+  }
+
+  private String buildCurriculumName(String gradeLevel, String subject) {
+    return "Mathematics " + gradeLevel + " - " + subject;
   }
 
   // -------------------------------------------------------------------------

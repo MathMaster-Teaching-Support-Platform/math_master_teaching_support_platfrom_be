@@ -19,11 +19,8 @@ import org.hibernate.annotations.Nationalized;
 @Table(
     name = "lessons",
     indexes = {
-      @Index(name = "idx_lessons_teacher_id", columnList = "teacher_id"),
-      @Index(name = "idx_lessons_status", columnList = "status"),
-      @Index(name = "idx_lessons_subject", columnList = "subject"),
-      @Index(name = "idx_lessons_grade_level", columnList = "grade_level"),
-      @Index(name = "idx_lessons_teacher_status", columnList = "teacher_id, status")
+      @Index(name = "idx_lessons_chapter_id", columnList = "chapter_id"),
+      @Index(name = "idx_lessons_status", columnList = "status")
     })
 public class Lesson {
 
@@ -32,8 +29,8 @@ public class Lesson {
   @Column(name = "id", updatable = false, nullable = false)
   private UUID id;
 
-  @Column(name = "teacher_id", nullable = false)
-  private UUID teacherId;
+  @Column(name = "chapter_id", nullable = false)
+  private UUID chapterId;
 
   @Size(max = 255)
   @Nationalized
@@ -42,16 +39,21 @@ public class Lesson {
 
   @Lob
   @Nationalized
-  @Column(name = "description")
-  private String description;
+  @Column(name = "learning_objectives")
+  private String learningObjectives;
 
-  @Size(max = 100)
-  @Column(name = "subject", length = 100)
-  private String subject;
+  @Lob
+  @Nationalized
+  @Column(name = "lesson_content", nullable = false)
+  private String lessonContent;
 
-  @Size(max = 50)
-  @Column(name = "grade_level", length = 50)
-  private String gradeLevel;
+  @Lob
+  @Nationalized
+  @Column(name = "summary")
+  private String summary;
+
+  @Column(name = "order_index")
+  private Integer orderIndex;
 
   @Column(name = "duration_minutes")
   private Integer durationMinutes;
@@ -74,14 +76,11 @@ public class Lesson {
   private Instant deletedAt;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
-  private User teacher;
+  @JoinColumn(name = "chapter_id", insertable = false, updatable = false)
+  private Chapter chapter;
 
   @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
-  private Set<Chapter> chapters;
-
-  @OneToOne(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
-  private LessonPlan lessonPlan;
+  private Set<LessonPlan> lessonPlans;
 
   @PrePersist
   public void prePersist() {
@@ -95,3 +94,4 @@ public class Lesson {
     updatedAt = Instant.now();
   }
 }
+

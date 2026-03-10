@@ -1,7 +1,10 @@
 package com.fptu.math_master.entity;
 
+import com.fptu.math_master.enums.CurriculumCategory;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.Set;
@@ -15,38 +18,42 @@ import org.hibernate.annotations.Nationalized;
 @Data
 @Entity
 @Table(
-    name = "chapters",
+    name = "curricula",
     uniqueConstraints = {
       @UniqueConstraint(
-          name = "uq_chapters_curriculum_order",
-          columnNames = {"curriculum_id", "order_index"})
+          name = "uq_curricula_name_grade_category",
+          columnNames = {"name", "grade", "category"})
     },
     indexes = {
-      @Index(name = "idx_chapters_curriculum_id", columnList = "curriculum_id"),
-      @Index(name = "idx_chapters_order", columnList = "order_index")
+      @Index(name = "idx_curricula_grade", columnList = "grade"),
+      @Index(name = "idx_curricula_category", columnList = "category"),
+      @Index(name = "idx_curricula_grade_category", columnList = "grade, category")
     })
-public class Chapter {
+public class  Curriculum {
 
   @Id
   @UuidV7Generator.UuidV7
   @Column(name = "id", updatable = false, nullable = false)
   private UUID id;
 
-  @Column(name = "curriculum_id", nullable = false)
-  private UUID curriculumId;
-
   @Size(max = 255)
   @Nationalized
-  @Column(name = "title", length = 255, nullable = false)
-  private String title;
+  @Column(name = "name", length = 255, nullable = false)
+  private String name;
+
+  @Min(1)
+  @Max(12)
+  @Column(name = "grade", nullable = false)
+  private Integer grade;
+
+  @Column(name = "category", nullable = false)
+  @Enumerated(EnumType.STRING)
+  private CurriculumCategory category;
 
   @Lob
   @Nationalized
   @Column(name = "description")
   private String description;
-
-  @Column(name = "order_index", nullable = false)
-  private Integer orderIndex;
 
   @Column(name = "created_at")
   private Instant createdAt;
@@ -57,12 +64,8 @@ public class Chapter {
   @Column(name = "deleted_at")
   private Instant deletedAt;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "curriculum_id", insertable = false, updatable = false)
-  private Curriculum curriculum;
-
-  @OneToMany(mappedBy = "chapter", cascade = CascadeType.ALL, orphanRemoval = true)
-  private Set<Lesson> lessons;
+  @OneToMany(mappedBy = "curriculum", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<Chapter> chapters;
 
   @PrePersist
   public void prePersist() {
