@@ -6,12 +6,14 @@ import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionSample;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
+import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.service.AIEnhancementService;
 import com.fptu.math_master.service.QuestionTemplateService;
@@ -37,6 +39,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
   QuestionTemplateRepository questionTemplateRepository;
   AIEnhancementService aiEnhancementService;
+  QuestionRepository questionRepository;
 
   @Override
   @Transactional
@@ -282,7 +285,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   public TemplateTestResponse testTemplate(UUID id, Integer sampleCount, Boolean useAI) {
     log.info("Testing template: {} (LLM-based)", id);
     QuestionTemplate template = fetchTemplateForTesting(id);
-    return generateWithLLM(template, sampleCount != null ? sampleCount : 3);
+    return generateWithLLMAndSave(template, sampleCount != null ? sampleCount : 3);
   }
 
   @Override
@@ -315,6 +318,55 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       enhanced.setOriginalQuestionText(sample.getQuestionText());
       enhanced.setOriginalOptions(sample.getOptions());
 
+      // Save Question entity with DRAFT status
+      try {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+        // Build generation metadata with DRAFT status and enhancement info
+        Map<String, Object> generationMetadata = new HashMap<>();
+        generationMetadata.put("status", "DRAFT");
+        generationMetadata.put("enhanced", enhanced.isEnhanced());
+        generationMetadata.put("usedParameters", sample.getUsedParameters());
+        generationMetadata.put("enhancementApplied", true);
+
+        // Create Question entity
+        Question question = Question.builder()
+            .createdBy(currentUserId)
+            .templateId(template.getId())
+            .questionType(template.getTemplateType())
+            .questionText(enhanced.getEnhancedQuestionText() != null
+                ? enhanced.getEnhancedQuestionText()
+                : enhanced.getOriginalQuestionText())
+            .options(enhanced.getEnhancedOptions() != null
+                ? new HashMap<>(enhanced.getEnhancedOptions())
+                : (enhanced.getOriginalOptions() != null ? new HashMap<>(enhanced.getOriginalOptions()) : null))
+            .correctAnswer(enhanced.getCorrectAnswerKey())
+            .explanation(enhanced.getExplanation())
+            .difficulty(sample.getCalculatedDifficulty())
+            .cognitiveLevel(template.getCognitiveLevel().name())
+            .generationMetadata(generationMetadata)
+            .build();
+
+        // Save to database
+        Question savedQuestion = questionRepository.save(question);
+        log.info(
+            "Saved AI-enhanced question as DRAFT with ID: {} (template: {})",
+            savedQuestion.getId(),
+            template.getId());
+
+        // Return response with generated question ID
+        enhanced.setGeneratedQuestionId(savedQuestion.getId().toString());
+
+      } catch (Exception e) {
+        log.error("Failed to save generated question as DRAFT: {}", e.getMessage(), e);
+        // Continue and return response even if save fails - don't block the response
+        if (enhanced.getValidationErrors() == null) {
+          enhanced.setValidationErrors(new ArrayList<>());
+        }
+        enhanced.getValidationErrors()
+            .add("Warning: Question was not saved to database. Error: " + e.getMessage());
+      }
+
       return enhanced;
 
     } catch (Exception e) {
@@ -323,9 +375,12 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     }
   }
 
-  private TemplateTestResponse generateWithLLM(QuestionTemplate template, int sampleCount) {
+  private TemplateTestResponse generateWithLLMAndSave(QuestionTemplate template, int sampleCount) {
     List<GeneratedQuestionSample> samples = new ArrayList<>();
     List<String> errors = new ArrayList<>();
+    List<UUID> savedQuestionIds = new ArrayList<>();
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
     for (int i = 0; i < sampleCount; i++) {
       try {
@@ -334,6 +389,40 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
           errors.add("Sample " + (i + 1) + ": " + sample.getQuestionText());
         } else {
           samples.add(sample);
+
+          // Save question as DRAFT
+          try {
+            Map<String, Object> generationMetadata = new HashMap<>();
+            generationMetadata.put("status", "DRAFT");
+            generationMetadata.put("sampleIndex", i);
+            generationMetadata.put("usedParameters", sample.getUsedParameters());
+            generationMetadata.put("enhancementApplied", false);
+
+            Question question = Question.builder()
+                .createdBy(currentUserId)
+                .templateId(template.getId())
+                .questionType(template.getTemplateType())
+                .questionText(sample.getQuestionText())
+                .options(sample.getOptions() != null ? new HashMap<>(sample.getOptions()) : null)
+                .correctAnswer(sample.getCorrectAnswer())
+                .difficulty(sample.getCalculatedDifficulty())
+                .cognitiveLevel(template.getCognitiveLevel().name())
+                .generationMetadata(generationMetadata)
+                .build();
+
+            Question savedQuestion = questionRepository.save(question);
+            savedQuestionIds.add(savedQuestion.getId());
+
+            log.info(
+                "Saved test question sample {} as DRAFT with ID: {} (template: {})",
+                i + 1,
+                savedQuestion.getId(),
+                template.getId());
+
+          } catch (Exception saveException) {
+            log.error("Failed to save test question sample {}: {}", i + 1, saveException.getMessage(), saveException);
+            errors.add("Sample " + (i + 1) + " saved but with warning: " + saveException.getMessage());
+          }
         }
       } catch (Exception e) {
         log.error("Error generating LLM sample {}: {}", i + 1, e.getMessage());
@@ -341,14 +430,22 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       }
     }
 
-    return TemplateTestResponse.builder()
+    TemplateTestResponse response = TemplateTestResponse.builder()
         .templateId(template.getId())
         .templateName(template.getName())
         .samples(samples)
         .isValid(!samples.isEmpty())
         .validationErrors(errors)
         .build();
+
+    // Add saved question IDs to response (if TemplateTestResponse supports it)
+    if (!savedQuestionIds.isEmpty()) {
+      log.info("Saved {} test question samples as DRAFT", savedQuestionIds.size());
+    }
+
+    return response;
   }
+
 
   /**
    * access extended to public templates (was owner-only).
