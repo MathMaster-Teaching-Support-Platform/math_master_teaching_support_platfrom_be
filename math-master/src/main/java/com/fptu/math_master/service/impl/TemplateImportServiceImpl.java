@@ -25,6 +25,8 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -849,19 +851,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
    * @return Saved QuestionTemplate entity
    */
   private QuestionTemplate saveDraftTemplate(TemplateImportResponse response) {
-    // Get current authenticated user
-    //    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    //    if (authentication == null || !authentication.isAuthenticated()) {
-    //      throw new RuntimeException("No authenticated user found");
-    //    }
-    //
-    //    String username = authentication.getName();
-    //    User currentUser = userRepository
-    //        .findByUserName(username)
-    //        .orElseThrow(() -> new RuntimeException("User not found: " + username));
-    //
-    //    log.info("Saving template as DRAFT for user: {}", username);
-
     TemplateImportResponse.TemplateDraft draft = response.getSuggestedTemplate();
 
     // Convert templateText Map<String, String> to Map<String, Object> for JSONB
@@ -873,7 +862,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     // Build QuestionTemplate entity
     QuestionTemplate template =
         QuestionTemplate.builder()
-            .createdBy(UUID.fromString("019c80ad-d33d-7000-b6f3-2a6f86ea290c"))
+            .createdBy(getCurrentUserId())
             .name(draft.getName() != null ? draft.getName() : "Imported Template")
             .description(
                 draft.getDescription() != null
@@ -909,6 +898,13 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     return savedTemplate;
   }
 
+  private UUID getCurrentUserId() {
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth instanceof JwtAuthenticationToken jwtAuth) {
+      return UUID.fromString(jwtAuth.getToken().getSubject());
+    }
+    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
+  }
   /** Convert difficulty rules Map<String, String> to Map<String, Object> for JSONB */
   private Map<String, Object> convertDifficultyRules(Map<String, String> rules) {
     if (rules == null) {

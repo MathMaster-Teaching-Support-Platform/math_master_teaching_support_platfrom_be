@@ -44,4 +44,7 @@ public class AIEnhancedQuestionResponse {
 
   /** Original (fallback) options */
   Map<String, String> originalOptions;
+
+  /** ID of the saved Question entity (DRAFT status) */
+  String generatedQuestionId;
 }
