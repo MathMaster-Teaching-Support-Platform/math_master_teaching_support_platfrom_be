@@ -1,6 +1,9 @@
 package com.fptu.math_master.entity;
 
+import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionDifficulty;
+import com.fptu.math_master.enums.QuestionSourceType;
+import com.fptu.math_master.enums.QuestionStatus;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.util.UuidV7Generator;
 import io.hypersistence.utils.hibernate.type.array.StringArrayType;
@@ -25,11 +28,12 @@ import org.hibernate.annotations.Type;
     name = "questions",
     indexes = {
       @Index(name = "idx_questions_bank", columnList = "question_bank_id"),
-      @Index(name = "idx_questions_chapter", columnList = "chapter_id"),
       @Index(name = "idx_questions_created_by", columnList = "created_by"),
       @Index(name = "idx_questions_type", columnList = "question_type"),
       @Index(name = "idx_questions_difficulty", columnList = "difficulty"),
       @Index(name = "idx_questions_cognitive_level", columnList = "cognitive_level"),
+      @Index(name = "idx_questions_status", columnList = "question_status"),
+      @Index(name = "idx_questions_source_type", columnList = "question_source_type"),
       @Index(name = "idx_questions_template", columnList = "template_id")
     })
 public class Question {
@@ -41,9 +45,6 @@ public class Question {
 
   @Column(name = "question_bank_id")
   private UUID questionBankId;
-
-  @Column(name = "chapter_id")
-  private UUID chapterId;
 
   @Column(name = "created_by", nullable = false)
   private UUID createdBy;
@@ -78,9 +79,17 @@ public class Question {
   @Enumerated(EnumType.STRING)
   private QuestionDifficulty difficulty;
 
-  @Size(max = 50)
-  @Column(name = "cognitive_level", length = 50)
-  private String cognitiveLevel;
+  @Column(name = "cognitive_level", nullable = false)
+  @Enumerated(EnumType.STRING)
+  private CognitiveLevel cognitiveLevel;
+
+  @Column(name = "question_status")
+  @Enumerated(EnumType.STRING)
+  private QuestionStatus questionStatus;
+
+  @Column(name = "question_source_type")
+  @Enumerated(EnumType.STRING)
+  private QuestionSourceType questionSourceType;
 
   @Type(StringArrayType.class)
   @Column(name = "bloom_taxonomy_tags", columnDefinition = "TEXT[]")
@@ -115,10 +124,6 @@ public class Question {
   private QuestionBank questionBank;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "chapter_id", insertable = false, updatable = false)
-  private Chapter chapter;
-
-  @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by", insertable = false, updatable = false)
   private User creator;
 
@@ -132,13 +137,12 @@ public class Question {
   @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<Answer> answers;
 
-  @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
-  private Set<MatrixQuestionMapping> matrixQuestionMappings;
-
   @PrePersist
   public void prePersist() {
     if (points == null) points = BigDecimal.valueOf(1.0);
     if (difficulty == null) difficulty = QuestionDifficulty.MEDIUM;
+    if (questionStatus == null) questionStatus = QuestionStatus.AI_DRAFT;
+    if (questionSourceType == null) questionSourceType = QuestionSourceType.MANUAL;
     if (createdAt == null) createdAt = Instant.now();
     if (updatedAt == null) updatedAt = Instant.now();
   }

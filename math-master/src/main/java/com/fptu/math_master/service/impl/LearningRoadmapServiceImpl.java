@@ -507,7 +507,7 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .endDate(assessment.getEndDate())
         .randomizeQuestions(assessment.getRandomizeQuestions())
         .showCorrectAnswers(assessment.getShowCorrectAnswers())
-        .hasMatrix(assessment.getHasMatrix())
+        .hasMatrix((assessment.getExamMatrixId() != null))
         .allowMultipleAttempts(assessment.getAllowMultipleAttempts())
         .maxAttempts(assessment.getMaxAttempts())
         .attemptScoringPolicy(assessment.getAttemptScoringPolicy())

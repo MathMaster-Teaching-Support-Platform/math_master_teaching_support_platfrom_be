@@ -343,7 +343,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .correctAnswer(enhanced.getCorrectAnswerKey())
             .explanation(enhanced.getExplanation())
             .difficulty(sample.getCalculatedDifficulty())
-            .cognitiveLevel(template.getCognitiveLevel().name())
+            .cognitiveLevel(template.getCognitiveLevel())
             .generationMetadata(generationMetadata)
             .build();
 
@@ -406,7 +406,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
                 .options(sample.getOptions() != null ? new HashMap<>(sample.getOptions()) : null)
                 .correctAnswer(sample.getCorrectAnswer())
                 .difficulty(sample.getCalculatedDifficulty())
-                .cognitiveLevel(template.getCognitiveLevel().name())
+                .cognitiveLevel(template.getCognitiveLevel())
                 .generationMetadata(generationMetadata)
                 .build();
 

@@ -25,6 +25,7 @@ import lombok.*;
     indexes = {
       @Index(name = "idx_assessment_questions_assessment", columnList = "assessment_id"),
       @Index(name = "idx_assessment_questions_question", columnList = "question_id"),
+      @Index(name = "idx_assessment_questions_matrix_mapping", columnList = "matrix_template_mapping_id"),
       @Index(name = "idx_assessment_questions_order", columnList = "order_index")
     })
 public class AssessmentQuestion {
@@ -46,8 +47,14 @@ public class AssessmentQuestion {
   @Column(name = "points_override", precision = 5, scale = 2)
   private BigDecimal pointsOverride;
 
+  @Column(name = "matrix_template_mapping_id")
+  private UUID matrixTemplateMappingId;
+
   @Column(name = "created_at")
   private Instant createdAt;
+
+  @Column(name = "updated_at")
+  private Instant updatedAt;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "assessment_id", insertable = false, updatable = false)
@@ -57,8 +64,18 @@ public class AssessmentQuestion {
   @JoinColumn(name = "question_id", insertable = false, updatable = false)
   private Question question;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "matrix_template_mapping_id", insertable = false, updatable = false)
+  private ExamMatrixTemplateMapping examMatrixTemplateMapping;
+
   @PrePersist
   public void prePersist() {
     if (createdAt == null) createdAt = Instant.now();
+    if (updatedAt == null) updatedAt = Instant.now();
+  }
+
+  @PreUpdate
+  public void preUpdate() {
+    updatedAt = Instant.now();
   }
 }

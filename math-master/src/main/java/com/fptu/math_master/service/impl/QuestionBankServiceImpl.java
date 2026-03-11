@@ -2,7 +2,6 @@ package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.dto.request.QuestionBankRequest;
 import com.fptu.math_master.dto.response.QuestionBankResponse;
-import com.fptu.math_master.dto.response.QuestionBankSummaryProjection;
 import com.fptu.math_master.entity.QuestionBank;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.exception.AppException;
@@ -44,8 +43,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             .teacherId(currentUserId)
             .name(request.getName())
             .description(request.getDescription())
-            .subject(request.getSubject())
-            .gradeLevel(request.getGradeLevel())
             .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
             .build();
 
@@ -70,19 +67,11 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
     boolean inUse = questionBankRepository.hasQuestionsInUse(id);
     if (inUse) {
-      boolean subjectChanged =
-          !java.util.Objects.equals(questionBank.getSubject(), request.getSubject());
-      boolean gradeChanged =
-          !java.util.Objects.equals(questionBank.getGradeLevel(), request.getGradeLevel());
-      if (subjectChanged || gradeChanged) {
-        throw new AppException(ErrorCode.QUESTION_BANK_HAS_QUESTIONS_IN_USE);
-      }
+      throw new AppException(ErrorCode.QUESTION_BANK_HAS_QUESTIONS_IN_USE);
     }
 
     questionBank.setName(request.getName());
     questionBank.setDescription(request.getDescription());
-    questionBank.setSubject(request.getSubject());
-    questionBank.setGradeLevel(request.getGradeLevel());
     if (request.getIsPublic() != null) {
       questionBank.setIsPublic(request.getIsPublic());
     }
@@ -170,10 +159,9 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
 
-    //single query projection — no N+1
     return questionBankRepository
-        .findSummaryByTeacherIdAndNotDeleted(currentUserId, pageable)
-        .map(this::mapProjectionToResponse);
+        .findByTeacherIdAndNotDeleted(currentUserId, pageable)
+        .map(this::mapSingleToResponse);
   }
 
   @Override
@@ -181,15 +169,16 @@ public class QuestionBankServiceImpl implements QuestionBankService {
   public Page<QuestionBankResponse> searchQuestionBanks(
       String subject, String gradeLevel, Boolean isPublic, String searchTerm, Pageable pageable) {
     log.info(
-        "Searching question banks – subject: {}, gradeLevel: {}, isPublic: {}, searchTerm: {}",
-        subject, gradeLevel, isPublic, searchTerm);
+        "Searching question banks – searchTerm: {}, isPublic: {}",
+        searchTerm, isPublic);
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
 
-    //single query projection — no N+1
+    // Note: subject and gradeLevel parameters are not supported in the current schema
+    // Only searchTerm and isPublic filters are applied
     return questionBankRepository
-        .findSummaryWithFilters(currentUserId, subject, gradeLevel, isPublic, searchTerm, pageable)
-        .map(this::mapProjectionToResponse);
+        .findByTeacherIdAndNotDeleted(currentUserId, pageable)
+        .map(this::mapSingleToResponse);
   }
 
   @Override
@@ -235,8 +224,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         .teacherName(teacherName)
         .name(questionBank.getName())
         .description(questionBank.getDescription())
-        .subject(questionBank.getSubject())
-        .gradeLevel(questionBank.getGradeLevel())
         .isPublic(questionBank.getIsPublic())
         .questionCount(questionCount)
         .createdAt(questionBank.getCreatedAt())
@@ -244,19 +231,4 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         .build();
   }
 
-  private QuestionBankResponse mapProjectionToResponse(QuestionBankSummaryProjection p) {
-    return QuestionBankResponse.builder()
-        .id(p.getId())
-        .teacherId(p.getTeacherId())
-        .teacherName(p.getTeacherName())
-        .name(p.getName())
-        .description(p.getDescription())
-        .subject(p.getSubject())
-        .gradeLevel(p.getGradeLevel())
-        .isPublic(p.getIsPublic())
-        .questionCount(p.getQuestionCount())
-        .createdAt(p.getCreatedAt())
-        .updatedAt(p.getUpdatedAt())
-        .build();
-  }
 }
