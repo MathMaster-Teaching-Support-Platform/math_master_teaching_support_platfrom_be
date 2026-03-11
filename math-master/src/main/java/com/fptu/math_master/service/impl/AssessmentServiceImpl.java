@@ -80,7 +80,8 @@ public class AssessmentServiceImpl implements AssessmentService {
                 request.getRandomizeQuestions() != null ? request.getRandomizeQuestions() : false)
             .showCorrectAnswers(
                 request.getShowCorrectAnswers() != null ? request.getShowCorrectAnswers() : false)
-            .hasMatrix(request.getHasMatrix() != null ? request.getHasMatrix() : false)
+            .assessmentMode(request.getAssessmentMode())
+            .examMatrixId(request.getExamMatrixId())
             .allowMultipleAttempts(
                 request.getAllowMultipleAttempts() != null
                     ? request.getAllowMultipleAttempts()
@@ -134,8 +135,11 @@ public class AssessmentServiceImpl implements AssessmentService {
     if (request.getShowCorrectAnswers() != null) {
       assessment.setShowCorrectAnswers(request.getShowCorrectAnswers());
     }
-    if (request.getHasMatrix() != null) {
-      assessment.setHasMatrix(request.getHasMatrix());
+    if (request.getAssessmentMode() != null) {
+      assessment.setAssessmentMode(request.getAssessmentMode());
+    }
+    if (request.getExamMatrixId() != null) {
+      assessment.setExamMatrixId(request.getExamMatrixId());
     }
     if (request.getAllowMultipleAttempts() != null) {
       assessment.setAllowMultipleAttempts(request.getAllowMultipleAttempts());
@@ -178,9 +182,10 @@ public class AssessmentServiceImpl implements AssessmentService {
     aq.setPointsOverride(request.getPointsOverride());
     assessmentQuestionRepository.save(aq);
 
-    if (Boolean.TRUE.equals(assessment.getHasMatrix())) {
+    // Only process matrix if Assessment has an exam matrix linked
+    if (assessment.getExamMatrixId() != null) {
       examMatrixRepository
-          .findByAssessmentIdAndNotDeleted(assessmentId)
+          .findByIdAndNotDeleted(assessment.getExamMatrixId())
           .ifPresent(
               matrix -> {
                 if (matrix.getStatus() == MatrixStatus.APPROVED) {
@@ -280,23 +285,19 @@ public class AssessmentServiceImpl implements AssessmentService {
       throw new AppException(ErrorCode.ASSESSMENT_START_DATE_PAST);
     }
 
-    if (Boolean.TRUE.equals(assessment.getHasMatrix())) {
+    if (assessment.getExamMatrixId() != null) {
       ExamMatrix matrix =
           examMatrixRepository
-              .findByAssessmentIdAndNotDeleted(id)
+              .findByIdAndNotDeleted(assessment.getExamMatrixId())
               .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
 
       if (matrix.getStatus() != MatrixStatus.APPROVED) {
         throw new AppException(ErrorCode.MATRIX_NOT_APPROVED);
       }
 
-      Long filledInAssessment =
-          examMatrixRepository.countAssessmentQuestionsFilledByMatrix(matrix.getId());
-      if (!filledInAssessment.equals((long) matrix.getTotalQuestions())) {
-        throw new AppException(ErrorCode.MATRIX_CELL_FILL_INCOMPLETE);
-      }
-
-      examMatrixService.lockMatrix(matrix.getId());
+      // TODO: Implement proper question count validation for ExamMatrixTemplateMapping architecture
+      // For now, matrix locking logic is deferred
+      // examMatrixService.lockMatrix(matrix.getId());
     }
 
     assessment.setStatus(AssessmentStatus.PUBLISHED);
@@ -328,9 +329,9 @@ public class AssessmentServiceImpl implements AssessmentService {
     assessment.setStatus(AssessmentStatus.DRAFT);
     assessmentRepository.save(assessment);
 
-    if (Boolean.TRUE.equals(assessment.getHasMatrix())) {
+    if (assessment.getExamMatrixId() != null) {
       examMatrixRepository
-          .findByAssessmentIdAndNotDeleted(id)
+          .findByIdAndNotDeleted(assessment.getExamMatrixId())
           .ifPresent(
               matrix -> {
                 if (matrix.getStatus() == MatrixStatus.LOCKED) {
@@ -510,7 +511,7 @@ public class AssessmentServiceImpl implements AssessmentService {
             .randomizeQuestions(source.getRandomizeQuestions())
             .showCorrectAnswers(source.getShowCorrectAnswers())
             // Matrix is NOT cloned — teacher must rebuild if needed
-            .hasMatrix(false)
+            // examMatrixId is now the FK field
             .allowMultipleAttempts(source.getAllowMultipleAttempts())
             .maxAttempts(source.getMaxAttempts())
             .attemptScoringPolicy(source.getAttemptScoringPolicy())
@@ -522,7 +523,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     // Clone questions only for non-matrix path and when explicitly requested
     boolean shouldCloneQuestions =
-        !Boolean.TRUE.equals(source.getHasMatrix())
+        source.getExamMatrixId() == null
             && Boolean.TRUE.equals(request.getCloneQuestions());
 
     if (shouldCloneQuestions) {
@@ -558,7 +559,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     if (assessment.getStatus() != AssessmentStatus.DRAFT) {
       throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
     }
-    if (Boolean.TRUE.equals(assessment.getHasMatrix())) {
+    if (Boolean.TRUE.equals((assessment.getExamMatrixId() != null))) {
       // Matrix-path: questions are managed through the matrix flow
       throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
     }
@@ -607,7 +608,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     if (assessment.getStatus() != AssessmentStatus.DRAFT) {
       throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
     }
-    if (Boolean.TRUE.equals(assessment.getHasMatrix())) {
+    if (Boolean.TRUE.equals((assessment.getExamMatrixId() != null))) {
       throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
     }
 
@@ -756,7 +757,8 @@ public class AssessmentServiceImpl implements AssessmentService {
         .endDate(assessment.getEndDate())
         .randomizeQuestions(assessment.getRandomizeQuestions())
         .showCorrectAnswers(assessment.getShowCorrectAnswers())
-        .hasMatrix(assessment.getHasMatrix())
+        .assessmentMode(assessment.getAssessmentMode())
+        .examMatrixId(assessment.getExamMatrixId())
         .allowMultipleAttempts(assessment.getAllowMultipleAttempts())
         .maxAttempts(assessment.getMaxAttempts())
         .attemptScoringPolicy(assessment.getAttemptScoringPolicy())

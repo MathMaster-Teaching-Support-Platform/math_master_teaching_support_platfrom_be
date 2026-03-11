@@ -17,14 +17,11 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class FinalizePreviewResponse {
 
-  /** The matrix cell that was finalised. */
-  private UUID cellId;
+  /** The template mapping that was finalised. */
+  private UUID templateMappingId;
 
-  /** The exam matrix owning the cell. */
+  /** The exam matrix owning the mapping. */
   private UUID matrixId;
-
-  /** The assessment that the questions were attached to. */
-  private UUID assessmentId;
 
   /** The template used to generate the questions. */
   private UUID templateId;
@@ -38,14 +35,11 @@ public class FinalizePreviewResponse {
   /** IDs of the newly created Question records. */
   private List<UUID> questionIds;
 
-  /** IDs of the newly created MatrixQuestionMapping records. */
-  private List<UUID> mappingIds;
+  /** Updated count of questions currently mapped to this template mapping (after replace/append logic). */
+  private int currentMappingQuestionCount;
 
-  /** Updated count of questions currently mapped to this cell (after replace/append logic). */
-  private int currentCellMappingCount;
-
-  /** Target number of questions for this cell (from cell.numQuestions). */
-  private int cellTargetCount;
+  /** Target number of questions for this mapping (from mapping.questionCount). */
+  private int mappingTargetCount;
 
   /**
    * Non-fatal warnings, e.g.: - question skipped due to duplicate text - difficulty mismatch with

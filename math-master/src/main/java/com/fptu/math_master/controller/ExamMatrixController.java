@@ -25,128 +25,140 @@ public class ExamMatrixController {
 
   ExamMatrixService examMatrixService;
 
-  @PostMapping("/assessment/{assessmentId}")
+  // ── Matrix CRUD ─────────────────────────────────────────────────────────
+
+  @PostMapping
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Create exam matrix",
       description =
-          "Teacher creates exam matrix for assessment. "
-              + "Validates: assessment must have lesson, lesson must have chapters. "
-              + "One assessment can only have one matrix. "
-              + "Status = DRAFT by default. Redirects to Matrix Builder.")
+          "Teacher creates a reusable exam matrix. "
+              + "The matrix is owned by the teacher and can later be linked to assessments. "
+              + "Status = DRAFT by default.")
   public ApiResponse<ExamMatrixResponse> createExamMatrix(
-      @PathVariable UUID assessmentId, @Valid @RequestBody ExamMatrixRequest request) {
-    log.info("REST request to create exam matrix for assessment: {}", assessmentId);
+      @Valid @RequestBody ExamMatrixRequest request) {
+    log.info("REST request to create exam matrix: {}", request.getName());
     return ApiResponse.<ExamMatrixResponse>builder()
-        .message("Exam matrix created successfully. Configure matrix dimensions next.")
-        .result(examMatrixService.createExamMatrix(assessmentId, request))
+        .message("Exam matrix created successfully. Add template mappings next.")
+        .result(examMatrixService.createExamMatrix(request))
         .build();
   }
 
-  @PutMapping("/{matrixId}/dimensions")
+  @PutMapping("/{matrixId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
-      summary = "Configure matrix dimensions",
-      description =
-          "Teacher selects chapters and cognitive levels (Bloom's Taxonomy). "
-              + "System generates matrix grid: Chapters × Cognitive Levels. "
-              + "Example: 3 chapters × 4 levels = 12 cells.")
-  public ApiResponse<ExamMatrixResponse> configureMatrixDimensions(
-      @PathVariable UUID matrixId, @Valid @RequestBody MatrixDimensionRequest request) {
-    log.info("REST request to configure matrix dimensions for: {}", matrixId);
+      summary = "Update exam matrix",
+      description = "Update matrix name, description, or reusable flag. Only DRAFT matrices can be updated.")
+  public ApiResponse<ExamMatrixResponse> updateExamMatrix(
+      @PathVariable UUID matrixId, @Valid @RequestBody ExamMatrixRequest request) {
+    log.info("REST request to update exam matrix: {}", matrixId);
     return ApiResponse.<ExamMatrixResponse>builder()
-        .message(
-            String.format(
-                "Matrix configured: %d chapters × %d cognitive levels = %d cells",
-                request.getChapterIds().size(),
-                request.getCognitiveLevels().size(),
-                request.getChapterIds().size() * request.getCognitiveLevels().size()))
-        .result(examMatrixService.configureMatrixDimensions(matrixId, request))
+        .message("Exam matrix updated successfully.")
+        .result(examMatrixService.updateExamMatrix(matrixId, request))
         .build();
   }
 
-  @PostMapping("/{matrixId}/cells")
+  @GetMapping("/{matrixId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
-      summary = "Fill matrix cells",
+      summary = "Get exam matrix by ID",
+      description = "Get exam matrix details with template mapping count.")
+  public ApiResponse<ExamMatrixResponse> getExamMatrixById(@PathVariable UUID matrixId) {
+    log.info("REST request to get exam matrix: {}", matrixId);
+    return ApiResponse.<ExamMatrixResponse>builder()
+        .result(examMatrixService.getExamMatrixById(matrixId))
+        .build();
+  }
+
+  @GetMapping("/assessment/{assessmentId}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Get exam matrix by assessment ID",
+      description = "Get exam matrix linked to a specific assessment via assessment.examMatrixId.")
+  public ApiResponse<ExamMatrixResponse> getExamMatrixByAssessmentId(
+      @PathVariable UUID assessmentId) {
+    log.info("REST request to get exam matrix by assessment: {}", assessmentId);
+    return ApiResponse.<ExamMatrixResponse>builder()
+        .result(examMatrixService.getExamMatrixByAssessmentId(assessmentId))
+        .build();
+  }
+
+  @GetMapping("/my")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "List my exam matrices",
+      description = "Get all exam matrices owned by the current teacher.")
+  public ApiResponse<List<ExamMatrixResponse>> getMyExamMatrices() {
+    log.info("REST request to get my exam matrices");
+    return ApiResponse.<List<ExamMatrixResponse>>builder()
+        .result(examMatrixService.getMyExamMatrices())
+        .build();
+  }
+
+  @DeleteMapping("/{matrixId}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Delete exam matrix",
+      description = "Delete exam matrix. Cannot delete if status = LOCKED. Soft delete.")
+  public ApiResponse<Void> deleteExamMatrix(@PathVariable UUID matrixId) {
+    log.info("REST request to delete exam matrix: {}", matrixId);
+    examMatrixService.deleteExamMatrix(matrixId);
+    return ApiResponse.<Void>builder().message("Exam matrix deleted successfully.").build();
+  }
+
+  // ── Template Mappings ───────────────────────────────────────────────────
+
+  @PostMapping("/{matrixId}/template-mappings")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Add template mapping",
       description =
-          "Teacher fills each cell with: "
-              + "- Number of questions "
-              + "- Points per question "
-              + "- Difficulty (optional override) "
-              + "- Question type (optional). "
-              + "System auto-calculates: total points per cell, total questions, total points in matrix.")
-  public ApiResponse<MatrixCellResponse> createOrUpdateMatrixCell(
-      @PathVariable UUID matrixId, @Valid @RequestBody MatrixCellRequest request) {
-    log.info("REST request to create/update matrix cell for: {}", matrixId);
-    return ApiResponse.<MatrixCellResponse>builder()
-        .message("Matrix cell updated successfully. Total points recalculated.")
-        .result(examMatrixService.createOrUpdateMatrixCell(matrixId, request))
+          "Add a question template mapping to the matrix. "
+              + "Specifies which template to use, cognitive level, question count, and points per question.")
+  public ApiResponse<TemplateMappingResponse> addTemplateMapping(
+      @PathVariable UUID matrixId, @Valid @RequestBody AddTemplateMappingRequest request) {
+    log.info("REST request to add template mapping to matrix: {}", matrixId);
+    return ApiResponse.<TemplateMappingResponse>builder()
+        .message("Template mapping added successfully.")
+        .result(examMatrixService.addTemplateMapping(matrixId, request))
         .build();
   }
 
-  @GetMapping("/{matrixId}/cells")
+  @DeleteMapping("/{matrixId}/template-mappings/{mappingId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
-      summary = "Get all matrix cells",
-      description = "Get all cells for the matrix with calculated totals and selection status.")
-  public ApiResponse<List<MatrixCellResponse>> getMatrixCells(@PathVariable UUID matrixId) {
-    log.info("REST request to get matrix cells for: {}", matrixId);
-    return ApiResponse.<List<MatrixCellResponse>>builder()
-        .result(examMatrixService.getMatrixCells(matrixId))
+      summary = "Remove template mapping",
+      description = "Remove a template mapping from the matrix. Only DRAFT matrices can be modified.")
+  public ApiResponse<Void> removeTemplateMapping(
+      @PathVariable UUID matrixId, @PathVariable UUID mappingId) {
+    log.info("REST request to remove template mapping {} from matrix: {}", mappingId, matrixId);
+    examMatrixService.removeTemplateMapping(matrixId, mappingId);
+    return ApiResponse.<Void>builder().message("Template mapping removed successfully.").build();
+  }
+
+  @GetMapping("/{matrixId}/template-mappings")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Get all template mappings",
+      description = "Get all template mappings for a matrix.")
+  public ApiResponse<List<TemplateMappingResponse>> getTemplateMappings(
+      @PathVariable UUID matrixId) {
+    log.info("REST request to get template mappings for matrix: {}", matrixId);
+    return ApiResponse.<List<TemplateMappingResponse>>builder()
+        .result(examMatrixService.getTemplateMappings(matrixId))
         .build();
   }
 
-  @GetMapping("/cells/{cellId}/suggest-questions")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Auto-suggest questions for cell",
-      description =
-          "System automatically suggests matching questions based on: "
-              + "chapter_id, difficulty, cognitive_level (from Bloom's taxonomy tags), question_type. "
-              + "Excludes already selected questions. Orders randomly.")
-  public ApiResponse<SuggestedQuestionsResponse> suggestQuestionsForCell(
-      @PathVariable UUID cellId, @RequestParam(required = false) Integer limit) {
-    log.info("REST request to suggest questions for cell: {}, limit: {}", cellId, limit);
-    return ApiResponse.<SuggestedQuestionsResponse>builder()
-        .result(examMatrixService.suggestQuestionsForCell(cellId, limit))
-        .build();
-  }
-
-  @PostMapping("/cells/select-questions")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Manual question selection for cell",
-      description =
-          "Teacher manually selects questions for a cell instead of using auto-suggest. "
-              + "Opens question picker filtered by cell criteria. "
-              + "Creates matrix_question_mapping entries.")
-  public ApiResponse<MatrixCellResponse> selectQuestionsManually(
-      @Valid @RequestBody ManualQuestionSelectionRequest request) {
-    log.info(
-        "REST request to manually select {} questions for cell: {}",
-        request.getQuestionIds().size(),
-        request.getMatrixCellId());
-    return ApiResponse.<MatrixCellResponse>builder()
-        .message(
-            String.format("%d questions selected successfully", request.getQuestionIds().size()))
-        .result(examMatrixService.selectQuestionsManually(request))
-        .build();
-  }
+  // ── Validation & Lifecycle ──────────────────────────────────────────────
 
   @GetMapping("/{matrixId}/validate")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Validate matrix coverage",
       description =
-          "System validates: "
-              + "- Total questions = target "
-              + "- Total points = target "
-              + "- All cells filled "
-              + "- Difficulty distribution (Easy 30-50%, Medium 30-50%, Hard 10-30%) "
-              + "- Cognitive levels balanced "
-              + "- Each chapter covered (≥15%). "
-              + "Returns validation report with errors/warnings. Blocks approve if errors exist.")
+          "Validates matrix template mappings: all mappings have templates, "
+              + "cognitive levels are covered, question counts and points are reasonable. "
+              + "Returns validation report with errors/warnings.")
   public ApiResponse<MatrixValidationReport> validateMatrix(@PathVariable UUID matrixId) {
     log.info("REST request to validate matrix: {}", matrixId);
     MatrixValidationReport report = examMatrixService.validateMatrix(matrixId);
@@ -165,51 +177,14 @@ public class ExamMatrixController {
       summary = "Approve matrix",
       description =
           "Teacher approves matrix after validation. "
-              + "Validates first (FR-EM-006). "
-              + "If errors → BLOCKED. If only warnings → Allow with confirmation. "
-              + "Status → APPROVED. System auto-populates assessment_questions from matrix.")
+              + "Validates first. If errors → BLOCKED. If only warnings → allow with confirmation. "
+              + "Status → APPROVED.")
   public ApiResponse<ExamMatrixResponse> approveMatrix(@PathVariable UUID matrixId) {
     log.info("REST request to approve matrix: {}", matrixId);
     return ApiResponse.<ExamMatrixResponse>builder()
-        .message("Matrix approved successfully! Questions populated to assessment.")
+        .message("Matrix approved successfully!")
         .result(examMatrixService.approveMatrix(matrixId))
         .build();
-  }
-
-  @GetMapping("/{matrixId}")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Get exam matrix by ID",
-      description = "Get exam matrix details with stats: cells, filled cells, selected questions.")
-  public ApiResponse<ExamMatrixResponse> getExamMatrixById(@PathVariable UUID matrixId) {
-    log.info("REST request to get exam matrix: {}", matrixId);
-    return ApiResponse.<ExamMatrixResponse>builder()
-        .result(examMatrixService.getExamMatrixById(matrixId))
-        .build();
-  }
-
-  @GetMapping("/assessment/{assessmentId}")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Get exam matrix by assessment ID",
-      description = "Get exam matrix for a specific assessment.")
-  public ApiResponse<ExamMatrixResponse> getExamMatrixByAssessmentId(
-      @PathVariable UUID assessmentId) {
-    log.info("REST request to get exam matrix by assessment: {}", assessmentId);
-    return ApiResponse.<ExamMatrixResponse>builder()
-        .result(examMatrixService.getExamMatrixByAssessmentId(assessmentId))
-        .build();
-  }
-
-  @DeleteMapping("/{matrixId}")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Delete exam matrix",
-      description = "Delete exam matrix. Cannot delete if status = LOCKED. Soft delete.")
-  public ApiResponse<Void> deleteExamMatrix(@PathVariable UUID matrixId) {
-    log.info("REST request to delete exam matrix: {}", matrixId);
-    examMatrixService.deleteExamMatrix(matrixId);
-    return ApiResponse.<Void>builder().message("Exam matrix deleted successfully.").build();
   }
 
   @PostMapping("/{matrixId}/lock")
@@ -217,56 +192,55 @@ public class ExamMatrixController {
   @Operation(
       summary = "Lock matrix - Internal use",
       description =
-          "System automatically locks matrix when assessment is published. "
-              + "Status → LOCKED. Matrix cannot be edited. Questions cannot be changed. "
-              + "This endpoint is for admin/system use only.")
+          "System automatically locks matrix when an associated assessment is published. "
+              + "Status → LOCKED. Matrix cannot be edited.")
   public ApiResponse<Void> lockMatrix(@PathVariable UUID matrixId) {
     log.info("REST request to lock matrix: {}", matrixId);
     examMatrixService.lockMatrix(matrixId);
     return ApiResponse.<Void>builder().message("Matrix locked successfully.").build();
   }
 
-  @GetMapping("/{matrixId}/cells/{cellId}/templates")
+  @PostMapping("/{matrixId}/reset")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
-      summary = "List Matching Question Templates for a Matrix Cell",
+      summary = "Reset matrix to DRAFT",
       description =
-          "Returns a ranked list of question templates that match the requirements of a given "
-              + "matrix cell (question type, cognitive level, tags/topic). "
-              + "Used when a teacher chooses 'Generate from Template' for a cell. "
-              + "\n\nFiltering rules:"
-              + "\n- templateType must match cell questionType (when cell has a type constraint)"
-              + "\n- cognitiveLevel must match cell cognitiveLevel"
-              + "\n- tags overlap with the cell's chapter title and topic"
-              + "\n- Only non-deleted templates (deletedAt IS NULL)"
-              + "\n- Only templates owned by the teacher OR public templates"
-              + "\n\nRanking (descending relevance score):"
-              + "\n1. templateType match (+40)"
-              + "\n2. cognitiveLevel match (+30)"
-              + "\n3. tag overlap with chapter/topic (+20 + up to +30)"
-              + "\n4. popularity (usageCount, capped +10)"
-              + "\n\nReturns 200 with empty list if no templates match (never 404).")
-  public ApiResponse<MatchingTemplatesResponse> listMatchingTemplatesForCell(
+          "Reset an APPROVED matrix back to DRAFT so template mappings can be re-edited.")
+  public ApiResponse<ExamMatrixResponse> resetMatrix(@PathVariable UUID matrixId) {
+    log.info("REST request to reset matrix: {}", matrixId);
+    return ApiResponse.<ExamMatrixResponse>builder()
+        .message("Matrix reset to DRAFT. You can now edit template mappings.")
+        .result(examMatrixService.resetMatrix(matrixId))
+        .build();
+  }
+
+  // ── Question Generation (template-mapping based) ────────────────────────
+
+  @GetMapping("/{matrixId}/matching-templates")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "List matching question templates for this matrix",
+      description =
+          "Returns a ranked list of question templates that can be used for this matrix. "
+              + "Helps teacher find suitable templates before adding a template mapping.")
+  public ApiResponse<MatchingTemplatesResponse> listMatchingTemplates(
       @PathVariable UUID matrixId,
-      @PathVariable UUID cellId,
       @RequestParam(required = false) String q,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(defaultValue = "false") boolean onlyMine,
       @RequestParam(defaultValue = "false") boolean publicOnly) {
 
-    log.info(
-        "REST request to list matching templates for matrixId={}, cellId={}", matrixId, cellId);
+    log.info("REST request to list matching templates for matrixId={}", matrixId);
 
     MatchingTemplatesResponse response =
-        examMatrixService.listMatchingTemplatesForCell(
-            matrixId, cellId, q, page, size, onlyMine, publicOnly);
+        examMatrixService.listMatchingTemplates(matrixId, q, page, size, onlyMine, publicOnly);
 
     String message =
         response.getTotalTemplatesFound() == 0
             ? "No matching templates found. You can create a new template or loosen filters."
             : String.format(
-                "Found %d matching template(s) for this cell.", response.getTotalTemplatesFound());
+                "Found %d matching template(s).", response.getTotalTemplatesFound());
 
     return ApiResponse.<MatchingTemplatesResponse>builder()
         .message(message)
@@ -274,49 +248,30 @@ public class ExamMatrixController {
         .build();
   }
 
-  @PostMapping("/{matrixId}/cells/{cellId}/generate-preview")
+  @PostMapping("/{matrixId}/template-mappings/{mappingId}/generate-preview")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
-      summary = "Generate Preview Questions for a Matrix Cell (No DB Persist)",
+      summary = "Generate preview questions for a template mapping (no DB persist)",
       description =
-          "Teacher selects a Question Template for a matrix cell and requests the system to "
-              + "generate preview candidates to assess question quality before finalising.\n\n"
-              + "⚠️ This endpoint is PURE READ — it does NOT write to any table "
-              + "(no questions, assessment_questions, or matrix_question_mapping records are created).\n\n"
-              + "Request body:\n"
-              + "- templateId: UUID of the template to use (must not be soft-deleted; DRAFT status rejected)\n"
-              + "- count: number of candidates to generate (1–50)\n"
-              + "- difficulty: optional override (EASY/MEDIUM/HARD); null = determined by template rules\n"
-              + "- seed: optional long for reproducible results\n\n"
-              + "Response contains:\n"
-              + "- cellRequirements: summary of the cell constraints for UI display\n"
-              + "- candidates[]: questionText, options (A–D for MCQ), correctAnswerKey, "
-              + "usedParameters, answerCalculation, calculatedDifficulty, explanation\n"
-              + "- warnings[]: partial generation, difficulty override mismatch, type mismatch\n\n"
-              + "Validation errors returned as 400/403/404:\n"
-              + "- 404 if matrixId, cellId, or templateId not found\n"
-              + "- 403 if teacher does not own the matrix\n"
-              + "- 400 if cell does not belong to matrix, or request body constraints violated")
+          "Generates in-memory candidate questions from the template associated with a mapping "
+              + "so the teacher can preview quality before finalising. Nothing is persisted.")
   public ApiResponse<PreviewCandidatesResponse> generatePreview(
       @PathVariable UUID matrixId,
-      @PathVariable UUID cellId,
+      @PathVariable UUID mappingId,
       @Valid @RequestBody GeneratePreviewRequest request) {
 
     log.info(
-        "REST request to generate preview for matrixId={}, cellId={}, templateId={}, count={}",
-        matrixId,
-        cellId,
-        request.getTemplateId(),
-        request.getCount());
+        "REST request to generate preview for matrixId={}, mappingId={}, templateId={}, count={}",
+        matrixId, mappingId, request.getTemplateId(), request.getCount());
 
     PreviewCandidatesResponse response =
-        examMatrixService.generatePreview(matrixId, cellId, request);
+        examMatrixService.generatePreview(matrixId, mappingId, request);
 
     String message;
     if (response.getGeneratedCount() == 0) {
       message =
           "No questions could be generated. Template constraints may be too strict "
-              + "or parameter ranges too narrow. Please adjust the template or try a different one.";
+              + "or parameter ranges too narrow.";
     } else if (response.getGeneratedCount() < response.getRequestedCount()) {
       message =
           String.format(
@@ -337,49 +292,27 @@ public class ExamMatrixController {
         .build();
   }
 
-  @PostMapping("/{matrixId}/cells/{cellId}/finalize")
+  @PostMapping("/{matrixId}/template-mappings/{mappingId}/finalize")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
-      summary = "Finalize / Approve Generated Questions for a Matrix Cell (Persist to DB)",
+      summary = "Finalize generated questions for a template mapping (persist to DB)",
       description =
-          "Teacher submits selected preview questions to be permanently saved.\n\n"
-              + "This endpoint WRITES to 3 tables atomically inside a single transaction:\n"
-              + "1. **questions** — creates a new Question record for each item\n"
-              + "2. **assessment_questions** — attaches each question to the matrix's assessment\n"
-              + "3. **matrix_question_mapping** — maps each question to this matrix cell\n\n"
-              + "If ANY step fails the entire transaction is rolled back (no partial state).\n\n"
-              + "**Request body fields:**\n"
-              + "- `templateId` — UUID of the source template (must exist, not DRAFT)\n"
-              + "- `pointsPerQuestion` — points > 0 applied to each question\n"
-              + "- `replaceExisting` — when true: old cell mappings + assessment links are removed "
-              + "and old question records are soft-deleted before inserting new ones\n"
-              + "- `questionBankId` — optional; associates generated questions with a bank\n"
-              + "- `questions[]` — list of QuestionItem (from preview candidates):\n"
-              + "  - `questionText` (required, non-blank)\n"
-              + "  - `questionType` (required)\n"
-              + "  - `options` — required map A/B/C/D for MCQ\n"
-              + "  - `correctAnswer` — A/B/C/D key for MCQ; answer value for other types\n"
-              + "  - `difficulty`, `cognitiveLevel`, `tags`, `explanation`\n"
-              + "  - `generationMetadata` — paramsUsed, answerFormula, seed, etc.\n\n"
-              + "**Validation failures return 400/403/404.**\n\n"
-              + "**Soft skips (warnings, not errors):** duplicate questionText, "
-              + "difficulty/cognitiveLevel mismatch with cell.\n\n"
-              + "**Hard errors (400):** MCQ with invalid options/correctAnswer, all questions skipped.")
+          "Persists selected preview questions to the questions table "
+              + "and creates assessment_questions entries when linked to an assessment. "
+              + "Atomic transaction — rollback on any failure.")
   public ApiResponse<FinalizePreviewResponse> finalizePreview(
       @PathVariable UUID matrixId,
-      @PathVariable UUID cellId,
+      @PathVariable UUID mappingId,
       @Valid @RequestBody FinalizePreviewRequest request) {
 
     log.info(
-        "REST request to finalize preview for matrixId={}, cellId={}, templateId={}, "
+        "REST request to finalize preview for matrixId={}, mappingId={}, templateId={}, "
             + "count={}, replaceExisting={}",
-        matrixId,
-        cellId,
-        request.getTemplateId(),
-        request.getQuestions().size(),
-        request.getReplaceExisting());
+        matrixId, mappingId, request.getTemplateId(),
+        request.getQuestions().size(), request.getReplaceExisting());
 
-    FinalizePreviewResponse response = examMatrixService.finalizePreview(matrixId, cellId, request);
+    FinalizePreviewResponse response =
+        examMatrixService.finalizePreview(matrixId, mappingId, request);
 
     String message;
     if (response.getSavedCount() == 0) {
@@ -395,28 +328,11 @@ public class ExamMatrixController {
     } else {
       message =
           String.format(
-              "Successfully finalised %d question(s) for cell. "
-                  + "Questions saved to DB and linked to assessment.",
+              "Successfully finalised %d question(s). Questions saved to DB.",
               response.getSavedCount());
     }
 
     return ApiResponse.<FinalizePreviewResponse>builder().message(message).result(response).build();
-  }
-
-  @PostMapping("/{matrixId}/reset")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Reset matrix to DRAFT",
-      description =
-          "Reset an APPROVED matrix back to DRAFT so cells and questions can be re-edited. "
-              + "All assessment_questions linked via this matrix will be cleared. "
-              + "Only allowed when the parent assessment is still in DRAFT status.")
-  public ApiResponse<ExamMatrixResponse> resetMatrix(@PathVariable UUID matrixId) {
-    log.info("REST request to reset matrix: {}", matrixId);
-    return ApiResponse.<ExamMatrixResponse>builder()
-        .message("Matrix reset to DRAFT. You can now edit cells and regenerate questions.")
-        .result(examMatrixService.resetMatrix(matrixId))
-        .build();
   }
 }
 

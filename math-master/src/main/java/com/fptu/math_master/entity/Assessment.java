@@ -1,5 +1,6 @@
 package com.fptu.math_master.entity;
 
+import com.fptu.math_master.enums.AssessmentMode;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AssessmentType;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
@@ -23,6 +24,8 @@ import org.hibernate.annotations.Nationalized;
     indexes = {
       @Index(name = "idx_assessments_teacher", columnList = "teacher_id"),
       @Index(name = "idx_assessments_lesson", columnList = "lesson_id"),
+      @Index(name = "idx_assessments_exam_matrix", columnList = "exam_matrix_id"),
+      @Index(name = "idx_assessments_mode", columnList = "assessment_mode"),
       @Index(name = "idx_assessments_status", columnList = "status"),
       @Index(name = "idx_assessments_start_date", columnList = "start_date"),
       @Index(name = "idx_assessments_end_date", columnList = "end_date")
@@ -72,8 +75,12 @@ public class Assessment {
   @Column(name = "show_correct_answers")
   private Boolean showCorrectAnswers;
 
-  @Column(name = "has_matrix")
-  private Boolean hasMatrix;
+  @Column(name = "assessment_mode")
+  @Enumerated(EnumType.STRING)
+  private AssessmentMode assessmentMode;
+
+  @Column(name = "exam_matrix_id")
+  private UUID examMatrixId;
 
   @Column(name = "allow_multiple_attempts")
   private Boolean allowMultipleAttempts;
@@ -118,16 +125,17 @@ public class Assessment {
   @OneToMany(mappedBy = "assessment", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<QuizAttempt> quizAttempts;
 
-  @OneToOne(mappedBy = "assessment", cascade = CascadeType.ALL, orphanRemoval = true)
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "exam_matrix_id", insertable = false, updatable = false)
   private ExamMatrix examMatrix;
 
   @PrePersist
   public void prePersist() {
     if (randomizeQuestions == null) randomizeQuestions = false;
     if (showCorrectAnswers == null) showCorrectAnswers = false;
-    if (hasMatrix == null) hasMatrix = false;
     if (allowMultipleAttempts == null) allowMultipleAttempts = false;
     if (showScoreImmediately == null) showScoreImmediately = true;
+    if (assessmentMode == null) assessmentMode = AssessmentMode.DIRECT;
     if (status == null) status = AssessmentStatus.DRAFT;
     if (createdAt == null) createdAt = Instant.now();
     if (updatedAt == null) updatedAt = Instant.now();

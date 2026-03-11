@@ -3,6 +3,7 @@ package com.fptu.math_master.entity;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
+import com.fptu.math_master.enums.TemplateVariant;
 import com.fptu.math_master.util.UuidV7Generator;
 import io.hypersistence.utils.hibernate.type.array.StringArrayType;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
@@ -26,8 +27,11 @@ import org.hibernate.annotations.Type;
     name = "question_templates",
     indexes = {
       @Index(name = "idx_question_templates_created_by", columnList = "created_by"),
+      @Index(name = "idx_question_templates_lesson", columnList = "lesson_id"),
+      @Index(name = "idx_question_templates_question_bank", columnList = "question_bank_id"),
       @Index(name = "idx_question_templates_tags", columnList = "tags"),
       @Index(name = "idx_question_templates_cognitive", columnList = "cognitive_level"),
+      @Index(name = "idx_question_templates_variant", columnList = "template_variant"),
       @Index(name = "idx_question_templates_public", columnList = "is_public")
     })
 public class QuestionTemplate {
@@ -39,6 +43,12 @@ public class QuestionTemplate {
 
   @Column(name = "created_by", nullable = false)
   private UUID createdBy;
+
+  @Column(name = "lesson_id")
+  private UUID lessonId;
+
+  @Column(name = "question_bank_id")
+  private UUID questionBankId;
 
   @Nationalized
   @Column(name = "name", nullable = false, columnDefinition = "TEXT")
@@ -52,6 +62,10 @@ public class QuestionTemplate {
   @Enumerated(EnumType.STRING)
   private QuestionType templateType;
 
+  @Column(name = "template_variant")
+  @Enumerated(EnumType.STRING)
+  private TemplateVariant templateVariant;
+
   /**
    * Multi-language support for question template text Example: {"en": "What is {x} + {y}?", "vi":
    * "{x} + {y} bằng bao nhiêu?"}
@@ -61,37 +75,54 @@ public class QuestionTemplate {
   private Map<String, Object> templateText;
 
   /**
-   * Parameters that can be substituted in the template Example: {"x": {"type": "integer", "min": 1,
-   * "max": 100}, "y": {"type": "integer", "min": 1, "max": 100}}
+   * Parameters that can be substituted in the template (PARAMETRIC variant)
+   * Example: {"x": {"type": "integer", "min": 1, "max": 100}, "y": {"type": "integer", "min": 1, "max": 100}}
+   * Nullable for PROPOSITIONAL templates
    */
   @Type(JsonBinaryType.class)
-  @Column(name = "parameters", nullable = false, columnDefinition = "jsonb")
+  @Column(name = "parameters", columnDefinition = "jsonb")
   private Map<String, Object> parameters;
 
-  /** Formula to calculate the correct answer Example: "x + y" or "Math.sqrt(x^2 + y^2)" */
-  @Column(name = "answer_formula", nullable = false, columnDefinition = "TEXT")
+  /** Formula to calculate the correct answer (PARAMETRIC variant) Example: "x + y" or "Math.sqrt(x^2 + y^2)" */
+  @Column(name = "answer_formula", columnDefinition = "TEXT")
   private String answerFormula;
 
   /**
-   * Configuration for generating multiple choice options Example: {"type": "around_answer",
-   * "count": 4, "range": 10}
+   * Configuration for generating multiple choice options (PARAMETRIC variant)
+   * Example: {"type": "around_answer", "count": 4, "range": 10}
    */
   @Type(JsonBinaryType.class)
   @Column(name = "options_generator", columnDefinition = "jsonb")
   private Map<String, Object> optionsGenerator;
 
   /**
-   * Rules for determining difficulty based on parameters Example: {"easy": "x < 10 AND y < 10",
-   * "medium": "x < 50 AND y < 50", "hard": "x >= 50 OR y >= 50"}
+   * Rules for determining difficulty based on parameters (PARAMETRIC variant)
+   * Example: {"easy": "x < 10 AND y < 10", "medium": "x < 50 AND y < 50", "hard": "x >= 50 OR y >= 50"}
    */
   @Type(JsonBinaryType.class)
-  @Column(name = "difficulty_rules", nullable = false, columnDefinition = "jsonb")
+  @Column(name = "difficulty_rules", columnDefinition = "jsonb")
   private Map<String, Object> difficultyRules;
 
-  /** Constraints for parameter generation Example: ["x < y", "x + y < 1000"] */
+  /** Constraints for parameter generation (PARAMETRIC variant) Example: ["x < y", "x + y < 1000"] */
   @Type(StringArrayType.class)
   @Column(name = "constraints", columnDefinition = "TEXT[]")
   private String[] constraints;
+
+  /** Theorem statement for PROPOSITIONAL templates - defines the mathematical proposition */
+  @Lob
+  @Nationalized
+  @Column(name = "theorem_statement")
+  private String theoremStatement;
+
+  /** Statement mutations for PROPOSITIONAL templates - variations of the theorem */
+  @Type(JsonBinaryType.class)
+  @Column(name = "statement_mutations", columnDefinition = "jsonb")
+  private Map<String, Object> statementMutations;
+
+  /** Question stem variations for both PARAMETRIC and PROPOSITIONAL templates */
+  @Type(JsonBinaryType.class)
+  @Column(name = "stem_variants", columnDefinition = "jsonb")
+  private Map<String, Object> stemVariants;
 
   @Column(name = "cognitive_level", nullable = false)
   @Enumerated(EnumType.STRING)
@@ -128,8 +159,19 @@ public class QuestionTemplate {
   @JoinColumn(name = "created_by", insertable = false, updatable = false)
   private User creator;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
+  private Lesson lesson;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
+  private QuestionBank questionBank;
+
   @OneToMany(mappedBy = "questionTemplate", cascade = CascadeType.ALL)
   private Set<Question> questions;
+
+  @OneToMany(mappedBy = "questionTemplate", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<ExamMatrixTemplateMapping> examMatrixMappings;
 
   @PrePersist
   public void prePersist() {

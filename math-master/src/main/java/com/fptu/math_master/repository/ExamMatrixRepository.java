@@ -1,6 +1,7 @@
 package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.ExamMatrix;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,40 +15,9 @@ public interface ExamMatrixRepository extends JpaRepository<ExamMatrix, UUID> {
   @Query("SELECT em FROM ExamMatrix em WHERE em.id = :id AND em.deletedAt IS NULL")
   Optional<ExamMatrix> findByIdAndNotDeleted(@Param("id") UUID id);
 
-  @Query(
-      "SELECT em FROM ExamMatrix em WHERE em.assessmentId = :assessmentId AND em.deletedAt IS NULL")
+  @Query("SELECT em FROM ExamMatrix em WHERE em.id = (SELECT a.examMatrixId FROM Assessment a WHERE a.id = :assessmentId AND a.deletedAt IS NULL) AND em.deletedAt IS NULL")
   Optional<ExamMatrix> findByAssessmentIdAndNotDeleted(@Param("assessmentId") UUID assessmentId);
 
-  @Query(
-      "SELECT COUNT(em) > 0 FROM ExamMatrix em WHERE em.assessmentId = :assessmentId AND em.deletedAt IS NULL")
-  boolean existsByAssessmentId(@Param("assessmentId") UUID assessmentId);
-
-  @Query("SELECT COUNT(mc) FROM MatrixCell mc WHERE mc.matrixId = :matrixId")
-  Long countCellsByMatrixId(@Param("matrixId") UUID matrixId);
-
-  @Query(
-      "SELECT COUNT(mc) FROM MatrixCell mc WHERE mc.matrixId = :matrixId AND mc.numQuestions > 0")
-  Long countFilledCellsByMatrixId(@Param("matrixId") UUID matrixId);
-
-  @Query(
-      "SELECT COUNT(mqm) FROM MatrixQuestionMapping mqm "
-          + "JOIN MatrixCell mc ON mqm.matrixCellId = mc.id "
-          + "WHERE mc.matrixId = :matrixId AND mqm.isSelected = true")
-  Long countSelectedQuestionsByMatrixId(@Param("matrixId") UUID matrixId);
-
-  /**
-   * Returns the count of assessment_question rows that are traceable back to the
-   * given matrix through matrix_question_mapping.  Used at publish time to confirm
-   * that the question set in assessment_questions actually matches the matrix spec.
-   */
-  @Query(
-      "SELECT COUNT(aq) FROM AssessmentQuestion aq "
-          + "WHERE aq.questionId IN ("
-          + "  SELECT mqm.questionId FROM MatrixQuestionMapping mqm "
-          + "  JOIN MatrixCell mc ON mqm.matrixCellId = mc.id "
-          + "  WHERE mc.matrixId = :matrixId AND mqm.isSelected = true"
-          + ") AND aq.assessmentId = ("
-          + "  SELECT em.assessmentId FROM ExamMatrix em WHERE em.id = :matrixId"
-          + ")")
-  Long countAssessmentQuestionsFilledByMatrix(@Param("matrixId") UUID matrixId);
+  @Query("SELECT em FROM ExamMatrix em WHERE em.teacherId = :teacherId AND em.deletedAt IS NULL")
+  List<ExamMatrix> findByTeacherIdAndNotDeleted(@Param("teacherId") UUID teacherId);
 }
