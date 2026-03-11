@@ -18,8 +18,6 @@ public class QuestionBankResponse {
   private String teacherName;
   private String name;
   private String description;
-  private String subject;
-  private String gradeLevel;
   private Boolean isPublic;
   private Long questionCount;
   private Instant createdAt;

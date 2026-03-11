@@ -19,7 +19,7 @@ public interface QuestionBankService {
   Page<QuestionBankResponse> getMyQuestionBanks(Pageable pageable);
 
   Page<QuestionBankResponse> searchQuestionBanks(
-      String subject, String gradeLevel, Boolean isPublic, String searchTerm, Pageable pageable);
+      Boolean isPublic, String searchTerm, Pageable pageable);
 
   QuestionBankResponse togglePublicStatus(UUID id);
 

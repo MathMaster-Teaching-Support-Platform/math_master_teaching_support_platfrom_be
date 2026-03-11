@@ -9,12 +9,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
- * STUB IMPLEMENTATION - Refactoring in progress
- * Transitioning from MatrixCell/MatrixQuestionMapping to ExamMatrixTemplateMapping architecture.
- * All methods throw UnsupportedOperationException() until proper implementation.
+ * STUB IMPLEMENTATION - Refactoring in progress.
+ * Transitioned from MatrixCell/MatrixQuestionMapping to ExamMatrixTemplateMapping architecture.
+ * All methods throw UnsupportedOperationException until proper implementation.
  */
 @Service
 @RequiredArgsConstructor
@@ -22,35 +21,56 @@ import org.springframework.transaction.annotation.Transactional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ExamMatrixServiceImpl implements ExamMatrixService {
 
+  // ── Matrix CRUD ─────────────────────────────────────────────────────────
+
   @Override
-  public ExamMatrixResponse createExamMatrix(UUID assessmentId, ExamMatrixRequest request) {
+  public ExamMatrixResponse createExamMatrix(ExamMatrixRequest request) {
     throw new UnsupportedOperationException("Under refactoring");
   }
 
   @Override
-  public ExamMatrixResponse configureMatrixDimensions(UUID matrixId, MatrixDimensionRequest request) {
+  public ExamMatrixResponse updateExamMatrix(UUID matrixId, ExamMatrixRequest request) {
     throw new UnsupportedOperationException("Under refactoring");
   }
 
   @Override
-  public MatrixCellResponse createOrUpdateMatrixCell(UUID matrixId, MatrixCellRequest request) {
+  public ExamMatrixResponse getExamMatrixById(UUID matrixId) {
     throw new UnsupportedOperationException("Under refactoring");
   }
 
   @Override
-  public List<MatrixCellResponse> getMatrixCells(UUID matrixId) {
+  public ExamMatrixResponse getExamMatrixByAssessmentId(UUID assessmentId) {
     throw new UnsupportedOperationException("Under refactoring");
   }
 
   @Override
-  public SuggestedQuestionsResponse suggestQuestionsForCell(UUID matrixCellId, Integer limit) {
+  public List<ExamMatrixResponse> getMyExamMatrices() {
     throw new UnsupportedOperationException("Under refactoring");
   }
 
   @Override
-  public MatrixCellResponse selectQuestionsManually(ManualQuestionSelectionRequest request) {
+  public void deleteExamMatrix(UUID matrixId) {
     throw new UnsupportedOperationException("Under refactoring");
   }
+
+  // ── Template Mappings ───────────────────────────────────────────────────
+
+  @Override
+  public TemplateMappingResponse addTemplateMapping(UUID matrixId, AddTemplateMappingRequest request) {
+    throw new UnsupportedOperationException("Under refactoring");
+  }
+
+  @Override
+  public void removeTemplateMapping(UUID matrixId, UUID mappingId) {
+    throw new UnsupportedOperationException("Under refactoring");
+  }
+
+  @Override
+  public List<TemplateMappingResponse> getTemplateMappings(UUID matrixId) {
+    throw new UnsupportedOperationException("Under refactoring");
+  }
+
+  // ── Validation & Lifecycle ──────────────────────────────────────────────
 
   @Override
   public MatrixValidationReport validateMatrix(UUID matrixId) {
@@ -68,37 +88,27 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   }
 
   @Override
-  public ExamMatrixResponse getExamMatrixById(UUID matrixId) {
-    throw new UnsupportedOperationException("Under refactoring");
-  }
-
-  @Override
-  public ExamMatrixResponse getExamMatrixByAssessmentId(UUID assessmentId) {
-    throw new UnsupportedOperationException("Under refactoring");
-  }
-
-  @Override
-  public void deleteExamMatrix(UUID matrixId) {
-    throw new UnsupportedOperationException("Under refactoring");
-  }
-
-  @Override
-  public PreviewCandidatesResponse generatePreview(UUID matrixId, UUID cellId, GeneratePreviewRequest request) {
-    throw new UnsupportedOperationException("Under refactoring");
-  }
-
-  @Override
-  public FinalizePreviewResponse finalizePreview(UUID matrixId, UUID cellId, FinalizePreviewRequest request) {
-    throw new UnsupportedOperationException("Under refactoring");
-  }
-
-  @Override
-  public MatchingTemplatesResponse listMatchingTemplatesForCell(UUID matrixId, UUID cellId, String q, int page, int size, boolean onlyMine, boolean publicOnly) {
-    throw new UnsupportedOperationException("Under refactoring");
-  }
-
-  @Override
   public ExamMatrixResponse resetMatrix(UUID matrixId) {
+    throw new UnsupportedOperationException("Under refactoring");
+  }
+
+  // ── Question Generation ─────────────────────────────────────────────────
+
+  @Override
+  public MatchingTemplatesResponse listMatchingTemplates(
+      UUID matrixId, String q, int page, int size, boolean onlyMine, boolean publicOnly) {
+    throw new UnsupportedOperationException("Under refactoring");
+  }
+
+  @Override
+  public PreviewCandidatesResponse generatePreview(
+      UUID matrixId, UUID mappingId, GeneratePreviewRequest request) {
+    throw new UnsupportedOperationException("Under refactoring");
+  }
+
+  @Override
+  public FinalizePreviewResponse finalizePreview(
+      UUID matrixId, UUID mappingId, FinalizePreviewRequest request) {
     throw new UnsupportedOperationException("Under refactoring");
   }
 }

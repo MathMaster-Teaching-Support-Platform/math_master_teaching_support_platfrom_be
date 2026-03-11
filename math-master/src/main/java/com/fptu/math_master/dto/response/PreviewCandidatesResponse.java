@@ -2,7 +2,6 @@ package com.fptu.math_master.dto.response;
 
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionDifficulty;
-import com.fptu.math_master.enums.QuestionType;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,15 +24,15 @@ public class PreviewCandidatesResponse {
 
   private UUID templateId;
   private String templateName;
-  private UUID cellId;
+  private UUID templateMappingId;
   private UUID matrixId;
 
   private int requestedCount;
   private int generatedCount;
 
-  // ── Cell requirements (for UI display) ──────────────────────────────────
+  // ── Mapping requirements (for UI display) ──────────────────────────────
 
-  private CellInfo cellRequirements;
+  private MappingInfo mappingRequirements;
 
   // ── Generated candidates ─────────────────────────────────────────────────
 
@@ -52,15 +51,12 @@ public class PreviewCandidatesResponse {
   @Builder
   @NoArgsConstructor
   @AllArgsConstructor
-  public static class CellInfo {
-    private UUID cellId;
-    private UUID chapterId;
-    private String chapterTitle;
-    private String topic;
+  public static class MappingInfo {
+    private UUID templateMappingId;
+    private UUID templateId;
+    private String templateName;
     private CognitiveLevel cognitiveLevel;
-    private QuestionDifficulty difficulty;
-    private QuestionType questionType;
-    private Integer numQuestions;
+    private Integer questionCount;
   }
 
   @Data

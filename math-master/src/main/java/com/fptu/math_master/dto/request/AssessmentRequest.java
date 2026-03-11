@@ -1,5 +1,6 @@
 package com.fptu.math_master.dto.request;
 
+import com.fptu.math_master.enums.AssessmentMode;
 import com.fptu.math_master.enums.AssessmentType;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
 import jakarta.validation.constraints.*;
@@ -43,7 +44,9 @@ public class AssessmentRequest {
 
   private Boolean showCorrectAnswers;
 
-  private Boolean hasMatrix;
+  private AssessmentMode assessmentMode;
+
+  private UUID examMatrixId;
 
   private Boolean allowMultipleAttempts;
 

@@ -80,6 +80,8 @@ public class AssessmentServiceImpl implements AssessmentService {
                 request.getRandomizeQuestions() != null ? request.getRandomizeQuestions() : false)
             .showCorrectAnswers(
                 request.getShowCorrectAnswers() != null ? request.getShowCorrectAnswers() : false)
+            .assessmentMode(request.getAssessmentMode())
+            .examMatrixId(request.getExamMatrixId())
             .allowMultipleAttempts(
                 request.getAllowMultipleAttempts() != null
                     ? request.getAllowMultipleAttempts()
@@ -133,7 +135,12 @@ public class AssessmentServiceImpl implements AssessmentService {
     if (request.getShowCorrectAnswers() != null) {
       assessment.setShowCorrectAnswers(request.getShowCorrectAnswers());
     }
-    // hasMatrix field removed; examMatrixId is now used instead
+    if (request.getAssessmentMode() != null) {
+      assessment.setAssessmentMode(request.getAssessmentMode());
+    }
+    if (request.getExamMatrixId() != null) {
+      assessment.setExamMatrixId(request.getExamMatrixId());
+    }
     if (request.getAllowMultipleAttempts() != null) {
       assessment.setAllowMultipleAttempts(request.getAllowMultipleAttempts());
     }
@@ -750,7 +757,8 @@ public class AssessmentServiceImpl implements AssessmentService {
         .endDate(assessment.getEndDate())
         .randomizeQuestions(assessment.getRandomizeQuestions())
         .showCorrectAnswers(assessment.getShowCorrectAnswers())
-        // examMatrixId handling for new architecture
+        .assessmentMode(assessment.getAssessmentMode())
+        .examMatrixId(assessment.getExamMatrixId())
         .allowMultipleAttempts(assessment.getAllowMultipleAttempts())
         .maxAttempts(assessment.getMaxAttempts())
         .attemptScoringPolicy(assessment.getAttemptScoringPolicy())

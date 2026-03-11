@@ -19,21 +19,13 @@ public class MatrixValidationReport {
   private List<String> warnings;
 
   // Summary
-  private Integer actualQuestions;
-  private Integer targetQuestions;
-  private BigDecimal actualPoints;
-  private BigDecimal targetPoints;
-  private Integer totalCells;
-  private Integer filledCells;
+  private Integer totalTemplateMappings;
+  private Integer totalQuestions;
+  private BigDecimal totalPoints;
 
   // Distribution
-  private Map<String, Double> chapterDistribution;
-  private Map<String, Double> difficultyDistribution;
   private Map<String, Integer> cognitiveLevelCoverage;
 
-  private boolean allCellsFilled;
   private boolean questionsMatchTarget;
-  private boolean pointsMatchTarget;
-  private boolean difficultyBalanced;
   private boolean allCognitiveLevelsCovered;
 }

@@ -1,7 +1,6 @@
 package com.fptu.math_master.dto.response;
 
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -22,8 +21,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class MatchingTemplatesResponse {
 
-  /** Summary of cell requirements used for filtering (for UI display). */
-  private CellRequirementsInfo cellRequirements;
+  /** Summary of matrix requirements used for filtering (for UI display). */
+  private MappingRequirementsInfo mappingRequirements;
 
   /** Total number of templates found matching the criteria. */
   private int totalTemplatesFound;
@@ -35,23 +34,17 @@ public class MatchingTemplatesResponse {
   private String hint;
 
   // ─────────────────────────────────────────────────────────────────────
-  // Nested: CellRequirementsInfo
+  // Nested: MappingRequirementsInfo
   // ─────────────────────────────────────────────────────────────────────
 
   @Data
   @Builder
   @NoArgsConstructor
   @AllArgsConstructor
-  public static class CellRequirementsInfo {
-    private UUID cellId;
+  public static class MappingRequirementsInfo {
     private UUID matrixId;
-    private UUID chapterId;
-    private String chapterTitle;
-    private String topic;
     private CognitiveLevel cognitiveLevel;
-    private QuestionDifficulty difficulty;
-    private QuestionType questionType;
-    private Integer numQuestions;
+    private Integer questionCount;
   }
 
   // ─────────────────────────────────────────────────────────────────────

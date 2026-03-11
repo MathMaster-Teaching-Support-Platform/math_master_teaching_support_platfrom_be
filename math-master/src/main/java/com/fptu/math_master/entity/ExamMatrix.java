@@ -65,9 +65,6 @@ public class ExamMatrix {
   @OneToMany(mappedBy = "examMatrix", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<ExamMatrixTemplateMapping> templateMappings;
 
-  @OneToMany(mappedBy = "examMatrix", cascade = CascadeType.ALL, orphanRemoval = true)
-  private Set<Assessment> assessments;
-
   @PrePersist
   public void prePersist() {
     if (isReusable == null) isReusable = false;

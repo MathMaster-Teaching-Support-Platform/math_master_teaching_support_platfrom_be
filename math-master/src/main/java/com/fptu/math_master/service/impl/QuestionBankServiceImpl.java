@@ -167,15 +167,13 @@ public class QuestionBankServiceImpl implements QuestionBankService {
   @Override
   @Transactional(readOnly = true)
   public Page<QuestionBankResponse> searchQuestionBanks(
-      String subject, String gradeLevel, Boolean isPublic, String searchTerm, Pageable pageable) {
+      Boolean isPublic, String searchTerm, Pageable pageable) {
     log.info(
         "Searching question banks – searchTerm: {}, isPublic: {}",
         searchTerm, isPublic);
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
 
-    // Note: subject and gradeLevel parameters are not supported in the current schema
-    // Only searchTerm and isPublic filters are applied
     return questionBankRepository
         .findByTeacherIdAndNotDeleted(currentUserId, pageable)
         .map(this::mapSingleToResponse);
