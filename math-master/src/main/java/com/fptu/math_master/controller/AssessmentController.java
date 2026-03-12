@@ -196,13 +196,11 @@ public class AssessmentController {
               + "Pagination supported (default 20 items/page).")
   public ApiResponse<Page<AssessmentResponse>> getMyAssessments(
       @RequestParam(required = false) AssessmentStatus status,
-      @RequestParam(required = false) UUID lessonId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(defaultValue = "createdAt") String sortBy,
       @RequestParam(defaultValue = "DESC") String sortDirection) {
 
-    log.info("REST request to get my assessments - status: {}, lessonId: {}", status, lessonId);
 
     Sort sort =
         sortDirection.equalsIgnoreCase("ASC")
@@ -212,7 +210,7 @@ public class AssessmentController {
     Pageable pageable = PageRequest.of(page, size, sort);
 
     return ApiResponse.<Page<AssessmentResponse>>builder()
-        .result(assessmentService.getMyAssessments(status, lessonId, pageable))
+        .result(assessmentService.getMyAssessments(status, pageable))
         .build();
   }
 

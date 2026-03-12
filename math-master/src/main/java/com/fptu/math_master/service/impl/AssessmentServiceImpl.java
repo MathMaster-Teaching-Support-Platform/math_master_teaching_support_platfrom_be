@@ -405,8 +405,7 @@ public class AssessmentServiceImpl implements AssessmentService {
   @Override
   @Transactional(readOnly = true)
   public Page<AssessmentResponse> getMyAssessments(
-      AssessmentStatus status, UUID lessonId, Pageable pageable) {
-    log.info("Getting my assessments - status: {}, lessonId: {}", status, lessonId);
+      AssessmentStatus status, Pageable pageable) {
 
     UUID currentUserId = getCurrentUserId();
     Page<Assessment> assessmentsPage =

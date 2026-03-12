@@ -32,7 +32,7 @@ public interface AssessmentService {
   AssessmentResponse getAssessmentById(UUID id);
 
   Page<AssessmentResponse> getMyAssessments(
-      AssessmentStatus status, UUID lessonId, Pageable pageable);
+      AssessmentStatus status, Pageable pageable);
 
   boolean canEditAssessment(UUID id);
 
