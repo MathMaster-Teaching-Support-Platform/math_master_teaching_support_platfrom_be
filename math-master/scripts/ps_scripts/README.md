@@ -18,10 +18,15 @@ cd scripts\ps_scripts
 .\install.ps1
 ```
 
+**Lưu ý**: Scripts sẽ tạo alias `khoipd_terminal_ps` và thêm vào PowerShell profile. Bạn có thể chạy từ bất kỳ thư mục nào sau khi cài đặt.
+
 ### 2️⃣ Sau Khi Cài Đặt
 
 ```powershell
 # Reload PowerShell profile hoặc mở terminal mới
+. $PROFILE
+
+# Chạy từ bất kỳ đâu
 khoipd_terminal_ps
 ```
 
@@ -30,9 +35,10 @@ khoipd_terminal_ps
 ```
 1. Format Code
 2. Local Deployment
-3. Project Status
-4. Help
-5. Exit
+3. Delete Logs
+4. Project Status
+5. Help
+6. Exit
 ```
 
 ---
@@ -62,6 +68,16 @@ khoipd_terminal_ps -Task DeployLocal
 ```
 
 **Công dụng**: Build Docker images, khởi động services (PostgreSQL, Redis, Centrifugo, Backend)
+
+---
+
+### Delete Logs
+
+```powershell
+khoipd_terminal_ps -Task DeleteLogs
+```
+
+**Công dụng**: Xóa tất cả log files (_.log, _.txt) từ thư mục logs
 
 ---
 
@@ -139,9 +155,9 @@ Copy-Item .env.production.example .env
 | Issue                   | Solution                                                               |
 | ----------------------- | ---------------------------------------------------------------------- |
 | `ExecutionPolicy` error | `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
+| Alias not found         | `. $PROFILE` hoặc mở terminal PowerShell mới                           |
 | Docker not running      | Mở Docker Desktop, chờ khởi động xong                                  |
 | `.env not found`        | `Copy-Item .env.production.example .env`                               |
-| `mvnw.cmd not found`    | Chắc chắn đang trong project root                                      |
 
 Xem [README_SCRIPTS_PS.md](README_SCRIPTS_PS.md#-khắc-phục-sự-cố) cho giải pháp chi tiết.
 

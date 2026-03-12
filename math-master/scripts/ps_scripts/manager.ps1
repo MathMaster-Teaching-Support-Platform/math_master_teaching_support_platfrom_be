@@ -31,11 +31,18 @@ function Invoke-ApplyFormat {
     Write-Host "Code Formatting - Math Master" -ForegroundColor Cyan
     Write-Host ""
     
-    if (-Not (Test-Path "mvnw.cmd")) {
+    $projectRoot = (Get-Location).Path
+    if ($projectRoot -like "*\ps_scripts" -or $projectRoot -like "*\ubuntu_scripts") {
+        $projectRoot = Split-Path (Split-Path $projectRoot)
+    }
+    
+    if (-Not (Test-Path (Join-Path $projectRoot "mvnw.cmd"))) {
         Write-Host "ERROR: mvnw.cmd not found!" -ForegroundColor Red
-        Write-Host "Please run from project root" -ForegroundColor Yellow
+        Write-Host "Project root: $projectRoot" -ForegroundColor Yellow
         return $false
     }
+    
+    Push-Location $projectRoot
     
     Write-Host "Checking formatting issues..." -ForegroundColor Yellow
     &.\mvnw.cmd spotless:check
@@ -44,6 +51,7 @@ function Invoke-ApplyFormat {
         Write-Host ""
         Write-Host "OK: All files are properly formatted!" -ForegroundColor Green
         Write-Host ""
+        Pop-Location
         return $true
     }
     
@@ -56,12 +64,14 @@ function Invoke-ApplyFormat {
     if ($LASTEXITCODE -ne 0) {
         Write-Host ""
         Write-Host "ERROR: Formatting failed!" -ForegroundColor Red
+        Pop-Location
         return $false
     }
     
     Write-Host ""
     Write-Host "Formatting Complete!" -ForegroundColor Green
     Write-Host ""
+    Pop-Location
     return $true
 }
 
@@ -69,6 +79,12 @@ function Invoke-DeployLocal {
     Write-Host ""
     Write-Host "Local Deployment - Math Master" -ForegroundColor Cyan
     Write-Host ""
+    
+    $projectRoot = (Get-Location).Path
+    if ($projectRoot -like "*\ps_scripts" -or $projectRoot -like "*\ubuntu_scripts") {
+        $projectRoot = Split-Path (Split-Path $projectRoot)
+    }
+    Push-Location $projectRoot
     
     Write-Host "Checking Docker..." -ForegroundColor Yellow
     try {
@@ -78,12 +94,14 @@ function Invoke-DeployLocal {
     }
     catch {
         Write-Host "ERROR: Docker not running!" -ForegroundColor Red
+        Pop-Location
         return $false
     }
     
     Write-Host ""
     if (-Not (Test-Path ".env")) {
         Write-Host "ERROR: .env file not found!" -ForegroundColor Red
+        Pop-Location
         return $false
     }
     Write-Host "OK: .env file found" -ForegroundColor Green
@@ -98,6 +116,7 @@ function Invoke-DeployLocal {
     if ($LASTEXITCODE -ne 0) {
         Write-Host ""
         Write-Host "ERROR: Docker build failed!" -ForegroundColor Red
+        Pop-Location
         return $false
     }
     
@@ -106,6 +125,7 @@ function Invoke-DeployLocal {
     if ($LASTEXITCODE -ne 0) {
         Write-Host ""
         Write-Host "ERROR: Failed to start services!" -ForegroundColor Red
+        Pop-Location
         return $false
     }
     
@@ -114,6 +134,7 @@ function Invoke-DeployLocal {
     Write-Host ""
     docker compose ps
     Write-Host ""
+    Pop-Location
     return $true
 }
 
@@ -122,7 +143,11 @@ function Invoke-DeleteLogs {
     Write-Host "Delete Log Files - Math Master" -ForegroundColor Cyan
     Write-Host ""
     
-    $projectRoot = "..\.." 
+    $projectRoot = (Get-Location).Path
+    if ($projectRoot -like "*\ps_scripts" -or $projectRoot -like "*\ubuntu_scripts") {
+        $projectRoot = Split-Path (Split-Path $projectRoot)
+    }
+    
     $logDir = Join-Path $projectRoot "logs"
     
     if (Test-Path $logDir) {
@@ -147,7 +172,16 @@ function Invoke-Status {
     Write-Host ""
     Write-Host "Project Status" -ForegroundColor Cyan
     Write-Host ""
+    
+    $projectRoot = (Get-Location).Path
+    if ($projectRoot -like "*\ps_scripts" -or $projectRoot -like "*\ubuntu_scripts") {
+        $projectRoot = Split-Path (Split-Path $projectRoot)
+    }
+    Push-Location $projectRoot
+    
     docker compose ps 2>&1
+    
+    Pop-Location
     Write-Host ""
     return $true
 }
