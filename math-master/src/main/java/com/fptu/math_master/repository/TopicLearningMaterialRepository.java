@@ -7,7 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface TopicLearningMaterialRepository extends JpaRepository<TopicLearningMaterial, UUID> {
+public interface TopicLearningMaterialRepository
+    extends JpaRepository<TopicLearningMaterial, UUID> {
 
   /**
    * Find all materials for a topic

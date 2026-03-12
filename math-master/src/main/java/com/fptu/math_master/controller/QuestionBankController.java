@@ -148,9 +148,7 @@ public class QuestionBankController {
     Pageable pageable = PageRequest.of(page, size, sort);
 
     return ApiResponse.<Page<QuestionBankResponse>>builder()
-        .result(
-            questionBankService.searchQuestionBanks(
-                isPublic, searchTerm, pageable))
+        .result(questionBankService.searchQuestionBanks(isPublic, searchTerm, pageable))
         .build();
   }
 

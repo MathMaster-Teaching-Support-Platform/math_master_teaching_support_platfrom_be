@@ -105,14 +105,14 @@ public class AssessmentAutoSubmitServiceImpl implements AssessmentAutoSubmitServ
     log.debug("Checking for assessments to auto-close...");
     Instant now = Instant.now();
 
-    List<Assessment> expired =
-        assessmentRepository.findPublishedAssessmentsWithExpiredEndDate(now);
+    List<Assessment> expired = assessmentRepository.findPublishedAssessmentsWithExpiredEndDate(now);
 
     for (Assessment assessment : expired) {
       try {
         assessment.setStatus(AssessmentStatus.CLOSED);
         assessmentRepository.save(assessment);
-        log.info("Auto-closed assessment {} (endDate={})", assessment.getId(), assessment.getEndDate());
+        log.info(
+            "Auto-closed assessment {} (endDate={})", assessment.getId(), assessment.getEndDate());
       } catch (Exception e) {
         log.error("Failed to auto-close assessment {}", assessment.getId(), e);
       }

@@ -131,10 +131,8 @@ public enum ErrorCode {
       1088,
       "Template is in DRAFT status and cannot be used for finalisation",
       HttpStatus.BAD_REQUEST),
-  TEMPLATE_ALREADY_PUBLISHED(
-      1093, "Template is already published", HttpStatus.BAD_REQUEST),
-  TEMPLATE_ALREADY_ARCHIVED(
-      1094, "Template is already archived", HttpStatus.BAD_REQUEST),
+  TEMPLATE_ALREADY_PUBLISHED(1093, "Template is already published", HttpStatus.BAD_REQUEST),
+  TEMPLATE_ALREADY_ARCHIVED(1094, "Template is already archived", HttpStatus.BAD_REQUEST),
   TEMPLATE_ACCESS_DENIED(
       1100, "You do not have permission to access this template", HttpStatus.FORBIDDEN),
   LESSON_NOT_FOUND(1089, "Lesson not found", HttpStatus.NOT_FOUND),
@@ -161,8 +159,7 @@ public enum ErrorCode {
       1099,
       "Cannot approve matrix while assessment is already published or closed",
       HttpStatus.BAD_REQUEST),
-  SUBMISSION_ALREADY_GRADED(
-      1101, "Submission has already been graded", HttpStatus.BAD_REQUEST),
+  SUBMISSION_ALREADY_GRADED(1101, "Submission has already been graded", HttpStatus.BAD_REQUEST),
   ANSWER_SUBMISSION_MISMATCH(
       1102, "Answer does not belong to the specified submission", HttpStatus.BAD_REQUEST),
   GRADING_ACCESS_DENIED(
@@ -170,7 +167,9 @@ public enum ErrorCode {
   REGRADE_REQUEST_ALREADY_PENDING(
       1104, "A regrade request for this question is already pending", HttpStatus.BAD_REQUEST),
   REGRADE_REQUEST_NOT_PENDING(
-      1105, "Regrade request is not in PENDING status and cannot be responded to", HttpStatus.BAD_REQUEST),
+      1105,
+      "Regrade request is not in PENDING status and cannot be responded to",
+      HttpStatus.BAD_REQUEST),
 
   ASSESSMENT_ALREADY_CLOSED(1106, "Assessment is already closed", HttpStatus.BAD_REQUEST),
   MATRIX_NOT_APPROVED_FOR_RESET(
@@ -180,21 +179,24 @@ public enum ErrorCode {
   QUESTION_NOT_IN_ASSESSMENT(
       1109, "Question does not belong to this assessment", HttpStatus.BAD_REQUEST),
   ASSESSMENT_QUESTION_EDIT_BLOCKED(
-      1110, "Questions can only be managed on DRAFT non-matrix assessments", HttpStatus.BAD_REQUEST),
+      1110,
+      "Questions can only be managed on DRAFT non-matrix assessments",
+      HttpStatus.BAD_REQUEST),
   SUBMISSION_ALREADY_INVALIDATED(
       1111, "Submission has already been invalidated", HttpStatus.BAD_REQUEST),
   SUBMISSION_INVALIDATION_BLOCKED(
       1112, "Only SUBMITTED or GRADED submissions can be invalidated", HttpStatus.BAD_REQUEST),
   SUBMISSION_RESULT_NOT_AVAILABLE(
-      1113, "Your result is not available yet — grades have not been released", HttpStatus.FORBIDDEN),
+      1113,
+      "Your result is not available yet — grades have not been released",
+      HttpStatus.FORBIDDEN),
   QUESTION_EDIT_BLOCKED(
       1114, "Questions used in a published assessment cannot be edited", HttpStatus.BAD_REQUEST),
   QUESTION_DELETE_BLOCKED(
       1115, "Questions used in an assessment cannot be deleted", HttpStatus.BAD_REQUEST),
   REGRADE_DEADLINE_PASSED(
       1116, "The regrade request window for this submission has closed", HttpStatus.BAD_REQUEST),
-  ASSESSMENT_CLONE_BLOCKED(
-      1117, "Cannot clone a deleted assessment", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_CLONE_BLOCKED(1117, "Cannot clone a deleted assessment", HttpStatus.BAD_REQUEST),
   CURRICULUM_NOT_FOUND(1118, "Curriculum not found", HttpStatus.NOT_FOUND),
   CURRICULUM_ALREADY_EXISTS(1119, "Curriculum already exists", HttpStatus.BAD_REQUEST);
 

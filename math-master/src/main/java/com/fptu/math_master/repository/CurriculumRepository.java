@@ -27,8 +27,7 @@ public interface CurriculumRepository extends JpaRepository<Curriculum, UUID> {
   @Query(
       "SELECT c FROM Curriculum c WHERE c.category = :category AND c.deletedAt IS NULL"
           + " ORDER BY c.grade, c.name")
-  List<Curriculum> findByCategoryAndNotDeleted(
-      @Param("category") CurriculumCategory category);
+  List<Curriculum> findByCategoryAndNotDeleted(@Param("category") CurriculumCategory category);
 
   @Query(
       "SELECT c FROM Curriculum c WHERE c.name = :name AND c.grade = :grade"

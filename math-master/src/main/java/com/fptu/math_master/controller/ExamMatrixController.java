@@ -48,7 +48,8 @@ public class ExamMatrixController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Update exam matrix",
-      description = "Update matrix name, description, or reusable flag. Only DRAFT matrices can be updated.")
+      description =
+          "Update matrix name, description, or reusable flag. Only DRAFT matrices can be updated.")
   public ApiResponse<ExamMatrixResponse> updateExamMatrix(
       @PathVariable UUID matrixId, @Valid @RequestBody ExamMatrixRequest request) {
     log.info("REST request to update exam matrix: {}", matrixId);
@@ -128,7 +129,8 @@ public class ExamMatrixController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Remove template mapping",
-      description = "Remove a template mapping from the matrix. Only DRAFT matrices can be modified.")
+      description =
+          "Remove a template mapping from the matrix. Only DRAFT matrices can be modified.")
   public ApiResponse<Void> removeTemplateMapping(
       @PathVariable UUID matrixId, @PathVariable UUID mappingId) {
     log.info("REST request to remove template mapping {} from matrix: {}", mappingId, matrixId);
@@ -204,8 +206,7 @@ public class ExamMatrixController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Reset matrix to DRAFT",
-      description =
-          "Reset an APPROVED matrix back to DRAFT so template mappings can be re-edited.")
+      description = "Reset an APPROVED matrix back to DRAFT so template mappings can be re-edited.")
   public ApiResponse<ExamMatrixResponse> resetMatrix(@PathVariable UUID matrixId) {
     log.info("REST request to reset matrix: {}", matrixId);
     return ApiResponse.<ExamMatrixResponse>builder()
@@ -239,8 +240,7 @@ public class ExamMatrixController {
     String message =
         response.getTotalTemplatesFound() == 0
             ? "No matching templates found. You can create a new template or loosen filters."
-            : String.format(
-                "Found %d matching template(s).", response.getTotalTemplatesFound());
+            : String.format("Found %d matching template(s).", response.getTotalTemplatesFound());
 
     return ApiResponse.<MatchingTemplatesResponse>builder()
         .message(message)
@@ -262,7 +262,10 @@ public class ExamMatrixController {
 
     log.info(
         "REST request to generate preview for matrixId={}, mappingId={}, templateId={}, count={}",
-        matrixId, mappingId, request.getTemplateId(), request.getCount());
+        matrixId,
+        mappingId,
+        request.getTemplateId(),
+        request.getCount());
 
     PreviewCandidatesResponse response =
         examMatrixService.generatePreview(matrixId, mappingId, request);
@@ -308,8 +311,11 @@ public class ExamMatrixController {
     log.info(
         "REST request to finalize preview for matrixId={}, mappingId={}, templateId={}, "
             + "count={}, replaceExisting={}",
-        matrixId, mappingId, request.getTemplateId(),
-        request.getQuestions().size(), request.getReplaceExisting());
+        matrixId,
+        mappingId,
+        request.getTemplateId(),
+        request.getQuestions().size(),
+        request.getReplaceExisting());
 
     FinalizePreviewResponse response =
         examMatrixService.finalizePreview(matrixId, mappingId, request);
@@ -335,4 +341,3 @@ public class ExamMatrixController {
     return ApiResponse.<FinalizePreviewResponse>builder().message(message).result(response).build();
   }
 }
-

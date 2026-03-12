@@ -71,9 +71,7 @@ public class CurriculumServiceImpl implements CurriculumService {
             .orElseThrow(() -> new AppException(ErrorCode.CURRICULUM_NOT_FOUND));
 
     // Check if new combination conflicts with existing curriculum
-    if (request.getName() != null
-        || request.getGrade() != null
-        || request.getCategory() != null) {
+    if (request.getName() != null || request.getGrade() != null || request.getCategory() != null) {
       String name = request.getName() != null ? request.getName() : curriculum.getName();
       Integer grade = request.getGrade() != null ? request.getGrade() : curriculum.getGrade();
       CurriculumCategory category =
@@ -82,7 +80,8 @@ public class CurriculumServiceImpl implements CurriculumService {
       if (!name.equals(curriculum.getName())
           || !grade.equals(curriculum.getGrade())
           || !category.equals(curriculum.getCategory())) {
-        if (curriculumRepository.findByNameAndGradeAndCategoryAndNotDeleted(name, grade, category)
+        if (curriculumRepository
+            .findByNameAndGradeAndCategoryAndNotDeleted(name, grade, category)
             .isPresent()) {
           throw new AppException(ErrorCode.CURRICULUM_ALREADY_EXISTS);
         }

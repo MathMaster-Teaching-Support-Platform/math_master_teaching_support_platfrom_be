@@ -2,10 +2,9 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.UUID;
-
-import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
 

@@ -31,8 +31,7 @@ public interface AssessmentService {
 
   AssessmentResponse getAssessmentById(UUID id);
 
-  Page<AssessmentResponse> getMyAssessments(
-      AssessmentStatus status, Pageable pageable);
+  Page<AssessmentResponse> getMyAssessments(AssessmentStatus status, Pageable pageable);
 
   boolean canEditAssessment(UUID id);
 

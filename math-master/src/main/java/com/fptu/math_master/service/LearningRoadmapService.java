@@ -140,8 +140,8 @@ public interface LearningRoadmapService {
    * @param isRequired whether material is mandatory
    * @return created material response
    */
-  TopicMaterialResponse linkMaterialToTopic(UUID topicId, UUID lessonId, UUID questionId,
-      String resourceType, Boolean isRequired);
+  TopicMaterialResponse linkMaterialToTopic(
+      UUID topicId, UUID lessonId, UUID questionId, String resourceType, Boolean isRequired);
 
   /**
    * Remove material from topic
@@ -151,7 +151,6 @@ public interface LearningRoadmapService {
   // ============================================================================
   // WEAK AREA ANALYSIS
   // ============================================================================
-
 
   // ============================================================================
   // UTILITY & ADMINISTRATION

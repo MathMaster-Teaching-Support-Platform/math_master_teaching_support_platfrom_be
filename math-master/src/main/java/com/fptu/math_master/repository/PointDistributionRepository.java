@@ -16,4 +16,3 @@ public interface PointDistributionRepository extends JpaRepository<PointDistribu
   @Query("DELETE FROM PointDistribution pd WHERE pd.matrixId = :matrixId")
   void deleteByMatrixId(@Param("matrixId") UUID matrixId);
 }
-

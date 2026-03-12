@@ -23,4 +23,3 @@ public class AddQuestionToAssessmentRequest {
   @DecimalMin(value = "0.0", message = "Points override must be non-negative")
   private BigDecimal pointsOverride;
 }
-

@@ -4,13 +4,11 @@ import com.fptu.math_master.enums.RoadmapGenerationType;
 import com.fptu.math_master.enums.RoadmapStatus;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
-
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-
-import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
@@ -78,6 +76,7 @@ public class LearningRoadmap {
 
   @Column(name = "total_topics_count", nullable = false)
   private Integer totalTopicsCount = 0;
+
   @Lob
   @Nationalized
   @Column(name = "description")
@@ -110,7 +109,11 @@ public class LearningRoadmap {
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
   private User teacher;
 
-  @OneToMany(mappedBy = "roadmap", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+  @OneToMany(
+      mappedBy = "roadmap",
+      cascade = CascadeType.ALL,
+      orphanRemoval = true,
+      fetch = FetchType.LAZY)
   private Set<RoadmapTopic> roadmapTopics;
 
   @PrePersist

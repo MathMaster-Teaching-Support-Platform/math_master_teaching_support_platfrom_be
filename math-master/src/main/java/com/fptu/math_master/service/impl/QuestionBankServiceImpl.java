@@ -168,9 +168,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
   @Transactional(readOnly = true)
   public Page<QuestionBankResponse> searchQuestionBanks(
       Boolean isPublic, String searchTerm, Pageable pageable) {
-    log.info(
-        "Searching question banks – searchTerm: {}, isPublic: {}",
-        searchTerm, isPublic);
+    log.info("Searching question banks – searchTerm: {}, isPublic: {}", searchTerm, isPublic);
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
 
@@ -211,10 +209,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         questionBankRepository.countQuestionsByQuestionBankId(questionBank.getId());
 
     String teacherName =
-        userRepository
-            .findById(questionBank.getTeacherId())
-            .map(User::getFullName)
-            .orElse(null);
+        userRepository.findById(questionBank.getTeacherId()).map(User::getFullName).orElse(null);
 
     return QuestionBankResponse.builder()
         .id(questionBank.getId())
@@ -228,5 +223,4 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         .updatedAt(questionBank.getUpdatedAt())
         .build();
   }
-
 }

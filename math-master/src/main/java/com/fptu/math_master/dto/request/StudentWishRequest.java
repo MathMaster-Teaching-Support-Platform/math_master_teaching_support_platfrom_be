@@ -27,7 +27,8 @@ public class StudentWishRequest {
   @NotBlank(message = "Learning goals are required")
   @Schema(
       description = "Description of learning goals",
-      example = "I want to improve my skills in solving quadratic equations and master factorization techniques")
+      example =
+          "I want to improve my skills in solving quadratic equations and master factorization techniques")
   private String learningGoals;
 
   @Schema(

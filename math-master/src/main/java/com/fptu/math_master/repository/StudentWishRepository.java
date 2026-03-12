@@ -23,13 +23,15 @@ public interface StudentWishRepository extends JpaRepository<StudentWish, UUID> 
   /**
    * Find all active wishes for a student
    */
-  @Query("SELECT sw FROM StudentWish sw WHERE sw.studentId = :studentId AND sw.isActive = true AND sw.deletedAt IS NULL")
+  @Query(
+      "SELECT sw FROM StudentWish sw WHERE sw.studentId = :studentId AND sw.isActive = true AND sw.deletedAt IS NULL")
   List<StudentWish> findAllActiveWishesByStudent(@Param("studentId") UUID studentId);
 
   /**
    * Find all wishes for a student (including inactive)
    */
-  @Query("SELECT sw FROM StudentWish sw WHERE sw.studentId = :studentId AND sw.deletedAt IS NULL ORDER BY sw.createdAt DESC")
+  @Query(
+      "SELECT sw FROM StudentWish sw WHERE sw.studentId = :studentId AND sw.deletedAt IS NULL ORDER BY sw.createdAt DESC")
   List<StudentWish> findAllWishesByStudent(@Param("studentId") UUID studentId);
 
   /**

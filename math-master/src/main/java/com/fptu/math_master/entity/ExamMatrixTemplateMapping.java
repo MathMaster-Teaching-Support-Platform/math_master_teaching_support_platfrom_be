@@ -66,7 +66,10 @@ public class ExamMatrixTemplateMapping {
   @JoinColumn(name = "template_id", insertable = false, updatable = false)
   private QuestionTemplate questionTemplate;
 
-  @OneToMany(mappedBy = "examMatrixTemplateMapping", cascade = CascadeType.ALL, orphanRemoval = true)
+  @OneToMany(
+      mappedBy = "examMatrixTemplateMapping",
+      cascade = CascadeType.ALL,
+      orphanRemoval = true)
   private Set<AssessmentQuestion> assessmentQuestions;
 
   @PrePersist

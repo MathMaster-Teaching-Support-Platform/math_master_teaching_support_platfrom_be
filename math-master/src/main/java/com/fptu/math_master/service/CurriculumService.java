@@ -73,7 +73,8 @@ public interface CurriculumService {
    * @param category curriculum category
    * @return list of curricula
    */
-  List<CurriculumResponse> getCurriculaByGradeAndCategory(Integer grade, CurriculumCategory category);
+  List<CurriculumResponse> getCurriculaByGradeAndCategory(
+      Integer grade, CurriculumCategory category);
 
   /**
    * Delete a curriculum (soft delete)

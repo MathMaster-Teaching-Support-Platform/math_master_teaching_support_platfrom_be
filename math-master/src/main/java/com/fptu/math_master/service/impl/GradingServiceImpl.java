@@ -66,7 +66,10 @@ public class GradingServiceImpl implements GradingService {
     for (Answer answer : answers) {
       Question question = questionMap.get(answer.getQuestionId());
       if (question == null) {
-        log.warn("Question {} not found for answer {}, skipping", answer.getQuestionId(), answer.getId());
+        log.warn(
+            "Question {} not found for answer {}, skipping",
+            answer.getQuestionId(),
+            answer.getId());
         hasSubjectiveQuestions = true;
         continue;
       }
@@ -113,20 +116,22 @@ public class GradingServiceImpl implements GradingService {
     final BigDecimal finalTotalScore = totalScore;
     final BigDecimal finalComputedPercentage = computedPercentage;
     final boolean finalHasSubjectiveQuestions = hasSubjectiveQuestions;
-    quizAttemptRepository
-        .findBySubmissionIdOrderByAttemptNumberDesc(submissionId)
-        .stream()
-        .filter(a -> a.getStatus() == SubmissionStatus.SUBMITTED || a.getStatus() == SubmissionStatus.GRADED)
+    quizAttemptRepository.findBySubmissionIdOrderByAttemptNumberDesc(submissionId).stream()
+        .filter(
+            a ->
+                a.getStatus() == SubmissionStatus.SUBMITTED
+                    || a.getStatus() == SubmissionStatus.GRADED)
         .findFirst()
-        .ifPresent(attempt -> {
-          attempt.setScore(finalTotalScore);
-          attempt.setMaxScore(submission.getMaxScore());
-          attempt.setPercentage(finalComputedPercentage);
-          if (!finalHasSubjectiveQuestions) {
-            attempt.setStatus(SubmissionStatus.GRADED);
-          }
-          quizAttemptRepository.save(attempt);
-        });
+        .ifPresent(
+            attempt -> {
+              attempt.setScore(finalTotalScore);
+              attempt.setMaxScore(submission.getMaxScore());
+              attempt.setPercentage(finalComputedPercentage);
+              if (!finalHasSubjectiveQuestions) {
+                attempt.setStatus(SubmissionStatus.GRADED);
+              }
+              quizAttemptRepository.save(attempt);
+            });
 
     log.info(
         "Auto-grading completed for submission: {}. Status: {}, Score: {}",
@@ -181,7 +186,7 @@ public class GradingServiceImpl implements GradingService {
       return false;
     }
     String studentAnswer = answer.getAnswerText().trim().toLowerCase();
-    String correctAnswer  = question.getCorrectAnswer().trim().toLowerCase();
+    String correctAnswer = question.getCorrectAnswer().trim().toLowerCase();
     boolean isCorrect = studentAnswer.equals(correctAnswer);
     answer.setIsCorrect(isCorrect);
     answer.setPointsEarned(isCorrect ? question.getPoints() : BigDecimal.ZERO);
@@ -275,23 +280,28 @@ public class GradingServiceImpl implements GradingService {
 
     // Fix #17: back-fill latest QuizAttempt with score so scoring-policy has per-attempt data
     final BigDecimal attemptScore = totalScore;
-    final BigDecimal attemptMax   = submission.getMaxScore();
-    quizAttemptRepository
-        .findBySubmissionIdOrderByAttemptNumberDesc(submission.getId())
-        .stream().findFirst()
-        .ifPresent(attempt -> {
-          attempt.setScore(attemptScore);
-          attempt.setMaxScore(attemptMax);
-          if (attemptMax != null && attemptMax.compareTo(BigDecimal.ZERO) > 0) {
-            attempt.setPercentage(
-                attemptScore.divide(attemptMax, 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP));
-          }
-          attempt.setStatus(SubmissionStatus.GRADED);
-          quizAttemptRepository.save(attempt);
-        });
+    final BigDecimal attemptMax = submission.getMaxScore();
+    quizAttemptRepository.findBySubmissionIdOrderByAttemptNumberDesc(submission.getId()).stream()
+        .findFirst()
+        .ifPresent(
+            attempt -> {
+              attempt.setScore(attemptScore);
+              attempt.setMaxScore(attemptMax);
+              if (attemptMax != null && attemptMax.compareTo(BigDecimal.ZERO) > 0) {
+                attempt.setPercentage(
+                    attemptScore
+                        .divide(attemptMax, 4, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100))
+                        .setScale(2, RoundingMode.HALF_UP));
+              }
+              attempt.setStatus(SubmissionStatus.GRADED);
+              quizAttemptRepository.save(attempt);
+            });
 
-    log.info("Grading completed for submission: {}. Final score: {}", request.getSubmissionId(), finalScore);
+    log.info(
+        "Grading completed for submission: {}. Final score: {}",
+        request.getSubmissionId(),
+        finalScore);
 
     return mapToGradingResponse(submission);
   }
@@ -307,7 +317,8 @@ public class GradingServiceImpl implements GradingService {
 
   @Override
   @Transactional(readOnly = true)
-  public Page<GradingSubmissionResponse> getGradingQueueByTeacher(UUID teacherId, Pageable pageable) {
+  public Page<GradingSubmissionResponse> getGradingQueueByTeacher(
+      UUID teacherId, Pageable pageable) {
     log.info("Getting grading queue for teacher: {}", teacherId);
     return submissionRepository
         .findByTeacherIdAndStatus(teacherId, SubmissionStatus.SUBMITTED, pageable)
@@ -363,7 +374,8 @@ public class GradingServiceImpl implements GradingService {
     answerRepository.save(answer);
 
     BigDecimal scoreDiff = request.getNewPoints().subtract(oldPoints);
-    BigDecimal newScore = (submission.getScore() != null ? submission.getScore() : BigDecimal.ZERO).add(scoreDiff);
+    BigDecimal newScore =
+        (submission.getScore() != null ? submission.getScore() : BigDecimal.ZERO).add(scoreDiff);
     submission.setScore(newScore);
 
     if (submission.getMaxScore() != null
@@ -386,7 +398,11 @@ public class GradingServiceImpl implements GradingService {
     submission.setGradedAt(Instant.now());
     submissionRepository.save(submission);
 
-    log.info("Grade overridden for answer: {}. Old: {}, New: {}", request.getAnswerId(), oldPoints, request.getNewPoints());
+    log.info(
+        "Grade overridden for answer: {}. Old: {}, New: {}",
+        request.getAnswerId(),
+        oldPoints,
+        request.getNewPoints());
   }
 
   @Override
@@ -408,8 +424,7 @@ public class GradingServiceImpl implements GradingService {
 
     BigDecimal baseScore = submission.getScore() != null ? submission.getScore() : BigDecimal.ZERO;
     BigDecimal proposedFinal = baseScore.add(request.getAdjustmentAmount());
-    if (submission.getMaxScore() != null
-        && proposedFinal.compareTo(submission.getMaxScore()) > 0) {
+    if (submission.getMaxScore() != null && proposedFinal.compareTo(submission.getMaxScore()) > 0) {
       proposedFinal = submission.getMaxScore();
       log.warn(
           "Manual adjustment for submission {} capped at maxScore {}",
@@ -435,8 +450,11 @@ public class GradingServiceImpl implements GradingService {
     submission.setGradedAt(Instant.now());
     submissionRepository.save(submission);
 
-    log.info("Manual adjustment added to submission: {}. Amount: {}, Final: {}",
-        request.getSubmissionId(), request.getAdjustmentAmount(), proposedFinal);
+    log.info(
+        "Manual adjustment added to submission: {}. Amount: {}, Final: {}",
+        request.getSubmissionId(),
+        request.getAdjustmentAmount(),
+        proposedFinal);
   }
 
   @Override
@@ -478,13 +496,14 @@ public class GradingServiceImpl implements GradingService {
         scores.isEmpty()
             ? BigDecimal.ZERO
             : scores.size() % 2 == 0
-                ? scores.get(scores.size() / 2 - 1)
+                ? scores
+                    .get(scores.size() / 2 - 1)
                     .add(scores.get(scores.size() / 2))
                     .divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP)
                 : scores.get(scores.size() / 2);
 
     BigDecimal highestScore = scores.isEmpty() ? BigDecimal.ZERO : scores.get(scores.size() - 1);
-    BigDecimal lowestScore  = scores.isEmpty() ? BigDecimal.ZERO : scores.get(0);
+    BigDecimal lowestScore = scores.isEmpty() ? BigDecimal.ZERO : scores.get(0);
 
     Assessment assessment =
         assessmentRepository
@@ -501,18 +520,42 @@ public class GradingServiceImpl implements GradingService {
     }
 
     Map<String, Long> scoreDistribution = new LinkedHashMap<>();
-    scoreDistribution.put("0-20",  scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(20)) <= 0).count());
-    scoreDistribution.put("21-40", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(20)) > 0  && s.compareTo(BigDecimal.valueOf(40)) <= 0).count());
-    scoreDistribution.put("41-60", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(40)) > 0  && s.compareTo(BigDecimal.valueOf(60)) <= 0).count());
-    scoreDistribution.put("61-80", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(60)) > 0  && s.compareTo(BigDecimal.valueOf(80)) <= 0).count());
-    scoreDistribution.put("81-100",scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(80)) > 0).count());
+    scoreDistribution.put(
+        "0-20", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(20)) <= 0).count());
+    scoreDistribution.put(
+        "21-40",
+        scores.stream()
+            .filter(
+                s ->
+                    s.compareTo(BigDecimal.valueOf(20)) > 0
+                        && s.compareTo(BigDecimal.valueOf(40)) <= 0)
+            .count());
+    scoreDistribution.put(
+        "41-60",
+        scores.stream()
+            .filter(
+                s ->
+                    s.compareTo(BigDecimal.valueOf(40)) > 0
+                        && s.compareTo(BigDecimal.valueOf(60)) <= 0)
+            .count());
+    scoreDistribution.put(
+        "61-80",
+        scores.stream()
+            .filter(
+                s ->
+                    s.compareTo(BigDecimal.valueOf(60)) > 0
+                        && s.compareTo(BigDecimal.valueOf(80)) <= 0)
+            .count());
+    scoreDistribution.put(
+        "81-100", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(80)) > 0).count());
 
     Long averageTimeSpent =
-        (long) submissions.stream()
-            .filter(s -> s.getTimeSpentSeconds() != null)
-            .mapToLong(Submission::getTimeSpentSeconds)
-            .average()
-            .orElse(0.0);
+        (long)
+            submissions.stream()
+                .filter(s -> s.getTimeSpentSeconds() != null)
+                .mapToLong(Submission::getTimeSpentSeconds)
+                .average()
+                .orElse(0.0);
 
     return GradingAnalyticsResponse.builder()
         .totalSubmissions(totalSubmissions)
@@ -536,7 +579,8 @@ public class GradingServiceImpl implements GradingService {
     List<Submission> submissions = submissionRepository.findAllByAssessmentId(assessmentId);
 
     StringBuilder csv = new StringBuilder();
-    csv.append("Student Name,Student Email,Score,Percentage,Final Score,Time Taken (seconds),Submitted At,Status\n");
+    csv.append(
+        "Student Name,Student Email,Score,Percentage,Final Score,Time Taken (seconds),Submitted At,Status\n");
 
     for (Submission submission : submissions) {
       User student = userRepository.findById(submission.getStudentId()).orElse(null);
@@ -547,11 +591,11 @@ public class GradingServiceImpl implements GradingService {
               "%s,%s,%s,%s,%s,%s,%s,%s\n",
               escapeCsv(student.getFullName()),
               escapeCsv(student.getEmail()),
-              submission.getScore()          != null ? submission.getScore()          : "0",
-              submission.getPercentage()     != null ? submission.getPercentage()     : "0",
-              submission.getFinalScore()     != null ? submission.getFinalScore()     : "0",
-              submission.getTimeSpentSeconds()!= null ? submission.getTimeSpentSeconds(): "0",
-              submission.getSubmittedAt()    != null ? submission.getSubmittedAt()    : "",
+              submission.getScore() != null ? submission.getScore() : "0",
+              submission.getPercentage() != null ? submission.getPercentage() : "0",
+              submission.getFinalScore() != null ? submission.getFinalScore() : "0",
+              submission.getTimeSpentSeconds() != null ? submission.getTimeSpentSeconds() : "0",
+              submission.getSubmittedAt() != null ? submission.getSubmittedAt() : "",
               submission.getStatus()));
     }
 
@@ -575,7 +619,7 @@ public class GradingServiceImpl implements GradingService {
     List<Submission> submissions = submissionRepository.findAllByAssessmentId(assessmentId);
 
     long released = 0;
-    long skipped  = 0;
+    long skipped = 0;
     for (Submission submission : submissions) {
       if (submission.getStatus() == SubmissionStatus.GRADED) {
         submission.setGradesReleased(true);
@@ -589,7 +633,9 @@ public class GradingServiceImpl implements GradingService {
 
     log.info(
         "Released {} submission(s), skipped {} ungraded submission(s) in assessment: {}",
-        released, skipped, assessmentId);
+        released,
+        skipped,
+        assessmentId);
   }
 
   @Override
@@ -704,12 +750,14 @@ public class GradingServiceImpl implements GradingService {
               .build();
       gradeAuditLogRepository.save(auditLog);
 
-      BigDecimal oldPoints = answer.getPointsEarned() != null ? answer.getPointsEarned() : BigDecimal.ZERO;
+      BigDecimal oldPoints =
+          answer.getPointsEarned() != null ? answer.getPointsEarned() : BigDecimal.ZERO;
       answer.setPointsEarned(request.getNewPoints());
       answerRepository.save(answer);
 
       BigDecimal scoreDiff = request.getNewPoints().subtract(oldPoints);
-      BigDecimal newScore  = (submission.getScore() != null ? submission.getScore() : BigDecimal.ZERO).add(scoreDiff);
+      BigDecimal newScore =
+          (submission.getScore() != null ? submission.getScore() : BigDecimal.ZERO).add(scoreDiff);
       submission.setScore(newScore);
 
       if (submission.getMaxScore() != null
@@ -728,7 +776,11 @@ public class GradingServiceImpl implements GradingService {
       submission.setFinalScore(finalScore);
       submissionRepository.save(submission);
 
-      log.info("Regrade approved — answer {} updated from {} to {}", answer.getId(), oldPoints, request.getNewPoints());
+      log.info(
+          "Regrade approved — answer {} updated from {} to {}",
+          answer.getId(),
+          oldPoints,
+          request.getNewPoints());
     }
 
     return mapToRegradeRequestResponse(regradeRequest);
@@ -822,7 +874,7 @@ public class GradingServiceImpl implements GradingService {
 
     // Fix #5 / #7: enforce gradesReleased gate unless showScoreImmediately bypasses it
     boolean gradesReleased = Boolean.TRUE.equals(submission.getGradesReleased());
-    boolean immediateMode  = Boolean.TRUE.equals(assessment.getShowScoreImmediately());
+    boolean immediateMode = Boolean.TRUE.equals(assessment.getShowScoreImmediately());
 
     if (!gradesReleased && !immediateMode) {
       throw new AppException(ErrorCode.SUBMISSION_RESULT_NOT_AVAILABLE);
@@ -884,8 +936,10 @@ public class GradingServiceImpl implements GradingService {
             .build();
     aiReviewRepository.save(overall);
 
-    log.info("AI review stubs created for submission {} ({} per-question + 1 overall)",
-        submissionId, answers.size());
+    log.info(
+        "AI review stubs created for submission {} ({} per-question + 1 overall)",
+        submissionId,
+        answers.size());
   }
 
   // ── Fix #16: Count pending subjective submissions for dashboard notification ──────
@@ -914,7 +968,8 @@ public class GradingServiceImpl implements GradingService {
    */
   private GradingSubmissionResponse mapToGradingResponse(Submission submission) {
     User student = userRepository.findById(submission.getStudentId()).orElse(null);
-    Assessment assessment = assessmentRepository.findById(submission.getAssessmentId()).orElse(null);
+    Assessment assessment =
+        assessmentRepository.findById(submission.getAssessmentId()).orElse(null);
 
     List<Answer> answers = answerRepository.findBySubmissionId(submission.getId());
 
@@ -929,28 +984,30 @@ public class GradingServiceImpl implements GradingService {
             .map(GradeAuditLog::getAnswerId)
             .collect(Collectors.toSet());
 
-    long pendingCount    = answers.stream().filter(a -> a.getPointsEarned() == null).count();
+    long pendingCount = answers.stream().filter(a -> a.getPointsEarned() == null).count();
     long autoGradedCount = answers.stream().filter(a -> a.getPointsEarned() != null).count();
 
     List<AnswerGradeResponse> answerResponses =
         answers.stream()
-            .map(answer -> {
-              Question question = questionMap.get(answer.getQuestionId());
-              return AnswerGradeResponse.builder()
-                  .answerId(answer.getId())
-                  .questionId(answer.getQuestionId())
-                  .questionText(question != null ? question.getQuestionText() : null)
-                  .answerText(answer.getAnswerText())
-                  // Fix #7: always populate correctAnswer here; getMyResult will null it if needed
-                  .correctAnswer(question != null ? question.getCorrectAnswer() : null)
-                  .isCorrect(answer.getIsCorrect())
-                  .pointsEarned(answer.getPointsEarned())
-                  .maxPoints(question != null ? question.getPoints() : null)
-                  .feedback(answer.getFeedback())
-                  .isManuallyAdjusted(manuallyAdjustedAnswerIds.contains(answer.getId()))
-                  .gradedAt(answer.getUpdatedAt())
-                  .build();
-            })
+            .map(
+                answer -> {
+                  Question question = questionMap.get(answer.getQuestionId());
+                  return AnswerGradeResponse.builder()
+                      .answerId(answer.getId())
+                      .questionId(answer.getQuestionId())
+                      .questionText(question != null ? question.getQuestionText() : null)
+                      .answerText(answer.getAnswerText())
+                      // Fix #7: always populate correctAnswer here; getMyResult will null it if
+                      // needed
+                      .correctAnswer(question != null ? question.getCorrectAnswer() : null)
+                      .isCorrect(answer.getIsCorrect())
+                      .pointsEarned(answer.getPointsEarned())
+                      .maxPoints(question != null ? question.getPoints() : null)
+                      .feedback(answer.getFeedback())
+                      .isManuallyAdjusted(manuallyAdjustedAnswerIds.contains(answer.getId()))
+                      .gradedAt(answer.getUpdatedAt())
+                      .build();
+                })
             .collect(Collectors.toList());
 
     Integer attemptNumber = quizAttemptRepository.countBySubmissionId(submission.getId());
@@ -981,9 +1038,11 @@ public class GradingServiceImpl implements GradingService {
   }
 
   private RegradeRequestResponse mapToRegradeRequestResponse(RegradeRequest request) {
-    User student  = userRepository.findById(request.getStudentId()).orElse(null);
-    User reviewer = request.getReviewedBy() != null
-        ? userRepository.findById(request.getReviewedBy()).orElse(null) : null;
+    User student = userRepository.findById(request.getStudentId()).orElse(null);
+    User reviewer =
+        request.getReviewedBy() != null
+            ? userRepository.findById(request.getReviewedBy()).orElse(null)
+            : null;
     Question question = questionRepository.findById(request.getQuestionId()).orElse(null);
 
     return RegradeRequestResponse.builder()

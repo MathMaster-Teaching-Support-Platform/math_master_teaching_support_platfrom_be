@@ -5,7 +5,6 @@ import com.fptu.math_master.dto.response.*;
 import com.fptu.math_master.service.LearningRoadmapService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -59,11 +58,13 @@ public class LearningRoadmapController {
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @Operation(
       summary = "Generate AI-powered roadmap from student wish",
-      description = "Generate a personalized learning roadmap based on student's learning wishes "
-          + "and goals using AI analysis")
+      description =
+          "Generate a personalized learning roadmap based on student's learning wishes "
+              + "and goals using AI analysis")
   public ApiResponse<RoadmapDetailResponse> generateRoadmapFromWish(
       @Parameter(description = "Student Wish ID", example = "550e8400-e29b-41d4-a716-446655440000")
-      @PathVariable UUID wishId) {
+          @PathVariable
+          UUID wishId) {
     String userId = SecurityContextHolder.getContext().getAuthentication().getName();
     UUID studentId = UUID.fromString(userId);
 
@@ -81,10 +82,13 @@ public class LearningRoadmapController {
   @GetMapping("/{roadmapId}")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Get roadmap details", description = "Retrieve detailed roadmap with all topics and materials")
+  @Operation(
+      summary = "Get roadmap details",
+      description = "Retrieve detailed roadmap with all topics and materials")
   public ApiResponse<RoadmapDetailResponse> getRoadmapById(
       @Parameter(description = "Roadmap ID", example = "550e8400-e29b-41d4-a716-446655440000")
-      @PathVariable UUID roadmapId) {
+          @PathVariable
+          UUID roadmapId) {
     log.info("GET /roadmaps/{} – retrieving roadmap", roadmapId);
 
     RoadmapDetailResponse result = roadmapService.getRoadmapById(roadmapId);
@@ -122,12 +126,14 @@ public class LearningRoadmapController {
   @SecurityRequirement(name = "bearerAuth")
   @Operation(
       summary = "Get active roadmap by subject",
-      description = "Retrieve the active (most recent) roadmap for the current student in a specific subject")
+      description =
+          "Retrieve the active (most recent) roadmap for the current student in a specific subject")
   public ApiResponse<RoadmapDetailResponse> getActiveRoadmapBySubject(
       @Parameter(description = "Subject name") @PathVariable String subject) {
     String userId = SecurityContextHolder.getContext().getAuthentication().getName();
     UUID studentId = UUID.fromString(userId);
-    log.info("GET /roadmaps/subject/{} – getting active roadmap for studentId={}", subject, studentId);
+    log.info(
+        "GET /roadmaps/subject/{} – getting active roadmap for studentId={}", subject, studentId);
 
     RoadmapDetailResponse result = roadmapService.getActiveRoadmapBySubject(studentId, subject);
 
@@ -141,7 +147,9 @@ public class LearningRoadmapController {
   @GetMapping("/list")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "List all student roadmaps", description = "Get all roadmaps for the current student without pagination")
+  @Operation(
+      summary = "List all student roadmaps",
+      description = "Get all roadmaps for the current student without pagination")
   public ApiResponse<List<RoadmapSummaryResponse>> getStudentRoadmapsList() {
     String userId = SecurityContextHolder.getContext().getAuthentication().getName();
     UUID studentId = UUID.fromString(userId);
@@ -159,7 +167,9 @@ public class LearningRoadmapController {
   @GetMapping("/teacher/{teacherId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Get teacher-assigned roadmaps", description = "Get all roadmaps assigned by a teacher")
+  @Operation(
+      summary = "Get teacher-assigned roadmaps",
+      description = "Get all roadmaps assigned by a teacher")
   public ApiResponse<List<RoadmapSummaryResponse>> getTeacherAssignedRoadmaps(
       @Parameter(description = "Teacher ID") @PathVariable UUID teacherId) {
     log.info("GET /roadmaps/teacher/{} – getting assigned roadmaps", teacherId);
@@ -180,7 +190,9 @@ public class LearningRoadmapController {
   @PutMapping("/topics/{topicId}/progress")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Update topic progress", description = "Update the progress status of a topic in roadmap")
+  @Operation(
+      summary = "Update topic progress",
+      description = "Update the progress status of a topic in roadmap")
   public ApiResponse<RoadmapTopicResponse> updateTopicProgress(
       @Parameter(description = "Topic ID") @PathVariable UUID topicId,
       @Valid @RequestBody UpdateTopicProgressRequest request) {
@@ -218,7 +230,9 @@ public class LearningRoadmapController {
   @GetMapping("/{roadmapId}/stats")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Get roadmap statistics", description = "Get progress statistics and analytics for a roadmap")
+  @Operation(
+      summary = "Get roadmap statistics",
+      description = "Get progress statistics and analytics for a roadmap")
   public ApiResponse<RoadmapStatsResponse> getRoadmapStats(
       @Parameter(description = "Roadmap ID") @PathVariable UUID roadmapId) {
     log.info("GET /roadmaps/{}/stats – getting statistics", roadmapId);
@@ -239,7 +253,9 @@ public class LearningRoadmapController {
   @GetMapping("/topics/{topicId}")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Get topic details", description = "Retrieve detailed information about a specific topic")
+  @Operation(
+      summary = "Get topic details",
+      description = "Retrieve detailed information about a specific topic")
   public ApiResponse<RoadmapTopicResponse> getTopicDetails(
       @Parameter(description = "Topic ID") @PathVariable UUID topicId) {
     log.info("GET /roadmaps/topics/{} – getting topic details", topicId);
@@ -256,7 +272,9 @@ public class LearningRoadmapController {
   @GetMapping("/topics/{topicId}/materials")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Get topic materials", description = "Get all learning materials (lessons, questions) for a topic")
+  @Operation(
+      summary = "Get topic materials",
+      description = "Get all learning materials (lessons, questions) for a topic")
   public ApiResponse<List<TopicMaterialResponse>> getTopicMaterials(
       @Parameter(description = "Topic ID") @PathVariable UUID topicId) {
     log.info("GET /roadmaps/topics/{}/materials – getting materials", topicId);
@@ -279,8 +297,10 @@ public class LearningRoadmapController {
   public ApiResponse<List<TopicMaterialResponse>> getMaterialsByType(
       @Parameter(description = "Topic ID") @PathVariable UUID topicId,
       @Parameter(description = "Resource type (LESSON, QUESTION, PRACTICE, EXAMPLE, ASSESSMENT)")
-      @RequestParam String resourceType) {
-    log.info("GET /roadmaps/topics/{}/materials-by-type – getting {} materials", topicId, resourceType);
+          @RequestParam
+          String resourceType) {
+    log.info(
+        "GET /roadmaps/topics/{}/materials-by-type – getting {} materials", topicId, resourceType);
 
     List<TopicMaterialResponse> result = roadmapService.getMaterialsByType(topicId, resourceType);
 
@@ -294,17 +314,22 @@ public class LearningRoadmapController {
   @PostMapping("/topics/{topicId}/materials")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Link material to topic", description = "Add a learning resource (lesson/question) to a topic")
+  @Operation(
+      summary = "Link material to topic",
+      description = "Add a learning resource (lesson/question) to a topic")
   public ApiResponse<TopicMaterialResponse> linkMaterialToTopic(
       @Parameter(description = "Topic ID") @PathVariable UUID topicId,
-      @Parameter(description = "Lesson ID (optional)") @RequestParam(required = false) UUID lessonId,
-      @Parameter(description = "Question ID (optional)") @RequestParam(required = false) UUID questionId,
+      @Parameter(description = "Lesson ID (optional)") @RequestParam(required = false)
+          UUID lessonId,
+      @Parameter(description = "Question ID (optional)") @RequestParam(required = false)
+          UUID questionId,
       @Parameter(description = "Resource type") @RequestParam String resourceType,
-      @Parameter(description = "Is required") @RequestParam(defaultValue = "true") Boolean isRequired) {
+      @Parameter(description = "Is required") @RequestParam(defaultValue = "true")
+          Boolean isRequired) {
     log.info("POST /roadmaps/topics/{}/materials – linking material", topicId);
 
-    TopicMaterialResponse result = roadmapService.linkMaterialToTopic(topicId, lessonId, questionId, resourceType,
-        isRequired);
+    TopicMaterialResponse result =
+        roadmapService.linkMaterialToTopic(topicId, lessonId, questionId, resourceType, isRequired);
 
     return ApiResponse.<TopicMaterialResponse>builder()
         .code(1000)
@@ -316,7 +341,9 @@ public class LearningRoadmapController {
   @DeleteMapping("/materials/{materialId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Remove material from topic", description = "Remove a learning resource from a topic")
+  @Operation(
+      summary = "Remove material from topic",
+      description = "Remove a learning resource from a topic")
   public ApiResponse<String> removeMaterialFromTopic(
       @Parameter(description = "Material ID") @PathVariable UUID materialId) {
     log.info("DELETE /roadmaps/materials/{} – removing material", materialId);
@@ -334,7 +361,6 @@ public class LearningRoadmapController {
   // WEAK AREA ANALYSIS
   // ============================================================================
 
-
   // ============================================================================
   // UTILITY & ADMINISTRATION
   // ============================================================================
@@ -342,7 +368,9 @@ public class LearningRoadmapController {
   @GetMapping("/check-exists")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Check if roadmap exists", description = "Check if an active roadmap exists for student and subject")
+  @Operation(
+      summary = "Check if roadmap exists",
+      description = "Check if an active roadmap exists for student and subject")
   public ApiResponse<Boolean> existsActiveRoadmap(
       @Parameter(description = "Student ID") @RequestParam UUID studentId,
       @Parameter(description = "Subject name") @RequestParam String subject) {
@@ -350,11 +378,7 @@ public class LearningRoadmapController {
 
     boolean result = roadmapService.existsActiveRoadmap(studentId, subject);
 
-    return ApiResponse.<Boolean>builder()
-        .code(1000)
-        .message("Success")
-        .result(result)
-        .build();
+    return ApiResponse.<Boolean>builder().code(1000).message("Success").result(result).build();
   }
 
   @DeleteMapping("/{roadmapId}/archive")
@@ -377,24 +401,24 @@ public class LearningRoadmapController {
   @GetMapping("/{roadmapId}/completion-estimate")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Estimate completion days", description = "Get estimated days to complete roadmap")
+  @Operation(
+      summary = "Estimate completion days",
+      description = "Get estimated days to complete roadmap")
   public ApiResponse<Integer> estimateCompletionDays(
       @Parameter(description = "Roadmap ID") @PathVariable UUID roadmapId) {
     log.info("GET /roadmaps/{}/completion-estimate – estimating days", roadmapId);
 
     Integer result = roadmapService.estimateCompletionDays(roadmapId);
 
-    return ApiResponse.<Integer>builder()
-        .code(1000)
-        .message("Success")
-        .result(result)
-        .build();
+    return ApiResponse.<Integer>builder().code(1000).message("Success").result(result).build();
   }
 
   @GetMapping("/{roadmapId}/progress")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @SecurityRequirement(name = "bearerAuth")
-  @Operation(summary = "Get progress percentage", description = "Get overall progress percentage for roadmap")
+  @Operation(
+      summary = "Get progress percentage",
+      description = "Get overall progress percentage for roadmap")
   public ApiResponse<java.math.BigDecimal> calculateRoadmapProgress(
       @Parameter(description = "Roadmap ID") @PathVariable UUID roadmapId) {
     log.info("GET /roadmaps/{}/progress – calculating progress", roadmapId);

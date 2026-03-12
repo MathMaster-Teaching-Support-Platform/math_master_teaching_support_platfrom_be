@@ -34,7 +34,8 @@ public interface RoadmapAIPlannerService {
    * @param gradeLevel Grade level
    * @return AI prompt string
    */
-  String generateRoadmapPrompt(StudentWish wish, PerformanceStats performanceStats, String gradeLevel);
+  String generateRoadmapPrompt(
+      StudentWish wish, PerformanceStats performanceStats, String gradeLevel);
 
   /**
    * Parse AI response and extract topic prioritization data

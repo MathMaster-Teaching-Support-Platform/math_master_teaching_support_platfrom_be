@@ -16,7 +16,8 @@ public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
       "SELECT c FROM Chapter c WHERE c.curriculumId = :curriculumId AND c.deletedAt IS NULL ORDER BY c.orderIndex")
   List<Chapter> findByCurriculumIdAndNotDeleted(@Param("curriculumId") UUID curriculumId);
 
-  @Query("SELECT COUNT(c) FROM Chapter c WHERE c.curriculumId = :curriculumId AND c.deletedAt IS NULL")
+  @Query(
+      "SELECT COUNT(c) FROM Chapter c WHERE c.curriculumId = :curriculumId AND c.deletedAt IS NULL")
   Long countByCurriculumIdAndNotDeleted(@Param("curriculumId") UUID curriculumId);
 
   @Query(
@@ -32,7 +33,6 @@ public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
   List<Chapter> findByLessonIdAndNotDeleted(@Param("lessonId") UUID lessonId);
 
   // Count lessons in chapters (for validation - checks if lesson belongs to a chapter)
-  @Query(
-      "SELECT COUNT(l) FROM Lesson l WHERE l.id = :lessonId AND l.deletedAt IS NULL")
+  @Query("SELECT COUNT(l) FROM Lesson l WHERE l.id = :lessonId AND l.deletedAt IS NULL")
   Long countByLessonIdAndNotDeleted(@Param("lessonId") UUID lessonId);
 }

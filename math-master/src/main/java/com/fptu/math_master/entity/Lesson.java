@@ -97,4 +97,3 @@ public class Lesson {
     updatedAt = Instant.now();
   }
 }
-

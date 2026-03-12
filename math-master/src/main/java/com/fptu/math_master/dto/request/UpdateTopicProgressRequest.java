@@ -29,6 +29,8 @@ public class UpdateTopicProgressRequest {
   @Schema(description = "Progress percentage (0-100)", example = "50")
   private java.math.BigDecimal progressPercentage;
 
-  @Schema(description = "Optional note about topic progress", example = "Completed first two practice sets")
+  @Schema(
+      description = "Optional note about topic progress",
+      example = "Completed first two practice sets")
   private String note;
 }

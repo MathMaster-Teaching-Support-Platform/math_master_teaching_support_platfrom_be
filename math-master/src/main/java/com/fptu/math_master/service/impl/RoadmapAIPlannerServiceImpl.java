@@ -11,19 +11,18 @@ import com.fptu.math_master.enums.TopicStatus;
 import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.RoadmapAIPlannerService;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementation of RoadmapAIPlannerService
@@ -54,7 +53,8 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
 
   @Override
   @Transactional
-  public RoadmapDetailResponse generateRoadmapFromWish(UUID studentId, StudentWish wish, String subject) {
+  public RoadmapDetailResponse generateRoadmapFromWish(
+      UUID studentId, StudentWish wish, String subject) {
     log.info("Generating AI-powered roadmap for student={}, subject={}", studentId, subject);
 
     // Get student performance stats
@@ -70,22 +70,25 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
 
     // Parse AI response
     AIPlannerResponse plannerResponse = parseAIResponse(aiResponse);
-    log.info("Parsed roadmap plan: {} topics, {} estimated days",
-        plannerResponse.topics.size(), plannerResponse.estimatedDays);
+    log.info(
+        "Parsed roadmap plan: {} topics, {} estimated days",
+        plannerResponse.topics.size(),
+        plannerResponse.estimatedDays);
 
     // Create roadmap entity
-    LearningRoadmap roadmap = LearningRoadmap.builder()
-        .studentId(studentId)
-        .subject(subject)
-        .gradeLevel(wish.getGradeLevel())
-        .generationType(com.fptu.math_master.enums.RoadmapGenerationType.PERSONALIZED)
-        .description("AI-generated roadmap based on student wishes: " + wish.getLearningGoals())
-        .status(RoadmapStatus.GENERATED)
-        .progressPercentage(BigDecimal.ZERO)
-        .completedTopicsCount(0)
-        .totalTopicsCount(plannerResponse.topics.size())
-        .estimatedCompletionDays(plannerResponse.estimatedDays)
-        .build();
+    LearningRoadmap roadmap =
+        LearningRoadmap.builder()
+            .studentId(studentId)
+            .subject(subject)
+            .gradeLevel(wish.getGradeLevel())
+            .generationType(com.fptu.math_master.enums.RoadmapGenerationType.PERSONALIZED)
+            .description("AI-generated roadmap based on student wishes: " + wish.getLearningGoals())
+            .status(RoadmapStatus.GENERATED)
+            .progressPercentage(BigDecimal.ZERO)
+            .completedTopicsCount(0)
+            .totalTopicsCount(plannerResponse.topics.size())
+            .estimatedCompletionDays(plannerResponse.estimatedDays)
+            .build();
 
     roadmap = roadmapRepository.save(roadmap);
     log.info("Created roadmap: {}", roadmap.getId());
@@ -101,42 +104,70 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
   public String generateRoadmapPrompt(StudentWish wish, PerformanceStats stats, String gradeLevel) {
     StringBuilder prompt = new StringBuilder();
 
-    prompt.append("You are an expert mathematics learning planner. ")
-        .append("Generate a personalized learning roadmap for a student based on their wishes and performance data.\n\n")
+    prompt
+        .append("You are an expert mathematics learning planner. ")
+        .append(
+            "Generate a personalized learning roadmap for a student based on their wishes and performance data.\n\n")
         .append("STUDENT PROFILE:\n")
-        .append("- Subject: ").append(wish.getSubject()).append("\n")
-        .append("- Grade Level: ").append(gradeLevel).append("\n")
-        .append("- Learning Goals: ").append(wish.getLearningGoals()).append("\n")
-        .append("- Preferred Topics: ").append(wish.getPreferredTopics()).append("\n")
-        .append("- Areas to Improve: ").append(wish.getWeakAreasToImprove()).append("\n")
-        .append("- Daily Study Time: ").append(wish.getDailyStudyMinutes()).append(" minutes\n")
-        .append("- Target Accuracy: ").append(wish.getTargetAccuracyPercentage()).append("%\n")
-        .append("- Learning Style: ").append(wish.getLearningStylePreference()).append("\n\n");
+        .append("- Subject: ")
+        .append(wish.getSubject())
+        .append("\n")
+        .append("- Grade Level: ")
+        .append(gradeLevel)
+        .append("\n")
+        .append("- Learning Goals: ")
+        .append(wish.getLearningGoals())
+        .append("\n")
+        .append("- Preferred Topics: ")
+        .append(wish.getPreferredTopics())
+        .append("\n")
+        .append("- Areas to Improve: ")
+        .append(wish.getWeakAreasToImprove())
+        .append("\n")
+        .append("- Daily Study Time: ")
+        .append(wish.getDailyStudyMinutes())
+        .append(" minutes\n")
+        .append("- Target Accuracy: ")
+        .append(wish.getTargetAccuracyPercentage())
+        .append("%\n")
+        .append("- Learning Style: ")
+        .append(wish.getLearningStylePreference())
+        .append("\n\n");
 
     if (stats.totalAssessmentsCompleted > 0) {
-      prompt.append("PERFORMANCE DATA:\n")
-          .append("- Overall Accuracy: ").append(String.format("%.1f", stats.averageAccuracy)).append("%\n")
-          .append("- Assessments Completed: ").append(stats.totalAssessmentsCompleted).append("\n");
+      prompt
+          .append("PERFORMANCE DATA:\n")
+          .append("- Overall Accuracy: ")
+          .append(String.format("%.1f", stats.averageAccuracy))
+          .append("%\n")
+          .append("- Assessments Completed: ")
+          .append(stats.totalAssessmentsCompleted)
+          .append("\n");
 
       if (!stats.topicStats.isEmpty()) {
         prompt.append("- Topic Performance:\n");
         for (PerformanceStats.TopicPerformance topic : stats.topicStats) {
-          prompt.append("  * ").append(topic.topicName).append(": ")
-              .append(String.format("%.1f", topic.accuracy)).append("% (")
-              .append(topic.questionsAttempted).append(" questions)\n");
+          prompt
+              .append("  * ")
+              .append(topic.topicName)
+              .append(": ")
+              .append(String.format("%.1f", topic.accuracy))
+              .append("% (")
+              .append(topic.questionsAttempted)
+              .append(" questions)\n");
         }
       }
       prompt.append("\n");
     }
 
-    prompt.append("PRIORITY LOGIC:\n")
+    prompt
+        .append("PRIORITY LOGIC:\n")
         .append("Assign priority for each topic:\n")
         .append("- Accuracy < 60% → Priority -2 (WEAK - highest priority)\n")
         .append("- Accuracy 60-80% → Priority -1\n")
         .append("- In student preferred topics → Priority +1\n")
         .append("- Accuracy > 85% → Priority +2 (review only)\n")
         .append("- If topic is both weak and preferred → Keep negative priority\n\n")
-
         .append("ROADMAP GENERATION RULES:\n")
         .append("1. INCLUDE weak topics (< 60% accuracy) - these are highest priority\n")
         .append("2. INCLUDE topics related to student goals\n")
@@ -144,7 +175,6 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
         .append("4. Include only EASY/MEDIUM materials for strong topics (> 85%)\n")
         .append("5. Each topic must have: Easy foundation → Medium practice → Hard application\n")
         .append("6. Allocate more time to weak topics\n\n")
-
         .append("RESPONSE FORMAT (JSON):\n")
         .append("{\n")
         .append("  \"topics\": [\n")
@@ -161,8 +191,8 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
         .append("  \"recommendations\": [\"recommendation 1\", \"recommendation 2\"],\n")
         .append("  \"focusAreas\": \"Top 3 areas student should focus on\"\n")
         .append("}\n\n")
-
-        .append("Generate a comprehensive roadmap that balances weak areas with student interests,\n")
+        .append(
+            "Generate a comprehensive roadmap that balances weak areas with student interests,\n")
         .append("respects daily study time constraints, and provides a clear progression path.");
 
     return prompt.toString();
@@ -198,18 +228,22 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
       }
 
       // Parse other fields
-      response.estimatedDays = parsed.containsKey("estimatedDays")
-          ? ((Number) parsed.get("estimatedDays")).intValue() : 30;
-      response.totalHours = parsed.containsKey("totalHours")
-          ? ((Number) parsed.get("totalHours")).intValue() : 60;
+      response.estimatedDays =
+          parsed.containsKey("estimatedDays")
+              ? ((Number) parsed.get("estimatedDays")).intValue()
+              : 30;
+      response.totalHours =
+          parsed.containsKey("totalHours") ? ((Number) parsed.get("totalHours")).intValue() : 60;
       response.focusAreas = (String) parsed.getOrDefault("focusAreas", "General improvement");
 
       if (parsed.containsKey("recommendations")) {
         response.recommendations = (List<String>) parsed.get("recommendations");
       }
 
-      log.info("Successfully parsed AI response: {} topics, {} estimated days",
-          response.topics.size(), response.estimatedDays);
+      log.info(
+          "Successfully parsed AI response: {} topics, {} estimated days",
+          response.topics.size(),
+          response.estimatedDays);
 
     } catch (Exception e) {
       log.error("Error parsing AI response: {}", e.getMessage(), e);
@@ -258,24 +292,26 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
       if (!grades.isEmpty()) {
         stats.totalAssessmentsCompleted = grades.size();
 
-        BigDecimal totalAccuracy = grades.stream()
-            .map(Grade::getPercentage)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalAccuracy =
+            grades.stream().map(Grade::getPercentage).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        stats.averageAccuracy = totalAccuracy.divide(
-            BigDecimal.valueOf(grades.size()), 2, RoundingMode.HALF_UP).doubleValue();
+        stats.averageAccuracy =
+            totalAccuracy
+                .divide(BigDecimal.valueOf(grades.size()), 2, RoundingMode.HALF_UP)
+                .doubleValue();
 
         // Group by lesson to get topic-level stats
-        Map<UUID, List<Grade>> byLesson = grades.stream()
-            .collect(Collectors.groupingBy(Grade::getLessonId));
+        Map<UUID, List<Grade>> byLesson =
+            grades.stream().collect(Collectors.groupingBy(Grade::getLessonId));
 
         for (Map.Entry<UUID, List<Grade>> entry : byLesson.entrySet()) {
           Lesson lesson = lessonRepository.findById(entry.getKey()).orElse(null);
           if (lesson != null) {
-            BigDecimal avg = entry.getValue().stream()
-                .map(Grade::getPercentage)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .divide(BigDecimal.valueOf(entry.getValue().size()), 2, RoundingMode.HALF_UP);
+            BigDecimal avg =
+                entry.getValue().stream()
+                    .map(Grade::getPercentage)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .divide(BigDecimal.valueOf(entry.getValue().size()), 2, RoundingMode.HALF_UP);
 
             PerformanceStats.TopicPerformance topicPerf = new PerformanceStats.TopicPerformance();
             topicPerf.topicName = lesson.getTitle();
@@ -307,14 +343,17 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
   /**
    * Create RoadmapTopic entities from AI plan
    */
-  private List<RoadmapTopic> createTopicsFromAIPlan(LearningRoadmap roadmap, AIPlannerResponse plan) {
+  private List<RoadmapTopic> createTopicsFromAIPlan(
+      LearningRoadmap roadmap, AIPlannerResponse plan) {
     List<RoadmapTopic> createdTopics = new ArrayList<>();
 
     // Sort topics by priority (prioritize weak areas)
-    List<AIPlannerResponse.PrioritizedTopic> sortedTopics = plan.topics.stream()
-        .sorted(Comparator.comparingInt((AIPlannerResponse.PrioritizedTopic t) -> t.priority)
-            .thenComparingInt(t -> -t.estimatedHours))
-        .collect(Collectors.toList());
+    List<AIPlannerResponse.PrioritizedTopic> sortedTopics =
+        plan.topics.stream()
+            .sorted(
+                Comparator.comparingInt((AIPlannerResponse.PrioritizedTopic t) -> t.priority)
+                    .thenComparingInt(t -> -t.estimatedHours))
+            .collect(Collectors.toList());
 
     int sequenceOrder = 1;
     for (AIPlannerResponse.PrioritizedTopic aiTopic : sortedTopics) {
@@ -323,18 +362,19 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
 
       QuestionDifficulty difficulty = QuestionDifficulty.valueOf(aiTopic.difficulty);
 
-      RoadmapTopic topic = RoadmapTopic.builder()
-          .roadmapId(roadmap.getId())
-          .lessonId(lesson != null ? lesson.getId() : null)
-          .title(aiTopic.title)
-          .description("AI-recommended: " + aiTopic.rationale)
-          .status(TopicStatus.NOT_STARTED)
-          .difficulty(difficulty)
-          .sequenceOrder(sequenceOrder++)
-          .priority(aiTopic.priority)
-          .progressPercentage(BigDecimal.ZERO)
-          .estimatedHours(aiTopic.estimatedHours)
-          .build();
+      RoadmapTopic topic =
+          RoadmapTopic.builder()
+              .roadmapId(roadmap.getId())
+              .lessonId(lesson != null ? lesson.getId() : null)
+              .title(aiTopic.title)
+              .description("AI-recommended: " + aiTopic.rationale)
+              .status(TopicStatus.NOT_STARTED)
+              .difficulty(difficulty)
+              .sequenceOrder(sequenceOrder++)
+              .priority(aiTopic.priority)
+              .progressPercentage(BigDecimal.ZERO)
+              .estimatedHours(aiTopic.estimatedHours)
+              .build();
 
       topic = topicRepository.save(topic);
       createdTopics.add(topic);
@@ -356,21 +396,27 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
       List<Lesson> allLessons = lessonRepository.findAll();
 
       // First try exact title match
-      Lesson exactMatch = allLessons.stream()
-          .filter(l -> l.getDeletedAt() == null && l.getTitle().toLowerCase().equals(searchTitle))
-          .findFirst()
-          .orElse(null);
+      Lesson exactMatch =
+          allLessons.stream()
+              .filter(
+                  l -> l.getDeletedAt() == null && l.getTitle().toLowerCase().equals(searchTitle))
+              .findFirst()
+              .orElse(null);
 
       if (exactMatch != null) {
         return exactMatch;
       }
 
       // Then try contains match
-      Lesson containsMatch = allLessons.stream()
-          .filter(l -> l.getDeletedAt() == null && (l.getTitle().toLowerCase().contains(searchTitle)
-              || searchTitle.contains(l.getTitle().toLowerCase())))
-          .findFirst()
-          .orElse(null);
+      Lesson containsMatch =
+          allLessons.stream()
+              .filter(
+                  l ->
+                      l.getDeletedAt() == null
+                          && (l.getTitle().toLowerCase().contains(searchTitle)
+                              || searchTitle.contains(l.getTitle().toLowerCase())))
+              .findFirst()
+              .orElse(null);
 
       return containsMatch;
     } catch (Exception e) {
@@ -384,24 +430,28 @@ public class RoadmapAIPlannerServiceImpl implements RoadmapAIPlannerService {
    */
   private RoadmapDetailResponse getRoadmapDetailResponse(LearningRoadmap roadmap) {
     // Fetch topics from database
-    List<RoadmapTopic> topics = topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmap.getId());
+    List<RoadmapTopic> topics =
+        topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmap.getId());
 
     // Map topics to response DTOs
-    List<RoadmapTopicResponse> topicResponses = topics.stream()
-        .map(topic -> RoadmapTopicResponse.builder()
-            .id(topic.getId())
-            .title(topic.getTitle())
-            .description(topic.getDescription())
-            .status(topic.getStatus())
-            .difficulty(topic.getDifficulty())
-            .sequenceOrder(topic.getSequenceOrder())
-            .priority(topic.getPriority())
-            .progressPercentage(topic.getProgressPercentage())
-            .estimatedHours(topic.getEstimatedHours())
-            .startedAt(topic.getStartedAt())
-            .completedAt(topic.getCompletedAt())
-            .build())
-        .collect(Collectors.toList());
+    List<RoadmapTopicResponse> topicResponses =
+        topics.stream()
+            .map(
+                topic ->
+                    RoadmapTopicResponse.builder()
+                        .id(topic.getId())
+                        .title(topic.getTitle())
+                        .description(topic.getDescription())
+                        .status(topic.getStatus())
+                        .difficulty(topic.getDifficulty())
+                        .sequenceOrder(topic.getSequenceOrder())
+                        .priority(topic.getPriority())
+                        .progressPercentage(topic.getProgressPercentage())
+                        .estimatedHours(topic.getEstimatedHours())
+                        .startedAt(topic.getStartedAt())
+                        .completedAt(topic.getCompletedAt())
+                        .build())
+            .collect(Collectors.toList());
 
     return RoadmapDetailResponse.builder()
         .id(roadmap.getId())

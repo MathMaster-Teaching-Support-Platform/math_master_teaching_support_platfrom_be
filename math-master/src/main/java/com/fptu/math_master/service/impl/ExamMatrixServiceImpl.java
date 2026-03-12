@@ -84,7 +84,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
     matrix = examMatrixRepository.save(matrix);
     log.info("Exam matrix updated: {}", matrixId);
-    return buildMatrixResponse(matrix, templateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId));
+    return buildMatrixResponse(
+        matrix, templateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId));
   }
 
   @Override
@@ -127,8 +128,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     log.info("Getting my exam matrices");
 
     UUID currentUserId = getCurrentUserId();
-    List<ExamMatrix> matrices =
-        examMatrixRepository.findByTeacherIdAndNotDeleted(currentUserId);
+    List<ExamMatrix> matrices = examMatrixRepository.findByTeacherIdAndNotDeleted(currentUserId);
 
     return matrices.stream()
         .map(
@@ -250,14 +250,16 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
 
     // Aggregate totals
-    int totalQuestions = mappings.stream().mapToInt(ExamMatrixTemplateMapping::getQuestionCount).sum();
+    int totalQuestions =
+        mappings.stream().mapToInt(ExamMatrixTemplateMapping::getQuestionCount).sum();
     BigDecimal totalPoints =
         mappings.stream()
             .map(
                 m ->
                     m.getTotalPoints() != null
                         ? m.getTotalPoints()
-                        : m.getPointsPerQuestion().multiply(BigDecimal.valueOf(m.getQuestionCount())))
+                        : m.getPointsPerQuestion()
+                            .multiply(BigDecimal.valueOf(m.getQuestionCount())))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
     if (totalQuestions == 0) {
@@ -373,7 +375,12 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
     log.info(
         "Listing matching templates for matrix {}, q={}, page={}, size={}, onlyMine={}, publicOnly={}",
-        matrixId, q, page, size, onlyMine, publicOnly);
+        matrixId,
+        q,
+        page,
+        size,
+        onlyMine,
+        publicOnly);
 
     ExamMatrix matrix = loadMatrixOrThrow(matrixId);
     validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
@@ -389,7 +396,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .collect(
                 Collectors.groupingBy(
                     ExamMatrixTemplateMapping::getCognitiveLevel, Collectors.counting()))
-            .entrySet().stream()
+            .entrySet()
+            .stream()
             .max(Map.Entry.comparingByValue())
             .map(Map.Entry::getKey)
             .orElse(null);
@@ -442,7 +450,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
     log.info(
         "Generating preview for matrixId={}, mappingId={}, templateId={}, count={}",
-        matrixId, mappingId, request.getTemplateId(), request.getCount());
+        matrixId,
+        mappingId,
+        request.getTemplateId(),
+        request.getCount());
 
     ExamMatrix matrix = loadMatrixOrThrow(matrixId);
     validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
@@ -559,7 +570,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .build();
 
     log.info(
-        "Preview generated: {}/{} candidates for mappingId={}", candidates.size(), targetCount, mappingId);
+        "Preview generated: {}/{} candidates for mappingId={}",
+        candidates.size(),
+        targetCount,
+        mappingId);
 
     return PreviewCandidatesResponse.builder()
         .templateId(template.getId())
@@ -581,7 +595,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
     log.info(
         "Finalizing preview for matrixId={}, mappingId={}, templateId={}, count={}, replaceExisting={}",
-        matrixId, mappingId, request.getTemplateId(), request.getQuestions().size(),
+        matrixId,
+        mappingId,
+        request.getTemplateId(),
+        request.getQuestions().size(),
         request.getReplaceExisting());
 
     // ── 1. Validate matrix + ownership ──────────────────────────────────
@@ -611,7 +628,9 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
     // ── 4. Replace existing assessment questions for this mapping if requested ──
     if (Boolean.TRUE.equals(request.getReplaceExisting())) {
-      log.info("replaceExisting=true: removing existing assessment questions for mappingId={}", mappingId);
+      log.info(
+          "replaceExisting=true: removing existing assessment questions for mappingId={}",
+          mappingId);
       // Find all AssessmentQuestion rows linked to this template mapping and remove them
       // across any assessment that references this matrix
       assessmentRepository.findAll().stream()
@@ -619,13 +638,16 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
           .forEach(
               a -> {
                 List<AssessmentQuestion> existing =
-                    assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(a.getId())
+                    assessmentQuestionRepository
+                        .findByAssessmentIdOrderByOrderIndex(a.getId())
                         .stream()
                         .filter(aq -> mappingId.equals(aq.getMatrixTemplateMappingId()))
                         .collect(Collectors.toList());
                 if (!existing.isEmpty()) {
                   List<UUID> qIds =
-                      existing.stream().map(AssessmentQuestion::getQuestionId).collect(Collectors.toList());
+                      existing.stream()
+                          .map(AssessmentQuestion::getQuestionId)
+                          .collect(Collectors.toList());
                   assessmentQuestionRepository.deleteByAssessmentIdAndQuestionIdIn(a.getId(), qIds);
                 }
               });
@@ -671,8 +693,12 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
           && item.getCognitiveLevel() != null
           && !mapping.getCognitiveLevel().equals(item.getCognitiveLevel())) {
         warnings.add(
-            label + "cognitiveLevel '" + item.getCognitiveLevel()
-                + "' differs from mapping cognitiveLevel '" + mapping.getCognitiveLevel() + "'.");
+            label
+                + "cognitiveLevel '"
+                + item.getCognitiveLevel()
+                + "' differs from mapping cognitiveLevel '"
+                + mapping.getCognitiveLevel()
+                + "'.");
       }
 
       batchTexts.add(textKey);
@@ -686,7 +712,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     // ── 6. Overflow check (append mode) ─────────────────────────────────
     if (!Boolean.TRUE.equals(request.getReplaceExisting())) {
       long currentCount =
-          assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(
+          assessmentQuestionRepository
+              .findByAssessmentIdOrderByOrderIndex(
                   assessmentRepository.findAll().stream()
                       .filter(a -> matrixId.equals(a.getExamMatrixId()) && a.getDeletedAt() == null)
                       .map(Assessment::getId)
@@ -754,8 +781,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .collect(Collectors.toList());
 
     for (Assessment assessment : linkedAssessments) {
-      Integer maxOrder =
-          assessmentQuestionRepository.findMaxOrderIndex(assessment.getId());
+      Integer maxOrder = assessmentQuestionRepository.findMaxOrderIndex(assessment.getId());
       int orderIndex = (maxOrder != null ? maxOrder : 0) + 1;
 
       for (UUID questionId : savedQuestionIds) {
@@ -782,7 +808,9 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
                 .count();
 
     log.info(
-        "Finalize complete: {} questions saved for mappingId={}", savedQuestionIds.size(), mappingId);
+        "Finalize complete: {} questions saved for mappingId={}",
+        savedQuestionIds.size(),
+        mappingId);
 
     return FinalizePreviewResponse.builder()
         .templateMappingId(mappingId)
@@ -895,7 +923,9 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     BigDecimal total =
         mapping.getTotalPoints() != null
             ? mapping.getTotalPoints()
-            : mapping.getPointsPerQuestion().multiply(BigDecimal.valueOf(mapping.getQuestionCount()));
+            : mapping
+                .getPointsPerQuestion()
+                .multiply(BigDecimal.valueOf(mapping.getQuestionCount()));
 
     return TemplateMappingResponse.builder()
         .id(mapping.getId())
@@ -923,7 +953,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   }
 
   private MatchingTemplatesResponse.TemplateItem mapToTemplateItem(
-      QuestionTemplate t, UUID currentUserId, QuestionType requiredType, CognitiveLevel requiredLevel) {
+      QuestionTemplate t,
+      UUID currentUserId,
+      QuestionType requiredType,
+      CognitiveLevel requiredLevel) {
 
     String creatorName = t.getCreator() != null ? t.getCreator().getFullName() : null;
 

@@ -15,7 +15,8 @@ public interface ExamMatrixRepository extends JpaRepository<ExamMatrix, UUID> {
   @Query("SELECT em FROM ExamMatrix em WHERE em.id = :id AND em.deletedAt IS NULL")
   Optional<ExamMatrix> findByIdAndNotDeleted(@Param("id") UUID id);
 
-  @Query("SELECT em FROM ExamMatrix em WHERE em.id = (SELECT a.examMatrixId FROM Assessment a WHERE a.id = :assessmentId AND a.deletedAt IS NULL) AND em.deletedAt IS NULL")
+  @Query(
+      "SELECT em FROM ExamMatrix em WHERE em.id = (SELECT a.examMatrixId FROM Assessment a WHERE a.id = :assessmentId AND a.deletedAt IS NULL) AND em.deletedAt IS NULL")
   Optional<ExamMatrix> findByAssessmentIdAndNotDeleted(@Param("assessmentId") UUID assessmentId);
 
   @Query("SELECT em FROM ExamMatrix em WHERE em.teacherId = :teacherId AND em.deletedAt IS NULL")

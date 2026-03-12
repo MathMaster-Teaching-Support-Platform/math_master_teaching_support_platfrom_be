@@ -29,7 +29,7 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_curricula_category", columnList = "category"),
       @Index(name = "idx_curricula_grade_category", columnList = "grade, category")
     })
-public class  Curriculum {
+public class Curriculum {
 
   @Id
   @UuidV7Generator.UuidV7

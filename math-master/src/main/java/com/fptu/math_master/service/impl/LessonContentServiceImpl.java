@@ -411,21 +411,16 @@ public class LessonContentServiceImpl implements LessonContentService {
 
   private LessonResponse mapToLessonResponse(List<Chapter> chapters) {
     if (chapters == null || chapters.isEmpty()) {
-      return LessonResponse.builder()
-          .build();
+      return LessonResponse.builder().build();
     }
     Chapter first = chapters.get(0);
     if (first.getLessons() == null || first.getLessons().isEmpty()) {
-      return LessonResponse.builder()
-          .build();
+      return LessonResponse.builder().build();
     }
-    Lesson firstLesson = first.getLessons().stream()
-        .filter(l -> l.getDeletedAt() == null)
-        .findFirst()
-        .orElse(null);
+    Lesson firstLesson =
+        first.getLessons().stream().filter(l -> l.getDeletedAt() == null).findFirst().orElse(null);
     if (firstLesson == null) {
-      return LessonResponse.builder()
-          .build();
+      return LessonResponse.builder().build();
     }
     return mapToLessonResponse(firstLesson);
   }
@@ -458,8 +453,7 @@ public class LessonContentServiceImpl implements LessonContentService {
         userRepository
             .findById(userId)
             .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-    boolean isAdmin =
-        user.getRoles().stream().anyMatch(r -> r.getName().equals("ADMIN"));
+    boolean isAdmin = user.getRoles().stream().anyMatch(r -> r.getName().equals("ADMIN"));
     if (!isAdmin) {
       throw new AppException(ErrorCode.NOT_A_TEACHER);
     }

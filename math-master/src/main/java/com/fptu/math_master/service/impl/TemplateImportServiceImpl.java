@@ -905,6 +905,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     }
     throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
+
   /** Convert difficulty rules Map<String, String> to Map<String, Object> for JSONB */
   private Map<String, Object> convertDifficultyRules(Map<String, String> rules) {
     if (rules == null) {

@@ -26,4 +26,3 @@ public interface AiReviewRepository extends JpaRepository<AiReview, UUID> {
   @Query("SELECT COUNT(r) > 0 FROM AiReview r WHERE r.submissionId = :submissionId")
   boolean existsBySubmissionId(@Param("submissionId") UUID submissionId);
 }
-

@@ -138,7 +138,9 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
 
     if (template.getStatus() == TemplateStatus.PUBLISHED) {
-      log.warn("Template {} is PUBLISHED — archiving instead of soft-deleting to preserve audit trail", id);
+      log.warn(
+          "Template {} is PUBLISHED — archiving instead of soft-deleting to preserve audit trail",
+          id);
       template.setStatus(TemplateStatus.ARCHIVED);
       questionTemplateRepository.save(template);
       return;
@@ -246,12 +248,16 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       Pageable pageable) {
     log.info(
         "Searching question templates – type: {}, cognitive: {}, isPublic: {}, term: {}",
-        templateType, cognitiveLevel, isPublic, searchTerm);
+        templateType,
+        cognitiveLevel,
+        isPublic,
+        searchTerm);
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
 
     return questionTemplateRepository
-        .searchTemplates(currentUserId, isPublic, templateType, cognitiveLevel, searchTerm, pageable)
+        .searchTemplates(
+            currentUserId, isPublic, templateType, cognitiveLevel, searchTerm, pageable)
         .map(this::mapToResponse);
   }
 
@@ -313,7 +319,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
               .context(template.getDescription())
               .build();
 
-      AIEnhancedQuestionResponse enhanced = aiEnhancementService.enhanceQuestion(enhancementRequest);
+      AIEnhancedQuestionResponse enhanced =
+          aiEnhancementService.enhanceQuestion(enhancementRequest);
 
       enhanced.setOriginalQuestionText(sample.getQuestionText());
       enhanced.setOriginalOptions(sample.getOptions());
@@ -330,22 +337,27 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         generationMetadata.put("enhancementApplied", true);
 
         // Create Question entity
-        Question question = Question.builder()
-            .createdBy(currentUserId)
-            .templateId(template.getId())
-            .questionType(template.getTemplateType())
-            .questionText(enhanced.getEnhancedQuestionText() != null
-                ? enhanced.getEnhancedQuestionText()
-                : enhanced.getOriginalQuestionText())
-            .options(enhanced.getEnhancedOptions() != null
-                ? new HashMap<>(enhanced.getEnhancedOptions())
-                : (enhanced.getOriginalOptions() != null ? new HashMap<>(enhanced.getOriginalOptions()) : null))
-            .correctAnswer(enhanced.getCorrectAnswerKey())
-            .explanation(enhanced.getExplanation())
-            .difficulty(sample.getCalculatedDifficulty())
-            .cognitiveLevel(template.getCognitiveLevel())
-            .generationMetadata(generationMetadata)
-            .build();
+        Question question =
+            Question.builder()
+                .createdBy(currentUserId)
+                .templateId(template.getId())
+                .questionType(template.getTemplateType())
+                .questionText(
+                    enhanced.getEnhancedQuestionText() != null
+                        ? enhanced.getEnhancedQuestionText()
+                        : enhanced.getOriginalQuestionText())
+                .options(
+                    enhanced.getEnhancedOptions() != null
+                        ? new HashMap<>(enhanced.getEnhancedOptions())
+                        : (enhanced.getOriginalOptions() != null
+                            ? new HashMap<>(enhanced.getOriginalOptions())
+                            : null))
+                .correctAnswer(enhanced.getCorrectAnswerKey())
+                .explanation(enhanced.getExplanation())
+                .difficulty(sample.getCalculatedDifficulty())
+                .cognitiveLevel(template.getCognitiveLevel())
+                .generationMetadata(generationMetadata)
+                .build();
 
         // Save to database
         Question savedQuestion = questionRepository.save(question);
@@ -363,7 +375,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         if (enhanced.getValidationErrors() == null) {
           enhanced.setValidationErrors(new ArrayList<>());
         }
-        enhanced.getValidationErrors()
+        enhanced
+            .getValidationErrors()
             .add("Warning: Question was not saved to database. Error: " + e.getMessage());
       }
 
@@ -398,17 +411,19 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             generationMetadata.put("usedParameters", sample.getUsedParameters());
             generationMetadata.put("enhancementApplied", false);
 
-            Question question = Question.builder()
-                .createdBy(currentUserId)
-                .templateId(template.getId())
-                .questionType(template.getTemplateType())
-                .questionText(sample.getQuestionText())
-                .options(sample.getOptions() != null ? new HashMap<>(sample.getOptions()) : null)
-                .correctAnswer(sample.getCorrectAnswer())
-                .difficulty(sample.getCalculatedDifficulty())
-                .cognitiveLevel(template.getCognitiveLevel())
-                .generationMetadata(generationMetadata)
-                .build();
+            Question question =
+                Question.builder()
+                    .createdBy(currentUserId)
+                    .templateId(template.getId())
+                    .questionType(template.getTemplateType())
+                    .questionText(sample.getQuestionText())
+                    .options(
+                        sample.getOptions() != null ? new HashMap<>(sample.getOptions()) : null)
+                    .correctAnswer(sample.getCorrectAnswer())
+                    .difficulty(sample.getCalculatedDifficulty())
+                    .cognitiveLevel(template.getCognitiveLevel())
+                    .generationMetadata(generationMetadata)
+                    .build();
 
             Question savedQuestion = questionRepository.save(question);
             savedQuestionIds.add(savedQuestion.getId());
@@ -420,8 +435,13 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
                 template.getId());
 
           } catch (Exception saveException) {
-            log.error("Failed to save test question sample {}: {}", i + 1, saveException.getMessage(), saveException);
-            errors.add("Sample " + (i + 1) + " saved but with warning: " + saveException.getMessage());
+            log.error(
+                "Failed to save test question sample {}: {}",
+                i + 1,
+                saveException.getMessage(),
+                saveException);
+            errors.add(
+                "Sample " + (i + 1) + " saved but with warning: " + saveException.getMessage());
           }
         }
       } catch (Exception e) {
@@ -430,13 +450,14 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       }
     }
 
-    TemplateTestResponse response = TemplateTestResponse.builder()
-        .templateId(template.getId())
-        .templateName(template.getName())
-        .samples(samples)
-        .isValid(!samples.isEmpty())
-        .validationErrors(errors)
-        .build();
+    TemplateTestResponse response =
+        TemplateTestResponse.builder()
+            .templateId(template.getId())
+            .templateName(template.getName())
+            .samples(samples)
+            .isValid(!samples.isEmpty())
+            .validationErrors(errors)
+            .build();
 
     // Add saved question IDs to response (if TemplateTestResponse supports it)
     if (!savedQuestionIds.isEmpty()) {
@@ -445,7 +466,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
     return response;
   }
-
 
   /**
    * access extended to public templates (was owner-only).

@@ -128,7 +128,8 @@ public class MindmapServiceImpl implements MindmapService {
     mindmap = mindmapRepository.save(mindmap);
 
     // Create nodes from the structure with level-based colors
-    List<MindmapNode> nodes = createNodesFromStructure(mindmap.getId(), structure.getNodes(), null, 1);
+    List<MindmapNode> nodes =
+        createNodesFromStructure(mindmap.getId(), structure.getNodes(), null, 1);
     mindmapNodeRepository.saveAll(nodes);
 
     log.info(
@@ -273,7 +274,8 @@ public class MindmapServiceImpl implements MindmapService {
     List<UUID> mindmapIds = mindmaps.getContent().stream().map(Mindmap::getId).toList();
     Map<UUID, Long> nodeCounts = getNodeCountsForMindmaps(mindmapIds);
 
-    return mindmaps.map(m -> mapToResponseWithNodeCount(m, nodeCounts.getOrDefault(m.getId(), 0L).intValue()));
+    return mindmaps.map(
+        m -> mapToResponseWithNodeCount(m, nodeCounts.getOrDefault(m.getId(), 0L).intValue()));
   }
 
   @Override
@@ -520,7 +522,7 @@ public class MindmapServiceImpl implements MindmapService {
     "#FF6B6B", // Level 3 - Red
     "#FFD93D", // Level 4 - Yellow
     "#A29BFE", // Level 5 - Purple
-    "#FF8C94"  // Level 6+ - Pink
+    "#FF8C94" // Level 6+ - Pink
   };
 
   private List<MindmapNode> createNodesFromStructure(
@@ -528,9 +530,10 @@ public class MindmapServiceImpl implements MindmapService {
     List<MindmapNode> nodes = new ArrayList<>();
 
     // Get color for this level (use last color if exceeds array length)
-    String levelColor = level <= LEVEL_COLORS.length 
-        ? LEVEL_COLORS[level - 1] 
-        : LEVEL_COLORS[LEVEL_COLORS.length - 1];
+    String levelColor =
+        level <= LEVEL_COLORS.length
+            ? LEVEL_COLORS[level - 1]
+            : LEVEL_COLORS[LEVEL_COLORS.length - 1];
 
     for (NodeStructure structure : structures) {
       MindmapNode node =

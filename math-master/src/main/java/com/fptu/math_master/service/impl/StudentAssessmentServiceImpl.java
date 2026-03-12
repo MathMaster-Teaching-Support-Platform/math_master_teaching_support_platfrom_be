@@ -568,25 +568,22 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
         BigDecimal policyScore;
         switch (policy) {
           case LATEST:
-            policyScore = attempts.stream()
-                .filter(a -> a.getScore() != null)
-                .findFirst()
-                .map(QuizAttempt::getScore)
-                .orElse(BigDecimal.ZERO);
+            policyScore =
+                attempts.stream()
+                    .filter(a -> a.getScore() != null)
+                    .findFirst()
+                    .map(QuizAttempt::getScore)
+                    .orElse(BigDecimal.ZERO);
             break;
           case AVERAGE:
-            policyScore = attemptScores.stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .divide(
-                    BigDecimal.valueOf(attemptScores.size()),
-                    2,
-                    RoundingMode.HALF_UP);
+            policyScore =
+                attemptScores.stream()
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .divide(BigDecimal.valueOf(attemptScores.size()), 2, RoundingMode.HALF_UP);
             break;
           case BEST:
           default:
-            policyScore = attemptScores.stream()
-                .max(BigDecimal::compareTo)
-                .orElse(BigDecimal.ZERO);
+            policyScore = attemptScores.stream().max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
             break;
         }
         if (submission.getManualAdjustment() == null) {

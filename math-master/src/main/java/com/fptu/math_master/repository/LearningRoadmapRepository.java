@@ -40,7 +40,8 @@ public interface LearningRoadmapRepository extends JpaRepository<LearningRoadmap
   /**
    * Find roadmaps by student and status
    */
-  List<LearningRoadmap> findByStudentIdAndStatusAndDeletedAtIsNull(UUID studentId, RoadmapStatus status);
+  List<LearningRoadmap> findByStudentIdAndStatusAndDeletedAtIsNull(
+      UUID studentId, RoadmapStatus status);
 
   /**
    * Find roadmaps assigned by a specific teacher
@@ -50,11 +51,12 @@ public interface LearningRoadmapRepository extends JpaRepository<LearningRoadmap
   /**
    * Check if roadmap exists for student and subject
    */
-  @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END "
-      + "FROM LearningRoadmap r WHERE r.studentId = :studentId "
-      + "AND r.subject = :subject AND r.deletedAt IS NULL AND r.status = 'ACTIVE'")
-  boolean existsActiveRoadmapForStudentAndSubject(@Param("studentId") UUID studentId,
-      @Param("subject") String subject);
+  @Query(
+      "SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END "
+          + "FROM LearningRoadmap r WHERE r.studentId = :studentId "
+          + "AND r.subject = :subject AND r.deletedAt IS NULL AND r.status = 'ACTIVE'")
+  boolean existsActiveRoadmapForStudentAndSubject(
+      @Param("studentId") UUID studentId, @Param("subject") String subject);
 
   /**
    * Get completed roadmaps count for a student
@@ -64,8 +66,9 @@ public interface LearningRoadmapRepository extends JpaRepository<LearningRoadmap
   /**
    * Find recently created roadmaps (last N days)
    */
-  @Query("SELECT r FROM LearningRoadmap r WHERE r.studentId = :studentId "
-      + "AND r.deletedAt IS NULL AND r.createdAt >= :fromDate ORDER BY r.createdAt DESC")
-  List<LearningRoadmap> findRecentRoadmaps(@Param("studentId") UUID studentId,
-      @Param("fromDate") java.time.Instant fromDate);
+  @Query(
+      "SELECT r FROM LearningRoadmap r WHERE r.studentId = :studentId "
+          + "AND r.deletedAt IS NULL AND r.createdAt >= :fromDate ORDER BY r.createdAt DESC")
+  List<LearningRoadmap> findRecentRoadmaps(
+      @Param("studentId") UUID studentId, @Param("fromDate") java.time.Instant fromDate);
 }

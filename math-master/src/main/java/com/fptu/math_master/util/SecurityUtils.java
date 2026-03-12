@@ -25,5 +25,3 @@ public final class SecurityUtils {
         .anyMatch(a -> a.equals(roleName) || a.equals(prefixed));
   }
 }
-
-

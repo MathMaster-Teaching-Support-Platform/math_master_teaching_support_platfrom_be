@@ -11,12 +11,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface GradeRepository extends JpaRepository<Grade, UUID> {
 
-  @Query(
-      "SELECT g FROM Grade g WHERE g.studentId = :studentId ORDER BY g.createdAt DESC")
+  @Query("SELECT g FROM Grade g WHERE g.studentId = :studentId ORDER BY g.createdAt DESC")
   List<Grade> findByStudentId(@Param("studentId") UUID studentId);
 
-  @Query(
-      "SELECT g FROM Grade g WHERE g.studentId = :studentId AND g.lessonId = :lessonId")
+  @Query("SELECT g FROM Grade g WHERE g.studentId = :studentId AND g.lessonId = :lessonId")
   List<Grade> findByStudentIdAndLessonId(
       @Param("studentId") UUID studentId, @Param("lessonId") UUID lessonId);
 }

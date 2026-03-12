@@ -4,11 +4,10 @@ import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.TopicStatus;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-
-import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
@@ -71,7 +70,8 @@ public class RoadmapTopic {
   private Integer sequenceOrder; // Order in which topics should be learned (1, 2, 3...)
 
   @Column(name = "priority", nullable = false)
-  private Integer priority = 0;  // Higher = more important (negative for weak areas = negative numbers)
+  private Integer priority =
+      0; // Higher = more important (negative for weak areas = negative numbers)
 
   @Column(name = "progress_percentage", nullable = false, precision = 5, scale = 2)
   private BigDecimal progressPercentage; // 0-100%

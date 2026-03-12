@@ -25,7 +25,9 @@ import lombok.*;
     indexes = {
       @Index(name = "idx_assessment_questions_assessment", columnList = "assessment_id"),
       @Index(name = "idx_assessment_questions_question", columnList = "question_id"),
-      @Index(name = "idx_assessment_questions_matrix_mapping", columnList = "matrix_template_mapping_id"),
+      @Index(
+          name = "idx_assessment_questions_matrix_mapping",
+          columnList = "matrix_template_mapping_id"),
       @Index(name = "idx_assessment_questions_order", columnList = "order_index")
     })
 public class AssessmentQuestion {

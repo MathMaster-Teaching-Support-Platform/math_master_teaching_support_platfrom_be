@@ -49,9 +49,7 @@ public class CurriculumController {
         .build();
   }
 
-  @Operation(
-      summary = "Update curriculum",
-      description = "Admin updates curriculum information")
+  @Operation(summary = "Update curriculum", description = "Admin updates curriculum information")
   @PutMapping("/{curriculumId}")
   @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<CurriculumResponse> updateCurriculum(
@@ -76,8 +74,7 @@ public class CurriculumController {
       description = "Get all curricula with pagination")
   @GetMapping
   public ApiResponse<Page<CurriculumResponse>> getAllCurricula(
-      @RequestParam(defaultValue = "0")
-          @Parameter(description = "Page number (0-indexed)")
+      @RequestParam(defaultValue = "0") @Parameter(description = "Page number (0-indexed)")
           int page,
       @RequestParam(defaultValue = "20") @Parameter(description = "Page size") int size) {
     log.info("GET /curricula – fetching paginated curricula (page={}, size={})", page, size);
@@ -96,7 +93,9 @@ public class CurriculumController {
         .build();
   }
 
-  @Operation(summary = "Get curricula by grade", description = "Get all curricula for a specific grade")
+  @Operation(
+      summary = "Get curricula by grade",
+      description = "Get all curricula for a specific grade")
   @GetMapping("/grade/{grade}")
   public ApiResponse<List<CurriculumResponse>> getCurriculaByGrade(
       @PathVariable @Parameter(description = "Grade level (1-12)") Integer grade) {
@@ -106,10 +105,13 @@ public class CurriculumController {
         .build();
   }
 
-  @Operation(summary = "Get curricula by category", description = "Get all curricula for a specific category")
+  @Operation(
+      summary = "Get curricula by category",
+      description = "Get all curricula for a specific category")
   @GetMapping("/category/{category}")
   public ApiResponse<List<CurriculumResponse>> getCurriculaByCategory(
-      @PathVariable @Parameter(description = "Category (GEOMETRY, NUMERICAL)") CurriculumCategory category) {
+      @PathVariable @Parameter(description = "Category (GEOMETRY, NUMERICAL)")
+          CurriculumCategory category) {
     log.info("GET /curricula/category/{} – fetching curricula", category);
     return ApiResponse.<List<CurriculumResponse>>builder()
         .result(curriculumService.getCurriculaByCategory(category))
@@ -122,9 +124,9 @@ public class CurriculumController {
   @GetMapping("/grade/{grade}/category/{category}")
   public ApiResponse<List<CurriculumResponse>> getCurriculaByGradeAndCategory(
       @PathVariable @Parameter(description = "Grade level (1-12)") Integer grade,
-      @PathVariable @Parameter(description = "Category (GEOMETRY, NUMERICAL)") CurriculumCategory category) {
-    log.info(
-        "GET /curricula/grade/{}/category/{} – fetching curricula", grade, category);
+      @PathVariable @Parameter(description = "Category (GEOMETRY, NUMERICAL)")
+          CurriculumCategory category) {
+    log.info("GET /curricula/grade/{}/category/{} – fetching curricula", grade, category);
     return ApiResponse.<List<CurriculumResponse>>builder()
         .result(curriculumService.getCurriculaByGradeAndCategory(grade, category))
         .build();
@@ -146,8 +148,6 @@ public class CurriculumController {
   public ApiResponse<Void> deleteCurriculum(@PathVariable UUID curriculumId) {
     log.info("DELETE /curricula/{} – deleting curriculum", curriculumId);
     curriculumService.deleteCurriculum(curriculumId);
-    return ApiResponse.<Void>builder()
-        .message("Curriculum deleted successfully")
-        .build();
+    return ApiResponse.<Void>builder().message("Curriculum deleted successfully").build();
   }
 }

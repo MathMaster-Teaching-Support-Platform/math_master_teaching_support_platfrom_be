@@ -201,7 +201,6 @@ public class AssessmentController {
       @RequestParam(defaultValue = "createdAt") String sortBy,
       @RequestParam(defaultValue = "DESC") String sortDirection) {
 
-
     Sort sort =
         sortDirection.equalsIgnoreCase("ASC")
             ? Sort.by(sortBy).ascending()
@@ -251,7 +250,9 @@ public class AssessmentController {
 
   @PostMapping("/{id}/close")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(summary = "Close assessment", description = "Permanently close a PUBLISHED assessment. No further attempts are allowed.")
+  @Operation(
+      summary = "Close assessment",
+      description = "Permanently close a PUBLISHED assessment. No further attempts are allowed.")
   public ApiResponse<AssessmentResponse> closeAssessment(@PathVariable UUID id) {
     log.info("REST request to close assessment: {}", id);
     return ApiResponse.<AssessmentResponse>builder()
@@ -262,10 +263,11 @@ public class AssessmentController {
 
   @PostMapping("/{id}/clone")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(summary = "Clone assessment", description = "Create a DRAFT copy of an existing assessment. Matrix is NOT cloned.")
+  @Operation(
+      summary = "Clone assessment",
+      description = "Create a DRAFT copy of an existing assessment. Matrix is NOT cloned.")
   public ApiResponse<AssessmentResponse> cloneAssessment(
-      @PathVariable UUID id,
-      @Valid @RequestBody CloneAssessmentRequest request) {
+      @PathVariable UUID id, @Valid @RequestBody CloneAssessmentRequest request) {
     log.info("REST request to clone assessment: {}", id);
     return ApiResponse.<AssessmentResponse>builder()
         .message("Assessment cloned successfully.")
@@ -275,11 +277,13 @@ public class AssessmentController {
 
   @PostMapping("/{assessmentId}/questions")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(summary = "Add question to assessment", description = "Add an existing question to a non-matrix DRAFT assessment.")
+  @Operation(
+      summary = "Add question to assessment",
+      description = "Add an existing question to a non-matrix DRAFT assessment.")
   public ApiResponse<AssessmentResponse> addQuestion(
-      @PathVariable UUID assessmentId,
-      @Valid @RequestBody AddQuestionToAssessmentRequest request) {
-    log.info("REST request to add question {} to assessment {}", request.getQuestionId(), assessmentId);
+      @PathVariable UUID assessmentId, @Valid @RequestBody AddQuestionToAssessmentRequest request) {
+    log.info(
+        "REST request to add question {} to assessment {}", request.getQuestionId(), assessmentId);
     return ApiResponse.<AssessmentResponse>builder()
         .message("Question added to assessment.")
         .result(assessmentService.addQuestion(assessmentId, request))
@@ -288,10 +292,11 @@ public class AssessmentController {
 
   @DeleteMapping("/{assessmentId}/questions/{questionId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(summary = "Remove question from assessment", description = "Remove a question from a non-matrix DRAFT assessment.")
+  @Operation(
+      summary = "Remove question from assessment",
+      description = "Remove a question from a non-matrix DRAFT assessment.")
   public ApiResponse<AssessmentResponse> removeQuestion(
-      @PathVariable UUID assessmentId,
-      @PathVariable UUID questionId) {
+      @PathVariable UUID assessmentId, @PathVariable UUID questionId) {
     log.info("REST request to remove question {} from assessment {}", questionId, assessmentId);
     return ApiResponse.<AssessmentResponse>builder()
         .message("Question removed from assessment.")
@@ -299,4 +304,3 @@ public class AssessmentController {
         .build();
   }
 }
-

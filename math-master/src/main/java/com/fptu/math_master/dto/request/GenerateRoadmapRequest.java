@@ -27,18 +27,25 @@ public class GenerateRoadmapRequest {
 
   @NotNull(message = "Generation type is required")
   @Schema(
-      description = "How to generate roadmap: PERSONALIZED (based on performance), DEFAULT (grade-based), TEACHER_ASSIGNED (by teacher)",
+      description =
+          "How to generate roadmap: PERSONALIZED (based on performance), DEFAULT (grade-based), TEACHER_ASSIGNED (by teacher)",
       example = "PERSONALIZED")
   private RoadmapGenerationType generationType;
 
-  @Schema(description = "Optional description of the roadmap", example = "Focus on weak areas in algebra")
+  @Schema(
+      description = "Optional description of the roadmap",
+      example = "Focus on weak areas in algebra")
   private String description;
 
   @Builder.Default
-  @Schema(description = "Whether to include weak topic analysis from performance data", example = "true")
+  @Schema(
+      description = "Whether to include weak topic analysis from performance data",
+      example = "true")
   private Boolean analyzePerformanceData = true;
 
   @Builder.Default
-  @Schema(description = "Whether to create default curriculum if performance data is insufficient", example = "true")
+  @Schema(
+      description = "Whether to create default curriculum if performance data is insufficient",
+      example = "true")
   private Boolean createDefaultIfNeeded = true;
 }

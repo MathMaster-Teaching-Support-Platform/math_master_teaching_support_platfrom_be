@@ -45,7 +45,8 @@ public class StudentWishController {
   @Operation(
       summary = "Create or update student wish",
       description = "Create a new student learning wish or update existing one for a subject")
-  public ApiResponse<StudentWishResponse> upsertWish(@Valid @RequestBody StudentWishRequest request) {
+  public ApiResponse<StudentWishResponse> upsertWish(
+      @Valid @RequestBody StudentWishRequest request) {
     String userId = SecurityContextHolder.getContext().getAuthentication().getName();
     UUID studentId = UUID.fromString(userId);
 
@@ -66,8 +67,7 @@ public class StudentWishController {
       summary = "Get active wish for subject",
       description = "Retrieve the active student wish for a specific subject")
   public ApiResponse<StudentWishResponse> getActiveWish(
-      @Parameter(description = "Subject name", example = "Algebra")
-      @PathVariable String subject) {
+      @Parameter(description = "Subject name", example = "Algebra") @PathVariable String subject) {
     String userId = SecurityContextHolder.getContext().getAuthentication().getName();
     UUID studentId = UUID.fromString(userId);
 
@@ -127,15 +127,13 @@ public class StudentWishController {
   @Operation(summary = "Deactivate wish", description = "Deactivate a student wish")
   public ApiResponse<Void> deactivateWish(
       @Parameter(description = "Wish ID", example = "550e8400-e29b-41d4-a716-446655440000")
-      @PathVariable UUID wishId) {
+          @PathVariable
+          UUID wishId) {
     log.info("PUT /student-wishes/{}/deactivate", wishId);
 
     studentWishService.deactivateWish(wishId);
 
-    return ApiResponse.<Void>builder()
-        .code(1000)
-        .message("Wish deactivated successfully")
-        .build();
+    return ApiResponse.<Void>builder().code(1000).message("Wish deactivated successfully").build();
   }
 
   @DeleteMapping("/{wishId}")
@@ -143,14 +141,12 @@ public class StudentWishController {
   @Operation(summary = "Delete wish", description = "Delete (soft delete) a student wish")
   public ApiResponse<Void> deleteWish(
       @Parameter(description = "Wish ID", example = "550e8400-e29b-41d4-a716-446655440000")
-      @PathVariable UUID wishId) {
+          @PathVariable
+          UUID wishId) {
     log.info("DELETE /student-wishes/{}", wishId);
 
     studentWishService.deleteWish(wishId);
 
-    return ApiResponse.<Void>builder()
-        .code(1000)
-        .message("Wish deleted successfully")
-        .build();
+    return ApiResponse.<Void>builder().code(1000).message("Wish deleted successfully").build();
   }
 }

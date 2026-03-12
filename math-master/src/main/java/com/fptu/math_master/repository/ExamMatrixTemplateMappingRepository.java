@@ -31,7 +31,6 @@ public interface ExamMatrixTemplateMappingRepository
       "SELECT SUM(m.questionCount * m.pointsPerQuestion) FROM ExamMatrixTemplateMapping m WHERE m.examMatrixId = :matrixId")
   Double sumPointsByMatrixId(@Param("matrixId") UUID matrixId);
 
-  @Query(
-      "SELECT COUNT(m) FROM ExamMatrixTemplateMapping m WHERE m.examMatrixId = :matrixId")
+  @Query("SELECT COUNT(m) FROM ExamMatrixTemplateMapping m WHERE m.examMatrixId = :matrixId")
   Long countByExamMatrixId(@Param("matrixId") UUID matrixId);
 }

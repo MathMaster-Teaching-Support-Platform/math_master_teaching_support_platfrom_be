@@ -4,7 +4,6 @@ import com.fptu.math_master.dto.request.UpdateTopicProgressRequest;
 import com.fptu.math_master.dto.response.*;
 import com.fptu.math_master.entity.*;
 import com.fptu.math_master.enums.QuestionDifficulty;
-import com.fptu.math_master.enums.RoadmapGenerationType;
 import com.fptu.math_master.enums.RoadmapStatus;
 import com.fptu.math_master.enums.TopicStatus;
 import com.fptu.math_master.exception.AppException;
@@ -12,22 +11,20 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.LearningRoadmapService;
 import com.fptu.math_master.service.RoadmapAIPlannerService;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementation of Learning Roadmap Service
@@ -74,11 +71,14 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     UUID studentId = UUID.fromString(userId);
 
     // Get the wish
-    StudentWish wish = studentWishRepository.findById(wishId)
-        .orElseThrow(() -> {
-          log.error("Wish not found: {}", wishId);
-          return new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-        });
+    StudentWish wish =
+        studentWishRepository
+            .findById(wishId)
+            .orElseThrow(
+                () -> {
+                  log.error("Wish not found: {}", wishId);
+                  return new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+                });
 
     // Verify the wish belongs to the student
     if (!wish.getStudentId().equals(studentId)) {
@@ -93,8 +93,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     }
 
     // Generate roadmap using AI planner
-    RoadmapDetailResponse result = roadmapAIPlannerService.generateRoadmapFromWish(
-        studentId, wish, wish.getSubject());
+    RoadmapDetailResponse result =
+        roadmapAIPlannerService.generateRoadmapFromWish(studentId, wish, wish.getSubject());
 
     log.info("AI-powered roadmap generated successfully: {}", result.getId());
     return result;
@@ -103,8 +103,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Override
   @Transactional(readOnly = true)
   public RoadmapDetailResponse getRoadmapById(UUID roadmapId) {
-    LearningRoadmap roadmap = roadmapRepository.findById(roadmapId)
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    LearningRoadmap roadmap =
+        roadmapRepository
+            .findById(roadmapId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     return mapToDetailResponse(roadmap);
   }
@@ -112,8 +114,9 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Override
   @Transactional(readOnly = true)
   public Page<RoadmapSummaryResponse> getStudentRoadmaps(UUID studentId, Pageable pageable) {
-    Page<LearningRoadmap> roadmaps = roadmapRepository.findByStudentIdAndDeletedAtIsNullOrderByCreatedAtDesc(
-        studentId, pageable);
+    Page<LearningRoadmap> roadmaps =
+        roadmapRepository.findByStudentIdAndDeletedAtIsNullOrderByCreatedAtDesc(
+            studentId, pageable);
 
     return roadmaps.map(this::mapToSummaryResponse);
   }
@@ -121,9 +124,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Override
   @Transactional(readOnly = true)
   public RoadmapDetailResponse getActiveRoadmapBySubject(UUID studentId, String subject) {
-    LearningRoadmap roadmap = roadmapRepository
-        .findTopByStudentIdAndSubjectAndDeletedAtIsNullOrderByCreatedAtDesc(studentId, subject)
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    LearningRoadmap roadmap =
+        roadmapRepository
+            .findTopByStudentIdAndSubjectAndDeletedAtIsNullOrderByCreatedAtDesc(studentId, subject)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     return mapToDetailResponse(roadmap);
   }
@@ -151,11 +155,14 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Override
   @Transactional
   public RoadmapTopicResponse updateTopicProgress(UpdateTopicProgressRequest request) {
-    log.info("Updating topic progress: topicId={}, status={}, progress={}%",
+    log.info(
+        "Updating topic progress: topicId={}, status={}, progress={}%",
         request.getTopicId(), request.getStatus(), request.getProgressPercentage());
 
-    RoadmapTopic topic = topicRepository.findById(request.getTopicId())
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    RoadmapTopic topic =
+        topicRepository
+            .findById(request.getTopicId())
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     // Update topic status
     TopicStatus previousStatus = topic.getStatus();
@@ -163,7 +170,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     topic.setProgressPercentage(request.getProgressPercentage());
 
     // Mark start time if transitioning to IN_PROGRESS
-    if (previousStatus != TopicStatus.IN_PROGRESS && request.getStatus() == TopicStatus.IN_PROGRESS) {
+    if (previousStatus != TopicStatus.IN_PROGRESS
+        && request.getStatus() == TopicStatus.IN_PROGRESS) {
       topic.setStartedAt(Instant.now());
     }
 
@@ -185,8 +193,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Override
   @Transactional(readOnly = true)
   public RoadmapTopicResponse getNextTopic(UUID roadmapId) {
-    RoadmapTopic nextTopic = topicRepository.findNextTopic(roadmapId)
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    RoadmapTopic nextTopic =
+        topicRepository
+            .findNextTopic(roadmapId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     return mapToTopicResponse(nextTopic);
   }
@@ -194,28 +204,31 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Override
   @Transactional(readOnly = true)
   public RoadmapStatsResponse getRoadmapStats(UUID roadmapId) {
-    LearningRoadmap roadmap = roadmapRepository.findById(roadmapId)
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    LearningRoadmap roadmap =
+        roadmapRepository
+            .findById(roadmapId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     List<RoadmapTopic> topics = topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmapId);
 
-    Long easyCount = topics.stream()
-        .filter(t -> t.getDifficulty() == QuestionDifficulty.EASY).count();
-    Long mediumCount = topics.stream()
-        .filter(t -> t.getDifficulty() == QuestionDifficulty.MEDIUM).count();
-    Long hardCount = topics.stream()
-        .filter(t -> t.getDifficulty() == QuestionDifficulty.HARD).count();
-    Long lockedCount = topics.stream()
-        .filter(t -> t.getStatus() == TopicStatus.LOCKED).count();
+    Long easyCount =
+        topics.stream().filter(t -> t.getDifficulty() == QuestionDifficulty.EASY).count();
+    Long mediumCount =
+        topics.stream().filter(t -> t.getDifficulty() == QuestionDifficulty.MEDIUM).count();
+    Long hardCount =
+        topics.stream().filter(t -> t.getDifficulty() == QuestionDifficulty.HARD).count();
+    Long lockedCount = topics.stream().filter(t -> t.getStatus() == TopicStatus.LOCKED).count();
 
-    int totalEstimatedHours = topics.stream()
-        .mapToInt(t -> t.getEstimatedHours() != null ? t.getEstimatedHours() : 1)
-        .sum();
+    int totalEstimatedHours =
+        topics.stream()
+            .mapToInt(t -> t.getEstimatedHours() != null ? t.getEstimatedHours() : 1)
+            .sum();
 
-    BigDecimal avgProgress = topics.stream()
-        .map(RoadmapTopic::getProgressPercentage)
-        .reduce(BigDecimal.ZERO, BigDecimal::add)
-        .divide(BigDecimal.valueOf(Math.max(topics.size(), 1)), 2, RoundingMode.HALF_UP);
+    BigDecimal avgProgress =
+        topics.stream()
+            .map(RoadmapTopic::getProgressPercentage)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .divide(BigDecimal.valueOf(Math.max(topics.size(), 1)), 2, RoundingMode.HALF_UP);
 
     Integer daysRemaining = calculateDaysRemaining(roadmap);
 
@@ -237,8 +250,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Override
   @Transactional(readOnly = true)
   public RoadmapTopicResponse getTopicDetails(UUID topicId) {
-    RoadmapTopic topic = topicRepository.findById(topicId)
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    RoadmapTopic topic =
+        topicRepository
+            .findById(topicId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     return mapToTopicResponse(topic);
   }
@@ -246,34 +261,40 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Override
   @Transactional(readOnly = true)
   public List<TopicMaterialResponse> getTopicMaterials(UUID topicId) {
-    List<TopicLearningMaterial> materials = materialRepository.findByTopicIdOrderBySequenceOrder(topicId);
+    List<TopicLearningMaterial> materials =
+        materialRepository.findByTopicIdOrderBySequenceOrder(topicId);
     return materials.stream().map(this::mapToMaterialResponse).collect(Collectors.toList());
   }
 
   @Override
   @Transactional(readOnly = true)
   public List<TopicMaterialResponse> getMaterialsByType(UUID topicId, String resourceType) {
-    List<TopicLearningMaterial> materials = materialRepository.findByTopicIdAndResourceType(topicId, resourceType);
+    List<TopicLearningMaterial> materials =
+        materialRepository.findByTopicIdAndResourceType(topicId, resourceType);
     return materials.stream().map(this::mapToMaterialResponse).collect(Collectors.toList());
   }
 
   @Override
   @Transactional
-  public TopicMaterialResponse linkMaterialToTopic(UUID topicId, UUID lessonId, UUID questionId,
-      String resourceType, Boolean isRequired) {
+  public TopicMaterialResponse linkMaterialToTopic(
+      UUID topicId, UUID lessonId, UUID questionId, String resourceType, Boolean isRequired) {
     log.info("Linking material to topic: topicId={}, type={}", topicId, resourceType);
 
-    RoadmapTopic topic = topicRepository.findById(topicId)
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    RoadmapTopic topic =
+        topicRepository
+            .findById(topicId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
-    TopicLearningMaterial material = TopicLearningMaterial.builder()
-        .topicId(topicId)
-        .lessonId(lessonId)
-        .questionId(questionId)
-        .resourceType(resourceType)
-        .isRequired(isRequired != null ? isRequired : true)
-        .sequenceOrder((int) materialRepository.findByTopicIdOrderBySequenceOrder(topicId).size() + 1)
-        .build();
+    TopicLearningMaterial material =
+        TopicLearningMaterial.builder()
+            .topicId(topicId)
+            .lessonId(lessonId)
+            .questionId(questionId)
+            .resourceType(resourceType)
+            .isRequired(isRequired != null ? isRequired : true)
+            .sequenceOrder(
+                (int) materialRepository.findByTopicIdOrderBySequenceOrder(topicId).size() + 1)
+            .build();
 
     material = materialRepository.save(material);
     log.info("Material linked successfully: materialId={}", material.getId());
@@ -286,7 +307,6 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     log.info("Removing material from topic: materialId={}", materialId);
     materialRepository.deleteById(materialId);
   }
-
 
   // ============================================================================
   // UTILITY & ADMINISTRATION
@@ -303,8 +323,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   public void archiveRoadmap(UUID roadmapId) {
     log.info("Archiving roadmap: roadmapId={}", roadmapId);
 
-    LearningRoadmap roadmap = roadmapRepository.findById(roadmapId)
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    LearningRoadmap roadmap =
+        roadmapRepository
+            .findById(roadmapId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     roadmap.setDeletedAt(Instant.now());
     roadmap.setStatus(RoadmapStatus.ARCHIVED);
@@ -316,8 +338,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Override
   @Transactional(readOnly = true)
   public Integer estimateCompletionDays(UUID roadmapId) {
-    LearningRoadmap roadmap = roadmapRepository.findById(roadmapId)
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    LearningRoadmap roadmap =
+        roadmapRepository
+            .findById(roadmapId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     return roadmap.getEstimatedCompletionDays();
   }
@@ -325,8 +349,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Override
   @Transactional(readOnly = true)
   public BigDecimal calculateRoadmapProgress(UUID roadmapId) {
-    LearningRoadmap roadmap = roadmapRepository.findById(roadmapId)
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    LearningRoadmap roadmap =
+        roadmapRepository
+            .findById(roadmapId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     return roadmap.getProgressPercentage();
   }
@@ -346,20 +372,20 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     if (topics.isEmpty()) {
       roadmap.setProgressPercentage(BigDecimal.ZERO);
     } else {
-      BigDecimal totalProgress = topics.stream()
-          .map(RoadmapTopic::getProgressPercentage)
-          .reduce(BigDecimal.ZERO, BigDecimal::add);
+      BigDecimal totalProgress =
+          topics.stream()
+              .map(RoadmapTopic::getProgressPercentage)
+              .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-      BigDecimal avgProgress = totalProgress.divide(
-          BigDecimal.valueOf(topics.size()), 2, RoundingMode.HALF_UP);
+      BigDecimal avgProgress =
+          totalProgress.divide(BigDecimal.valueOf(topics.size()), 2, RoundingMode.HALF_UP);
 
       roadmap.setProgressPercentage(avgProgress);
     }
 
     // Update completed topics count
-    Long completedCount = topics.stream()
-        .filter(t -> t.getStatus() == TopicStatus.COMPLETED)
-        .count();
+    Long completedCount =
+        topics.stream().filter(t -> t.getStatus() == TopicStatus.COMPLETED).count();
 
     roadmap.setCompletedTopicsCount(completedCount.intValue());
 
@@ -403,10 +429,14 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     }
 
     BigDecimal remainingPercent = BigDecimal.valueOf(100).subtract(roadmap.getProgressPercentage());
-    BigDecimal estimatedDays = remainingPercent
-        .multiply(BigDecimal.valueOf(roadmap.getEstimatedCompletionDays() != null
-            ? roadmap.getEstimatedCompletionDays() : 30))
-        .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
+    BigDecimal estimatedDays =
+        remainingPercent
+            .multiply(
+                BigDecimal.valueOf(
+                    roadmap.getEstimatedCompletionDays() != null
+                        ? roadmap.getEstimatedCompletionDays()
+                        : 30))
+            .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
 
     return estimatedDays.intValue();
   }
@@ -416,10 +446,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   // ============================================================================
 
   private RoadmapDetailResponse mapToDetailResponse(LearningRoadmap roadmap) {
-    List<RoadmapTopic> topics = topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmap.getId());
-    List<RoadmapTopicResponse> topicResponses = topics.stream()
-        .map(this::mapToTopicResponse)
-        .collect(Collectors.toList());
+    List<RoadmapTopic> topics =
+        topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmap.getId());
+    List<RoadmapTopicResponse> topicResponses =
+        topics.stream().map(this::mapToTopicResponse).collect(Collectors.toList());
 
     return RoadmapDetailResponse.builder()
         .id(roadmap.getId())
@@ -465,15 +495,18 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     if (topic.getLessonId() != null) {
       // Fetch assessments for the lesson
       Page<Assessment> assessmentsPage = assessmentRepository.findByNotDeleted(Pageable.unpaged());
-      assessmentResponses = assessmentsPage.getContent().stream()
-          .map(this::mapToAssessmentResponse)
-          .collect(Collectors.toList());
+      assessmentResponses =
+          assessmentsPage.getContent().stream()
+              .map(this::mapToAssessmentResponse)
+              .collect(Collectors.toList());
 
       // Fetch mindmaps for the lesson
-      Page<Mindmap> mindmapsPage = mindmapRepository.findByLessonIdAndNotDeleted(topic.getLessonId(), Pageable.unpaged());
-      mindmapResponses = mindmapsPage.getContent().stream()
-          .map(this::mapToMindmapResponse)
-          .collect(Collectors.toList());
+      Page<Mindmap> mindmapsPage =
+          mindmapRepository.findByLessonIdAndNotDeleted(topic.getLessonId(), Pageable.unpaged());
+      mindmapResponses =
+          mindmapsPage.getContent().stream()
+              .map(this::mapToMindmapResponse)
+              .collect(Collectors.toList());
     }
 
     return RoadmapTopicResponse.builder()

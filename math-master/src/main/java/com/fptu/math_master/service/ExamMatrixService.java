@@ -42,12 +42,7 @@ public interface ExamMatrixService {
   // ── Question Generation (template-mapping based) ────────────────────────
 
   MatchingTemplatesResponse listMatchingTemplates(
-      UUID matrixId,
-      String q,
-      int page,
-      int size,
-      boolean onlyMine,
-      boolean publicOnly);
+      UUID matrixId, String q, int page, int size, boolean onlyMine, boolean publicOnly);
 
   PreviewCandidatesResponse generatePreview(
       UUID matrixId, UUID mappingId, GeneratePreviewRequest request);

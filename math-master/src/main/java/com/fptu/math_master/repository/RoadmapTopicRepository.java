@@ -32,16 +32,18 @@ public interface RoadmapTopicRepository extends JpaRepository<RoadmapTopic, UUID
   /**
    * Find topics by roadmap and priority (for weak areas)
    */
-  @Query("SELECT t FROM RoadmapTopic t WHERE t.roadmapId = :roadmapId "
-      + "ORDER BY t.priority ASC, t.sequenceOrder ASC")
+  @Query(
+      "SELECT t FROM RoadmapTopic t WHERE t.roadmapId = :roadmapId "
+          + "ORDER BY t.priority ASC, t.sequenceOrder ASC")
   List<RoadmapTopic> findTopicsByPriority(@Param("roadmapId") UUID roadmapId);
 
   /**
    * Find next topic to learn (first NOT_STARTED or in progress)
    */
-  @Query("SELECT t FROM RoadmapTopic t WHERE t.roadmapId = :roadmapId "
-      + "AND (t.status = 'NOT_STARTED' OR t.status = 'IN_PROGRESS') "
-      + "ORDER BY t.sequenceOrder ASC LIMIT 1")
+  @Query(
+      "SELECT t FROM RoadmapTopic t WHERE t.roadmapId = :roadmapId "
+          + "AND (t.status = 'NOT_STARTED' OR t.status = 'IN_PROGRESS') "
+          + "ORDER BY t.sequenceOrder ASC LIMIT 1")
   Optional<RoadmapTopic> findNextTopic(@Param("roadmapId") UUID roadmapId);
 
   /**
@@ -52,9 +54,10 @@ public interface RoadmapTopicRepository extends JpaRepository<RoadmapTopic, UUID
   /**
    * Check if all prerequisites for a topic are completed
    */
-  @Query("SELECT CASE WHEN COUNT(t) = 0 THEN true ELSE false END "
-      + "FROM RoadmapTopic t WHERE t.roadmapId = :roadmapId "
-      + "AND t.sequenceOrder < :sequenceOrder AND t.status != 'COMPLETED'")
-  boolean arePrerequisitesCompleted(@Param("roadmapId") UUID roadmapId,
-      @Param("sequenceOrder") Integer sequenceOrder);
+  @Query(
+      "SELECT CASE WHEN COUNT(t) = 0 THEN true ELSE false END "
+          + "FROM RoadmapTopic t WHERE t.roadmapId = :roadmapId "
+          + "AND t.sequenceOrder < :sequenceOrder AND t.status != 'COMPLETED'")
+  boolean arePrerequisitesCompleted(
+      @Param("roadmapId") UUID roadmapId, @Param("sequenceOrder") Integer sequenceOrder);
 }

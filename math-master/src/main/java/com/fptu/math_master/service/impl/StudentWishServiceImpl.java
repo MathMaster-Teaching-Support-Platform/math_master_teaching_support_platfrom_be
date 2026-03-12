@@ -7,18 +7,17 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.StudentWishRepository;
 import com.fptu.math_master.service.StudentWishService;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Implementation of StudentWishService
@@ -38,8 +37,8 @@ public class StudentWishServiceImpl implements StudentWishService {
     log.info("Creating/updating wish for student={}, subject={}", studentId, request.getSubject());
 
     // Check if wish already exists
-    Optional<StudentWish> existing = studentWishRepository.findActiveWishByStudentAndSubject(
-        studentId, request.getSubject());
+    Optional<StudentWish> existing =
+        studentWishRepository.findActiveWishByStudentAndSubject(studentId, request.getSubject());
 
     StudentWish wish;
     if (existing.isPresent()) {
@@ -56,19 +55,20 @@ public class StudentWishServiceImpl implements StudentWishService {
       log.info("Updated existing wish: {}", wish.getId());
     } else {
       // Create new wish
-      wish = StudentWish.builder()
-          .studentId(studentId)
-          .subject(request.getSubject())
-          .gradeLevel(request.getGradeLevel())
-          .learningGoals(request.getLearningGoals())
-          .preferredTopics(request.getPreferredTopics())
-          .weakAreasToImprove(request.getWeakAreasToImprove())
-          .dailyStudyMinutes(request.getDailyStudyMinutes())
-          .targetAccuracyPercentage(request.getTargetAccuracyPercentage())
-          .learningStylePreference(request.getLearningStylePreference())
-          .preferDifficultChallenges(request.getPreferDifficultChallenges())
-          .isActive(true)
-          .build();
+      wish =
+          StudentWish.builder()
+              .studentId(studentId)
+              .subject(request.getSubject())
+              .gradeLevel(request.getGradeLevel())
+              .learningGoals(request.getLearningGoals())
+              .preferredTopics(request.getPreferredTopics())
+              .weakAreasToImprove(request.getWeakAreasToImprove())
+              .dailyStudyMinutes(request.getDailyStudyMinutes())
+              .targetAccuracyPercentage(request.getTargetAccuracyPercentage())
+              .learningStylePreference(request.getLearningStylePreference())
+              .preferDifficultChallenges(request.getPreferDifficultChallenges())
+              .isActive(true)
+              .build();
       log.info("Created new wish for student={}, subject={}", studentId, request.getSubject());
     }
 
@@ -81,11 +81,14 @@ public class StudentWishServiceImpl implements StudentWishService {
   public StudentWishResponse getActiveWish(UUID studentId, String subject) {
     log.debug("Getting active wish for student={}, subject={}", studentId, subject);
 
-    StudentWish wish = studentWishRepository.findActiveWishByStudentAndSubject(studentId, subject)
-        .orElseThrow(() -> {
-          log.warn("No active wish found for student={}, subject={}", studentId, subject);
-          return new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-        });
+    StudentWish wish =
+        studentWishRepository
+            .findActiveWishByStudentAndSubject(studentId, subject)
+            .orElseThrow(
+                () -> {
+                  log.warn("No active wish found for student={}, subject={}", studentId, subject);
+                  return new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+                });
 
     return mapToResponse(wish);
   }
@@ -115,8 +118,10 @@ public class StudentWishServiceImpl implements StudentWishService {
   public void deactivateWish(UUID wishId) {
     log.info("Deactivating wish: {}", wishId);
 
-    StudentWish wish = studentWishRepository.findById(wishId)
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    StudentWish wish =
+        studentWishRepository
+            .findById(wishId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     wish.setIsActive(false);
     studentWishRepository.save(wish);
@@ -127,8 +132,10 @@ public class StudentWishServiceImpl implements StudentWishService {
   public void deleteWish(UUID wishId) {
     log.info("Soft deleting wish: {}", wishId);
 
-    StudentWish wish = studentWishRepository.findById(wishId)
-        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    StudentWish wish =
+        studentWishRepository
+            .findById(wishId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     wish.setDeletedAt(Instant.now());
     wish.setIsActive(false);

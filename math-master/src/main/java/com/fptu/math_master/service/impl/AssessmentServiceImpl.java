@@ -10,7 +10,6 @@ import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentQuestion;
 import com.fptu.math_master.entity.ExamMatrix;
-import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
@@ -243,8 +242,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         .timeLimitMinutes(assessment.getTimeLimitMinutes())
         .startDate(
             assessment.getStartDate() != null ? formatter.format(assessment.getStartDate()) : null)
-        .endDate(
-            assessment.getEndDate() != null ? formatter.format(assessment.getEndDate()) : null)
+        .endDate(assessment.getEndDate() != null ? formatter.format(assessment.getEndDate()) : null)
         .hasSchedule(assessment.getStartDate() != null || assessment.getEndDate() != null)
         .canPublish(canPublish)
         .validationMessage(validationMessage)
@@ -294,7 +292,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
       // TODO: Implement proper question count validation for ExamMatrixTemplateMapping architecture
       // For now, matrix locking logic is deferred
-       examMatrixService.lockMatrix(matrix.getId());
+      examMatrixService.lockMatrix(matrix.getId());
     }
 
     assessment.setStatus(AssessmentStatus.PUBLISHED);
@@ -376,7 +374,9 @@ public class AssessmentServiceImpl implements AssessmentService {
               matrix.setDeletedAt(now);
               examMatrixRepository.save(matrix);
               log.info(
-                  "Soft-deleted orphaned ExamMatrix {} along with Assessment {}", matrix.getId(), id);
+                  "Soft-deleted orphaned ExamMatrix {} along with Assessment {}",
+                  matrix.getId(),
+                  id);
             });
 
     log.info("Assessment soft deleted successfully: {}", id);
@@ -404,8 +404,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
   @Override
   @Transactional(readOnly = true)
-  public Page<AssessmentResponse> getMyAssessments(
-      AssessmentStatus status, Pageable pageable) {
+  public Page<AssessmentResponse> getMyAssessments(AssessmentStatus status, Pageable pageable) {
 
     UUID currentUserId = getCurrentUserId();
     Page<Assessment> assessmentsPage =
@@ -419,13 +418,12 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     // Pre-fetch teacher name once (all assessments on this page share the same teacher)
     String teacherName =
-        userRepository
-            .findById(currentUserId)
-            .map(User::getFullName)
-            .orElse("Unknown");
+        userRepository.findById(currentUserId).map(User::getFullName).orElse("Unknown");
 
     return assessmentsPage.map(
-        a -> mapToResponseWithSummary(a, teacherName, summaryMap.getOrDefault(a.getId(), new long[]{0L, 0L, 0L})));
+        a ->
+            mapToResponseWithSummary(
+                a, teacherName, summaryMap.getOrDefault(a.getId(), new long[] {0L, 0L, 0L})));
   }
 
   @Override
@@ -482,8 +480,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
   @Override
   @Transactional
-  public AssessmentResponse cloneAssessment(
-      UUID sourceId, CloneAssessmentRequest request) {
+  public AssessmentResponse cloneAssessment(UUID sourceId, CloneAssessmentRequest request) {
     log.info("Cloning assessment: {}", sourceId);
 
     Assessment source = loadAssessmentOrThrow(sourceId);
@@ -518,8 +515,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     // Clone questions only for non-matrix path and when explicitly requested
     boolean shouldCloneQuestions =
-        source.getExamMatrixId() == null
-            && Boolean.TRUE.equals(request.getCloneQuestions());
+        source.getExamMatrixId() == null && Boolean.TRUE.equals(request.getCloneQuestions());
 
     if (shouldCloneQuestions) {
       java.util.List<AssessmentQuestion> sourceQuestions =
@@ -543,9 +539,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
   @Override
   @Transactional
-  public AssessmentResponse addQuestion(
-      UUID assessmentId,
-      AddQuestionToAssessmentRequest request) {
+  public AssessmentResponse addQuestion(UUID assessmentId, AddQuestionToAssessmentRequest request) {
     log.info("Adding question {} to assessment {}", request.getQuestionId(), assessmentId);
 
     Assessment assessment = loadAssessmentOrThrow(assessmentId);
@@ -588,7 +582,11 @@ public class AssessmentServiceImpl implements AssessmentService {
             .build();
     assessmentQuestionRepository.save(aq);
 
-    log.info("Question {} added to assessment {} at index {}", request.getQuestionId(), assessmentId, nextOrder);
+    log.info(
+        "Question {} added to assessment {} at index {}",
+        request.getQuestionId(),
+        assessmentId,
+        nextOrder);
     return mapToResponse(assessment);
   }
 
@@ -688,10 +686,12 @@ public class AssessmentServiceImpl implements AssessmentService {
       UUID aid = (UUID) row[0];
       long qCount = row[1] == null ? 0L : ((Number) row[1]).longValue();
       // row[2] is a Double from COALESCE(SUM(...))
-      long pointsCents = row[2] == null ? 0L :
-          new BigDecimal(row[2].toString()).multiply(BigDecimal.valueOf(100)).longValue();
+      long pointsCents =
+          row[2] == null
+              ? 0L
+              : new BigDecimal(row[2].toString()).multiply(BigDecimal.valueOf(100)).longValue();
       long subCount = row[3] == null ? 0L : ((Number) row[3]).longValue();
-      map.put(aid, new long[]{qCount, pointsCents, subCount});
+      map.put(aid, new long[] {qCount, pointsCents, subCount});
     }
     return map;
   }
@@ -699,12 +699,12 @@ public class AssessmentServiceImpl implements AssessmentService {
   /** Single-assessment response — fires individual queries (used by write methods). */
   private AssessmentResponse mapToResponse(Assessment assessment) {
     Long totalQuestions = assessmentRepository.countQuestionsByAssessmentId(assessment.getId());
-    BigDecimal totalPoints = safeTotalPoints(assessmentRepository.calculateTotalPoints(assessment.getId()));
+    BigDecimal totalPoints =
+        safeTotalPoints(assessmentRepository.calculateTotalPoints(assessment.getId()));
     Long submissionCount = assessmentRepository.countSubmissionsByAssessmentId(assessment.getId());
 
     String teacherName =
         userRepository.findById(assessment.getTeacherId()).map(User::getFullName).orElse("Unknown");
-
 
     return buildResponse(assessment, teacherName, totalQuestions, totalPoints, submissionCount);
   }
@@ -713,9 +713,9 @@ public class AssessmentServiceImpl implements AssessmentService {
   private AssessmentResponse mapToResponseWithSummary(
       Assessment assessment, String teacherName, long[] summary) {
     long qCount = summary[0];
-    BigDecimal totalPoints = BigDecimal.valueOf(summary[1]).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    BigDecimal totalPoints =
+        BigDecimal.valueOf(summary[1]).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     long subCount = summary[2];
-
 
     return buildResponse(assessment, teacherName, qCount, totalPoints, subCount);
   }
