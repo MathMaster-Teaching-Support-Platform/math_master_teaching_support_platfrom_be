@@ -66,12 +66,14 @@ fr
 ### 2️⃣ Docker Compose Management
 
 Quản lý 4 services chính:
+
 - **PostgreSQL**: Main database
 - **Redis**: Caching & real-time features
 - **Centrifugo**: WebSocket server
 - **Math Master App**: Spring Boot application
 
 Các tác vụ:
+
 - Start/Stop/Restart services
 - View logs real-time
 - Check container status
@@ -149,6 +151,7 @@ Sau đó, app chạy tại `http://localhost:8080`
 ### Development Workflow
 
 **Bắt Đầu Làm Việc:**
+
 ```bash
 fr                           # Start manager
 # → 2. Docker Compose → 1. Start All Services
@@ -157,6 +160,7 @@ fr                           # Start manager
 ```
 
 **Trong Quá Trình Phát Triển:**
+
 ```bash
 # Edit code in IDE
 # App sẽ auto-reload via Spring DevTools
@@ -165,6 +169,7 @@ mvn clean package -DskipTests && java -jar target/math-master*.jar
 ```
 
 **Trước Khi Commit:**
+
 ```bash
 fr
 # → 4. Health Checks → 1. Check All Services (verify all OK)
@@ -172,6 +177,7 @@ fr
 ```
 
 **Dừng Phát Triển:**
+
 ```bash
 fr
 # → 2. Docker Compose → 2. Stop All Services
@@ -247,7 +253,7 @@ STUDENT_PASSWORD=change_me_in_production
 STUDENT_GMAIL=student@mathmaster.com
 STUDENT_FULLNAME=Student User
 
-# Teacher Account  
+# Teacher Account
 TEACHER_USERNAME=teacher
 TEACHER_PASSWORD=change_me_in_production
 TEACHER_GMAIL=teacher@mathmaster.com
@@ -276,6 +282,7 @@ CENTRIFUGO_WS_URL=ws://localhost:8000/connection/websocket
 ```
 
 **Key Technologies:**
+
 - Spring Boot 3.5.0 + Java 21
 - Spring Security + JWT Authentication
 - PostgreSQL (Hibernate ORM)
@@ -288,6 +295,7 @@ CENTRIFUGO_WS_URL=ws://localhost:8000/connection/websocket
 ## 🚨 Common Issues & Solutions
 
 ### "Java not found"
+
 ```bash
 # Check installation
 java -version
@@ -299,6 +307,7 @@ java -version
 ```
 
 ### "Maven command not found"
+
 ```bash
 # Check installation
 mvn -version
@@ -310,6 +319,7 @@ mvn -version
 ```
 
 ### "Docker not running"
+
 ```bash
 # Start Docker Desktop application (macOS, Windows)
 # Or on Linux:
@@ -317,6 +327,7 @@ sudo systemctl start docker
 ```
 
 ### "Port 8080 already in use"
+
 ```bash
 # Kill process using port 8080
 lsof -i :8080  # macOS/Linux - find PID
@@ -327,6 +338,7 @@ kill -9 <PID>
 ```
 
 ### "Cannot connect to database"
+
 ```bash
 # Check container status
 docker-compose ps
@@ -339,6 +351,7 @@ fr → Database Management → Show Database Info
 ```
 
 ### "Services not ready after long wait"
+
 ```bash
 # Check logs
 docker-compose logs
@@ -379,6 +392,7 @@ less logs/math-master-YYYYMMDD.log
 ### Enable Debug Logging
 
 Edit `src/main/resources/application.yaml`:
+
 ```yaml
 logging:
   level:
@@ -405,6 +419,7 @@ docker-compose logs -f postgres-math-master
 ## 📄 Files Modified/Added
 
 ### Modified (from old FR Manager):
+
 - `config/config.sh` - Adapted for Math Master
 - `lib/builder.sh` - Maven-specific builds
 - `fr-manager.sh` - Simplified for single repo
@@ -412,11 +427,13 @@ docker-compose logs -f postgres-math-master
 - `install.sh` - Updated paths
 
 ### New Files:
+
 - `lib/environment-setup.sh` - Environment verification
 - `lib/health-checks.sh` - Service health monitoring
 - `lib/database-migrations.sh` - Database management
 
 ### Unchanged (still compatible):
+
 - `lib/colors.sh` - Terminal colors
 - `lib/ui.sh` - UI utilities
 - `lib/git_utils.sh` - Git operations
@@ -551,16 +568,19 @@ fr
 Chuyển đổi tất cả repos liên quan đến một task (ML/AP/BT) sang cùng một nhánh và build.
 
 **Task Types:**
+
 - **ML** (Module Library): repos 2, 3, 4
-- **AP** (API): repos 2, 3, 4, 5  
+- **AP** (API): repos 2, 3, 4, 5
 - **BT** (Batch): repos 2, 3, 4, 6
 
 **Versions:**
+
 - `3.1` → `release/v3.1`
 - `3.0` → `develop/v3.0`
 - `2.8.65` → `fix/v2.8.65` (với fallback `fix/v2.8.60` nếu không tìm thấy)
 
 **Flow:**
+
 1. Kiểm tra trạng thái tất cả repos
 2. Hiển thị các conflicts/uncommitted changes
 3. Xin xác nhận từ người dùng
@@ -576,6 +596,7 @@ Build một module riêng lẻ mà không cần checkout hay build toàn bộ.
 Build VRF framework (chỉ cần build 1 lần).
 
 Versions:
+
 - `v2.0.0`
 - `v1.4.25`
 
@@ -584,6 +605,7 @@ Versions:
 Format code sử dụng Prettier và prettier-plugin-java.
 
 **Options:**
+
 - Format một module cụ thể
 - Format tất cả modules
 - Check formatting (không thay đổi file)
@@ -592,6 +614,7 @@ Format code sử dụng Prettier và prettier-plugin-java.
 ### 5. Check Repository Status
 
 Kiểm tra trạng thái của các repositories:
+
 - Current branch
 - Uncommitted changes
 - Unpushed commits
@@ -602,6 +625,7 @@ Kiểm tra trạng thái của các repositories:
 Xóa tất cả local branches của một repo (trừ default branch).
 
 **Options:**
+
 - Cleanup một repo cụ thể
 - Cleanup tất cả repos
 - Cleanup merged branches only
@@ -611,6 +635,7 @@ Xóa tất cả local branches của một repo (trừ default branch).
 ### 7. View Logs
 
 Xem logs của các operations đã thực hiện:
+
 - Conflicts và cách xử lý
 - Stashes được tạo
 - Build logs
@@ -668,6 +693,7 @@ Khi có conflicts (uncommitted changes, local commits khác remote), FR Manager 
 ### Auto Stash
 
 Nếu chọn stash, FR Manager sẽ:
+
 - Tạo stash với tên: `fr-manager-auto-<branch>-<timestamp>`
 - Log vào file để theo dõi
 - Tiếp tục với checkout
@@ -681,6 +707,7 @@ Tất cả operations quan trọng được log vào `logs/`:
 - `stashes-YYYYMMDD.log`: Stashes được tạo
 
 **View logs:**
+
 ```bash
 fr  # Chọn option 7
 ```
@@ -780,6 +807,7 @@ Sau đó update `FORMATTER_PLUGIN_PATH` trong `config/config.sh`
 ## 📞 Support
 
 Nếu gặp vấn đề:
+
 1. Check logs: `fr` → Option 7
 2. Review config: `config/config.sh`
 3. Run với verbose mode (coming soon)

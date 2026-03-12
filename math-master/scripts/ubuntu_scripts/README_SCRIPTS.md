@@ -43,6 +43,7 @@ chmod +x config/*.sh
 ```
 
 Installer sẽ:
+
 - ✓ Tạo wrapper script `khoipd_terminal`
 - ✓ Thêm alias vào shell RC file (`.bashrc`, `.zshrc`)
 - ✓ Kiểm tra prerequisites (Java, Maven, Docker)
@@ -97,17 +98,17 @@ scripts/ubuntu_scripts/
 
 ### Mô Tả Các File Lib
 
-| File | Chức Năng |
-|------|----------|
-| **colors.sh** | Định nghĩa màu ANSI cho terminal output (RED, GREEN, BLUE, etc.) |
-| **ui.sh** | Hàm UI: title(), opt(), ask(), warn(), err(), success() |
-| **git_utils.sh** | Git operations: check_git_status(), git_log_recent() |
-| **status_checker.sh** | Kiểm tra git status, uncommitted changes, unpushed commits |
-| **builder.sh** | Maven build: build_project(), build_docker(), run_tests() |
-| **logger.sh** | Log functions: log_info(), log_error(), log_success() |
-| **environment-setup.sh** | Environment checks & setup: check_java(), check_docker() |
-| **health-checks.sh** | Service health: check_app_health(), check_redis_health() |
-| **database-migrations.sh** | Database ops: backup_database(), restore_database() |
+| File                       | Chức Năng                                                        |
+| -------------------------- | ---------------------------------------------------------------- |
+| **colors.sh**              | Định nghĩa màu ANSI cho terminal output (RED, GREEN, BLUE, etc.) |
+| **ui.sh**                  | Hàm UI: title(), opt(), ask(), warn(), err(), success()          |
+| **git_utils.sh**           | Git operations: check_git_status(), git_log_recent()             |
+| **status_checker.sh**      | Kiểm tra git status, uncommitted changes, unpushed commits       |
+| **builder.sh**             | Maven build: build_project(), build_docker(), run_tests()        |
+| **logger.sh**              | Log functions: log_info(), log_error(), log_success()            |
+| **environment-setup.sh**   | Environment checks & setup: check_java(), check_docker()         |
+| **health-checks.sh**       | Service health: check_app_health(), check_redis_health()         |
+| **database-migrations.sh** | Database ops: backup_database(), restore_database()              |
 
 ---
 
@@ -149,7 +150,7 @@ Khi chạy `khoipd_terminal`, bạn sẽ thấy menu chính:
 8. View Logs               # Xem log files
 9. Exit                     # Thoát
 
-Select option (1-9): 
+Select option (1-9):
 ```
 
 ---
@@ -169,13 +170,15 @@ Select option (1-9):
 ```
 
 Điều này sẽ:
+
 - ✓ Kiểm tra Java 21 installation
-- ✓ Kiểm tra Maven 3.6+ installation  
+- ✓ Kiểm tra Maven 3.6+ installation
 - ✓ Kiểm tra Docker & Docker Compose installation
 - ✓ Tạo `.env` file từ template (nếu không có)
 - ✓ Setup Git hooks (nếu cần)
 
 **Output mong đợi**:
+
 ```
 Java: OK (Java 21)
 Maven: OK (Maven 3.9.9)
@@ -197,12 +200,14 @@ Docker Compose: OK (Docker Compose 2.0.0)
 ```
 
 **Nó sẽ khởi động**:
+
 - 🐘 PostgreSQL (port 5432)
 - 🔴 Redis (port 6379)
 - 📡 Centrifugo (port 8000)
 - 🚀 Math Master App (port 8080)
 
 **Xác minh**:
+
 ```bash
 # Kiểm tra các container
 docker ps | grep math-master
@@ -224,6 +229,7 @@ khoipd_terminal → 2. Docker Compose → 5. Check Service Status
 ```
 
 **Nó sẽ kiểm tra**:
+
 - ✓ App health endpoint (http://localhost:8080/actuator/health)
 - ✓ Redis connectivity
 - ✓ Database state
@@ -244,12 +250,14 @@ khoipd_terminal → 2. Docker Compose → 5. Check Service Status
 ```
 
 **Lệnh thực tế**:
+
 ```bash
 cd ${PROJECT_ROOT}
 mvn clean package -P dev -DskipTests=false
 ```
 
 **Tùy chọn**:
+
 - Skip tests: `MAVEN_SKIP_TESTS=true` trong config.sh
 - Custom profile: `BUILD_PROFILES="prod"` trong config.sh
 
@@ -292,11 +300,13 @@ mvn clean package -P dev -DskipTests=false
 ```
 
 **Image được tạo**:
+
 ```
 math-master:latest
 ```
 
 **Kiểm tra**:
+
 ```bash
 docker images | grep math-master
 ```
@@ -314,6 +324,7 @@ docker images | grep math-master
 ```
 
 **Backup file sẽ được lưu tại**:
+
 ```
 ${PROJECT_ROOT}/backups/math-master-backup-20250313_143022.sql
 ```
@@ -347,12 +358,14 @@ ${PROJECT_ROOT}/backups/math-master-backup-20250313_143022.sql
 ```
 
 **Sẽ kiểm tra**:
+
 - ✓ Application health
-- ✓ Redis connectivity  
+- ✓ Redis connectivity
 - ✓ Database state
 - ✓ Centrifugo availability
 
 **Output**:
+
 ```
 ✓ Application is healthy (HTTP 200)
 ✓ Redis is healthy (PONG)
@@ -736,6 +749,7 @@ khoipd_terminal → 4. Health Checks → 1. Check All Services
 Để tạo custom build profile:
 
 **File**: `pom.xml`
+
 ```xml
 <profiles>
   <profile>
@@ -744,7 +758,7 @@ khoipd_terminal → 4. Health Checks → 1. Check All Services
       <logging.level>DEBUG</logging.level>
     </properties>
   </profile>
-  
+
   <profile>
     <id>prod</id>
     <properties>
@@ -755,6 +769,7 @@ khoipd_terminal → 4. Health Checks → 1. Check All Services
 ```
 
 **File**: `config/config.sh`
+
 ```bash
 # Build env
 BUILD_PROFILES="prod"
@@ -764,6 +779,7 @@ MAVEN_SKIP_TESTS=true
 ### 5️⃣ Logging & Debugging
 
 **View application logs**:
+
 ```bash
 # Real-time logs
 docker-compose logs -f app
@@ -778,6 +794,7 @@ khoipd_terminal → 2. Docker Compose → 4. View Logs
 **Enable debug logging**:
 
 Edit `src/main/resources/application.yaml`:
+
 ```yaml
 logging:
   level:
@@ -787,6 +804,7 @@ logging:
 ```
 
 **View script logs**:
+
 ```bash
 # View manager operation logs
 less logs/math-master-20250313.log
@@ -957,6 +975,7 @@ docker-compose --version
 Scripts được duy trì tại: `scripts/ubuntu_scripts/`
 
 Có thể contribute bằng:
+
 - Bug reports
 - Feature requests
 - Documentation improvements
