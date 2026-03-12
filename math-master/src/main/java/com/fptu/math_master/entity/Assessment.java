@@ -23,7 +23,6 @@ import org.hibernate.annotations.Nationalized;
     name = "assessments",
     indexes = {
       @Index(name = "idx_assessments_teacher", columnList = "teacher_id"),
-      @Index(name = "idx_assessments_lesson", columnList = "lesson_id"),
       @Index(name = "idx_assessments_exam_matrix", columnList = "exam_matrix_id"),
       @Index(name = "idx_assessments_mode", columnList = "assessment_mode"),
       @Index(name = "idx_assessments_status", columnList = "status"),

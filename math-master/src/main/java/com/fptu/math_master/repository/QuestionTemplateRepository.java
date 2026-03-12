@@ -45,7 +45,7 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
           + "AND (:isPublic IS NULL OR t.isPublic = :isPublic) "
           + "AND (:templateType IS NULL OR t.templateType = :templateType) "
           + "AND (:cognitiveLevel IS NULL OR t.cognitiveLevel = :cognitiveLevel) "
-          + "AND (:searchTerm IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+          + "AND (:searchTerm IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', CAST(:searchTerm as string), '%')))")
   Page<QuestionTemplate> searchTemplates(
       @Param("currentUserId") UUID currentUserId,
       @Param("isPublic") Boolean isPublic,
@@ -66,7 +66,7 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
           + "AND (:currentUserId IS NULL OR :onlyMine = false OR t.createdBy = :currentUserId) "
           + "AND (:templateType IS NULL OR t.templateType = :templateType) "
           + "AND (:cognitiveLevel IS NULL OR t.cognitiveLevel = :cognitiveLevel) "
-          + "AND (:searchTerm IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+          + "AND (:searchTerm IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', CAST(:searchTerm as string), '%')))")
   Page<QuestionTemplate> findMatchingTemplatesForCell(
       @Param("currentUserId") UUID currentUserId,
       @Param("onlyMine") boolean onlyMine,
