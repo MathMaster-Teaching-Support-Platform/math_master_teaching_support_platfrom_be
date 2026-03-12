@@ -26,6 +26,45 @@ init_manager() {
   log_info "Math Master Manager started"
 }
 
+# ================= DELETE LOGS FUNCTION =================
+delete_logs() {
+  local log_dir="${LOGS_DIR}"
+  
+  if [[ -d "${log_dir}" ]]; then
+    local log_count=$(find "${log_dir}" -maxdepth 1 \( -name "*.log" -o -name "*.txt" \) 2>/dev/null | wc -l)
+    
+    if [[ ${log_count} -gt 0 ]]; then
+      info "Found ${log_count} log files"
+      find "${log_dir}" -maxdepth 1 \( -name "*.log" -o -name "*.txt" \) -delete
+      success "Log files deleted successfully!"
+    else
+      warn "No log files found in ${log_dir}"
+    fi
+  else
+    warn "Logs directory not found at: ${log_dir}"
+  fi
+}
+
+# ================= DELETE LOGS MENU =================
+delete_logs_menu() {
+  clear
+  title "DELETE LOGS"
+  echo
+  info "This will delete all log files (.log and .txt) in the logs directory."
+  echo
+  ask "Are you sure? (yes/no): "
+  read confirm
+  
+  if [[ "${confirm}" == "yes" ]]; then
+    delete_logs
+  else
+    warn "Operation cancelled"
+  fi
+  
+  ask "Press enter to continue..."
+  read
+}
+
 # ================= BUILD MENU =================
 build_menu() {
   while true; do
@@ -445,26 +484,28 @@ main_menu() {
     opt "1. Build Operations"
     opt "2. Docker Compose"
     opt "3. Database Management"
-    opt "4. Health Checks"
-    opt "5. Environment Setup"
-    opt "6. Repository Status"
-    opt "7. Print Configuration"
-    opt "8. View Logs"
-    opt "9. Exit"
+    opt "4. Delete Logs"
+    opt "5. Health Checks"
+    opt "6. Environment Setup"
+    opt "7. Repository Status"
+    opt "8. Print Configuration"
+    opt "9. View Logs"
+    opt "10. Exit"
     echo
-    ask "Select option (1-9): "
+    ask "Select option (1-10): "
     read MAIN_CHOICE
     
     case "$MAIN_CHOICE" in
       1) build_menu ;;
       2) docker_menu ;;
       3) database_menu ;;
-      4) health_check_menu ;;
-      5) environment_menu ;;
-      6) check_status_menu ;;
-      7) print_config ;;
-      8) view_logs_menu ;;
-      9)
+      4) delete_logs_menu ;;
+      5) health_check_menu ;;
+      6) environment_menu ;;
+      7) check_status_menu ;;
+      8) print_config ;;
+      9) view_logs_menu ;;
+      10)
         success "Goodbye!"
         exit 0
         ;;
