@@ -1,0 +1,68 @@
+[2026-01-23 10:14:51] [INFO] FR Manager started
+[2026-01-23 10:15:29] [INFO] Checkout fr-wes-flyway: fix/v2.8.59 -> release/v3.1
+[2026-01-23 10:15:54] [WARN] Conflict in fr-ilc-backend-modules on support/v2 - force
+[2026-01-23 10:15:57] [INFO] Checkout fr-ilc-backend-modules: support/v2 -> release/v3.1
+[2026-01-23 10:16:15] [WARN] Conflict in fr-wes-backend-modules on fix/v2.8.59 - force
+[2026-01-23 10:16:19] [INFO] Checkout fr-wes-backend-modules: fix/v2.8.59 -> release/v3.1
+[2026-01-23 10:16:27] [WARN] Conflict in fr-wes-onln-backend on feature/v2/NWMS-29659_59 - force
+[2026-01-23 10:16:30] [INFO] Checkout fr-wes-onln-backend: feature/v2/NWMS-29659_59 -> release/v3.1
+[2026-01-23 10:16:32] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-23 10:17:46] [INFO] Build successful for fr-ilc-backend-modules (74s)
+[2026-01-23 10:17:46] [INFO] Build started for fr-wes-backend-modules
+[2026-01-23 10:18:34] [INFO] Build successful for fr-wes-backend-modules (48s)
+[2026-01-23 10:18:34] [INFO] Build started for fr-wes-onln-backend
+[2026-01-23 10:20:43] [ERROR] Build failed for fr-wes-onln-backend: Script returned error code 1
+[2026-01-23 10:21:16] [INFO] Build started for fr-wes-onln-backend
+[2026-01-23 10:22:07] [ERROR] Build failed for fr-wes-onln-backend: Script returned error code 1
+[2026-01-23 10:22:37] [INFO] Build started for fr-wes-onln-backend
+[2026-01-23 11:24:22] [INFO] FR Manager started
+[2026-01-23 11:25:16] [INFO] Checkout fr-wes-flyway: release/v3.1 -> fix/v2.8.59
+[2026-01-23 11:25:21] [WARN] Conflict in fr-ilc-backend-modules on release/v3.1 - force
+[2026-01-23 11:25:24] [INFO] Checkout fr-ilc-backend-modules: release/v3.1 -> fix/v2.8.50
+[2026-01-23 11:25:32] [INFO] Checkout fr-wes-backend-modules: release/v3.1 -> fix/v2.8.59
+[2026-01-23 11:25:38] [WARN] Conflict in fr-wes-onln-backend on feature/v3.1/NWMS-30186_HT - force
+[2026-01-23 11:25:42] [INFO] Checkout fr-wes-onln-backend: feature/v3.1/NWMS-30186_HT -> fix/v2.8.59
+[2026-01-23 11:25:42] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-23 11:25:56] [ERROR] Build failed for fr-ilc-backend-modules: Script returned error code 1
+[2026-01-23 11:26:01] [INFO] Build started for fr-wes-backend-modules
+[2026-01-23 11:26:16] [INFO] FR Manager started
+[2026-01-23 11:26:19] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-23 11:27:04] [INFO] Build successful for fr-ilc-backend-modules (45s)
+[2026-01-23 11:27:15] [INFO] Build started for fr-wes-backend-modules
+[2026-01-23 11:27:55] [INFO] Build successful for fr-wes-backend-modules (40s)
+[2026-01-23 11:28:14] [INFO] Build started for fr-wes-onln-backend
+[2026-01-23 11:30:06] [ERROR] Build failed for fr-wes-onln-backend: Script returned error code 1
+[2026-01-23 11:30:21] [INFO] Build started for fr-wes-onln-backend
+[2026-01-23 11:30:27] [INFO] Build successful for fr-wes-onln-backend (4070s)
+[2026-01-23 14:14:07] [ERROR] Build failed for fr-wes-onln-backend: Script returned error code 2
+[2026-01-23 14:15:27] [INFO] Checkout fr-wes-flyway: fix/v2.8.59 -> release/v3.1
+[2026-01-23 14:15:33] [WARN] Conflict in fr-ilc-backend-modules on support/v2 - force
+[2026-01-23 14:15:36] [INFO] Checkout fr-ilc-backend-modules: support/v2 -> release/v3.1
+[2026-01-23 14:15:44] [INFO] Checkout fr-wes-backend-modules: fix/v2.8.59 -> release/v3.1
+[2026-01-23 14:15:52] [INFO] Checkout fr-wes-onln-backend: fix/v2.8.59 -> release/v3.1
+[2026-01-23 14:15:52] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-23 14:16:57] [INFO] Build successful for fr-ilc-backend-modules (65s)
+[2026-01-23 14:16:57] [INFO] Build started for fr-wes-backend-modules
+[2026-01-23 14:17:44] [INFO] Build successful for fr-wes-backend-modules (47s)
+[2026-01-23 14:17:44] [INFO] Build started for fr-wes-onln-backend
+[2026-01-23 14:35:00] [INFO] FR Manager started
+[2026-01-23 15:29:31] [INFO] Deleted branch: fix/v2.8.59 from fr-wes-flyway
+[2026-01-23 15:29:33] [INFO] Deleted branch: develop/v3.0 from fr-ilc-backend-modules
+[2026-01-23 15:29:33] [INFO] Deleted branch: fix/v2.8.50 from fr-ilc-backend-modules
+[2026-01-23 15:29:33] [INFO] Deleted branch: fix/v2.8.60 from fr-ilc-backend-modules
+[2026-01-23 15:29:33] [INFO] Deleted branch: fix/v2.8.70 from fr-ilc-backend-modules
+[2026-01-23 15:29:33] [INFO] Deleted branch: support/v2 from fr-ilc-backend-modules
+[2026-01-23 15:29:37] [INFO] Deleted branch: develop/v3.0 from fr-wes-backend-modules
+[2026-01-23 15:29:37] [INFO] Deleted branch: fix/v2.8.59 from fr-wes-backend-modules
+[2026-01-23 15:29:37] [INFO] Deleted branch: fix/v2.8.60 from fr-wes-backend-modules
+[2026-01-23 15:29:37] [INFO] Deleted branch: fix/v2.8.70 from fr-wes-backend-modules
+[2026-01-23 15:29:39] [INFO] Deleted branch: develop/v3.0 from fr-wes-onln-backend
+[2026-01-23 15:29:39] [INFO] Deleted branch: feature/v2.8.59/NWMS-29851 from fr-wes-onln-backend
+[2026-01-23 15:29:39] [INFO] Deleted branch: feature/v2/NWMS-29659-28 from fr-wes-onln-backend
+[2026-01-23 15:29:39] [INFO] Deleted branch: feature/v2/NWMS-29659_59 from fr-wes-onln-backend
+[2026-01-23 15:29:39] [INFO] Deleted branch: feature/v3.1/NWMS-30186_HT from fr-wes-onln-backend
+[2026-01-23 15:29:39] [INFO] Deleted branch: feature/v3.1/NWMS-30220 from fr-wes-onln-backend
+[2026-01-23 15:29:39] [INFO] Deleted branch: fix/v2.8.59 from fr-wes-onln-backend
+[2026-01-23 15:29:39] [INFO] Deleted branch: fix/v2.8.60 from fr-wes-onln-backend
+[2026-01-23 15:29:43] [INFO] Deleted branch: develop/v3.0 from fr-wes-batch
+[2026-01-23 15:30:50] [INFO] FR Manager started

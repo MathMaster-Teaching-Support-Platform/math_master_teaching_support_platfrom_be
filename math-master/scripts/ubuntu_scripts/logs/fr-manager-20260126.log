@@ -1,0 +1,23 @@
+[2026-01-26 08:13:30] [INFO] FR Manager started
+[2026-01-26 08:14:21] [INFO] Checkout fr-wes-flyway: release/v3.1 -> fix/v2.8.50
+[2026-01-26 08:14:29] [WARN] Conflict in fr-ilc-backend-modules on release/v3.1 - force
+[2026-01-26 08:14:32] [INFO] Checkout fr-ilc-backend-modules: release/v3.1 -> fix/v2.8.50
+[2026-01-26 08:14:45] [INFO] Checkout fr-wes-backend-modules: release/v3.1 -> fix/v2.8.50
+[2026-01-26 08:14:46] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-26 08:15:50] [INFO] Build successful for fr-ilc-backend-modules (64s)
+[2026-01-26 08:15:50] [INFO] Build started for fr-wes-backend-modules
+[2026-01-26 08:16:31] [INFO] Build successful for fr-wes-backend-modules (41s)
+[2026-01-26 10:00:17] [INFO] Checkout fr-wes-flyway: fix/v2.8.50 -> fix/v2.8.60
+[2026-01-26 10:00:26] [WARN] Conflict in fr-ilc-backend-modules on fix/v2.8.50 - force
+[2026-01-26 10:00:29] [INFO] Checkout fr-ilc-backend-modules: fix/v2.8.50 -> fix/v2.8.60
+[2026-01-26 10:00:36] [INFO] Checkout fr-wes-backend-modules: feature/v2.8.61/NWMS-30234 -> fix/v2.8.61
+[2026-01-26 10:01:42] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-26 10:02:15] [INFO] Build successful for fr-ilc-backend-modules (33s)
+[2026-01-26 10:02:15] [INFO] Build started for fr-wes-backend-modules
+[2026-01-26 10:02:36] [INFO] Build successful for fr-wes-backend-modules (21s)
+[2026-01-26 11:30:56] [INFO] FR Manager started
+[2026-01-26 11:33:47] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-26 11:34:11] [INFO] Build successful for fr-ilc-backend-modules (24s)
+[2026-01-26 11:34:14] [INFO] Build started for fr-wes-backend-modules
+[2026-01-26 11:34:34] [INFO] Build successful for fr-wes-backend-modules (20s)
+[2026-01-26 12:53:13] [INFO] FR Manager started

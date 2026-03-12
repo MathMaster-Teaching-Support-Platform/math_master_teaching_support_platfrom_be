@@ -1,0 +1,66 @@
+[2026-01-21 08:42:58] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: develop/v3.0
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-21 08:43:09] CONFLICT DETECTED
+  Repository: fr-wes-backend-modules
+  Branch: develop/v3.0
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-21 08:46:56] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: fix/v2.8.60
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-21 08:51:39] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: fix/v2.8.70
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-21 08:54:15] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: fix/v2.8.60
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-21 08:57:20] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: fix/v2.8.70
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-21 08:57:28] CONFLICT DETECTED
+  Repository: fr-wes-backend-modules
+  Branch: fix/v2.8.70
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-21 09:24:21] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: develop/v3.0
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-21 09:24:29] CONFLICT DETECTED
+  Repository: fr-wes-backend-modules
+  Branch: develop/v3.0
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-21 10:06:41] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: develop/v3.0
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-21 10:07:13] CONFLICT DETECTED
+  Repository: fr-wes-onln-backend
+  Branch: develop/v3.0
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────

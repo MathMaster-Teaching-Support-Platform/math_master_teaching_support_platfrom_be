@@ -1,0 +1,36 @@
+[2026-01-23 10:15:54] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: support/v2
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-23 10:16:15] CONFLICT DETECTED
+  Repository: fr-wes-backend-modules
+  Branch: fix/v2.8.59
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-23 10:16:27] CONFLICT DETECTED
+  Repository: fr-wes-onln-backend
+  Branch: feature/v2/NWMS-29659_59
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-23 11:25:21] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: release/v3.1
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-23 11:25:38] CONFLICT DETECTED
+  Repository: fr-wes-onln-backend
+  Branch: feature/v3.1/NWMS-30186_HT
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-23 14:15:33] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: support/v2
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────

@@ -1,0 +1,12 @@
+[2026-01-26 08:14:29] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: release/v3.1
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────
+[2026-01-26 10:00:26] CONFLICT DETECTED
+  Repository: fr-ilc-backend-modules
+  Branch: fix/v2.8.50
+  Action Taken: force
+  Details: Forced checkout, changes discarded
+────────────────────────────────────────

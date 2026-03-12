@@ -1,0 +1,90 @@
+[2026-01-21 08:31:18] [INFO] FR Manager started
+[2026-01-21 08:32:43] [INFO] Checkout fr-wes-flyway: release/v3.1 -> develop/v3.0
+[2026-01-21 08:32:51] [INFO] Checkout fr-ilc-backend-modules: develop/v3.0 -> develop/v3.0
+[2026-01-21 08:32:58] [INFO] Checkout fr-wes-backend-modules: release/v3.1 -> develop/v3.0
+[2026-01-21 08:33:06] [INFO] Checkout fr-wes-batch: release/v3.1 -> develop/v3.0
+[2026-01-21 08:35:26] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-21 08:35:58] [INFO] Build successful for fr-ilc-backend-modules (32s)
+[2026-01-21 08:35:58] [INFO] Build started for fr-wes-backend-modules
+[2026-01-21 08:36:45] [INFO] Build successful for fr-wes-backend-modules (47s)
+[2026-01-21 08:36:45] [INFO] Build started for fr-wes-batch
+[2026-01-21 08:40:38] [INFO] Build successful for fr-wes-batch (233s)
+[2026-01-21 08:42:51] [INFO] Checkout fr-wes-flyway: develop/v3.0 -> fix/v2.8.60
+[2026-01-21 08:42:58] [WARN] Conflict in fr-ilc-backend-modules on develop/v3.0 - force
+[2026-01-21 08:43:01] [INFO] Checkout fr-ilc-backend-modules: develop/v3.0 -> fix/v2.8.60
+[2026-01-21 08:43:09] [WARN] Conflict in fr-wes-backend-modules on develop/v3.0 - force
+[2026-01-21 08:43:13] [INFO] Checkout fr-wes-backend-modules: develop/v3.0 -> fix/v2.8.60
+[2026-01-21 08:43:17] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-21 08:43:31] [ERROR] Build failed for fr-ilc-backend-modules: Script returned error code 1
+[2026-01-21 08:45:25] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-21 08:45:33] [ERROR] Build failed for fr-ilc-backend-modules: Script returned error code 1
+[2026-01-21 08:46:50] [INFO] Checkout fr-wes-flyway: fix/v2.8.60 -> fix/v2.8.70
+[2026-01-21 08:46:56] [WARN] Conflict in fr-ilc-backend-modules on fix/v2.8.60 - force
+[2026-01-21 08:46:59] [INFO] Checkout fr-ilc-backend-modules: fix/v2.8.60 -> fix/v2.8.70
+[2026-01-21 08:47:07] [INFO] Checkout fr-wes-backend-modules: fix/v2.8.60 -> fix/v2.8.70
+[2026-01-21 08:47:08] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-21 08:47:16] [ERROR] Build failed for fr-ilc-backend-modules: Script returned error code 1
+[2026-01-21 08:48:06] [INFO] Build started for fr-wes-backend-modules
+[2026-01-21 08:48:25] [ERROR] Build failed for fr-wes-backend-modules: Script returned error code 1
+[2026-01-21 08:48:59] [INFO] Build started for fr-vrf-backend
+[2026-01-21 08:50:12] [INFO] Build successful for fr-vrf-backend (73s)
+[2026-01-21 08:50:53] [INFO] FR Manager started
+[2026-01-21 08:51:30] [INFO] Checkout fr-wes-flyway: fix/v2.8.70 -> fix/v2.8.60
+[2026-01-21 08:51:39] [WARN] Conflict in fr-ilc-backend-modules on fix/v2.8.70 - force
+[2026-01-21 08:51:42] [INFO] Checkout fr-ilc-backend-modules: fix/v2.8.70 -> fix/v2.8.60
+[2026-01-21 08:51:49] [INFO] Checkout fr-wes-backend-modules: fix/v2.8.70 -> fix/v2.8.60
+[2026-01-21 08:51:58] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-21 08:52:31] [INFO] Build successful for fr-ilc-backend-modules (33s)
+[2026-01-21 08:52:31] [INFO] Build started for fr-wes-backend-modules
+[2026-01-21 08:53:10] [INFO] Build successful for fr-wes-backend-modules (39s)
+[2026-01-21 08:53:33] [INFO] FR Manager started
+[2026-01-21 08:54:03] [INFO] Checkout fr-wes-flyway: fix/v2.8.60 -> fix/v2.8.70
+[2026-01-21 08:54:15] [WARN] Conflict in fr-ilc-backend-modules on fix/v2.8.60 - force
+[2026-01-21 08:54:18] [INFO] Checkout fr-ilc-backend-modules: fix/v2.8.60 -> fix/v2.8.70
+[2026-01-21 08:54:26] [INFO] Checkout fr-wes-backend-modules: fix/v2.8.60 -> fix/v2.8.70
+[2026-01-21 08:54:50] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-21 08:55:25] [INFO] Build successful for fr-ilc-backend-modules (35s)
+[2026-01-21 08:55:25] [INFO] Build started for fr-wes-backend-modules
+[2026-01-21 08:56:03] [INFO] Build successful for fr-wes-backend-modules (38s)
+[2026-01-21 08:57:14] [INFO] Checkout fr-wes-flyway: fix/v2.8.70 -> develop/v3.0
+[2026-01-21 08:57:20] [WARN] Conflict in fr-ilc-backend-modules on fix/v2.8.70 - force
+[2026-01-21 08:57:23] [INFO] Checkout fr-ilc-backend-modules: fix/v2.8.70 -> develop/v3.0
+[2026-01-21 08:57:28] [WARN] Conflict in fr-wes-backend-modules on fix/v2.8.70 - force
+[2026-01-21 08:57:31] [INFO] Checkout fr-wes-backend-modules: fix/v2.8.70 -> develop/v3.0
+[2026-01-21 08:57:33] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-21 08:58:13] [INFO] Build successful for fr-ilc-backend-modules (40s)
+[2026-01-21 08:58:13] [INFO] Build started for fr-wes-backend-modules
+[2026-01-21 08:59:06] [INFO] Build successful for fr-wes-backend-modules (53s)
+[2026-01-21 09:02:26] [INFO] FR Manager started
+[2026-01-21 09:04:45] [INFO] FR Manager started
+[2026-01-21 09:16:44] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-21 09:17:01] [INFO] Build successful for fr-ilc-backend-modules (17s)
+[2026-01-21 09:17:08] [INFO] Build started for fr-wes-backend-modules
+[2026-01-21 09:17:26] [INFO] Build successful for fr-wes-backend-modules (18s)
+[2026-01-21 09:24:14] [INFO] Checkout fr-wes-flyway: develop/v3.0 -> develop/v3.0
+[2026-01-21 09:24:21] [WARN] Conflict in fr-ilc-backend-modules on develop/v3.0 - force
+[2026-01-21 09:24:24] [INFO] Checkout fr-ilc-backend-modules: develop/v3.0 -> develop/v3.0
+[2026-01-21 09:24:29] [WARN] Conflict in fr-wes-backend-modules on develop/v3.0 - force
+[2026-01-21 09:24:32] [INFO] Checkout fr-wes-backend-modules: develop/v3.0 -> develop/v3.0
+[2026-01-21 09:24:43] [INFO] Checkout fr-wes-onln-backend: feature/v2.8.59/NWMS-29851 -> develop/v3.0
+[2026-01-21 09:24:44] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-21 09:25:07] [INFO] Build successful for fr-ilc-backend-modules (23s)
+[2026-01-21 09:25:07] [INFO] Build started for fr-wes-backend-modules
+[2026-01-21 09:25:31] [INFO] Build successful for fr-wes-backend-modules (24s)
+[2026-01-21 09:25:31] [INFO] Build started for fr-wes-onln-backend
+[2026-01-21 10:05:47] [INFO] Build successful for fr-wes-onln-backend (2416s)
+[2026-01-21 10:06:27] [INFO] Checkout fr-wes-flyway: develop/v3.0 -> fix/v2.8.59
+[2026-01-21 10:06:41] [WARN] Conflict in fr-ilc-backend-modules on develop/v3.0 - force
+[2026-01-21 10:06:44] [INFO] Checkout fr-ilc-backend-modules: develop/v3.0 -> fix/v2.8.50
+[2026-01-21 10:06:53] [INFO] Checkout fr-wes-backend-modules: develop/v3.0 -> fix/v2.8.59
+[2026-01-21 10:07:13] [WARN] Conflict in fr-wes-onln-backend on develop/v3.0 - force
+[2026-01-21 10:07:16] [INFO] Checkout fr-wes-onln-backend: develop/v3.0 -> fix/v2.8.59
+[2026-01-21 10:07:23] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-21 10:08:21] [INFO] Build successful for fr-ilc-backend-modules (58s)
+[2026-01-21 10:08:21] [INFO] Build started for fr-wes-backend-modules
+[2026-01-21 10:09:34] [INFO] Build successful for fr-wes-backend-modules (73s)
+[2026-01-21 10:09:34] [INFO] Build started for fr-wes-onln-backend
+[2026-01-21 10:29:33] [INFO] FR Manager started
+[2026-01-21 10:54:43] [INFO] Build successful for fr-wes-onln-backend (2709s)
+[2026-01-21 11:05:57] [INFO] FR Manager started
+[2026-01-21 11:10:37] [INFO] FR Manager started

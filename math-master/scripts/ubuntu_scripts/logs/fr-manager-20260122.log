@@ -1,0 +1,30 @@
+[2026-01-22 13:40:13] [INFO] FR Manager started
+[2026-01-22 13:40:26] [INFO] Deleted branch: develop/v3.0 from fr-wes-flyway
+[2026-01-22 13:40:26] [INFO] Deleted branch: fix/v2.8.59 from fr-wes-flyway
+[2026-01-22 13:40:26] [INFO] Deleted branch: fix/v2.8.60 from fr-wes-flyway
+[2026-01-22 13:40:26] [INFO] Deleted branch: fix/v2.8.70 from fr-wes-flyway
+[2026-01-22 13:40:48] [INFO] FR Manager started
+[2026-01-22 13:41:43] [INFO] Checkout fr-wes-flyway: release/v3.1 -> fix/v2.8.59
+[2026-01-22 13:42:13] [WARN] Conflict in fr-ilc-backend-modules on support/v2 - force
+[2026-01-22 13:42:16] [INFO] Checkout fr-ilc-backend-modules: support/v2 -> fix/v2.8.50
+[2026-01-22 13:42:23] [INFO] Checkout fr-wes-backend-modules: fix/v2.8.59 -> fix/v2.8.59
+[2026-01-22 13:42:31] [INFO] Checkout fr-wes-onln-backend: feature/v2/NWMS-29659-28 -> fix/v2.8.59
+[2026-01-22 13:42:48] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-22 13:43:16] [INFO] Build successful for fr-ilc-backend-modules (28s)
+[2026-01-22 13:43:16] [INFO] Build started for fr-wes-backend-modules
+[2026-01-22 13:43:37] [INFO] Build successful for fr-wes-backend-modules (21s)
+[2026-01-22 13:43:37] [INFO] Build started for fr-wes-onln-backend
+[2026-01-22 13:47:48] [INFO] FR Manager started
+[2026-01-22 13:49:19] [INFO] Checkout fr-wes-flyway: fix/v2.8.59 -> fix/v2.8.59
+[2026-01-22 13:49:25] [WARN] Conflict in fr-ilc-backend-modules on support/v2 - force
+[2026-01-22 13:49:28] [INFO] Checkout fr-ilc-backend-modules: support/v2 -> fix/v2.8.50
+[2026-01-22 13:49:35] [INFO] Checkout fr-wes-backend-modules: fix/v2.8.59 -> fix/v2.8.59
+[2026-01-22 13:49:42] [WARN] Conflict in fr-wes-onln-backend on fix/v2.8.59 - force
+[2026-01-22 13:49:45] [INFO] Checkout fr-wes-onln-backend: fix/v2.8.59 -> fix/v2.8.59
+[2026-01-22 13:49:58] [INFO] Build started for fr-ilc-backend-modules
+[2026-01-22 13:50:21] [INFO] Build successful for fr-ilc-backend-modules (23s)
+[2026-01-22 13:50:21] [INFO] Build started for fr-wes-backend-modules
+[2026-01-22 13:50:40] [INFO] Build successful for fr-wes-backend-modules (19s)
+[2026-01-22 13:50:40] [INFO] Build started for fr-wes-onln-backend
+[2026-01-22 13:51:20] [INFO] Build successful for fr-wes-onln-backend (463s)
+[2026-01-22 13:51:20] [ERROR] Build failed for fr-wes-onln-backend: Script returned error code 1
