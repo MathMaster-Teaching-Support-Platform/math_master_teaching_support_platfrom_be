@@ -26,8 +26,8 @@ public interface AssessmentRepository
   Page<Assessment> findByTeacherIdAndNotDeleted(
       @Param("teacherId") UUID teacherId, Pageable pageable);
 
-  @Query("SELECT a FROM Assessment a WHERE a.lessonId = :lessonId AND a.deletedAt IS NULL")
-  Page<Assessment> findByLessonIdAndNotDeleted(@Param("lessonId") UUID lessonId, Pageable pageable);
+  @Query("SELECT a FROM Assessment a WHERE a.deletedAt IS NULL")
+  Page<Assessment> findByNotDeleted(Pageable pageable);
 
   @Query("SELECT COUNT(s) FROM Submission s WHERE s.assessmentId = :assessmentId")
   Long countSubmissionsByAssessmentId(@Param("assessmentId") UUID assessmentId);
@@ -63,12 +63,10 @@ public interface AssessmentRepository
       "SELECT a FROM Assessment a "
           + "WHERE a.deletedAt IS NULL "
           + "AND a.teacherId = :teacherId "
-          + "AND (:status IS NULL OR a.status = :status) "
-          + "AND (:lessonId IS NULL OR a.lessonId = :lessonId)")
+          + "AND (:status IS NULL OR a.status = :status) ")
   Page<Assessment> findWithFilters(
       @Param("teacherId") UUID teacherId,
       @Param("status") AssessmentStatus status,
-      @Param("lessonId") UUID lessonId,
       Pageable pageable);
 
   @Query(

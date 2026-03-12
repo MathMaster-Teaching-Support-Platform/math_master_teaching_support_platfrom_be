@@ -40,9 +40,6 @@ public class Assessment {
   @Column(name = "teacher_id", nullable = false)
   private UUID teacherId;
 
-  @Column(name = "lesson_id")
-  private UUID lessonId;
-
   @Size(max = 255)
   @Nationalized
   @Column(name = "title", length = 255, nullable = false)
@@ -111,10 +108,6 @@ public class Assessment {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
   private User teacher;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
-  private Lesson lesson;
 
   @OneToMany(mappedBy = "assessment", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<AssessmentQuestion> assessmentQuestions;

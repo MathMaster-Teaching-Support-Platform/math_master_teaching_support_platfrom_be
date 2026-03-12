@@ -51,7 +51,6 @@ public class AssessmentServiceImpl implements AssessmentService {
   AssessmentRepository assessmentRepository;
   AssessmentQuestionRepository assessmentQuestionRepository;
   UserRepository userRepository;
-  LessonRepository lessonRepository;
   ExamMatrixRepository examMatrixRepository;
   ExamMatrixService examMatrixService;
   QuestionRepository questionRepository;
@@ -68,7 +67,6 @@ public class AssessmentServiceImpl implements AssessmentService {
     Assessment assessment =
         Assessment.builder()
             .teacherId(currentUserId)
-            .lessonId(request.getLessonId())
             .title(request.getTitle())
             .description(request.getDescription())
             .assessmentType(request.getAssessmentType())
@@ -123,7 +121,6 @@ public class AssessmentServiceImpl implements AssessmentService {
     assessment.setTitle(request.getTitle());
     assessment.setDescription(request.getDescription());
     assessment.setAssessmentType(request.getAssessmentType());
-    assessment.setLessonId(request.getLessonId());
     assessment.setTimeLimitMinutes(request.getTimeLimitMinutes());
     assessment.setPassingScore(request.getPassingScore());
     assessment.setStartDate(request.getStartDate());
@@ -297,7 +294,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
       // TODO: Implement proper question count validation for ExamMatrixTemplateMapping architecture
       // For now, matrix locking logic is deferred
-      // examMatrixService.lockMatrix(matrix.getId());
+       examMatrixService.lockMatrix(matrix.getId());
     }
 
     assessment.setStatus(AssessmentStatus.PUBLISHED);
@@ -413,7 +410,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     UUID currentUserId = getCurrentUserId();
     Page<Assessment> assessmentsPage =
-        assessmentRepository.findWithFilters(currentUserId, status, lessonId, pageable);
+        assessmentRepository.findWithFilters(currentUserId, status, pageable);
 
     // FIX: eliminate N+1 — fetch bulk summary for all IDs on this page in one query
     List<UUID> ids =
@@ -502,7 +499,6 @@ public class AssessmentServiceImpl implements AssessmentService {
     Assessment clone =
         Assessment.builder()
             .teacherId(currentUserId)
-            .lessonId(source.getLessonId())
             .title(newTitle)
             .description(source.getDescription())
             .assessmentType(source.getAssessmentType())
@@ -710,13 +706,8 @@ public class AssessmentServiceImpl implements AssessmentService {
     String teacherName =
         userRepository.findById(assessment.getTeacherId()).map(User::getFullName).orElse("Unknown");
 
-    String lessonTitle = null;
-    if (assessment.getLessonId() != null) {
-      lessonTitle =
-          lessonRepository.findById(assessment.getLessonId()).map(Lesson::getTitle).orElse(null);
-    }
 
-    return buildResponse(assessment, teacherName, lessonTitle, totalQuestions, totalPoints, submissionCount);
+    return buildResponse(assessment, teacherName, totalQuestions, totalPoints, submissionCount);
   }
 
   /** Bulk-list response — uses pre-fetched summary row to avoid N+1. */
@@ -726,19 +717,13 @@ public class AssessmentServiceImpl implements AssessmentService {
     BigDecimal totalPoints = BigDecimal.valueOf(summary[1]).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     long subCount = summary[2];
 
-    String lessonTitle = null;
-    if (assessment.getLessonId() != null) {
-      lessonTitle =
-          lessonRepository.findById(assessment.getLessonId()).map(Lesson::getTitle).orElse(null);
-    }
 
-    return buildResponse(assessment, teacherName, lessonTitle, qCount, totalPoints, subCount);
+    return buildResponse(assessment, teacherName, qCount, totalPoints, subCount);
   }
 
   private AssessmentResponse buildResponse(
       Assessment assessment,
       String teacherName,
-      String lessonTitle,
       long totalQuestions,
       BigDecimal totalPoints,
       long submissionCount) {
@@ -746,8 +731,6 @@ public class AssessmentServiceImpl implements AssessmentService {
         .id(assessment.getId())
         .teacherId(assessment.getTeacherId())
         .teacherName(teacherName)
-        .lessonId(assessment.getLessonId())
-        .lessonTitle(lessonTitle)
         .title(assessment.getTitle())
         .description(assessment.getDescription())
         .assessmentType(assessment.getAssessmentType())

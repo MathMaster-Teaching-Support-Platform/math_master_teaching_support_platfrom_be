@@ -68,7 +68,7 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Transactional
   public RoadmapDetailResponse generateRoadmapFromWish(UUID wishId) {
     log.info("Generating AI-powered roadmap from wish: {}", wishId);
-    
+
     // Extract studentId from JWT token
     String userId = SecurityContextHolder.getContext().getAuthentication().getName();
     UUID studentId = UUID.fromString(userId);
@@ -460,15 +460,15 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   private RoadmapTopicResponse mapToTopicResponse(RoadmapTopic topic) {
     List<AssessmentResponse> assessmentResponses = new ArrayList<>();
     List<MindmapResponse> mindmapResponses = new ArrayList<>();
-    
+
     // Load assessments and mindmaps from the linked lesson
     if (topic.getLessonId() != null) {
       // Fetch assessments for the lesson
-      Page<Assessment> assessmentsPage = assessmentRepository.findByLessonIdAndNotDeleted(topic.getLessonId(), Pageable.unpaged());
+      Page<Assessment> assessmentsPage = assessmentRepository.findByNotDeleted(Pageable.unpaged());
       assessmentResponses = assessmentsPage.getContent().stream()
           .map(this::mapToAssessmentResponse)
           .collect(Collectors.toList());
-      
+
       // Fetch mindmaps for the lesson
       Page<Mindmap> mindmapsPage = mindmapRepository.findByLessonIdAndNotDeleted(topic.getLessonId(), Pageable.unpaged());
       mindmapResponses = mindmapsPage.getContent().stream()
@@ -497,7 +497,6 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     return AssessmentResponse.builder()
         .id(assessment.getId())
         .teacherId(assessment.getTeacherId())
-        .lessonId(assessment.getLessonId())
         .title(assessment.getTitle())
         .description(assessment.getDescription())
         .assessmentType(assessment.getAssessmentType())
