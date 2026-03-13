@@ -39,40 +39,40 @@ function Invoke-ApplyFormat {
     if (-Not (Test-Path (Join-Path $projectRoot "mvnw.cmd"))) {
         Write-Host "ERROR: mvnw.cmd not found!" -ForegroundColor Red
         Write-Host "Project root: $projectRoot" -ForegroundColor Yellow
-        return $false
+        return
     }
     
     Push-Location $projectRoot
     
     Write-Host "Checking formatting issues..." -ForegroundColor Yellow
-    &.\mvnw.cmd spotless:check
+    &.\mvnw.cmd -DskipTests spotless:check 2>&1 | Where-Object { $_ -notmatch "Downloading from central" -and $_ -notmatch "Downloaded from central" }
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host ""
         Write-Host "OK: All files are properly formatted!" -ForegroundColor Green
         Write-Host ""
         Pop-Location
-        return $true
+        return
     }
     
     Write-Host ""
     Write-Host "Applying formatting fixes..." -ForegroundColor Yellow
     Write-Host ""
     
-    &.\mvnw.cmd spotless:apply
+    &.\mvnw.cmd -DskipTests spotless:apply 2>&1 | Where-Object { $_ -notmatch "Downloading from central" -and $_ -notmatch "Downloaded from central" }
     
     if ($LASTEXITCODE -ne 0) {
         Write-Host ""
         Write-Host "ERROR: Formatting failed!" -ForegroundColor Red
         Pop-Location
-        return $false
+        return
     }
     
     Write-Host ""
     Write-Host "Formatting Complete!" -ForegroundColor Green
     Write-Host ""
     Pop-Location
-    return $true
+    return
 }
 
 function Invoke-DeployLocal {
@@ -95,14 +95,14 @@ function Invoke-DeployLocal {
     catch {
         Write-Host "ERROR: Docker not running!" -ForegroundColor Red
         Pop-Location
-        return $false
+        return
     }
     
     Write-Host ""
     if (-Not (Test-Path ".env")) {
         Write-Host "ERROR: .env file not found!" -ForegroundColor Red
         Pop-Location
-        return $false
+        return
     }
     Write-Host "OK: .env file found" -ForegroundColor Green
     
@@ -117,7 +117,7 @@ function Invoke-DeployLocal {
         Write-Host ""
         Write-Host "ERROR: Docker build failed!" -ForegroundColor Red
         Pop-Location
-        return $false
+        return
     }
     
     docker compose up -d
@@ -126,7 +126,7 @@ function Invoke-DeployLocal {
         Write-Host ""
         Write-Host "ERROR: Failed to start services!" -ForegroundColor Red
         Pop-Location
-        return $false
+        return
     }
     
     Write-Host ""
@@ -135,7 +135,7 @@ function Invoke-DeployLocal {
     docker compose ps
     Write-Host ""
     Pop-Location
-    return $true
+    return
 }
 
 function Invoke-DeleteLogs {
@@ -165,7 +165,7 @@ function Invoke-DeleteLogs {
     }
     
     Write-Host ""
-    return $true
+    return
 }
 
 function Invoke-Status {
@@ -179,11 +179,11 @@ function Invoke-Status {
     }
     Push-Location $projectRoot
     
-    docker compose ps 2>&1
+    docker compose ps 2>&1 | Where-Object { $_ -notmatch "Downloading from central" -and $_ -notmatch "Downloaded from central" }
     
     Pop-Location
     Write-Host ""
-    return $true
+    return
 }
 
 function Show-MainMenu {
@@ -195,7 +195,8 @@ function Show-MainMenu {
     Write-Host "3 - Delete Logs" -ForegroundColor White
     Write-Host "4 - Project Status" -ForegroundColor White
     Write-Host "5 - Help" -ForegroundColor White
-    Write-Host "6 - Exit" -ForegroundColor White
+    Write-Host "6 - Clear Screen" -ForegroundColor White
+    Write-Host "7 - Exit" -ForegroundColor White
     Write-Host ""
 }
 
@@ -207,19 +208,19 @@ if ($Help -or $Task -eq 'Help') {
 if ($Task) {
     switch ($Task) {
         'ApplyFormat' {
-            $Success = Invoke-ApplyFormat
-            exit $(if ($Success) { 0 } else { 1 })
+            Invoke-ApplyFormat | Out-Null
+            exit 0
         }
         'DeployLocal' {
-            $Success = Invoke-DeployLocal
-            exit $(if ($Success) { 0 } else { 1 })
+            Invoke-DeployLocal | Out-Null
+            exit 0
         }
         'DeleteLogs' {
-            $Success = Invoke-DeleteLogs
-            exit $(if ($Success) { 0 } else { 1 })
+            Invoke-DeleteLogs | Out-Null
+            exit 0
         }
         'Status' {
-            Invoke-Status
+            Invoke-Status | Out-Null
             exit 0
         }
     }
@@ -230,17 +231,28 @@ while ($true) {
     $choice = Read-Host "Enter number"
     
     switch ($choice) {
-        '1' { Invoke-ApplyFormat; Read-Host "Press Enter" }
-        '2' { Invoke-DeployLocal; Read-Host "Press Enter" }
-        '3' { Invoke-DeleteLogs; Read-Host "Press Enter" }
-        '4' { Invoke-Status; Read-Host "Press Enter" }
-        '5' { Show-Help; Read-Host "Press Enter" }
+        '1' { 
+            Invoke-ApplyFormat
+        }
+        '2' { 
+            Invoke-DeployLocal
+        }
+        '3' { 
+            Invoke-DeleteLogs
+        }
+        '4' { 
+            Invoke-Status
+        }
+        '5' { 
+            Show-Help
+        }
         '6' {
+            Clear-Host
+        }
+        '7' {
             Write-Host ""
             Write-Host "Goodbye!" -ForegroundColor Cyan
             exit 0
         }
     }
-    
-    Clear-Host
 }

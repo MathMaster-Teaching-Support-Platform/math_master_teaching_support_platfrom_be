@@ -26,20 +26,28 @@ cd scripts\ps_scripts
 # Reload PowerShell profile hoặc mở terminal mới
 . $PROFILE
 
-# Chạy từ bất kỳ đâu
+# Chạy từ bất kỳ đâu (output sẽ tự động cleaned)
 khoipd_terminal_ps
 ```
 
 ### 3️⃣ Chọn Task
 
 ```
-1. Format Code
-2. Local Deployment
-3. Delete Logs
-4. Project Status
-5. Help
-6. Exit
+1. Format Code           - Apply Google Java Format
+2. Local Deployment      - Build & deploy with Docker
+3. Delete Logs           - Remove log files
+4. Project Status        - Check Docker containers
+5. Help                  - Show available tasks
+6. Clear Screen          - Clear terminal output
+7. Exit                  - Close manager
 ```
+
+**Tính năng**:
+
+- ✅ Tự động quay lại menu sau mỗi task
+- ✅ Không hiển thị True/False (giao diện sạch)
+- ✅ Tự động caches Maven metadata (lần thứ 2 nhanh hơn)
+- ✅ Chạy từ bất kỳ thư mục nào (auto-navigate to project root)
 
 ---
 
