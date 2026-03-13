@@ -309,6 +309,23 @@ public class AssessmentController {
         .build();
   }
 
+  @PostMapping("/generate-from-matrix")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Generate assessment from exam matrix (simplified)",
+      description =
+          "One-step assessment generation: auto-creates assessment and generates questions from exam matrix. "
+              + "Only requires examMatrixId. Automatically names assessment from matrix name. "
+              + "Perfect for quick assessment creation with minimal input.")
+  public ApiResponse<AssessmentResponse> generateAssessmentFromMatrix(
+      @Valid @RequestBody GenerateAssessmentQuestionsRequest request) {
+    log.info("REST request to auto-generate assessment from matrix: {}", request.getExamMatrixId());
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Assessment generated successfully from exam matrix with all questions.")
+        .result(assessmentService.generateAssessmentFromMatrix(request))
+        .build();
+  }
+
   @PostMapping("/{assessmentId}/generate")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(

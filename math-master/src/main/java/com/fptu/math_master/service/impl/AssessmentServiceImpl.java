@@ -4,16 +4,20 @@ import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.CreateQuestionRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
+import com.fptu.math_master.dto.response.GeneratedQuestionSample;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.AssessmentQuestion;
 import com.fptu.math_master.entity.ExamMatrix;
 import com.fptu.math_master.entity.Lesson;
+import com.fptu.math_master.entity.Question;
+import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
@@ -21,8 +25,10 @@ import com.fptu.math_master.enums.MatrixStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
+import com.fptu.math_master.service.AIEnhancementService;
 import com.fptu.math_master.service.AssessmentService;
 import com.fptu.math_master.service.ExamMatrixService;
+import com.fptu.math_master.service.QuestionService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -54,7 +60,10 @@ public class AssessmentServiceImpl implements AssessmentService {
   ExamMatrixRepository examMatrixRepository;
   ExamMatrixTemplateMappingRepository examMatrixTemplateMappingRepository;
   LessonRepository lessonRepository;
+  QuestionTemplateRepository questionTemplateRepository;
   ExamMatrixService examMatrixService;
+  AIEnhancementService aiEnhancementService;
+  QuestionService questionService;
   QuestionRepository questionRepository;
 
   @Override
@@ -663,6 +672,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     int totalQuestionsGenerated = 0;
     int totalPoints = 0;
+    int orderIndex = 0;
 
     // For each template mapping, generate required number of questions
     for (com.fptu.math_master.entity.ExamMatrixTemplateMapping mapping : mappings) {
@@ -681,6 +691,11 @@ public class AssessmentServiceImpl implements AssessmentService {
                   ? request.getReuseApprovedQuestions()
                   : false);
 
+      log.info("Template {} generated {} questions out of {} requested",
+          mapping.getTemplateId(),
+          generatedQuestions.size(),
+          mapping.getQuestionCount());
+
       // Create AssessmentQuestion records
       for (com.fptu.math_master.entity.Question question : generatedQuestions) {
         AssessmentQuestion assessmentQuestion =
@@ -689,6 +704,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                 .questionId(question.getId())
                 .matrixTemplateMappingId(mapping.getId())
                 .pointsOverride(mapping.getPointsPerQuestion())
+                .orderIndex(orderIndex++)
                 .build();
         assessmentQuestionRepository.save(assessmentQuestion);
         totalQuestionsGenerated++;
@@ -712,19 +728,19 @@ public class AssessmentServiceImpl implements AssessmentService {
         .build();
   }
 
-  private List<com.fptu.math_master.entity.Question> generateQuestionsFromTemplate(
+  private List<Question> generateQuestionsFromTemplate(
       UUID templateId,
       Integer count,
-      @SuppressWarnings("unused") com.fptu.math_master.enums.CognitiveLevel cognitiveLevel,
+      com.fptu.math_master.enums.CognitiveLevel cognitiveLevel,
       boolean reuseApprovedQuestions) {
     log.info("Generating {} questions from template {}", count, templateId);
 
-    ArrayList<com.fptu.math_master.entity.Question> result = new ArrayList<>();
+    ArrayList<Question> result = new ArrayList<>();
 
     // First, try to reuse existing questions from template if requested
     if (reuseApprovedQuestions) {
       // Try to find existing questions from template
-      List<com.fptu.math_master.entity.Question> existingList =
+      List<Question> existingList =
           questionRepository
               .findByTemplateIdAndNotDeleted(templateId)
               .stream()
@@ -734,9 +750,9 @@ public class AssessmentServiceImpl implements AssessmentService {
 
       if (result.size() >= count) {
         if (!result.isEmpty()) {
-        log.info("Reused {} approved questions from template {}", result.size(), templateId);
-      }
-        return result;
+          log.info("Reused {} approved questions from template {}", result.size(), templateId);
+        }
+        return result.stream().limit(count).collect(Collectors.toList());
       }
 
       log.info(
@@ -745,20 +761,151 @@ public class AssessmentServiceImpl implements AssessmentService {
           count - result.size());
     }
 
+    // Load the template
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findById(templateId)
+            .orElseThrow(() -> {
+              log.error("Template not found: {}", templateId);
+              return new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND);
+            });
+    
+    // Log template details for debugging
+    log.info("Processing template '{}' (ID: {})", template.getName(), templateId);
+    log.info("  - Formula: '{}'", template.getAnswerFormula());
+    log.info("  - Type: {}", template.getTemplateType());
+    log.info("  - Parameters: {}", template.getParameters() != null ? template.getParameters().keySet() : "none");
+
     // Generate remaining questions using AI
     int remainingCount = count - result.size();
+    List<UUID> newQuestionIds = new ArrayList<>();
+    
     for (int i = 0; i < remainingCount; i++) {
       try {
-        // Call AI to generate a question from the template
-        // This is a simplified implementation - in production, integrate with QuestionService
         log.debug("Generating question {} of {} from template {}", i + 1, remainingCount, templateId);
-        // TODO: Integrate with AI question generation service
+        
+        // Call AI to generate a question sample
+        GeneratedQuestionSample sample = aiEnhancementService.generateQuestion(template, i);
+        
+        // Validate sample has required fields
+        if (sample == null) {
+          log.error("AI generated null sample for question {} of {}", i + 1, remainingCount);
+          continue;
+        }
+        
+        String questionText = sample.getQuestionText();
+        String correctAnswerKey = sample.getCorrectAnswer(); // This is the KEY (A/B/C/D)
+        String explanation = sample.getExplanation();
+        
+        // Validate all text fields are actual strings, not null or objects
+        if (questionText == null || questionText.trim().isEmpty()) {
+          log.warn("Question {} has empty questionText, skipping", i + 1);
+          continue;
+        }
+        if (correctAnswerKey == null || correctAnswerKey.trim().isEmpty()) {
+          log.warn("Question {} has empty correctAnswer key, skipping", i + 1);
+          continue;
+        }
+        if (explanation == null || explanation.trim().isEmpty()) {
+          explanation = "Provided by AI";
+        }
+        
+        // Check if options contain set notation (indicates template formula issue)
+        if (sample.getOptions() != null) {
+          boolean hasSetNotation = sample.getOptions().values().stream()
+              .anyMatch(opt -> opt != null && opt.contains("{") && opt.contains("}"));
+          if (hasSetNotation) {
+            log.warn("Question {} has set notation in options (template issue), skipping: {}", 
+                i + 1, sample.getOptions());
+            continue;
+          }
+        }
+        
+        // Get the actual answer VALUE from the options using the KEY
+        String correctAnswer = null;
+        if (sample.getOptions() != null && sample.getOptions().containsKey(correctAnswerKey)) {
+          Object answerObj = sample.getOptions().get(correctAnswerKey);
+          if (answerObj != null) {
+            // Ensure it's a proper string, not an object reference
+            correctAnswer = answerObj.toString().trim();
+            log.debug("Extracted answer value '{}' for key '{}' from options", correctAnswer, correctAnswerKey);
+          }
+        }
+        
+        if (correctAnswer == null || correctAnswer.isEmpty()) {
+          log.warn("Question {} has no valid correctAnswer for key '{}', skipping", i + 1, correctAnswerKey);
+          continue;
+        }
+        
+        // Check if answer is the error placeholder
+        if ("?".equals(correctAnswer)) {
+          log.warn("Question {} has placeholder answer '?', template formula likely failed, skipping", i + 1);
+          continue;
+        }
+        
+        // Convert GeneratedQuestionSample to CreateQuestionRequest
+        CreateQuestionRequest createRequest = CreateQuestionRequest.builder()
+            .questionText(questionText.trim())
+            .questionType(template.getTemplateType())
+            .options(convertOptionsToObjectMap(sample.getOptions()))
+            .correctAnswer(correctAnswer.trim())
+            .explanation(explanation.trim())
+            .difficulty(sample.getCalculatedDifficulty() != null ? sample.getCalculatedDifficulty() : com.fptu.math_master.enums.QuestionDifficulty.MEDIUM)
+            .cognitiveLevel(cognitiveLevel)
+            .templateId(templateId)
+            .build();
+        
+        // Validate request before creating question
+        if (createRequest.getQuestionText() == null || createRequest.getQuestionText().isEmpty()) {
+          log.error("CreateQuestionRequest has null/empty questionText, skipping");
+          continue;
+        }
+        
+        // Log detailed info about what we're saving
+        log.info("Creating question {} of {}:", i + 1, remainingCount);
+        log.info("  - questionText: {}", createRequest.getQuestionText().substring(0, Math.min(50, createRequest.getQuestionText().length())));
+        log.info("  - correctAnswer: {}", createRequest.getCorrectAnswer());
+        log.info("  - explanation: {}", createRequest.getExplanation().substring(0, Math.min(50, createRequest.getExplanation().length())));
+        log.info("  - options: {}", createRequest.getOptions());
+        
+        // Create the question using QuestionService
+        var questionResponse = questionService.createQuestion(createRequest);
+        
+        // Store the ID for later batch retrieval
+        if (questionResponse != null && questionResponse.getId() != null) {
+          newQuestionIds.add(questionResponse.getId());
+          log.info("Question {} created with ID: {}", i + 1, questionResponse.getId());
+        }
+        
       } catch (Exception e) {
-        log.error("Failed to generate question from template {}: {}", templateId, e.getMessage());
+        log.error("Failed to generate question {} from template {}: {}", i + 1, templateId, e.getMessage());
+      }
+    }
+    
+    // Batch retrieve all newly created questions using their IDs
+    if (!newQuestionIds.isEmpty()) {
+      log.info("Retrieving {} newly created questions from database", newQuestionIds.size());
+      try {
+        List<Question> newQuestions = questionRepository.findAllById(newQuestionIds);
+        log.info("Retrieved {} questions (expected {})", newQuestions.size(), newQuestionIds.size());
+        result.addAll(newQuestions);
+      } catch (Exception e) {
+        log.error("Failed to retrieve created questions: {}", e.getMessage(), e);
       }
     }
 
+    log.info("Generated {} new questions from template {}, total now: {}", 
+        remainingCount - (count - result.size()), templateId, result.size());
     return result;
+  }
+
+  private Map<String, Object> convertOptionsToObjectMap(Map<String, String> stringOptions) {
+    if (stringOptions == null) {
+      return null;
+    }
+    Map<String, Object> objectMap = new LinkedHashMap<>();
+    stringOptions.forEach((key, value) -> objectMap.put(key, value));
+    return objectMap;
   }
 
   private Assessment loadAssessmentOrThrow(UUID id) {
@@ -948,5 +1095,61 @@ public class AssessmentServiceImpl implements AssessmentService {
                     AssessmentLesson.builder().assessmentId(assessmentId).lessonId(lessonId).build())
             .toList();
     assessmentLessonRepository.saveAll(links);
+  }
+
+  @Override
+  @Transactional
+  public AssessmentResponse generateAssessmentFromMatrix(
+      GenerateAssessmentQuestionsRequest request) {
+    log.info("Auto-generating assessment from matrix: {}", request.getExamMatrixId());
+
+    UUID currentUserId = getCurrentUserId();
+    validateTeacherRole(currentUserId);
+
+    // Load and validate matrix
+    ExamMatrix matrix =
+        examMatrixRepository
+            .findByIdAndNotDeleted(request.getExamMatrixId())
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+
+    if (matrix.getStatus() != MatrixStatus.APPROVED) {
+      throw new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND);
+    }
+
+    // Auto-create assessment with matrix name
+    Assessment assessment =
+        Assessment.builder()
+            .teacherId(currentUserId)
+            .title(matrix.getName() != null ? matrix.getName() : "Auto-Generated Assessment")
+            .description("Auto-generated from exam matrix: " + matrix.getName())
+            .assessmentType(com.fptu.math_master.enums.AssessmentType.QUIZ)
+            .status(AssessmentStatus.DRAFT)
+            .randomizeQuestions(false)
+            .showCorrectAnswers(false)
+            .assessmentMode(com.fptu.math_master.enums.AssessmentMode.MATRIX_BASED)
+            .allowMultipleAttempts(false)
+            .showScoreImmediately(true)
+            .examMatrixId(matrix.getId())
+            .build();
+
+    Assessment savedAssessment = assessmentRepository.save(assessment);
+    log.info("Created assessment {} from matrix {}", savedAssessment.getId(), matrix.getId());
+
+    // Generate questions from matrix
+    try {
+      generateQuestionsFromMatrix(
+          savedAssessment.getId(),
+          request);
+    } catch (Exception e) {
+      log.error(
+          "Failed to generate questions for assessment {}: {}",
+          savedAssessment.getId(),
+          e.getMessage(),
+          e);
+      // Assessment is created, return it even if generation partially failed
+    }
+
+    // Return the created assessment with its questions
+    return mapToResponse(savedAssessment);
   }
 }

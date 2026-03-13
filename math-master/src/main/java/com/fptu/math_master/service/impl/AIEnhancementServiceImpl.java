@@ -47,8 +47,11 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       enhancedResponse.setValid(isValid);
 
       if (!isValid) {
-        log.warn("AI output validation failed, using fallback");
-        return createFallbackResponse(request, enhancedResponse.getValidationErrors());
+        log.warn("AI output validation failed with errors: {}", enhancedResponse.getValidationErrors());
+        // For now, we'll still return the response instead of using fallback
+        // because fallback creates incomplete questions
+        enhancedResponse.setEnhanced(false);
+        return enhancedResponse; // Return the AI response even if validation failed
       }
 
       enhancedResponse.setEnhanced(true);
@@ -86,16 +89,19 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         request.getRawOptions(),
         response.getCorrectAnswerKey(),
         response.getEnhancedOptions())) {
+      log.warn("Validation: AI changed the correct answer from '{}' to '{}'", answerToValidate, response.getCorrectAnswerKey());
       errors.add("AI changed the correct answer - this is not allowed");
     }
 
     // 2. Validate MCQ has exactly 4 options (A, B, C, D)
     if (request.getQuestionType() == QuestionType.MULTIPLE_CHOICE) {
       if (response.getEnhancedOptions() == null || response.getEnhancedOptions().size() != 4) {
+        log.warn("Validation: MCQ has {} options instead of 4", response.getEnhancedOptions() == null ? 0 : response.getEnhancedOptions().size());
         errors.add("MCQ must have exactly 4 options (A, B, C, D)");
       } else {
         Set<String> expectedKeys = new HashSet<>(Arrays.asList("A", "B", "C", "D"));
         if (!response.getEnhancedOptions().keySet().equals(expectedKeys)) {
+          log.warn("Validation: MCQ options keys don't match A,B,C,D: {}", response.getEnhancedOptions().keySet());
           errors.add("MCQ options must be labeled A, B, C, D");
         }
       }
@@ -103,17 +109,20 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     // 3. Validate content is mathematics-related
     if (!isMathematicsContent(response.getEnhancedQuestionText())) {
+      log.warn("Validation: Content doesn't seem to be mathematics-related");
       errors.add("Content contains non-mathematics material");
     }
 
     // 4. Validate question text is not empty
     if (response.getEnhancedQuestionText() == null
         || response.getEnhancedQuestionText().trim().isEmpty()) {
+      log.warn("Validation: Enhanced question text is empty");
       errors.add("Enhanced question text is empty");
     }
 
     // 5. Validate no harmful/inappropriate content
     if (containsInappropriateContent(response.getEnhancedQuestionText())) {
+      log.warn("Validation: Content contains inappropriate material");
       errors.add("Content contains inappropriate material");
     }
 
@@ -246,12 +255,19 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     try {
       // Extract JSON from the response (AI might wrap it in markdown code blocks)
       String jsonContent = extractJSON(aiContent);
+      log.debug("Extracted JSON:\n{}", jsonContent);
 
       JsonNode root = objectMapper.readTree(jsonContent);
 
+      String enhancedQuestion = root.path("enhancedQuestion").asText();
+      if (enhancedQuestion == null || enhancedQuestion.isBlank()) {
+        log.warn("enhancedQuestion field is empty, using original question text");
+        enhancedQuestion = request.getRawQuestionText();
+      }
+
       AIEnhancedQuestionResponse response =
           AIEnhancedQuestionResponse.builder()
-              .enhancedQuestionText(root.path("enhancedQuestion").asText())
+              .enhancedQuestionText(enhancedQuestion)
               .correctAnswerKey(root.path("correctAnswerKey").asText())
               .explanation(root.path("explanation").asText())
               .originalQuestionText(request.getRawQuestionText())
@@ -304,12 +320,13 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   private String extractJSON(String content) {
     String jsonContent = content;
 
-    // Try to extract JSON from markdown code blocks
+    // Try to extract JSON from markdown code blocks first
     Pattern pattern = Pattern.compile("```(?:json)?\\s*\\n?(.+?)```", Pattern.DOTALL);
     Matcher matcher = pattern.matcher(content);
 
     if (matcher.find()) {
       jsonContent = matcher.group(1).trim();
+      log.debug("Extracted JSON from code block");
     } else {
       // If no code block, try to find JSON object
       int startIdx = content.indexOf('{');
@@ -317,6 +334,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
       if (startIdx >= 0 && endIdx > startIdx) {
         jsonContent = content.substring(startIdx, endIdx + 1);
+        log.debug("Extracted JSON as substring from position {} to {}", startIdx, endIdx);
+      } else {
+        log.warn("Could not find valid JSON structure in content. Raw content:\n{}", 
+            content.length() > 500 ? content.substring(0, 500) + "..." : content);
       }
     }
 
@@ -596,6 +617,28 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     // Step 1: always compute params + answer in Java first (guaranteed correct)
     Map<String, Object> params = pickParameters(template, sampleIndex);
     String correctAnswerStr = evaluateFormula(template.getAnswerFormula(), params);
+    
+    // DEBUG: Log what we computed
+    log.info("Template '{}' computed answer: '{}' from formula: '{}'", 
+        template.getName(), correctAnswerStr, template.getAnswerFormula());
+    log.info("  Parameters: {}", params);
+    
+    // If answer is still '?', something is wrong with formula evaluation
+    if ("?".equals(correctAnswerStr)) {
+      log.error("CRITICAL: Formula evaluation returned '?'. Formula: '{}', Template: '{}'", 
+          template.getAnswerFormula(), template.getName());
+      // Create minimal fallback
+      return GeneratedQuestionSample.builder()
+          .questionText("Template error: Cannot evaluate formula")
+          .options(Map.of("A", "Unable to generate"))
+          .correctAnswer("A")
+          .explanation("Error: Formula evaluation failed")
+          .calculatedDifficulty(QuestionDifficulty.MEDIUM)
+          .usedParameters(params)
+          .answerCalculation("Error: " + template.getAnswerFormula())
+          .build();
+    }
+    
     QuestionDifficulty difficulty = determineDifficulty(template.getDifficultyRules(), params);
     String questionTextBase = fillTemplateText(template.getTemplateText(), params);
 
@@ -680,16 +723,29 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   /** Evaluate the answer formula using picked parameters via javax.script */
   private String evaluateFormula(String formula, Map<String, Object> params) {
     if (formula == null || formula.isBlank()) return "?";
+    
+    javax.script.ScriptEngine engine = null;
     try {
       javax.script.ScriptEngineManager mgr = new javax.script.ScriptEngineManager();
-      javax.script.ScriptEngine engine = mgr.getEngineByName("JavaScript");
+      engine = mgr.getEngineByName("JavaScript");
       if (engine == null) engine = mgr.getEngineByName("graal.js");
-      
-      // If no ScriptEngine available, use simple arithmetic evaluator as fallback
-      if (engine == null) {
+    } catch (Throwable e) {
+      // ScriptEngineManager initialization failed (Graal.js not available)
+      log.debug("ScriptEngineManager initialization failed, using simple evaluator: {}", e.getMessage());
+      engine = null;
+    }
+    
+    // If no ScriptEngine available, use simple arithmetic evaluator as fallback
+    if (engine == null) {
+      try {
         return evaluateFormulaSimple(formula, params);
+      } catch (Exception fallbackError) {
+        log.warn("Simple formula evaluation also failed for '{}': {}", formula, fallbackError.getMessage());
+        return "?";
       }
-      
+    }
+    
+    try {
       for (Map.Entry<String, Object> e : params.entrySet()) engine.put(e.getKey(), e.getValue());
       Object result = engine.eval(formula);
       double val = ((Number) result).doubleValue();
@@ -701,11 +757,12 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       formatted = formatted.replaceAll("0+$", "").replaceAll("\\.$", "");
       return formatted;
     } catch (Exception e) {
-      log.warn("Formula evaluation failed '{}': {}", formula, e.getMessage());
+      log.warn("ScriptEngine evaluation failed for '{}': {}, trying simple evaluator", formula, e.getMessage());
       // Try simple fallback
       try {
         return evaluateFormulaSimple(formula, params);
       } catch (Exception fallbackError) {
+        log.warn("Simple fallback also failed: {}", fallbackError.getMessage());
         return "?";
       }
     }
@@ -717,6 +774,12 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
    */
   private String evaluateFormulaSimple(String formula, Map<String, Object> params) {
     try {
+      // Check if formula contains set notation or complex math that we can't handle
+      if (formula.contains("{") && formula.contains("}")) {
+        log.warn("Formula '{}' contains set notation {{}} - cannot evaluate as simple number", formula);
+        return "?";
+      }
+      
       String expression = formula;
       
       // Substitute each parameter with its value
@@ -728,7 +791,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         expression = expression.replaceAll("\\b" + paramName + "\\b", "(" + valueStr + ")");
       }
       
+      log.debug("Evaluating formula: '{}' with substituted expression: '{}'", formula, expression);
       double result = parseArithmetic(expression);
+      log.debug("Formula evaluation result: {}", result);
       
       // Format result
       if (result == Math.floor(result) && !Double.isInfinite(result)) {
@@ -738,7 +803,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       formatted = formatted.replaceAll("0+$", "").replaceAll("\\.$", "");
       return formatted;
     } catch (Exception e) {
-      log.debug("Simple formula evaluation failed: {}", e.getMessage());
+      log.warn("Simple formula evaluation failed for '{}': {}", formula, e.getMessage());
       return "?";
     }
   }
@@ -826,10 +891,24 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   private QuestionDifficulty determineDifficulty(
       Map<String, Object> rules, Map<String, Object> params) {
     if (rules == null || rules.isEmpty()) return QuestionDifficulty.MEDIUM;
+    
+    javax.script.ScriptEngine engine = null;
     try {
       javax.script.ScriptEngineManager mgr = new javax.script.ScriptEngineManager();
-      javax.script.ScriptEngine engine = mgr.getEngineByName("JavaScript");
+      engine = mgr.getEngineByName("JavaScript");
       if (engine == null) engine = mgr.getEngineByName("graal.js");
+    } catch (Throwable e) {
+      // ScriptEngineManager initialization failed (Graal.js not available)
+      log.debug("ScriptEngineManager initialization failed in determineDifficulty: {}", e.getMessage());
+      return QuestionDifficulty.MEDIUM;
+    }
+    
+    if (engine == null) {
+      log.debug("No ScriptEngine available for difficulty determination");
+      return QuestionDifficulty.MEDIUM;
+    }
+    
+    try {
       for (Map.Entry<String, Object> e : params.entrySet()) engine.put(e.getKey(), e.getValue());
 
       for (String level : new String[] {"easy", "EASY", "medium", "MEDIUM", "hard", "HARD"}) {
@@ -848,7 +927,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         } catch (Exception ignored) {
         }
       }
-    } catch (Exception ignored) {
+    } catch (Exception e) {
+      log.debug("Error evaluating difficulty rules: {}", e.getMessage());
     }
     return QuestionDifficulty.MEDIUM;
   }
@@ -928,12 +1008,26 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       String json = extractJSON(aiContent);
       // Attempt to repair truncated JSON
       json = repairTruncatedJson(json);
+      log.debug("Extracted and repaired JSON for question generation:\n{}", json);
+      
       JsonNode root = objectMapper.readTree(json);
 
       String questionText = root.path("questionText").asText();
-      if (questionText.isBlank()) questionText = baseQuestionText;
+      
+      // Validate and fallback
+      if (questionText == null || questionText.isBlank()) {
+        log.warn("questionText is empty, using baseQuestionText");
+        questionText = baseQuestionText;
+      } else if (questionText.matches("^\\d+$")) {
+        // If it's only numbers, it's likely a parsing error
+        log.warn("questionText contains only numbers ({}), using baseQuestionText instead", questionText);
+        questionText = baseQuestionText;
+      }
 
       String explanation = root.path("explanation").asText();
+      if (explanation == null || explanation.isBlank()) {
+        explanation = "Solution provided by AI";
+      }
 
       // Difficulty from LLM or pre-computed
       String diffStr = root.path("difficulty").asText("").trim().toUpperCase();

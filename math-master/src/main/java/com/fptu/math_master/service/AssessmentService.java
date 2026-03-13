@@ -59,4 +59,13 @@ public interface AssessmentService {
    */
   AssessmentGenerationResponse generateQuestionsFromMatrix(
       UUID assessmentId, GenerateAssessmentQuestionsRequest request);
+
+  /**
+   * Auto-generate assessment from exam matrix (simplified one-step flow).
+   * Creates new assessment with name from matrix and generates all questions.
+   *
+   * @param request Generation request with exam matrix ID and options
+   * @return Created assessment with generated questions
+   */
+  AssessmentResponse generateAssessmentFromMatrix(GenerateAssessmentQuestionsRequest request);
 }
