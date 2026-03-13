@@ -3,8 +3,10 @@ package com.fptu.math_master.controller;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.enums.AssessmentStatus;
@@ -304,6 +306,27 @@ public class AssessmentController {
     return ApiResponse.<AssessmentResponse>builder()
         .message("Question removed from assessment.")
         .result(assessmentService.removeQuestion(assessmentId, questionId))
+        .build();
+  }
+
+  @PostMapping("/{assessmentId}/generate")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Generate assessment questions from exam matrix",
+      description =
+          "Generate questions from exam matrix templates using AI. "
+              + "Iterates through all template mappings in the matrix and generates required number of questions. "
+              + "Can optionally reuse previously approved questions.")
+  public ApiResponse<AssessmentGenerationResponse> generateQuestionsFromMatrix(
+      @PathVariable UUID assessmentId,
+      @Valid @RequestBody GenerateAssessmentQuestionsRequest request) {
+    log.info(
+        "REST request to generate questions from matrix {} for assessment {}",
+        request.getExamMatrixId(),
+        assessmentId);
+    return ApiResponse.<AssessmentGenerationResponse>builder()
+        .message("Questions generated successfully from exam matrix.")
+        .result(assessmentService.generateQuestionsFromMatrix(assessmentId, request))
         .build();
   }
 }

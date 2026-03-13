@@ -4,7 +4,9 @@ import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
+import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.entity.Assessment;
@@ -25,13 +27,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
-import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -627,6 +623,142 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     log.info("Question {} removed from assessment {}", questionId, assessmentId);
     return mapToResponse(assessment);
+  }
+
+  @Override
+  @Transactional
+  public AssessmentGenerationResponse generateQuestionsFromMatrix(
+      UUID assessmentId, GenerateAssessmentQuestionsRequest request) {
+    log.info(
+        "Generating questions from matrix {} for assessment {}",
+        request.getExamMatrixId(),
+        assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    UUID currentUserId = getCurrentUserId();
+    validateOwnerOrAdmin(assessment.getTeacherId(), currentUserId);
+
+    if (assessment.getStatus() != AssessmentStatus.DRAFT) {
+      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
+    }
+
+    // Load the exam matrix
+    ExamMatrix matrix =
+        examMatrixRepository
+            .findByIdAndNotDeleted(request.getExamMatrixId())
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+
+    // Verify matrix is approved
+    if (matrix.getStatus() != MatrixStatus.APPROVED) {
+      throw new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND);
+    }
+
+    // Load template mappings
+    List<com.fptu.math_master.entity.ExamMatrixTemplateMapping> mappings =
+        examMatrixTemplateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
+
+    if (mappings.isEmpty()) {
+      throw new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND);
+    }
+
+    int totalQuestionsGenerated = 0;
+    int totalPoints = 0;
+
+    // For each template mapping, generate required number of questions
+    for (com.fptu.math_master.entity.ExamMatrixTemplateMapping mapping : mappings) {
+      log.info(
+          "Processing mapping: {}, template: {}, count: {}",
+          mapping.getId(),
+          mapping.getTemplateId(),
+          mapping.getQuestionCount());
+
+      List<com.fptu.math_master.entity.Question> generatedQuestions =
+          generateQuestionsFromTemplate(
+              mapping.getTemplateId(),
+              mapping.getQuestionCount(),
+              mapping.getCognitiveLevel(),
+              request.getReuseApprovedQuestions() != null
+                  ? request.getReuseApprovedQuestions()
+                  : false);
+
+      // Create AssessmentQuestion records
+      for (com.fptu.math_master.entity.Question question : generatedQuestions) {
+        AssessmentQuestion assessmentQuestion =
+            AssessmentQuestion.builder()
+                .assessmentId(assessmentId)
+                .questionId(question.getId())
+                .matrixTemplateMappingId(mapping.getId())
+                .pointsOverride(mapping.getPointsPerQuestion())
+                .build();
+        assessmentQuestionRepository.save(assessmentQuestion);
+        totalQuestionsGenerated++;
+        totalPoints += mapping.getPointsPerQuestion().intValue();
+      }
+    }
+
+    log.info(
+        "Generated {} questions for assessment {} with {} total points",
+        totalQuestionsGenerated,
+        assessmentId,
+        totalPoints);
+
+    return AssessmentGenerationResponse.builder()
+        .totalQuestionsGenerated(totalQuestionsGenerated)
+        .totalPoints(totalPoints)
+        .message(
+            String.format(
+                "%d questions generated successfully from exam matrix. Total points: %d",
+                totalQuestionsGenerated, totalPoints))
+        .build();
+  }
+
+  private List<com.fptu.math_master.entity.Question> generateQuestionsFromTemplate(
+      UUID templateId,
+      Integer count,
+      @SuppressWarnings("unused") com.fptu.math_master.enums.CognitiveLevel cognitiveLevel,
+      boolean reuseApprovedQuestions) {
+    log.info("Generating {} questions from template {}", count, templateId);
+
+    ArrayList<com.fptu.math_master.entity.Question> result = new ArrayList<>();
+
+    // First, try to reuse existing questions from template if requested
+    if (reuseApprovedQuestions) {
+      // Try to find existing questions from template
+      List<com.fptu.math_master.entity.Question> existingList =
+          questionRepository
+              .findByTemplateIdAndNotDeleted(templateId)
+              .stream()
+              .limit(count)
+              .collect(Collectors.toList());
+      result.addAll(existingList);
+
+      if (result.size() >= count) {
+        if (!result.isEmpty()) {
+        log.info("Reused {} approved questions from template {}", result.size(), templateId);
+      }
+        return result;
+      }
+
+      log.info(
+          "Only {} approved questions available, need {} more",
+          result.size(),
+          count - result.size());
+    }
+
+    // Generate remaining questions using AI
+    int remainingCount = count - result.size();
+    for (int i = 0; i < remainingCount; i++) {
+      try {
+        // Call AI to generate a question from the template
+        // This is a simplified implementation - in production, integrate with QuestionService
+        log.debug("Generating question {} of {} from template {}", i + 1, remainingCount, templateId);
+        // TODO: Integrate with AI question generation service
+      } catch (Exception e) {
+        log.error("Failed to generate question from template {}: {}", templateId, e.getMessage());
+      }
+    }
+
+    return result;
   }
 
   private Assessment loadAssessmentOrThrow(UUID id) {

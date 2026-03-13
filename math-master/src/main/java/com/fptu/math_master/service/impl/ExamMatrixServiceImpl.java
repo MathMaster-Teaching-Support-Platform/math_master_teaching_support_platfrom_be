@@ -197,6 +197,54 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
   @Override
   @Transactional
+  public BatchTemplateMappingsResponse addTemplateMappings(
+      UUID matrixId, BatchAddTemplateMappingsRequest request) {
+    log.info(
+        "Adding batch template mappings to matrix {}, count={}",
+        matrixId,
+        request.getMappings().size());
+
+    ExamMatrix matrix = loadMatrixOrThrow(matrixId);
+    validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
+    validateNotApprovedOrLocked(matrix);
+
+    List<TemplateMappingResponse> addedMappings = new ArrayList<>();
+    
+    for (AddTemplateMappingRequest mappingRequest : request.getMappings()) {
+      QuestionTemplate template =
+          questionTemplateRepository
+              .findByIdWithCreator(mappingRequest.getTemplateId())
+              .filter(t -> t.getDeletedAt() == null)
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+      ExamMatrixTemplateMapping mapping =
+          ExamMatrixTemplateMapping.builder()
+              .examMatrixId(matrixId)
+              .templateId(mappingRequest.getTemplateId())
+              .cognitiveLevel(mappingRequest.getCognitiveLevel())
+              .questionCount(mappingRequest.getQuestionCount())
+              .pointsPerQuestion(mappingRequest.getPointsPerQuestion())
+              .build();
+
+      mapping = templateMappingRepository.save(mapping);
+      addedMappings.add(buildMappingResponse(mapping, template.getName()));
+      log.debug("Template mapping added with id: {}", mapping.getId());
+    }
+
+    log.info("Batch: {} template mappings added to matrix {}", addedMappings.size(), matrixId);
+    
+    return BatchTemplateMappingsResponse.builder()
+        .totalMappingsAdded(addedMappings.size())
+        .addedMappings(addedMappings)
+        .message(
+            String.format(
+                "%d template mappings added successfully to matrix.",
+                addedMappings.size()))
+        .build();
+  }
+
+  @Override
+  @Transactional
   public void removeTemplateMapping(UUID matrixId, UUID mappingId) {
     log.info("Removing template mapping {} from matrix {}", mappingId, matrixId);
 

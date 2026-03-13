@@ -25,6 +25,9 @@ public interface ExamMatrixService {
 
   TemplateMappingResponse addTemplateMapping(UUID matrixId, AddTemplateMappingRequest request);
 
+  BatchTemplateMappingsResponse addTemplateMappings(
+      UUID matrixId, BatchAddTemplateMappingsRequest request);
+
   void removeTemplateMapping(UUID matrixId, UUID mappingId);
 
   List<TemplateMappingResponse> getTemplateMappings(UUID matrixId);

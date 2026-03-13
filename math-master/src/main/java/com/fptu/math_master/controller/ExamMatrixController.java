@@ -125,6 +125,26 @@ public class ExamMatrixController {
         .build();
   }
 
+  @PostMapping("/{matrixId}/templates")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Add multiple template mappings in batch",
+      description =
+          "Add multiple question template mappings to the matrix in a single transaction. "
+              + "Validates all templateIds exist before adding. "
+              + "Returns a list of all added mappings.")
+  public ApiResponse<BatchTemplateMappingsResponse> addTemplateMappings(
+      @PathVariable UUID matrixId, @Valid @RequestBody BatchAddTemplateMappingsRequest request) {
+    log.info(
+        "REST request to add batch template mappings to matrix: {}, count={}",
+        matrixId,
+        request.getMappings().size());
+    return ApiResponse.<BatchTemplateMappingsResponse>builder()
+        .message("Template mappings added successfully in batch.")
+        .result(examMatrixService.addTemplateMappings(matrixId, request))
+        .build();
+  }
+
   @DeleteMapping("/{matrixId}/template-mappings/{mappingId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(

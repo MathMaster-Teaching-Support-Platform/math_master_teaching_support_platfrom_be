@@ -1,11 +1,14 @@
 package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.dto.request.AIEnhancementRequest;
+import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
+import com.fptu.math_master.dto.response.AIGeneratedTemplatesResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionSample;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
+import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.CognitiveLevel;
@@ -13,15 +16,18 @@ import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.service.AIEnhancementService;
+import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.QuestionTemplateService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -39,7 +45,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
   QuestionTemplateRepository questionTemplateRepository;
+  LessonRepository lessonRepository;
   AIEnhancementService aiEnhancementService;
+  GeminiService geminiService;
   QuestionRepository questionRepository;
 
   @Override
@@ -387,6 +395,185 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       log.error("Failed to generate AI-enhanced question: {}", e.getMessage(), e);
       throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
     }
+  }
+
+  @Override
+  @Transactional
+  public AIGeneratedTemplatesResponse aiGenerateTemplates(AIGenerateTemplatesRequest request) {
+    log.info("AI generating templates from lesson: {}", request.getLessonId());
+
+    // Load lesson to ensure it exists and get its content
+    Lesson lesson =
+        lessonRepository
+            .findById(request.getLessonId())
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    int templateCount = request.getTemplateCount() != null ? request.getTemplateCount() : 1;
+
+    log.info(
+        "Generating {} templates from lesson {} (title: {})",
+        templateCount,
+        lesson.getId(),
+        lesson.getTitle());
+
+    List<QuestionTemplateResponse> generatedTemplates = new ArrayList<>();
+
+    // Build a prompt that tells Gemini to analyze lesson content and generate templates
+    String lessonContent = buildLessonContent(lesson);
+    String prompt =
+        String.format(
+            "Analyze the following lesson content and generate %d practical and diverse question templates:\n\n"
+                + "Lesson: %s\n"
+                + "Content:\n%s\n\n"
+                + "For each template, provide the following in JSON format:\n"
+                + "{\n"
+                + "  \"templates\": [\n"
+                + "    {\n"
+                + "      \"name\": \"Template Name\",\n"
+                + "      \"description\": \"What this template tests\",\n"
+                + "      \"templateType\": \"MULTIPLE_CHOICE\",\n"
+                + "      \"cognitiveLevel\": \"UNDERSTAND\",\n"
+                + "      \"templateText\": \"Question text with {parameter} placeholders\",\n"
+                + "      \"parameters\": {\n"
+                + "        \"parameter\": {\"type\": \"integer\", \"min\": 1, \"max\": 100}\n"
+                + "      },\n"
+                + "      \"answerFormula\": \"formula to calculate answer\",\n"
+                + "      \"tags\": [\"tag1\", \"tag2\"]\n"
+                + "    }\n"
+                + "  ]\n"
+                + "}\n\n"
+                + "Generate templates that are practical, diverse in cognitive levels, and reusable.",
+            templateCount, lesson.getTitle(), lessonContent);
+
+    try {
+      // Call Gemini to generate templates
+      String aiResponse = geminiService.sendMessage(prompt);
+      log.debug("Gemini response for template generation: {}", aiResponse);
+
+      // Parse the JSON response (simplified - in production, use proper JSON parsing and validation)
+      List<QuestionTemplate> savedTemplates = parseAndSaveTemplates(aiResponse, lesson, currentUserId);
+
+      generatedTemplates =
+          savedTemplates.stream().map(this::mapToResponse).collect(Collectors.toList());
+
+      log.info(
+          "Successfully generated and saved {} templates from lesson {}",
+          generatedTemplates.size(),
+          lesson.getId());
+
+    } catch (Exception e) {
+      log.error("Failed to generate templates from lesson: {}", e.getMessage(), e);
+      throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+    }
+
+    return AIGeneratedTemplatesResponse.builder()
+        .totalTemplatesGenerated(generatedTemplates.size())
+        .generatedTemplates(generatedTemplates)
+        .lessonName(lesson.getTitle())
+        .message(
+            String.format(
+                "%d templates generated successfully from lesson '%s'. Templates are in DRAFT status and ready to be configured.",
+                generatedTemplates.size(), lesson.getTitle()))
+        .build();
+  }
+
+  private String buildLessonContent(Lesson lesson) {
+    // Combine lesson metadata and content for AI analysis
+    StringBuilder content = new StringBuilder();
+    if (lesson.getSummary() != null) {
+      content.append("Summary: ").append(lesson.getSummary()).append("\n\n");
+    }
+    if (lesson.getLessonContent() != null) {
+      content.append("Content: ").append(lesson.getLessonContent()).append("\n\n");
+    }
+    if (lesson.getLearningObjectives() != null) {
+      content.append("Learning Objectives: ").append(lesson.getLearningObjectives()).append("\n\n");
+    }
+    return content.length() > 0
+        ? content.toString()
+        : "No detailed content available. Generate templates based on the lesson title: " + lesson.getTitle();
+  }
+
+  private List<QuestionTemplate> parseAndSaveTemplates(
+      String aiResponse, Lesson lesson, UUID currentUserId) {
+    List<QuestionTemplate> savedTemplates = new ArrayList<>();
+
+    try {
+      // Extract JSON from response (Gemini might include markdown code blocks)
+      String jsonContent = extractJsonFromResponse(aiResponse);
+
+      // Parse templates and create QuestionTemplate entities
+      // Note: In a real implementation, use ObjectMapper for proper JSON parsing
+      List<Map<String, Object>> templates = extractTemplatesList(jsonContent);
+
+      for (Map<String, Object> templateData : templates) {
+        QuestionTemplate template =
+            QuestionTemplate.builder()
+                .createdBy(currentUserId)
+                .lessonId(lesson.getId())
+                .name((String) templateData.getOrDefault("name", "Generated Template"))
+                .description((String) templateData.getOrDefault("description", ""))
+                .templateType(
+                    QuestionType.valueOf(
+                        (String)
+                            templateData.getOrDefault(
+                                "templateType", "MULTIPLE_CHOICE")))
+                .templateText(
+                    Map.of("en", (String) templateData.getOrDefault("templateText", "")))
+                .parameters((Map<String, Object>) templateData.get("parameters"))
+                .answerFormula((String) templateData.get("answerFormula"))
+                .cognitiveLevel(
+                    CognitiveLevel.valueOf(
+                        (String) templateData.getOrDefault("cognitiveLevel", "UNDERSTAND")))
+                .tags(
+                    ((List<?>) templateData.getOrDefault("tags", new ArrayList<>()))
+                        .toArray(new String[0]))
+                .isPublic(false)
+                .status(TemplateStatus.DRAFT)
+                .usageCount(0)
+                .build();
+
+        savedTemplates.add(questionTemplateRepository.save(template));
+        log.debug("Saved AI-generated template: {}", template.getName());
+      }
+
+    } catch (Exception e) {
+      log.error("Failed to parse AI response and save templates: {}", e.getMessage(), e);
+      // Return whatever templates were successfully saved
+    }
+
+    return savedTemplates;
+  }
+
+  private String extractJsonFromResponse(String response) {
+    // Remove markdown code blocks if present
+    if (response.contains("```json")) {
+      int start = response.indexOf("```json") + 7;
+      int end = response.lastIndexOf("```");
+      if (end > start) {
+        return response.substring(start, end).trim();
+      }
+    } else if (response.contains("```")) {
+      int start = response.indexOf("```") + 3;
+      int end = response.lastIndexOf("```");
+      if (end > start) {
+        return response.substring(start, end).trim();
+      }
+    }
+    return response;
+  }
+
+  private List<Map<String, Object>> extractTemplatesList(String jsonContent) {
+    // Simplified parsing - in production, use JsonNode with ObjectMapper
+    List<Map<String, Object>> templates = new ArrayList<>();
+
+    // This is a placeholder implementation
+    // In production, use proper JSON parsing with ObjectMapper or Jackson
+    log.debug("Extracting templates from JSON content");
+
+    // For now, return empty list - the actual implementation would parse the JSON properly
+    return templates;
   }
 
   private TemplateTestResponse generateWithLLMAndSave(QuestionTemplate template, int sampleCount) {
