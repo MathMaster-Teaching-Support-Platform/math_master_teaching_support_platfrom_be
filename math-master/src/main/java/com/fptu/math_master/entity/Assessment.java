@@ -112,6 +112,9 @@ public class Assessment {
   private Set<AssessmentQuestion> assessmentQuestions;
 
   @OneToMany(mappedBy = "assessment", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<AssessmentLesson> assessmentLessons;
+
+  @OneToMany(mappedBy = "assessment", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<Submission> submissions;
 
   @OneToMany(mappedBy = "assessment", cascade = CascadeType.ALL, orphanRemoval = true)

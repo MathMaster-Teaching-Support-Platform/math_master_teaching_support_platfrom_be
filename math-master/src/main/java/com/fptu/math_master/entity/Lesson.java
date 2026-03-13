@@ -85,6 +85,9 @@ public class Lesson {
   @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<QuestionTemplate> questionTemplates;
 
+  @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<AssessmentLesson> assessmentLessons;
+
   @PrePersist
   public void prePersist() {
     if (status == null) status = LessonStatus.DRAFT;

@@ -6,6 +6,7 @@ import com.fptu.math_master.enums.AssessmentType;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,6 +22,8 @@ public class AssessmentResponse {
   private UUID id;
   private UUID teacherId;
   private String teacherName;
+  private List<UUID> lessonIds;
+  private List<String> lessonTitles;
   private String title;
   private String description;
   private AssessmentType assessmentType;

@@ -2,6 +2,7 @@ package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.enums.LessonStatus;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -35,4 +36,10 @@ public interface LessonRepository
 
   @Query("SELECT l FROM Lesson l WHERE l.id = :id AND l.deletedAt IS NULL")
   java.util.Optional<Lesson> findByIdAndNotDeleted(@Param("id") UUID id);
+
+  @Query("SELECT l.id FROM Lesson l WHERE l.id IN :ids AND l.deletedAt IS NULL")
+  List<UUID> findExistingIdsByIds(@Param("ids") Collection<UUID> ids);
+
+  @Query("SELECT l FROM Lesson l WHERE l.id IN :ids AND l.deletedAt IS NULL")
+  List<Lesson> findByIdInAndNotDeleted(@Param("ids") Collection<UUID> ids);
 }

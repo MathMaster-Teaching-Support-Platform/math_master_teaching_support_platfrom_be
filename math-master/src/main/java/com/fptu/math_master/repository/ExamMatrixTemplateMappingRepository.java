@@ -33,4 +33,12 @@ public interface ExamMatrixTemplateMappingRepository
 
   @Query("SELECT COUNT(m) FROM ExamMatrixTemplateMapping m WHERE m.examMatrixId = :matrixId")
   Long countByExamMatrixId(@Param("matrixId") UUID matrixId);
+
+  @Query(
+      "SELECT DISTINCT qt.lessonId FROM ExamMatrixTemplateMapping m "
+          + "JOIN m.questionTemplate qt "
+          + "WHERE m.examMatrixId = :matrixId "
+          + "AND qt.lessonId IS NOT NULL "
+          + "AND qt.deletedAt IS NULL")
+  List<UUID> findDistinctLessonIdsByExamMatrixId(@Param("matrixId") UUID matrixId);
 }

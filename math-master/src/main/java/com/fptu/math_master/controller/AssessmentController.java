@@ -41,7 +41,9 @@ public class AssessmentController {
       description =
           "Teacher creates a new assessment (quiz/test/exam/homework). "
               + "Title is required (max 255 chars), description is optional. "
-              + "Can set type, link to lesson, time limit, passing score, schedule, and options. "
+              + "Must select an examMatrixId and one or more lessonIds. "
+              + "Selected lessonIds are validated to ensure they belong to the chosen matrix. "
+              + "Can set type, time limit, passing score, schedule, and options. "
               + "Status is DRAFT by default. Redirects to Assessment Builder after creation.")
   public ApiResponse<AssessmentResponse> createAssessment(
       @Valid @RequestBody AssessmentRequest request) {
@@ -58,6 +60,7 @@ public class AssessmentController {
       summary = "Update assessment",
       description =
           "Update assessment details. Only DRAFT assessments can be edited. "
+              + "When updating matrix/lessons, selected lessonIds must remain valid for examMatrixId. "
               + "Published assessments cannot be modified unless unpublished first.")
   public ApiResponse<AssessmentResponse> updateAssessment(
       @PathVariable UUID id, @Valid @RequestBody AssessmentRequest request) {

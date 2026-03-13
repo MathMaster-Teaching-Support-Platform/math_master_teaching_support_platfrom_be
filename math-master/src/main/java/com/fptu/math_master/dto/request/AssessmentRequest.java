@@ -6,6 +6,7 @@ import com.fptu.math_master.enums.AttemptScoringPolicy;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,6 +28,9 @@ public class AssessmentRequest {
   @NotNull(message = "Assessment type is required")
   private AssessmentType assessmentType;
 
+  @NotEmpty(message = "At least one lesson is required")
+  private List<@NotNull(message = "Lesson id is required") UUID> lessonIds;
+
   @Min(value = 1, message = "Time limit must be greater than 0")
   private Integer timeLimitMinutes;
 
@@ -44,6 +48,7 @@ public class AssessmentRequest {
 
   private AssessmentMode assessmentMode;
 
+  @NotNull(message = "Exam matrix is required")
   private UUID examMatrixId;
 
   private Boolean allowMultipleAttempts;

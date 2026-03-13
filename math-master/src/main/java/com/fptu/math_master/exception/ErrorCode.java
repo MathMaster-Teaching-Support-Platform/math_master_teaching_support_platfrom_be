@@ -198,7 +198,11 @@ public enum ErrorCode {
       1116, "The regrade request window for this submission has closed", HttpStatus.BAD_REQUEST),
   ASSESSMENT_CLONE_BLOCKED(1117, "Cannot clone a deleted assessment", HttpStatus.BAD_REQUEST),
   CURRICULUM_NOT_FOUND(1118, "Curriculum not found", HttpStatus.NOT_FOUND),
-  CURRICULUM_ALREADY_EXISTS(1119, "Curriculum already exists", HttpStatus.BAD_REQUEST);
+  CURRICULUM_ALREADY_EXISTS(1119, "Curriculum already exists", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_LESSON_NOT_IN_MATRIX(
+      1120,
+      "One or more selected lessons are not available in the chosen exam matrix",
+      HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

@@ -8,8 +8,10 @@ import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.entity.Assessment;
+import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.AssessmentQuestion;
 import com.fptu.math_master.entity.ExamMatrix;
+import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
@@ -24,9 +26,11 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
@@ -48,9 +52,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class AssessmentServiceImpl implements AssessmentService {
 
   AssessmentRepository assessmentRepository;
+  AssessmentLessonRepository assessmentLessonRepository;
   AssessmentQuestionRepository assessmentQuestionRepository;
   UserRepository userRepository;
   ExamMatrixRepository examMatrixRepository;
+  ExamMatrixTemplateMappingRepository examMatrixTemplateMappingRepository;
+  LessonRepository lessonRepository;
   ExamMatrixService examMatrixService;
   QuestionRepository questionRepository;
 
@@ -62,6 +69,9 @@ public class AssessmentServiceImpl implements AssessmentService {
     UUID currentUserId = getCurrentUserId();
     validateTeacherRole(currentUserId);
     validateDates(request.getStartDate(), request.getEndDate());
+    ExamMatrix matrix = validateAndGetAccessibleMatrix(request.getExamMatrixId(), currentUserId);
+    List<UUID> lessonIds = normalizeLessonIds(request.getLessonIds());
+    validateLessonSelectionForMatrix(matrix.getId(), lessonIds);
 
     Assessment assessment =
         Assessment.builder()
@@ -78,7 +88,7 @@ public class AssessmentServiceImpl implements AssessmentService {
             .showCorrectAnswers(
                 request.getShowCorrectAnswers() != null ? request.getShowCorrectAnswers() : false)
             .assessmentMode(request.getAssessmentMode())
-            .examMatrixId(request.getExamMatrixId())
+            .examMatrixId(matrix.getId())
             .allowMultipleAttempts(
                 request.getAllowMultipleAttempts() != null
                     ? request.getAllowMultipleAttempts()
@@ -96,6 +106,7 @@ public class AssessmentServiceImpl implements AssessmentService {
             .build();
 
     assessment = assessmentRepository.save(assessment);
+    syncAssessmentLessons(assessment.getId(), lessonIds);
     log.info("Assessment created successfully with id: {}", assessment.getId());
     return mapToResponse(assessment);
   }
@@ -106,7 +117,8 @@ public class AssessmentServiceImpl implements AssessmentService {
     log.info("Updating assessment with id: {}", id);
 
     Assessment assessment = loadAssessmentOrThrow(id);
-    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+    UUID currentUserId = getCurrentUserId();
+    validateOwnerOrAdmin(assessment.getTeacherId(), currentUserId);
 
     if (assessment.getStatus().isTerminal()) {
       throw new AppException(ErrorCode.ASSESSMENT_IS_CLOSED);
@@ -116,6 +128,9 @@ public class AssessmentServiceImpl implements AssessmentService {
     }
 
     validateDates(request.getStartDate(), request.getEndDate());
+    ExamMatrix matrix = validateAndGetAccessibleMatrix(request.getExamMatrixId(), currentUserId);
+    List<UUID> lessonIds = normalizeLessonIds(request.getLessonIds());
+    validateLessonSelectionForMatrix(matrix.getId(), lessonIds);
 
     assessment.setTitle(request.getTitle());
     assessment.setDescription(request.getDescription());
@@ -134,9 +149,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     if (request.getAssessmentMode() != null) {
       assessment.setAssessmentMode(request.getAssessmentMode());
     }
-    if (request.getExamMatrixId() != null) {
-      assessment.setExamMatrixId(request.getExamMatrixId());
-    }
+    assessment.setExamMatrixId(matrix.getId());
     if (request.getAllowMultipleAttempts() != null) {
       assessment.setAllowMultipleAttempts(request.getAllowMultipleAttempts());
     }
@@ -151,6 +164,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     }
 
     assessment = assessmentRepository.save(assessment);
+    syncAssessmentLessons(assessment.getId(), lessonIds);
     log.info("Assessment updated successfully: {}", id);
     return mapToResponse(assessment);
   }
@@ -548,7 +562,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     if (assessment.getStatus() != AssessmentStatus.DRAFT) {
       throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
     }
-    if (Boolean.TRUE.equals((assessment.getExamMatrixId() != null))) {
+    if (assessment.getExamMatrixId() != null) {
       // Matrix-path: questions are managed through the matrix flow
       throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
     }
@@ -601,7 +615,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     if (assessment.getStatus() != AssessmentStatus.DRAFT) {
       throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
     }
-    if (Boolean.TRUE.equals((assessment.getExamMatrixId() != null))) {
+    if (assessment.getExamMatrixId() != null) {
       throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
     }
 
@@ -726,10 +740,20 @@ public class AssessmentServiceImpl implements AssessmentService {
       long totalQuestions,
       BigDecimal totalPoints,
       long submissionCount) {
+
+    List<UUID> lessonIds = assessmentLessonRepository.findLessonIdsByAssessmentId(assessment.getId());
+    Map<UUID, String> lessonTitleById =
+        lessonRepository.findByIdInAndNotDeleted(lessonIds).stream()
+            .collect(Collectors.toMap(Lesson::getId, Lesson::getTitle));
+    List<String> lessonTitles =
+        lessonIds.stream().map(id -> lessonTitleById.getOrDefault(id, "Unknown")).toList();
+
     return AssessmentResponse.builder()
         .id(assessment.getId())
         .teacherId(assessment.getTeacherId())
         .teacherName(teacherName)
+        .lessonIds(lessonIds)
+        .lessonTitles(lessonTitles)
         .title(assessment.getTitle())
         .description(assessment.getDescription())
         .assessmentType(assessment.getAssessmentType())
@@ -752,5 +776,45 @@ public class AssessmentServiceImpl implements AssessmentService {
         .createdAt(assessment.getCreatedAt())
         .updatedAt(assessment.getUpdatedAt())
         .build();
+  }
+
+  private ExamMatrix validateAndGetAccessibleMatrix(UUID matrixId, UUID currentUserId) {
+    ExamMatrix matrix =
+        examMatrixRepository
+            .findByIdAndNotDeleted(matrixId)
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+    if (!matrix.getTeacherId().equals(currentUserId) && !hasRole(PredefinedRole.ADMIN_ROLE)) {
+      throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
+    }
+    return matrix;
+  }
+
+  private List<UUID> normalizeLessonIds(List<UUID> lessonIds) {
+    return new java.util.ArrayList<>(new LinkedHashSet<>(lessonIds));
+  }
+
+  private void validateLessonSelectionForMatrix(UUID matrixId, List<UUID> lessonIds) {
+    Set<UUID> existingLessonIds = new java.util.HashSet<>(lessonRepository.findExistingIdsByIds(lessonIds));
+    if (existingLessonIds.size() != lessonIds.size()) {
+      throw new AppException(ErrorCode.LESSON_NOT_FOUND);
+    }
+
+    Set<UUID> matrixLessonIds =
+        new java.util.HashSet<>(
+            examMatrixTemplateMappingRepository.findDistinctLessonIdsByExamMatrixId(matrixId));
+    if (!matrixLessonIds.containsAll(lessonIds)) {
+      throw new AppException(ErrorCode.ASSESSMENT_LESSON_NOT_IN_MATRIX);
+    }
+  }
+
+  private void syncAssessmentLessons(UUID assessmentId, List<UUID> lessonIds) {
+    assessmentLessonRepository.deleteByAssessmentId(assessmentId);
+    List<AssessmentLesson> links =
+        lessonIds.stream()
+            .map(
+                lessonId ->
+                    AssessmentLesson.builder().assessmentId(assessmentId).lessonId(lessonId).build())
+            .toList();
+    assessmentLessonRepository.saveAll(links);
   }
 }
