@@ -15,7 +15,9 @@ import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.MindmapService;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.*;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -145,24 +147,38 @@ public class MindmapServiceImpl implements MindmapService {
   @Transactional(readOnly = true)
   public MindmapDetailResponse getMindmapById(UUID id) {
     log.info("Getting mindmap by id: {}", id);
+    long startedAt = System.currentTimeMillis();
 
     // Use optimized query with JOIN FETCH to load teacher and lesson in one query
     Mindmap mindmap =
         mindmapRepository
             .findByIdWithDetailsAndNotDeleted(id)
             .orElseThrow(() -> new AppException(ErrorCode.MINDMAP_NOT_FOUND));
+    long loadedMindmapAt = System.currentTimeMillis();
 
     validateOwnerOrAdmin(mindmap.getTeacherId(), getCurrentUserId());
+    long validatedPermissionAt = System.currentTimeMillis();
 
     // Fetch all nodes in one query
-    List<MindmapNode> allNodes =
-        mindmapNodeRepository.findByMindmapIdOrderByDisplayOrder(mindmap.getId());
+    List<MindmapNode> allNodes = getSortedNodesByMindmapId(mindmap.getId());
+    long loadedNodesAt = System.currentTimeMillis();
 
     // Build hierarchical structure
     List<MindmapNodeResponse> nodes = buildNodeHierarchy(allNodes);
+    long builtHierarchyAt = System.currentTimeMillis();
 
     // Pass node count directly instead of querying again
     MindmapResponse mindmapResponse = mapToResponseWithNodeCount(mindmap, allNodes.size());
+
+    log.info(
+      "Mindmap detail timing id={} total={}ms, loadMindmap={}ms, auth={}ms, loadNodes={}ms, buildTree={}ms, nodeCount={}",
+      id,
+      builtHierarchyAt - startedAt,
+      loadedMindmapAt - startedAt,
+      validatedPermissionAt - loadedMindmapAt,
+      loadedNodesAt - validatedPermissionAt,
+      builtHierarchyAt - loadedNodesAt,
+      allNodes.size());
 
     return MindmapDetailResponse.builder().mindmap(mindmapResponse).nodes(nodes).build();
   }
@@ -258,30 +274,55 @@ public class MindmapServiceImpl implements MindmapService {
   public Page<MindmapResponse> getMyMindmaps(UUID lessonId, Pageable pageable) {
     UUID currentUserId = getCurrentUserId();
     log.info("Getting mindmaps for teacher: {} with lessonId: {}", currentUserId, lessonId);
+    long startedAt = System.currentTimeMillis();
 
     Page<Mindmap> mindmaps;
     if (lessonId != null) {
       // Filter by both teacherId and lessonId
       mindmaps =
-          mindmapRepository.findByTeacherIdAndLessonIdAndNotDeleted(
+          mindmapRepository.findByTeacherIdAndLessonIdWithDetailsAndNotDeleted(
               currentUserId, lessonId, pageable);
     } else {
       // Get all mindmaps for the teacher with optimized query
       mindmaps = mindmapRepository.findByTeacherIdWithDetailsAndNotDeleted(currentUserId, pageable);
     }
 
+    List<Mindmap> content = mindmaps.getContent();
+    long loadedMindmapsAt = System.currentTimeMillis();
+
     // Batch fetch node counts to avoid N+1
-    List<UUID> mindmapIds = mindmaps.getContent().stream().map(Mindmap::getId).toList();
+    List<UUID> mindmapIds = content.stream().map(Mindmap::getId).toList();
     Map<UUID, Long> nodeCounts = getNodeCountsForMindmaps(mindmapIds);
+    long loadedNodeCountsAt = System.currentTimeMillis();
+
+    // Batch resolve names for entities that were not join-fetched
+    Map<UUID, String> teacherNames = getTeacherNamesForMindmaps(content);
+    Map<UUID, String> lessonTitles = getLessonTitlesForMindmaps(content);
+    long loadedNamesAt = System.currentTimeMillis();
+
+    log.info(
+      "My mindmaps timing teacherId={} total={}ms, loadPage={}ms, nodeCounts={}ms, names={}ms, pageSize={}",
+      currentUserId,
+      loadedNamesAt - startedAt,
+      loadedMindmapsAt - startedAt,
+      loadedNodeCountsAt - loadedMindmapsAt,
+      loadedNamesAt - loadedNodeCountsAt,
+      content.size());
 
     return mindmaps.map(
-        m -> mapToResponseWithNodeCount(m, nodeCounts.getOrDefault(m.getId(), 0L).intValue()));
+        m ->
+            mapToResponseWithNodeCount(
+                m,
+                nodeCounts.getOrDefault(m.getId(), 0L).intValue(),
+                teacherNames,
+                lessonTitles));
   }
 
   @Override
   @Transactional(readOnly = true)
   public Page<MindmapResponse> getMindmapsByLesson(UUID lessonId, Pageable pageable) {
     log.info("Getting mindmaps for lesson: {}", lessonId);
+    long startedAt = System.currentTimeMillis();
 
     lessonRepository
         .findById(lessonId)
@@ -290,12 +331,35 @@ public class MindmapServiceImpl implements MindmapService {
     Page<Mindmap> mindmaps =
         mindmapRepository.findByLessonIdWithDetailsAndNotDeleted(lessonId, pageable);
 
+    List<Mindmap> content = mindmaps.getContent();
+    long loadedMindmapsAt = System.currentTimeMillis();
+
     // Batch fetch node counts to avoid N+1
-    List<UUID> mindmapIds = mindmaps.getContent().stream().map(Mindmap::getId).toList();
+    List<UUID> mindmapIds = content.stream().map(Mindmap::getId).toList();
     Map<UUID, Long> nodeCounts = getNodeCountsForMindmaps(mindmapIds);
+    long loadedNodeCountsAt = System.currentTimeMillis();
+
+    // Batch resolve names for entities that were not join-fetched
+    Map<UUID, String> teacherNames = getTeacherNamesForMindmaps(content);
+    Map<UUID, String> lessonTitles = getLessonTitlesForMindmaps(content);
+    long loadedNamesAt = System.currentTimeMillis();
+
+    log.info(
+      "Lesson mindmaps timing lessonId={} total={}ms, loadPage={}ms, nodeCounts={}ms, names={}ms, pageSize={}",
+      lessonId,
+      loadedNamesAt - startedAt,
+      loadedMindmapsAt - startedAt,
+      loadedNodeCountsAt - loadedMindmapsAt,
+      loadedNamesAt - loadedNodeCountsAt,
+      content.size());
 
     return mindmaps.map(
-        m -> mapToResponseWithNodeCount(m, nodeCounts.getOrDefault(m.getId(), 0L).intValue()));
+        m ->
+            mapToResponseWithNodeCount(
+                m,
+                nodeCounts.getOrDefault(m.getId(), 0L).intValue(),
+                teacherNames,
+                lessonTitles));
   }
 
   @Override
@@ -405,33 +469,14 @@ public class MindmapServiceImpl implements MindmapService {
     validateOwnerOrAdmin(mindmap.getTeacherId(), getCurrentUserId());
 
     List<MindmapNode> allNodes =
-        mindmapNodeRepository.findByMindmapIdOrderByDisplayOrder(mindmapId);
+        getSortedNodesByMindmapId(mindmapId);
+    return buildNodeHierarchy(allNodes);
+  }
 
-    // Build hierarchical structure
-    Map<UUID, MindmapNodeResponse> nodeMap = new HashMap<>();
-    List<MindmapNodeResponse> rootNodes = new ArrayList<>();
-
-    // First pass: create all node responses
-    for (MindmapNode node : allNodes) {
-      MindmapNodeResponse response = mapNodeToResponse(node);
-      response.setChildren(new ArrayList<>());
-      nodeMap.put(node.getId(), response);
-    }
-
-    // Second pass: build hierarchy
-    for (MindmapNode node : allNodes) {
-      MindmapNodeResponse response = nodeMap.get(node.getId());
-      if (node.getParentId() == null) {
-        rootNodes.add(response);
-      } else {
-        MindmapNodeResponse parent = nodeMap.get(node.getParentId());
-        if (parent != null) {
-          parent.getChildren().add(response);
-        }
-      }
-    }
-
-    return rootNodes;
+  private List<MindmapNode> getSortedNodesByMindmapId(UUID mindmapId) {
+    List<MindmapNode> nodes = mindmapNodeRepository.findByMindmapId(mindmapId);
+    nodes.sort(Comparator.comparing(MindmapNode::getDisplayOrder, Comparator.nullsLast(Integer::compareTo)));
+    return nodes;
   }
 
   // Helper methods
@@ -642,10 +687,41 @@ public class MindmapServiceImpl implements MindmapService {
   }
 
   /**
+   * Optimized version for paged endpoints that resolves teacher/lesson names in batch.
+   */
+  private MindmapResponse mapToResponseWithNodeCount(
+      Mindmap mindmap,
+      int nodeCount,
+      Map<UUID, String> teacherNames,
+      Map<UUID, String> lessonTitles) {
+    String teacherName =
+        Optional.ofNullable(teacherNames.get(mindmap.getTeacherId())).orElse("Unknown");
+    String lessonTitle =
+        mindmap.getLessonId() == null ? null : lessonTitles.get(mindmap.getLessonId());
+
+    return MindmapResponse.builder()
+        .id(mindmap.getId())
+        .teacherId(mindmap.getTeacherId())
+        .teacherName(teacherName)
+        .lessonId(mindmap.getLessonId())
+        .lessonTitle(lessonTitle)
+        .title(mindmap.getTitle())
+        .description(mindmap.getDescription())
+        .aiGenerated(mindmap.getAiGenerated())
+        .generationPrompt(mindmap.getGenerationPrompt())
+        .status(mindmap.getStatus())
+        .nodeCount(nodeCount)
+        .createdAt(mindmap.getCreatedAt())
+        .updatedAt(mindmap.getUpdatedAt())
+        .build();
+  }
+
+  /**
    * Build node hierarchy from flat list without additional queries
    */
   private List<MindmapNodeResponse> buildNodeHierarchy(List<MindmapNode> allNodes) {
     Map<UUID, MindmapNodeResponse> nodeMap = new HashMap<>();
+    Map<UUID, UUID> parentMap = new HashMap<>();
     List<MindmapNodeResponse> rootNodes = new ArrayList<>();
 
     // First pass: create all node responses
@@ -653,7 +729,10 @@ public class MindmapServiceImpl implements MindmapService {
       MindmapNodeResponse response = mapNodeToResponse(node);
       response.setChildren(new ArrayList<>());
       nodeMap.put(node.getId(), response);
+      parentMap.put(node.getId(), node.getParentId());
     }
+
+    Set<UUID> cycleNodes = findCycleNodes(parentMap);
 
     // Second pass: build hierarchy
     for (MindmapNode node : allNodes) {
@@ -661,14 +740,72 @@ public class MindmapServiceImpl implements MindmapService {
       if (node.getParentId() == null) {
         rootNodes.add(response);
       } else {
+        // Guard against corrupted data that introduces parent cycles.
+        if (cycleNodes.contains(node.getId())) {
+          log.warn(
+              "Detected cyclic hierarchy in mindmap node graph. nodeId={}, parentId={}. Treating as root.",
+              node.getId(),
+              node.getParentId());
+          rootNodes.add(response);
+          continue;
+        }
+
         MindmapNodeResponse parent = nodeMap.get(node.getParentId());
         if (parent != null) {
           parent.getChildren().add(response);
+        } else {
+          // Parent may have been deleted; keep node visible as a root node.
+          rootNodes.add(response);
         }
       }
     }
 
     return rootNodes;
+  }
+
+  /**
+   * Detect all nodes that belong to parent-pointer cycles in O(n).
+   */
+  private Set<UUID> findCycleNodes(Map<UUID, UUID> parentMap) {
+    Set<UUID> cycleNodes = new HashSet<>();
+    Map<UUID, Integer> state = new HashMap<>();
+
+    for (UUID nodeId : parentMap.keySet()) {
+      if (state.getOrDefault(nodeId, 0) != 0) {
+        continue;
+      }
+
+      List<UUID> path = new ArrayList<>();
+      Map<UUID, Integer> indexInPath = new HashMap<>();
+      UUID cursor = nodeId;
+
+      while (cursor != null && parentMap.containsKey(cursor)) {
+        Integer nodeState = state.getOrDefault(cursor, 0);
+        if (nodeState == 2) {
+          break;
+        }
+        if (nodeState == 1) {
+          Integer cycleStart = indexInPath.get(cursor);
+          if (cycleStart != null) {
+            for (int i = cycleStart; i < path.size(); i++) {
+              cycleNodes.add(path.get(i));
+            }
+          }
+          break;
+        }
+
+        state.put(cursor, 1);
+        indexInPath.put(cursor, path.size());
+        path.add(cursor);
+        cursor = parentMap.get(cursor);
+      }
+
+      for (UUID visitedNode : path) {
+        state.put(visitedNode, 2);
+      }
+    }
+
+    return cycleNodes;
   }
 
   private MindmapNodeResponse mapNodeToResponse(MindmapNode node) {
@@ -746,9 +883,71 @@ public class MindmapServiceImpl implements MindmapService {
 
     return mindmapNodeRepository.countByMindmapIds(mindmapIds).stream()
         .collect(
-            java.util.stream.Collectors.toMap(
+            Collectors.toMap(
                 MindmapNodeRepository.NodeCountProjection::getMindmapId,
                 MindmapNodeRepository.NodeCountProjection::getCount));
+  }
+
+  private Map<UUID, String> getTeacherNamesForMindmaps(List<Mindmap> mindmaps) {
+    if (mindmaps == null || mindmaps.isEmpty()) {
+      return new HashMap<>();
+    }
+
+    Map<UUID, String> result = new HashMap<>();
+    Set<UUID> missingTeacherIds = new HashSet<>();
+
+    for (Mindmap mindmap : mindmaps) {
+      User teacher = mindmap.getTeacher();
+      if (teacher != null) {
+        result.put(
+            mindmap.getTeacherId(),
+            teacher.getFullName() != null ? teacher.getFullName() : "Unknown");
+      } else {
+        missingTeacherIds.add(mindmap.getTeacherId());
+      }
+    }
+
+    if (!missingTeacherIds.isEmpty()) {
+      userRepository
+        .findAllById(missingTeacherIds)
+        .forEach(
+          user ->
+            result.put(
+              user.getId(), user.getFullName() != null ? user.getFullName() : "Unknown"));
+    }
+
+    return result;
+  }
+
+  private Map<UUID, String> getLessonTitlesForMindmaps(List<Mindmap> mindmaps) {
+    if (mindmaps == null || mindmaps.isEmpty()) {
+      return new HashMap<>();
+    }
+
+    Map<UUID, String> result = new HashMap<>();
+    Set<UUID> missingLessonIds = new HashSet<>();
+
+    for (Mindmap mindmap : mindmaps) {
+      UUID lessonId = mindmap.getLessonId();
+      if (lessonId == null) {
+        continue;
+      }
+
+      Lesson lesson = mindmap.getLesson();
+      if (lesson != null) {
+        result.put(lessonId, lesson.getTitle());
+      } else {
+        missingLessonIds.add(lessonId);
+      }
+    }
+
+    if (!missingLessonIds.isEmpty()) {
+      lessonRepository
+          .findAllById(missingLessonIds)
+          .forEach(lesson -> result.put(lesson.getId(), lesson.getTitle()));
+    }
+
+    return result;
   }
 
   // Inner classes for AI response parsing

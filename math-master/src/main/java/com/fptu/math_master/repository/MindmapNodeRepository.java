@@ -12,8 +12,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface MindmapNodeRepository extends JpaRepository<MindmapNode, UUID> {
 
-  @Query("SELECT n FROM MindmapNode n WHERE n.mindmapId = :mindmapId ORDER BY n.displayOrder ASC")
-  List<MindmapNode> findByMindmapIdOrderByDisplayOrder(@Param("mindmapId") UUID mindmapId);
+  @Query("SELECT n FROM MindmapNode n WHERE n.mindmapId = :mindmapId")
+  List<MindmapNode> findByMindmapId(@Param("mindmapId") UUID mindmapId);
 
   @Query(
       "SELECT n FROM MindmapNode n WHERE n.mindmapId = :mindmapId AND n.parentId IS NULL ORDER BY n.displayOrder ASC")
