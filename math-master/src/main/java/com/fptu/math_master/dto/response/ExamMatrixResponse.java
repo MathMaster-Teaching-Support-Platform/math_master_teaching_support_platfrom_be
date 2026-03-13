@@ -1,6 +1,7 @@
 package com.fptu.math_master.dto.response;
 
 import com.fptu.math_master.enums.MatrixStatus;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -21,6 +22,8 @@ public class ExamMatrixResponse {
   private String name;
   private String description;
   private Boolean isReusable;
+  private Integer totalQuestionsTarget;
+  private BigDecimal totalPointsTarget;
   private MatrixStatus status;
   private Integer templateMappingCount;
   private List<TemplateMappingResponse> templateMappings;

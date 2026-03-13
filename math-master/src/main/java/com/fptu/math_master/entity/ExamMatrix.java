@@ -4,6 +4,7 @@ import com.fptu.math_master.enums.MatrixStatus;
 import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
@@ -44,6 +45,12 @@ public class ExamMatrix {
 
   @Column(name = "is_reusable", nullable = false)
   private Boolean isReusable;
+
+  @Column(name = "total_questions_target")
+  private Integer totalQuestionsTarget;
+
+  @Column(name = "total_points_target", precision = 6, scale = 2)
+  private BigDecimal totalPointsTarget;
 
   @Column(name = "status")
   @Enumerated(EnumType.STRING)

@@ -22,10 +22,13 @@ public class MatrixValidationReport {
   private Integer totalTemplateMappings;
   private Integer totalQuestions;
   private BigDecimal totalPoints;
+  private Integer totalQuestionsTarget;
+  private BigDecimal totalPointsTarget;
 
   // Distribution
   private Map<String, Integer> cognitiveLevelCoverage;
 
   private boolean questionsMatchTarget;
+  private boolean pointsMatchTarget;
   private boolean allCognitiveLevelsCovered;
 }

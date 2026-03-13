@@ -59,6 +59,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .name(request.getName())
             .description(request.getDescription())
             .isReusable(request.getIsReusable() != null ? request.getIsReusable() : false)
+            .totalQuestionsTarget(request.getTotalQuestionsTarget())
+            .totalPointsTarget(request.getTotalPointsTarget())
             .status(MatrixStatus.DRAFT)
             .build();
 
@@ -80,6 +82,12 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     matrix.setDescription(request.getDescription());
     if (request.getIsReusable() != null) {
       matrix.setIsReusable(request.getIsReusable());
+    }
+    if (request.getTotalQuestionsTarget() != null) {
+      matrix.setTotalQuestionsTarget(request.getTotalQuestionsTarget());
+    }
+    if (request.getTotalPointsTarget() != null) {
+      matrix.setTotalPointsTarget(request.getTotalPointsTarget());
     }
 
     matrix = examMatrixRepository.save(matrix);
@@ -269,6 +277,47 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       errors.add("Total points across all mappings must be greater than 0.");
     }
 
+    Integer totalQuestionsTarget = matrix.getTotalQuestionsTarget();
+    BigDecimal totalPointsTarget = matrix.getTotalPointsTarget();
+
+    boolean questionsMatchTarget = true;
+    if (totalQuestionsTarget != null) {
+      if (totalQuestionsTarget <= 0) {
+        errors.add("Total questions target must be greater than 0.");
+        questionsMatchTarget = false;
+      } else {
+        questionsMatchTarget = totalQuestions == totalQuestionsTarget;
+        if (!questionsMatchTarget) {
+          errors.add(
+              String.format(
+                  "Total questions mismatch: target=%d, actual=%d.",
+                  totalQuestionsTarget, totalQuestions));
+        }
+      }
+    } else {
+      warnings.add(
+          "Matrix does not define totalQuestionsTarget; question-count target matching is skipped.");
+    }
+
+    boolean pointsMatchTarget = true;
+    if (totalPointsTarget != null) {
+      if (totalPointsTarget.compareTo(BigDecimal.ZERO) <= 0) {
+        errors.add("Total points target must be greater than 0.");
+        pointsMatchTarget = false;
+      } else {
+        pointsMatchTarget = totalPoints.compareTo(totalPointsTarget) == 0;
+        if (!pointsMatchTarget) {
+          errors.add(
+              String.format(
+                  "Total points mismatch: target=%s, actual=%s.",
+                  totalPointsTarget.toPlainString(), totalPoints.toPlainString()));
+        }
+      }
+    } else {
+      warnings.add(
+          "Matrix does not define totalPointsTarget; points target matching is skipped.");
+    }
+
     // Cognitive level coverage
     Map<String, Integer> cognitiveLevelCoverage =
         mappings.stream()
@@ -285,7 +334,6 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               "Only %d cognitive level(s) covered (recommended: at least 3).", distinctLevels));
     }
 
-    boolean questionsMatchTarget = totalQuestions > 0;
     boolean canApprove = errors.isEmpty();
 
     return MatrixValidationReport.builder()
@@ -295,8 +343,11 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .totalTemplateMappings(mappings.size())
         .totalQuestions(totalQuestions)
         .totalPoints(totalPoints)
+        .totalQuestionsTarget(totalQuestionsTarget)
+        .totalPointsTarget(totalPointsTarget)
         .cognitiveLevelCoverage(cognitiveLevelCoverage)
         .questionsMatchTarget(questionsMatchTarget)
+        .pointsMatchTarget(pointsMatchTarget)
         .allCognitiveLevelsCovered(allCognitiveLevelsCovered)
         .build();
   }
@@ -909,6 +960,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .name(matrix.getName())
         .description(matrix.getDescription())
         .isReusable(matrix.getIsReusable())
+        .totalQuestionsTarget(matrix.getTotalQuestionsTarget())
+        .totalPointsTarget(matrix.getTotalPointsTarget())
         .status(matrix.getStatus())
         .templateMappingCount(mappingResponses.size())
         .templateMappings(mappingResponses)
