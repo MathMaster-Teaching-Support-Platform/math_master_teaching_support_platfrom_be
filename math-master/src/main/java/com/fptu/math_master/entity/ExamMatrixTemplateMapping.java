@@ -1,13 +1,7 @@
 package com.fptu.math_master.entity;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Set;
-import java.util.UUID;
-
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.util.UuidV7Generator;
-
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -23,6 +17,10 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Set;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -41,10 +39,10 @@ import lombok.NoArgsConstructor;
           columnNames = {"exam_matrix_id", "template_id"})
     },
     indexes = {
-      @Index(name = "idx_exam_matrix_template_matrix",    columnList = "exam_matrix_id"),
-      @Index(name = "idx_exam_matrix_template_template",  columnList = "template_id"),
+      @Index(name = "idx_exam_matrix_template_matrix", columnList = "exam_matrix_id"),
+      @Index(name = "idx_exam_matrix_template_template", columnList = "template_id"),
       @Index(name = "idx_exam_matrix_template_cognitive", columnList = "cognitive_level"),
-      @Index(name = "idx_exam_matrix_template_row",       columnList = "matrix_row_id")
+      @Index(name = "idx_exam_matrix_template_row", columnList = "matrix_row_id")
     })
 public class ExamMatrixTemplateMapping {
 

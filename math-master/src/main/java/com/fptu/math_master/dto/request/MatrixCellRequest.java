@@ -1,12 +1,10 @@
 package com.fptu.math_master.dto.request;
 
-import java.math.BigDecimal;
-
 import com.fptu.math_master.enums.CognitiveLevel;
-
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

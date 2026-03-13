@@ -21,16 +21,16 @@ import org.hibernate.annotations.Nationalized;
     indexes = {
       @Index(name = "idx_mindmaps_teacher", columnList = "teacher_id"),
       @Index(name = "idx_mindmaps_lesson", columnList = "lesson_id"),
-    @Index(name = "idx_mindmaps_status", columnList = "status"),
-    @Index(
-      name = "idx_mindmaps_teacher_deleted_created",
-      columnList = "teacher_id, deleted_at, created_at"),
-    @Index(
-      name = "idx_mindmaps_lesson_deleted_created",
-      columnList = "lesson_id, deleted_at, created_at"),
-    @Index(
-      name = "idx_mindmaps_teacher_lesson_deleted_created",
-      columnList = "teacher_id, lesson_id, deleted_at, created_at")
+      @Index(name = "idx_mindmaps_status", columnList = "status"),
+      @Index(
+          name = "idx_mindmaps_teacher_deleted_created",
+          columnList = "teacher_id, deleted_at, created_at"),
+      @Index(
+          name = "idx_mindmaps_lesson_deleted_created",
+          columnList = "lesson_id, deleted_at, created_at"),
+      @Index(
+          name = "idx_mindmaps_teacher_lesson_deleted_created",
+          columnList = "teacher_id, lesson_id, deleted_at, created_at")
     })
 public class Mindmap {
 

@@ -1,14 +1,7 @@
 package com.fptu.math_master.entity;
 
-import java.time.Instant;
-import java.util.Set;
-import java.util.UUID;
-
-import org.hibernate.annotations.Nationalized;
-
 import com.fptu.math_master.enums.CurriculumCategory;
 import com.fptu.math_master.util.UuidV7Generator;
-
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -28,10 +21,14 @@ import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
+import java.util.Set;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor

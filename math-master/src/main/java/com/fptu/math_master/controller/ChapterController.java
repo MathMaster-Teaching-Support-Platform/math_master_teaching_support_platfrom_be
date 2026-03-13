@@ -1,8 +1,22 @@
 package com.fptu.math_master.controller;
 
+import com.fptu.math_master.dto.request.CreateChapterRequest;
+import com.fptu.math_master.dto.request.UpdateChapterRequest;
+import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.ChapterResponse;
+import com.fptu.math_master.dto.response.LessonResponse;
+import com.fptu.math_master.service.ChapterService;
+import com.fptu.math_master.service.LessonService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
-
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,23 +28,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import com.fptu.math_master.dto.request.CreateChapterRequest;
-import com.fptu.math_master.dto.request.UpdateChapterRequest;
-import com.fptu.math_master.dto.response.ApiResponse;
-import com.fptu.math_master.dto.response.ChapterResponse;
-import com.fptu.math_master.dto.response.LessonResponse;
-import com.fptu.math_master.service.ChapterService;
-import com.fptu.math_master.service.LessonService;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/chapters")
@@ -46,7 +43,8 @@ public class ChapterController {
 
   @Operation(
       summary = "Create a chapter",
-      description = "Creates a new chapter inside a curriculum. orderIndex is auto-assigned if omitted.")
+      description =
+          "Creates a new chapter inside a curriculum. orderIndex is auto-assigned if omitted.")
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")

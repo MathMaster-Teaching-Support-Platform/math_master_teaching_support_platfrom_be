@@ -1,11 +1,10 @@
 package com.fptu.math_master.service;
 
-import java.util.List;
-import java.util.UUID;
-
 import com.fptu.math_master.dto.request.CreateChapterRequest;
 import com.fptu.math_master.dto.request.UpdateChapterRequest;
 import com.fptu.math_master.dto.response.ChapterResponse;
+import java.util.List;
+import java.util.UUID;
 
 public interface ChapterService {
 

@@ -701,7 +701,8 @@ public class AssessmentServiceImpl implements AssessmentService {
                   ? request.getReuseApprovedQuestions()
                   : false);
 
-      log.info("Template {} generated {} questions out of {} requested",
+      log.info(
+          "Template {} generated {} questions out of {} requested",
           mapping.getTemplateId(),
           generatedQuestions.size(),
           mapping.getQuestionCount());
@@ -786,9 +787,7 @@ public class AssessmentServiceImpl implements AssessmentService {
               "Reused {} APPROVED questions from template {}{}",
               result.size(),
               templateId,
-              templateQuestionBankId != null
-                  ? " (bankId=" + templateQuestionBankId + ")"
-                  : "");
+              templateQuestionBankId != null ? " (bankId=" + templateQuestionBankId + ")" : "");
         }
         return result.stream().limit(count).collect(Collectors.toList());
       }
@@ -844,11 +843,14 @@ public class AssessmentServiceImpl implements AssessmentService {
 
         // Check if options contain set notation (indicates template formula issue)
         if (sample.getOptions() != null) {
-          boolean hasSetNotation = sample.getOptions().values().stream()
-              .anyMatch(opt -> opt != null && opt.contains("{") && opt.contains("}"));
+          boolean hasSetNotation =
+              sample.getOptions().values().stream()
+                  .anyMatch(opt -> opt != null && opt.contains("{") && opt.contains("}"));
           if (hasSetNotation) {
-            log.warn("Question {} has set notation in options (template issue), skipping: {}",
-                i + 1, sample.getOptions());
+            log.warn(
+                "Question {} has set notation in options (template issue), skipping: {}",
+                i + 1,
+                sample.getOptions());
             continue;
           }
         }
@@ -860,18 +862,26 @@ public class AssessmentServiceImpl implements AssessmentService {
           if (answerObj != null) {
             // Ensure it's a proper string, not an object reference
             correctAnswer = answerObj.toString().trim();
-            log.debug("Extracted answer value '{}' for key '{}' from options", correctAnswer, correctAnswerKey);
+            log.debug(
+                "Extracted answer value '{}' for key '{}' from options",
+                correctAnswer,
+                correctAnswerKey);
           }
         }
 
         if (correctAnswer == null || correctAnswer.isEmpty()) {
-          log.warn("Question {} has no valid correctAnswer for key '{}', skipping", i + 1, correctAnswerKey);
+          log.warn(
+              "Question {} has no valid correctAnswer for key '{}', skipping",
+              i + 1,
+              correctAnswerKey);
           continue;
         }
 
         // Check if answer is the error placeholder
         if ("?".equals(correctAnswer)) {
-          log.warn("Question {} has placeholder answer '?', template formula likely failed, skipping", i + 1);
+          log.warn(
+              "Question {} has placeholder answer '?', template formula likely failed, skipping",
+              i + 1);
           continue;
         }
 
@@ -901,9 +911,17 @@ public class AssessmentServiceImpl implements AssessmentService {
 
         // Log detailed info about what we're saving
         log.info("Creating question {} of {}:", i + 1, remainingCount);
-        log.info("  - questionText: {}", createRequest.getQuestionText().substring(0, Math.min(50, createRequest.getQuestionText().length())));
+        log.info(
+            "  - questionText: {}",
+            createRequest
+                .getQuestionText()
+                .substring(0, Math.min(50, createRequest.getQuestionText().length())));
         log.info("  - correctAnswer: {}", createRequest.getCorrectAnswer());
-        log.info("  - explanation: {}", createRequest.getExplanation().substring(0, Math.min(50, createRequest.getExplanation().length())));
+        log.info(
+            "  - explanation: {}",
+            createRequest
+                .getExplanation()
+                .substring(0, Math.min(50, createRequest.getExplanation().length())));
         log.info("  - options: {}", createRequest.getOptions());
 
         // Create the question using QuestionService
@@ -929,15 +947,19 @@ public class AssessmentServiceImpl implements AssessmentService {
       log.info("Retrieving {} newly created questions from database", newQuestionIds.size());
       try {
         List<Question> newQuestions = questionRepository.findAllById(newQuestionIds);
-        log.info("Retrieved {} questions (expected {})", newQuestions.size(), newQuestionIds.size());
+        log.info(
+            "Retrieved {} questions (expected {})", newQuestions.size(), newQuestionIds.size());
         result.addAll(newQuestions);
       } catch (Exception e) {
         log.error("Failed to retrieve created questions: {}", e.getMessage(), e);
       }
     }
 
-    log.info("Generated {} new questions from template {}, total now: {}",
-        remainingCount - (count - result.size()), templateId, result.size());
+    log.info(
+        "Generated {} new questions from template {}, total now: {}",
+        remainingCount - (count - result.size()),
+        templateId,
+        result.size());
     return result;
   }
 
@@ -1062,7 +1084,8 @@ public class AssessmentServiceImpl implements AssessmentService {
       BigDecimal totalPoints,
       long submissionCount) {
 
-    List<UUID> lessonIds = assessmentLessonRepository.findLessonIdsByAssessmentId(assessment.getId());
+    List<UUID> lessonIds =
+        assessmentLessonRepository.findLessonIdsByAssessmentId(assessment.getId());
     Map<UUID, String> lessonTitleById =
         lessonRepository.findByIdInAndNotDeleted(lessonIds).stream()
             .collect(Collectors.toMap(Lesson::getId, Lesson::getTitle));
@@ -1115,7 +1138,8 @@ public class AssessmentServiceImpl implements AssessmentService {
   }
 
   private void validateLessonSelectionForMatrix(UUID matrixId, List<UUID> lessonIds) {
-    Set<UUID> existingLessonIds = new java.util.HashSet<>(lessonRepository.findExistingIdsByIds(lessonIds));
+    Set<UUID> existingLessonIds =
+        new java.util.HashSet<>(lessonRepository.findExistingIdsByIds(lessonIds));
     if (existingLessonIds.size() != lessonIds.size()) {
       throw new AppException(ErrorCode.LESSON_NOT_FOUND);
     }
@@ -1134,7 +1158,10 @@ public class AssessmentServiceImpl implements AssessmentService {
         lessonIds.stream()
             .map(
                 lessonId ->
-                    AssessmentLesson.builder().assessmentId(assessmentId).lessonId(lessonId).build())
+                    AssessmentLesson.builder()
+                        .assessmentId(assessmentId)
+                        .lessonId(lessonId)
+                        .build())
             .toList();
     assessmentLessonRepository.saveAll(links);
   }
@@ -1179,9 +1206,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     // Generate questions from matrix
     try {
-      generateQuestionsFromMatrix(
-          savedAssessment.getId(),
-          request);
+      generateQuestionsFromMatrix(savedAssessment.getId(), request);
     } catch (Exception e) {
       log.error(
           "Failed to generate questions for assessment {}: {}",

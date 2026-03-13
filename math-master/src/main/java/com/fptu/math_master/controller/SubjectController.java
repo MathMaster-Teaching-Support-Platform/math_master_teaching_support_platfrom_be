@@ -1,8 +1,20 @@
 package com.fptu.math_master.controller;
 
+import com.fptu.math_master.dto.request.CreateSubjectRequest;
+import com.fptu.math_master.dto.request.LinkGradeSubjectRequest;
+import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.SubjectResponse;
+import com.fptu.math_master.service.SubjectService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
-
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,21 +23,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import com.fptu.math_master.dto.request.CreateSubjectRequest;
-import com.fptu.math_master.dto.request.LinkGradeSubjectRequest;
-import com.fptu.math_master.dto.response.ApiResponse;
-import com.fptu.math_master.dto.response.SubjectResponse;
-import com.fptu.math_master.service.SubjectService;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/subjects")

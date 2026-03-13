@@ -1,26 +1,5 @@
 package com.fptu.math_master.service.impl;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
-import org.springframework.data.domain.PageRequest;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
 import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
@@ -71,11 +50,29 @@ import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AIEnhancementService;
 import com.fptu.math_master.service.ExamMatrixService;
-
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -262,7 +259,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     validateNotApprovedOrLocked(matrix);
 
     List<TemplateMappingResponse> addedMappings = new ArrayList<>();
-    
+
     for (AddTemplateMappingRequest mappingRequest : request.getMappings()) {
       QuestionTemplate template =
           questionTemplateRepository
@@ -285,14 +282,13 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
 
     log.info("Batch: {} template mappings added to matrix {}", addedMappings.size(), matrixId);
-    
+
     return BatchTemplateMappingsResponse.builder()
         .totalMappingsAdded(addedMappings.size())
         .addedMappings(addedMappings)
         .message(
             String.format(
-                "%d template mappings added successfully to matrix.",
-                addedMappings.size()))
+                "%d template mappings added successfully to matrix.", addedMappings.size()))
         .build();
   }
 
@@ -415,8 +411,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         }
       }
     } else {
-      warnings.add(
-          "Matrix does not define totalPointsTarget; points target matching is skipped.");
+      warnings.add("Matrix does not define totalPointsTarget; points target matching is skipped.");
     }
 
     // Cognitive level coverage
@@ -1043,10 +1038,14 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
     validateNotApprovedOrLocked(matrix);
 
-    List<ExamMatrixRow> existing = examMatrixRowRepository.findByExamMatrixIdOrderByOrderIndex(matrixId);
-    int nextOrder = existing.stream()
-        .mapToInt(r -> r.getOrderIndex() != null ? r.getOrderIndex() : 0)
-        .max().orElse(0) + 1;
+    List<ExamMatrixRow> existing =
+        examMatrixRowRepository.findByExamMatrixIdOrderByOrderIndex(matrixId);
+    int nextOrder =
+        existing.stream()
+                .mapToInt(r -> r.getOrderIndex() != null ? r.getOrderIndex() : 0)
+                .max()
+                .orElse(0)
+            + 1;
 
     persistRow(matrixId, rowRequest, nextOrder);
     return buildTableResponse(matrix);
@@ -1237,10 +1236,11 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
     // If templateId is supplied and questionTypeName is blank, default to template name
     if ((qTypeName == null || qTypeName.isBlank()) && rowSpec.getTemplateId() != null) {
-      qTypeName = questionTemplateRepository
-          .findById(rowSpec.getTemplateId())
-          .map(QuestionTemplate::getName)
-          .orElse(null);
+      qTypeName =
+          questionTemplateRepository
+              .findById(rowSpec.getTemplateId())
+              .map(QuestionTemplate::getName)
+              .orElse(null);
     }
 
     if ((qTypeName == null || qTypeName.isBlank()) && rowSpec.getTemplateId() == null) {
@@ -1315,7 +1315,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
 
     // Load rows ordered by orderIndex
-    List<ExamMatrixRow> rows = examMatrixRowRepository.findByExamMatrixIdOrderByOrderIndex(matrixId);
+    List<ExamMatrixRow> rows =
+        examMatrixRowRepository.findByExamMatrixIdOrderByOrderIndex(matrixId);
 
     // Load all cells for this matrix keyed by rowId
     List<ExamMatrixTemplateMapping> allCells =
@@ -1329,7 +1330,11 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     Map<UUID, List<ExamMatrixRow>> rowsByChapter =
         rows.stream()
             .filter(r -> r.getChapterId() != null)
-            .collect(Collectors.groupingBy(ExamMatrixRow::getChapterId, java.util.LinkedHashMap::new, Collectors.toList()));
+            .collect(
+                Collectors.groupingBy(
+                    ExamMatrixRow::getChapterId,
+                    java.util.LinkedHashMap::new,
+                    Collectors.toList()));
 
     // Handle rows without a chapter
     List<ExamMatrixRow> uncategorised =
@@ -1442,14 +1447,14 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         finalCurriculumName = curr.getName();
         if (curr.getSubjectId() != null) {
           finalSubjectId = curr.getSubjectId();
-          finalSubjectName = subjectRepository.findById(curr.getSubjectId())
-              .map(Subject::getName).orElse(null);
+          finalSubjectName =
+              subjectRepository.findById(curr.getSubjectId()).map(Subject::getName).orElse(null);
         }
       }
     }
 
-    String teacherName = userRepository.findById(matrix.getTeacherId())
-        .map(User::getFullName).orElse("Unknown");
+    String teacherName =
+        userRepository.findById(matrix.getTeacherId()).map(User::getFullName).orElse("Unknown");
 
     return ExamMatrixTableResponse.builder()
         .id(matrix.getId())

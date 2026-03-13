@@ -14,14 +14,15 @@ public interface AssessmentLessonRepository extends JpaRepository<AssessmentLess
 
   @Query(
       "SELECT al FROM AssessmentLesson al WHERE al.assessmentId = :assessmentId ORDER BY al.createdAt")
-  List<AssessmentLesson> findByAssessmentIdOrderByCreatedAt(@Param("assessmentId") UUID assessmentId);
+  List<AssessmentLesson> findByAssessmentIdOrderByCreatedAt(
+      @Param("assessmentId") UUID assessmentId);
 
   @Query("SELECT al.lessonId FROM AssessmentLesson al WHERE al.assessmentId = :assessmentId")
   List<UUID> findLessonIdsByAssessmentId(@Param("assessmentId") UUID assessmentId);
 
   @Query("SELECT al FROM AssessmentLesson al WHERE al.assessmentId IN :assessmentIds")
-  List<AssessmentLesson> findByAssessmentIdIn(@Param("assessmentIds") Collection<UUID> assessmentIds);
+  List<AssessmentLesson> findByAssessmentIdIn(
+      @Param("assessmentIds") Collection<UUID> assessmentIds);
 
   void deleteByAssessmentId(UUID assessmentId);
 }
-

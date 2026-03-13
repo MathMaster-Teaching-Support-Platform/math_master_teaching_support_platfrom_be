@@ -49,7 +49,9 @@ public class CreateQuestionRequest {
   private QuestionDifficulty difficulty = QuestionDifficulty.MEDIUM;
 
   @NotNull(message = "Cognitive level is required")
-  @Schema(description = "Bloom's cognitive level: REMEMBER, UNDERSTAND, APPLY, ANALYZE, EVALUATE, CREATE")
+  @Schema(
+      description =
+          "Bloom's cognitive level: REMEMBER, UNDERSTAND, APPLY, ANALYZE, EVALUATE, CREATE")
   private CognitiveLevel cognitiveLevel;
 
   @Schema(description = "Tags for categorization")

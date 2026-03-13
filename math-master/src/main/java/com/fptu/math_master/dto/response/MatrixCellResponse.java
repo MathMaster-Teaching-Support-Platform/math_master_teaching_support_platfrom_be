@@ -1,10 +1,8 @@
 package com.fptu.math_master.dto.response;
 
+import com.fptu.math_master.enums.CognitiveLevel;
 import java.math.BigDecimal;
 import java.util.UUID;
-
-import com.fptu.math_master.enums.CognitiveLevel;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,8 +19,10 @@ public class MatrixCellResponse {
 
   private UUID mappingId;
   private CognitiveLevel cognitiveLevel;
+
   /** Short display label: NB / TH / VD / VDC. */
   private String cognitiveLevelLabel;
+
   private Integer questionCount;
   private BigDecimal pointsPerQuestion;
   private BigDecimal totalPoints;

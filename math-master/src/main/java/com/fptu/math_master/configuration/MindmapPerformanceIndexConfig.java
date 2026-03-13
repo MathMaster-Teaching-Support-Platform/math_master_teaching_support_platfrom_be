@@ -18,7 +18,8 @@ public class MindmapPerformanceIndexConfig implements ApplicationRunner {
   public void run(ApplicationArguments args) {
     long startedAt = System.currentTimeMillis();
     try {
-      // Ensure critical indexes exist even if ddl-auto=update skips/does not backfill existing schemas.
+      // Ensure critical indexes exist even if ddl-auto=update skips/does not backfill existing
+      // schemas.
       jdbcTemplate.execute(
           "CREATE INDEX IF NOT EXISTS idx_mindmap_nodes_mindmap_order ON mindmap_nodes (mindmap_id, display_order)");
       jdbcTemplate.execute(

@@ -9,8 +9,6 @@ import com.fptu.math_master.dto.response.QuestionResponse;
 import com.fptu.math_master.service.QuestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -160,7 +158,11 @@ public class QuestionController {
           int page,
       @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
 
-    log.info("REST request to search questions: search={}, difficulty={}, type={}", search, difficulty, type);
+    log.info(
+        "REST request to search questions: search={}, difficulty={}, type={}",
+        search,
+        difficulty,
+        type);
 
     Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 

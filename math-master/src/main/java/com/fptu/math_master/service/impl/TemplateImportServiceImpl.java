@@ -874,8 +874,8 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     // Build QuestionTemplate entity
     QuestionTemplate template =
         QuestionTemplate.builder()
-          .createdBy(currentUserId)
-          .questionBankId(questionBankId)
+            .createdBy(currentUserId)
+            .questionBankId(questionBankId)
             .name(draft.getName() != null ? draft.getName() : "Imported Template")
             .description(
                 draft.getDescription() != null

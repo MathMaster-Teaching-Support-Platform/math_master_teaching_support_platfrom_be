@@ -1,8 +1,25 @@
 package com.fptu.math_master.controller;
 
+import com.fptu.math_master.dto.request.CreateLessonRequest;
+import com.fptu.math_master.dto.request.GenerateLessonContentRequest;
+import com.fptu.math_master.dto.request.UpdateLessonRequest;
+import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.ChapterResponse;
+import com.fptu.math_master.dto.response.GenerateLessonContentResponse;
+import com.fptu.math_master.dto.response.LessonResponse;
+import com.fptu.math_master.service.LessonContentService;
+import com.fptu.math_master.service.LessonService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
-
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -15,26 +32,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import com.fptu.math_master.dto.request.CreateLessonRequest;
-import com.fptu.math_master.dto.request.GenerateLessonContentRequest;
-import com.fptu.math_master.dto.request.UpdateLessonRequest;
-import com.fptu.math_master.dto.response.ApiResponse;
-import com.fptu.math_master.dto.response.ChapterResponse;
-import com.fptu.math_master.dto.response.GenerateLessonContentResponse;
-import com.fptu.math_master.dto.response.LessonResponse;
-import com.fptu.math_master.service.LessonContentService;
-import com.fptu.math_master.service.LessonService;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/lessons")
@@ -142,8 +139,7 @@ public class LessonContentController {
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  public ApiResponse<LessonResponse> createLesson(
-      @Valid @RequestBody CreateLessonRequest request) {
+  public ApiResponse<LessonResponse> createLesson(@Valid @RequestBody CreateLessonRequest request) {
     log.info("POST /lessons – chapterId={}", request.getChapterId());
     return ApiResponse.<LessonResponse>builder()
         .result(lessonService.createLesson(request))

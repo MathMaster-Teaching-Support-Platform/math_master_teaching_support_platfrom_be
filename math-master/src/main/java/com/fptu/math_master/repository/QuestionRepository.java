@@ -44,8 +44,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
 
   @Query(
       "SELECT q FROM Question q WHERE q.questionBankId = :bankId AND q.deletedAt IS NULL ORDER BY q.createdAt DESC")
-  Page<Question> findByQuestionBankIdAndNotDeleted(
-      @Param("bankId") UUID bankId, Pageable pageable);
+  Page<Question> findByQuestionBankIdAndNotDeleted(@Param("bankId") UUID bankId, Pageable pageable);
 
   @Query(
       "SELECT q FROM Question q WHERE q.templateId = :templateId AND q.deletedAt IS NULL ORDER BY q.createdAt DESC")

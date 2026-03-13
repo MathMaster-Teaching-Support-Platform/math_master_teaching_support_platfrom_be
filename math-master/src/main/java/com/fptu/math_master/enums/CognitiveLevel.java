@@ -31,4 +31,3 @@ public enum CognitiveLevel {
   EVALUATE,
   CREATE
 }
-

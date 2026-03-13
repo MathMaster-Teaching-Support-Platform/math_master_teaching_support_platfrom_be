@@ -60,4 +60,3 @@ public class AssessmentLesson {
     updatedAt = Instant.now();
   }
 }
-

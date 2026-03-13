@@ -1,13 +1,6 @@
 package com.fptu.math_master.entity;
 
-import java.time.Instant;
-import java.util.Set;
-import java.util.UUID;
-
-import org.hibernate.annotations.Nationalized;
-
 import com.fptu.math_master.util.UuidV7Generator;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -22,10 +15,14 @@ import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
+import java.util.Set;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Nationalized;
 
 /**
  * Represents a branch/subject of Mathematics (môn học).
@@ -44,7 +41,9 @@ import lombok.NoArgsConstructor;
 @Table(
     name = "subjects",
     uniqueConstraints = {
-      @UniqueConstraint(name = "uq_subjects_code", columnNames = {"code"})
+      @UniqueConstraint(
+          name = "uq_subjects_code",
+          columnNames = {"code"})
     },
     indexes = {
       @Index(name = "idx_subjects_code", columnList = "code"),

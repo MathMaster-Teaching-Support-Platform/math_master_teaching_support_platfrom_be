@@ -1,8 +1,5 @@
 package com.fptu.math_master.service;
 
-import java.util.List;
-import java.util.UUID;
-
 import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
 import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
@@ -18,6 +15,8 @@ import com.fptu.math_master.dto.response.MatchingTemplatesResponse;
 import com.fptu.math_master.dto.response.MatrixValidationReport;
 import com.fptu.math_master.dto.response.PreviewCandidatesResponse;
 import com.fptu.math_master.dto.response.TemplateMappingResponse;
+import java.util.List;
+import java.util.UUID;
 
 public interface ExamMatrixService {
 

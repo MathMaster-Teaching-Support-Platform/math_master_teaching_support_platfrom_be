@@ -20,7 +20,6 @@ import com.fptu.math_master.util.CSVParser;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
@@ -59,12 +58,16 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
     String questionText = request.getQuestionText().trim();
-    log.info("Creating question: {}", questionText.substring(0, Math.min(50, questionText.length())));
+    log.info(
+        "Creating question: {}", questionText.substring(0, Math.min(50, questionText.length())));
 
     UUID currentUserId = getCurrentUserId();
 
     // Set defaults for optional fields
-    String explanation = request.getExplanation() != null ? request.getExplanation().trim() : "No explanation provided";
+    String explanation =
+        request.getExplanation() != null
+            ? request.getExplanation().trim()
+            : "No explanation provided";
     String correctAnswer = request.getCorrectAnswer().trim();
 
     Question question =
@@ -89,15 +92,32 @@ public class QuestionServiceImpl implements QuestionService {
 
     // Log EXACTLY what was saved to the database
     log.info("Question saved to DB with ID: {}", question.getId());
-    log.info("  - questionText type: {}, value: {}",
-        question.getQuestionText() == null ? "null" : question.getQuestionText().getClass().getSimpleName(),
-        question.getQuestionText() == null ? "null" : question.getQuestionText().substring(0, Math.min(50, question.getQuestionText().length())));
-    log.info("  - correctAnswer type: {}, value: {}",
-        question.getCorrectAnswer() == null ? "null" : question.getCorrectAnswer().getClass().getSimpleName(),
+    log.info(
+        "  - questionText type: {}, value: {}",
+        question.getQuestionText() == null
+            ? "null"
+            : question.getQuestionText().getClass().getSimpleName(),
+        question.getQuestionText() == null
+            ? "null"
+            : question
+                .getQuestionText()
+                .substring(0, Math.min(50, question.getQuestionText().length())));
+    log.info(
+        "  - correctAnswer type: {}, value: {}",
+        question.getCorrectAnswer() == null
+            ? "null"
+            : question.getCorrectAnswer().getClass().getSimpleName(),
         question.getCorrectAnswer());
-    log.info("  - explanation type: {}, value: {}",
-        question.getExplanation() == null ? "null" : question.getExplanation().getClass().getSimpleName(),
-        question.getExplanation() == null ? "null" : question.getExplanation().substring(0, Math.min(50, question.getExplanation().length())));
+    log.info(
+        "  - explanation type: {}, value: {}",
+        question.getExplanation() == null
+            ? "null"
+            : question.getExplanation().getClass().getSimpleName(),
+        question.getExplanation() == null
+            ? "null"
+            : question
+                .getExplanation()
+                .substring(0, Math.min(50, question.getExplanation().length())));
 
     return mapToResponse(question);
   }
@@ -378,17 +398,15 @@ public class QuestionServiceImpl implements QuestionService {
         }
       }
 
-      return questionRepository.findByFilters(currentUserId, difficultyEnum, typeEnum, pageable)
+      return questionRepository
+          .findByFilters(currentUserId, difficultyEnum, typeEnum, pageable)
           .map(this::mapToResponse);
     }
   }
 
   private QuestionResponse mapToResponse(Question question) {
     String creatorName =
-        userRepository
-            .findById(question.getCreatedBy())
-            .map(User::getFullName)
-            .orElse("Unknown");
+        userRepository.findById(question.getCreatedBy()).map(User::getFullName).orElse("Unknown");
 
     String bankName = null;
     if (question.getQuestionBankId() != null) {

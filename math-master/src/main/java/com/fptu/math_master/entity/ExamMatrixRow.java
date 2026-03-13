@@ -1,13 +1,6 @@
 package com.fptu.math_master.entity;
 
-import java.time.Instant;
-import java.util.Set;
-import java.util.UUID;
-
-import org.hibernate.annotations.Nationalized;
-
 import com.fptu.math_master.util.UuidV7Generator;
-
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -21,10 +14,14 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
+import java.util.Set;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Nationalized;
 
 /**
  * One explicit row in an exam-matrix table (ma trận đề thi).
@@ -49,11 +46,11 @@ import lombok.NoArgsConstructor;
 @Table(
     name = "exam_matrix_rows",
     indexes = {
-      @Index(name = "idx_emr_matrix",  columnList = "exam_matrix_id"),
+      @Index(name = "idx_emr_matrix", columnList = "exam_matrix_id"),
       @Index(name = "idx_emr_chapter", columnList = "chapter_id"),
-      @Index(name = "idx_emr_lesson",  columnList = "lesson_id"),
-      @Index(name = "idx_emr_tpl",     columnList = "template_id"),
-      @Index(name = "idx_emr_order",   columnList = "order_index")
+      @Index(name = "idx_emr_lesson", columnList = "lesson_id"),
+      @Index(name = "idx_emr_tpl", columnList = "template_id"),
+      @Index(name = "idx_emr_order", columnList = "order_index")
     })
 public class ExamMatrixRow {
 

@@ -22,7 +22,9 @@ public class CreateSubjectRequest {
 
   @NotBlank(message = "Code is required")
   @Size(max = 50, message = "Code must not exceed 50 characters")
-  @Pattern(regexp = "^[A-Z0-9_]+$", message = "Code must be uppercase letters, digits, or underscores")
+  @Pattern(
+      regexp = "^[A-Z0-9_]+$",
+      message = "Code must be uppercase letters, digits, or underscores")
   private String code;
 
   private String description;

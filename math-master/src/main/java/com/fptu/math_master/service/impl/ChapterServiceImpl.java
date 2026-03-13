@@ -1,13 +1,5 @@
 package com.fptu.math_master.service.impl;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.fptu.math_master.dto.request.CreateChapterRequest;
 import com.fptu.math_master.dto.request.UpdateChapterRequest;
 import com.fptu.math_master.dto.response.ChapterResponse;
@@ -17,11 +9,16 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.CurriculumRepository;
 import com.fptu.math_master.service.ChapterService;
-
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor

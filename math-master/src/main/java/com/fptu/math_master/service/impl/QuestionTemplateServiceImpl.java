@@ -469,8 +469,10 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       String aiResponse = geminiService.sendMessage(prompt);
       log.debug("Gemini response for template generation: {}", aiResponse);
 
-      // Parse the JSON response (simplified - in production, use proper JSON parsing and validation)
-      List<QuestionTemplate> savedTemplates = parseAndSaveTemplates(aiResponse, lesson, currentUserId);
+      // Parse the JSON response (simplified - in production, use proper JSON parsing and
+      // validation)
+      List<QuestionTemplate> savedTemplates =
+          parseAndSaveTemplates(aiResponse, lesson, currentUserId);
 
       generatedTemplates =
           savedTemplates.stream().map(this::mapToResponse).collect(Collectors.toList());
@@ -510,7 +512,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     }
     return content.length() > 0
         ? content.toString()
-        : "No detailed content available. Generate templates based on the lesson title: " + lesson.getTitle();
+        : "No detailed content available. Generate templates based on the lesson title: "
+            + lesson.getTitle();
   }
 
   private List<QuestionTemplate> parseAndSaveTemplates(
@@ -534,11 +537,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
                 .description((String) templateData.getOrDefault("description", ""))
                 .templateType(
                     QuestionType.valueOf(
-                        (String)
-                            templateData.getOrDefault(
-                                "templateType", "MULTIPLE_CHOICE")))
-                .templateText(
-                    Map.of("en", (String) templateData.getOrDefault("templateText", "")))
+                        (String) templateData.getOrDefault("templateType", "MULTIPLE_CHOICE")))
+                .templateText(Map.of("en", (String) templateData.getOrDefault("templateText", "")))
                 .parameters((Map<String, Object>) templateData.get("parameters"))
                 .answerFormula((String) templateData.get("answerFormula"))
                 .cognitiveLevel(
@@ -611,7 +611,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
           // Save question as DRAFT in its own transaction to prevent connection timeouts
           try {
-            UUID savedQuestionId = saveQuestionWithOwnTransaction(currentUserId, template, sample, i);
+            UUID savedQuestionId =
+                saveQuestionWithOwnTransaction(currentUserId, template, sample, i);
             savedQuestionIds.add(savedQuestionId);
           } catch (Exception saveException) {
             log.error(
@@ -669,8 +670,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .templateId(template.getId())
             .questionType(template.getTemplateType())
             .questionText(sample.getQuestionText())
-            .options(
-                sample.getOptions() != null ? new HashMap<>(sample.getOptions()) : null)
+            .options(sample.getOptions() != null ? new HashMap<>(sample.getOptions()) : null)
             .correctAnswer(sample.getCorrectAnswer())
             .difficulty(sample.getCalculatedDifficulty())
             .cognitiveLevel(template.getCognitiveLevel())

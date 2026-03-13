@@ -13,11 +13,11 @@ public interface TemplateImportService {
    * @param file Uploaded file (Word, PDF, or Text)
    * @param subjectHint Optional subject/topic hint
    * @param contextHint Optional context hint
-  * @param questionBankId Optional question bank ID to assign the imported template to
+   * @param questionBankId Optional question bank ID to assign the imported template to
    * @return Analysis and suggested template draft
    */
   TemplateImportResponse importTemplateFromFile(
-    MultipartFile file, String subjectHint, String contextHint, UUID questionBankId);
+      MultipartFile file, String subjectHint, String contextHint, UUID questionBankId);
 
   /**
    * Extract text content from uploaded file

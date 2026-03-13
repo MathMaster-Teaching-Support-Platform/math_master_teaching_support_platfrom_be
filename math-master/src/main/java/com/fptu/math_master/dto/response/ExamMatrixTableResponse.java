@@ -1,13 +1,11 @@
 package com.fptu.math_master.dto.response;
 
+import com.fptu.math_master.enums.MatrixStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import com.fptu.math_master.enums.MatrixStatus;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -44,10 +42,12 @@ public class ExamMatrixTableResponse {
 
   /** Curriculum / chương trình the matrix is based on. */
   private UUID curriculumId;
+
   private String curriculumName;
 
   /** Subject (môn) — resolved from the curriculum. */
   private UUID subjectId;
+
   private String subjectName;
 
   private Boolean isReusable;

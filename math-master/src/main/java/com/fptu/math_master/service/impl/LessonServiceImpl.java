@@ -1,13 +1,5 @@
 package com.fptu.math_master.service.impl;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.fptu.math_master.dto.request.CreateLessonRequest;
 import com.fptu.math_master.dto.request.UpdateLessonRequest;
 import com.fptu.math_master.dto.response.LessonResponse;
@@ -18,11 +10,16 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.service.LessonService;
-
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -45,10 +42,7 @@ public class LessonServiceImpl implements LessonService {
     int orderIndex =
         request.getOrderIndex() != null
             ? request.getOrderIndex()
-            : lessonRepository
-                    .countByChapterIdAndNotDeleted(request.getChapterId())
-                    .intValue()
-                + 1;
+            : lessonRepository.countByChapterIdAndNotDeleted(request.getChapterId()).intValue() + 1;
 
     Lesson lesson =
         Lesson.builder()
@@ -94,7 +88,8 @@ public class LessonServiceImpl implements LessonService {
     if (request.getLessonContent() != null) lesson.setLessonContent(request.getLessonContent());
     if (request.getSummary() != null) lesson.setSummary(request.getSummary());
     if (request.getOrderIndex() != null) lesson.setOrderIndex(request.getOrderIndex());
-    if (request.getDurationMinutes() != null) lesson.setDurationMinutes(request.getDurationMinutes());
+    if (request.getDurationMinutes() != null)
+      lesson.setDurationMinutes(request.getDurationMinutes());
     if (request.getDifficulty() != null) lesson.setDifficulty(request.getDifficulty());
     if (request.getStatus() != null) lesson.setStatus(request.getStatus());
 

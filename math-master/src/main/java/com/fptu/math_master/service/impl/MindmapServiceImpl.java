@@ -15,8 +15,8 @@ import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.MindmapService;
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.*;
+import java.util.Comparator;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -171,14 +171,14 @@ public class MindmapServiceImpl implements MindmapService {
     MindmapResponse mindmapResponse = mapToResponseWithNodeCount(mindmap, allNodes.size());
 
     log.info(
-      "Mindmap detail timing id={} total={}ms, loadMindmap={}ms, auth={}ms, loadNodes={}ms, buildTree={}ms, nodeCount={}",
-      id,
-      builtHierarchyAt - startedAt,
-      loadedMindmapAt - startedAt,
-      validatedPermissionAt - loadedMindmapAt,
-      loadedNodesAt - validatedPermissionAt,
-      builtHierarchyAt - loadedNodesAt,
-      allNodes.size());
+        "Mindmap detail timing id={} total={}ms, loadMindmap={}ms, auth={}ms, loadNodes={}ms, buildTree={}ms, nodeCount={}",
+        id,
+        builtHierarchyAt - startedAt,
+        loadedMindmapAt - startedAt,
+        validatedPermissionAt - loadedMindmapAt,
+        loadedNodesAt - validatedPermissionAt,
+        builtHierarchyAt - loadedNodesAt,
+        allNodes.size());
 
     return MindmapDetailResponse.builder().mindmap(mindmapResponse).nodes(nodes).build();
   }
@@ -301,21 +301,18 @@ public class MindmapServiceImpl implements MindmapService {
     long loadedNamesAt = System.currentTimeMillis();
 
     log.info(
-      "My mindmaps timing teacherId={} total={}ms, loadPage={}ms, nodeCounts={}ms, names={}ms, pageSize={}",
-      currentUserId,
-      loadedNamesAt - startedAt,
-      loadedMindmapsAt - startedAt,
-      loadedNodeCountsAt - loadedMindmapsAt,
-      loadedNamesAt - loadedNodeCountsAt,
-      content.size());
+        "My mindmaps timing teacherId={} total={}ms, loadPage={}ms, nodeCounts={}ms, names={}ms, pageSize={}",
+        currentUserId,
+        loadedNamesAt - startedAt,
+        loadedMindmapsAt - startedAt,
+        loadedNodeCountsAt - loadedMindmapsAt,
+        loadedNamesAt - loadedNodeCountsAt,
+        content.size());
 
     return mindmaps.map(
         m ->
             mapToResponseWithNodeCount(
-                m,
-                nodeCounts.getOrDefault(m.getId(), 0L).intValue(),
-                teacherNames,
-                lessonTitles));
+                m, nodeCounts.getOrDefault(m.getId(), 0L).intValue(), teacherNames, lessonTitles));
   }
 
   @Override
@@ -345,21 +342,18 @@ public class MindmapServiceImpl implements MindmapService {
     long loadedNamesAt = System.currentTimeMillis();
 
     log.info(
-      "Lesson mindmaps timing lessonId={} total={}ms, loadPage={}ms, nodeCounts={}ms, names={}ms, pageSize={}",
-      lessonId,
-      loadedNamesAt - startedAt,
-      loadedMindmapsAt - startedAt,
-      loadedNodeCountsAt - loadedMindmapsAt,
-      loadedNamesAt - loadedNodeCountsAt,
-      content.size());
+        "Lesson mindmaps timing lessonId={} total={}ms, loadPage={}ms, nodeCounts={}ms, names={}ms, pageSize={}",
+        lessonId,
+        loadedNamesAt - startedAt,
+        loadedMindmapsAt - startedAt,
+        loadedNodeCountsAt - loadedMindmapsAt,
+        loadedNamesAt - loadedNodeCountsAt,
+        content.size());
 
     return mindmaps.map(
         m ->
             mapToResponseWithNodeCount(
-                m,
-                nodeCounts.getOrDefault(m.getId(), 0L).intValue(),
-                teacherNames,
-                lessonTitles));
+                m, nodeCounts.getOrDefault(m.getId(), 0L).intValue(), teacherNames, lessonTitles));
   }
 
   @Override
@@ -468,14 +462,15 @@ public class MindmapServiceImpl implements MindmapService {
 
     validateOwnerOrAdmin(mindmap.getTeacherId(), getCurrentUserId());
 
-    List<MindmapNode> allNodes =
-        getSortedNodesByMindmapId(mindmapId);
+    List<MindmapNode> allNodes = getSortedNodesByMindmapId(mindmapId);
     return buildNodeHierarchy(allNodes);
   }
 
   private List<MindmapNode> getSortedNodesByMindmapId(UUID mindmapId) {
     List<MindmapNode> nodes = mindmapNodeRepository.findByMindmapId(mindmapId);
-    nodes.sort(Comparator.comparing(MindmapNode::getDisplayOrder, Comparator.nullsLast(Integer::compareTo)));
+    nodes.sort(
+        Comparator.comparing(
+            MindmapNode::getDisplayOrder, Comparator.nullsLast(Integer::compareTo)));
     return nodes;
   }
 
@@ -909,11 +904,11 @@ public class MindmapServiceImpl implements MindmapService {
 
     if (!missingTeacherIds.isEmpty()) {
       userRepository
-        .findAllById(missingTeacherIds)
-        .forEach(
-          user ->
-            result.put(
-              user.getId(), user.getFullName() != null ? user.getFullName() : "Unknown"));
+          .findAllById(missingTeacherIds)
+          .forEach(
+              user ->
+                  result.put(
+                      user.getId(), user.getFullName() != null ? user.getFullName() : "Unknown"));
     }
 
     return result;

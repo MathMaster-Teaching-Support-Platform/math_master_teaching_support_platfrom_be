@@ -1,11 +1,10 @@
 package com.fptu.math_master.service;
 
-import java.util.List;
-import java.util.UUID;
-
 import com.fptu.math_master.dto.request.CreateSubjectRequest;
 import com.fptu.math_master.dto.request.LinkGradeSubjectRequest;
 import com.fptu.math_master.dto.response.SubjectResponse;
+import java.util.List;
+import java.util.UUID;
 
 public interface SubjectService {
 
