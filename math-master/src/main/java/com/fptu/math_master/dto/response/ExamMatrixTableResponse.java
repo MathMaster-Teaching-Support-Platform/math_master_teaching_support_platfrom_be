@@ -1,12 +1,17 @@
 package com.fptu.math_master.dto.response;
 
-import com.fptu.math_master.enums.MatrixStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import lombok.*;
+
+import com.fptu.math_master.enums.MatrixStatus;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Full hierarchical view of an exam matrix (ma trận đề thi) — mirrors the

@@ -1,7 +1,12 @@
 package com.fptu.math_master.dto.response;
 
+import java.time.Instant;
 import java.util.UUID;
-import lombok.*;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @Builder
@@ -9,8 +14,10 @@ import lombok.*;
 @AllArgsConstructor
 public class ChapterResponse {
   private UUID id;
-  private UUID lessonId;
+  private UUID curriculumId;
   private String title;
   private String description;
   private Integer orderIndex;
+  private Instant createdAt;
+  private Instant updatedAt;
 }

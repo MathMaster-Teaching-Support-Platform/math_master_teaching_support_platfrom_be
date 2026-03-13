@@ -57,6 +57,7 @@ Lớp | Chương              | Dạng bài            | Trích dẫn | NB | TH 
 ```
 
 > **Ghi chú cardinality:**
+>
 > - 1 `Subject` có nhiều `Curriculum` (mỗi lớp/nhu cầu khác nhau)
 > - 1 `Curriculum` có nhiều `Chapter`
 > - 1 `Chapter` có nhiều `Lesson`
@@ -80,43 +81,43 @@ Lớp | Chương              | Dạng bài            | Trích dẫn | NB | TH 
 
 ## 3. Entities mới / thay đổi
 
-### 3.1 `Subject` *(NEW)*
+### 3.1 `Subject` _(NEW)_
 
 Thay thế `CurriculumCategory` enum cho các trường hợp cần thông tin đầy đủ về môn học.
 
-| Cột             | Kiểu         | Mô tả                                              |
-|-----------------|--------------|----------------------------------------------------|
-| `id`            | UUID         | Primary key                                        |
-| `name`          | VARCHAR(255) | Tên môn, ví dụ "Đại Số", "Hình Học", "Giải Tích"   |
-| `code`          | VARCHAR(50)  | Mã định danh duy nhất, ví dụ `DAI_SO`, `HINH_HOC` |
-| `description`   | TEXT         | Mô tả môn                                          |
-| `grade_min`     | INT          | Lớp thấp nhất môn này xuất hiện (nullable)         |
-| `grade_max`     | INT          | Lớp cao nhất môn này xuất hiện (nullable)          |
-| `is_active`     | BOOLEAN      | Soft-delete flag                                   |
-| `created_at`    | TIMESTAMP    |                                                    |
-| `updated_at`    | TIMESTAMP    |                                                    |
+| Cột           | Kiểu         | Mô tả                                             |
+| ------------- | ------------ | ------------------------------------------------- |
+| `id`          | UUID         | Primary key                                       |
+| `name`        | VARCHAR(255) | Tên môn, ví dụ "Đại Số", "Hình Học", "Giải Tích"  |
+| `code`        | VARCHAR(50)  | Mã định danh duy nhất, ví dụ `DAI_SO`, `HINH_HOC` |
+| `description` | TEXT         | Mô tả môn                                         |
+| `grade_min`   | INT          | Lớp thấp nhất môn này xuất hiện (nullable)        |
+| `grade_max`   | INT          | Lớp cao nhất môn này xuất hiện (nullable)         |
+| `is_active`   | BOOLEAN      | Soft-delete flag                                  |
+| `created_at`  | TIMESTAMP    |                                                   |
+| `updated_at`  | TIMESTAMP    |                                                   |
 
 **Quan hệ:** `Subject` 1 → N `Curriculum`, `Subject` N–N `SchoolGrade` via `GradeSubject`.
 
 ---
 
-### 3.2 `GradeSubject` *(NEW)*
+### 3.2 `GradeSubject` _(NEW)_
 
 Bảng junction cho quan hệ N-N giữa **lớp học** và **môn học**.
 
-| Cột           | Kiểu    | Mô tả                             |
-|---------------|---------|-----------------------------------|
-| `id`          | UUID    | Primary key                       |
-| `grade_level` | INT     | Lớp học (10, 11, 12)              |
-| `subject_id`  | UUID FK | Liên kết đến `subjects`           |
-| `is_active`   | BOOLEAN | Soft-delete flag                  |
-| `created_at`  | TIMESTAMP |                                 |
+| Cột           | Kiểu      | Mô tả                   |
+| ------------- | --------- | ----------------------- |
+| `id`          | UUID      | Primary key             |
+| `grade_level` | INT       | Lớp học (10, 11, 12)    |
+| `subject_id`  | UUID FK   | Liên kết đến `subjects` |
+| `is_active`   | BOOLEAN   | Soft-delete flag        |
+| `created_at`  | TIMESTAMP |                         |
 
 **Ý nghĩa:** Ví dụ, grade=12 được liên kết với Subject `DAI_SO`, `HINH_HOC`, `GIAI_TICH` — cho phép UI hiển thị "Lớp 12 học các môn: Đại Số, Hình Học, Giải Tích".
 
 ---
 
-### 3.3 `Curriculum` *(UPDATED)*
+### 3.3 `Curriculum` _(UPDATED)_
 
 Thêm trường `subject_id` (nullable) để liên kết với `Subject` entity mới.
 
@@ -127,50 +128,50 @@ Curriculum.subjectId (UUID FK → subjects)     — preferred going forward
 
 ---
 
-### 3.4 `ExamMatrix` *(UPDATED)*
+### 3.4 `ExamMatrix` _(UPDATED)_
 
-| Trường thêm mới   | Kiểu    | Mô tả                                              |
-|-------------------|---------|----------------------------------------------------|
-| `curriculum_id`   | UUID FK | Chương trình ma trận dựa vào (optional)            |
-| `grade_level`     | INT     | Cache lớp mục tiêu (ví dụ 12)                     |
+| Trường thêm mới | Kiểu    | Mô tả                                   |
+| --------------- | ------- | --------------------------------------- |
+| `curriculum_id` | UUID FK | Chương trình ma trận dựa vào (optional) |
+| `grade_level`   | INT     | Cache lớp mục tiêu (ví dụ 12)           |
 
 ---
 
-### 3.5 `ExamMatrixRow` *(NEW)*
+### 3.5 `ExamMatrixRow` _(NEW)_
 
 Mỗi **hàng** trong bảng ma trận đề thi — tương ứng với một **dạng bài**.
 
-| Cột                   | Kiểu         | Mô tả                                           |
-|-----------------------|--------------|-------------------------------------------------|
-| `id`                  | UUID         | Primary key                                     |
-| `exam_matrix_id`      | UUID FK      | Ma trận chứa hàng này                           |
-| `chapter_id`          | UUID FK      | Chương (chongson)                               |
-| `lesson_id`           | UUID FK      | Bài học (optional, thu hẹp xuống bài cụ thể)   |
-| `template_id`         | UUID FK      | QuestionTemplate (dạng bài, optional)           |
-| `question_type_name`  | VARCHAR(500) | Tên hiển thị "Đơn điệu của HS"                 |
-| `reference_questions` | VARCHAR(255) | Số đề tham chiếu "3,30" (cột Trích dẫn)        |
-| `order_index`         | INT          | Thứ tự trong nhóm chương                        |
-| `created_at`          | TIMESTAMP    |                                                 |
-| `updated_at`          | TIMESTAMP    |                                                 |
+| Cột                   | Kiểu         | Mô tả                                        |
+| --------------------- | ------------ | -------------------------------------------- |
+| `id`                  | UUID         | Primary key                                  |
+| `exam_matrix_id`      | UUID FK      | Ma trận chứa hàng này                        |
+| `chapter_id`          | UUID FK      | Chương (chongson)                            |
+| `lesson_id`           | UUID FK      | Bài học (optional, thu hẹp xuống bài cụ thể) |
+| `template_id`         | UUID FK      | QuestionTemplate (dạng bài, optional)        |
+| `question_type_name`  | VARCHAR(500) | Tên hiển thị "Đơn điệu của HS"               |
+| `reference_questions` | VARCHAR(255) | Số đề tham chiếu "3,30" (cột Trích dẫn)      |
+| `order_index`         | INT          | Thứ tự trong nhóm chương                     |
+| `created_at`          | TIMESTAMP    |                                              |
+| `updated_at`          | TIMESTAMP    |                                              |
 
 ---
 
-### 3.6 `ExamMatrixTemplateMapping` *(UPDATED)*
+### 3.6 `ExamMatrixTemplateMapping` _(UPDATED)_
 
 Thêm trường `matrix_row_id` (UUID FK → `exam_matrix_rows`) để liên kết cell với row.
 
 ---
 
-### 3.7 `CognitiveLevel` enum *(UPDATED)*
+### 3.7 `CognitiveLevel` enum _(UPDATED)_
 
 Thêm 4 mức độ chuẩn THPT Việt Nam:
 
-| Enum value     | Label | Ý nghĩa              |
-|----------------|-------|----------------------|
-| `NHAN_BIET`    | NB    | Nhận Biết            |
-| `THONG_HIEU`   | TH    | Thông Hiểu           |
-| `VAN_DUNG`     | VD    | Vận Dụng             |
-| `VAN_DUNG_CAO` | VDC   | Vận Dụng Cao         |
+| Enum value     | Label | Ý nghĩa      |
+| -------------- | ----- | ------------ |
+| `NHAN_BIET`    | NB    | Nhận Biết    |
+| `THONG_HIEU`   | TH    | Thông Hiểu   |
+| `VAN_DUNG`     | VD    | Vận Dụng     |
+| `VAN_DUNG_CAO` | VDC   | Vận Dụng Cao |
 
 > Các giá trị Bloom cũ (`REMEMBER`, `UNDERSTAND`, `APPLY`, `ANALYZE`, `EVALUATE`, `CREATE`) vẫn được giữ để backward-compat.
 
@@ -180,17 +181,18 @@ Thêm 4 mức độ chuẩn THPT Việt Nam:
 
 ### 4.1 Subject (Môn học) — `/subjects`
 
-| Method   | Endpoint                              | Auth       | Mô tả                              |
-|----------|---------------------------------------|------------|------------------------------------|
-| `POST`   | `/subjects`                           | ADMIN      | Tạo môn mới                        |
-| `GET`    | `/subjects`                           | Public     | Danh sách tất cả môn đang active   |
-| `GET`    | `/subjects/{subjectId}`               | Public     | Chi tiết một môn                   |
-| `GET`    | `/subjects/grade/{gradeLevel}`        | Public     | Các môn thuộc lớp (10/11/12)       |
-| `POST`   | `/subjects/{subjectId}/grades`        | ADMIN      | Liên kết môn với lớp (N-N)         |
-| `DELETE` | `/subjects/{subjectId}/grades/{grade}`| ADMIN      | Bỏ liên kết môn-lớp               |
-| `DELETE` | `/subjects/{subjectId}`               | ADMIN      | Deactivate môn (soft delete)       |
+| Method   | Endpoint                               | Auth   | Mô tả                            |
+| -------- | -------------------------------------- | ------ | -------------------------------- |
+| `POST`   | `/subjects`                            | ADMIN  | Tạo môn mới                      |
+| `GET`    | `/subjects`                            | Public | Danh sách tất cả môn đang active |
+| `GET`    | `/subjects/{subjectId}`                | Public | Chi tiết một môn                 |
+| `GET`    | `/subjects/grade/{gradeLevel}`         | Public | Các môn thuộc lớp (10/11/12)     |
+| `POST`   | `/subjects/{subjectId}/grades`         | ADMIN  | Liên kết môn với lớp (N-N)       |
+| `DELETE` | `/subjects/{subjectId}/grades/{grade}` | ADMIN  | Bỏ liên kết môn-lớp              |
+| `DELETE` | `/subjects/{subjectId}`                | ADMIN  | Deactivate môn (soft delete)     |
 
 **Tạo môn mới:**
+
 ```json
 POST /subjects
 {
@@ -203,6 +205,7 @@ POST /subjects
 ```
 
 **Liên kết môn với lớp:**
+
 ```json
 POST /subjects/{subjectId}/grades
 { "gradeLevel": 12 }
@@ -217,6 +220,7 @@ POST /subjects/{subjectId}/grades
 Tạo ma trận đề thi hoàn chỉnh trong **một request duy nhất**.
 
 **Request Body:**
+
 ```json
 {
   "name": "Ma Trận Đề Minh Họa THPT 2024",
@@ -234,8 +238,16 @@ Tạo ma trận đề thi hoàn chỉnh trong **một request duy nhất**.
       "referenceQuestions": "3,30",
       "orderIndex": 1,
       "cells": [
-        { "cognitiveLevel": "NHAN_BIET",  "questionCount": 1, "pointsPerQuestion": 0.2 },
-        { "cognitiveLevel": "THONG_HIEU", "questionCount": 1, "pointsPerQuestion": 0.2 }
+        {
+          "cognitiveLevel": "NHAN_BIET",
+          "questionCount": 1,
+          "pointsPerQuestion": 0.2
+        },
+        {
+          "cognitiveLevel": "THONG_HIEU",
+          "questionCount": 1,
+          "pointsPerQuestion": 0.2
+        }
       ]
     },
     {
@@ -245,10 +257,26 @@ Tạo ma trận đề thi hoàn chỉnh trong **một request duy nhất**.
       "referenceQuestions": "4,5,39,46",
       "orderIndex": 2,
       "cells": [
-        { "cognitiveLevel": "NHAN_BIET",    "questionCount": 1, "pointsPerQuestion": 0.2 },
-        { "cognitiveLevel": "THONG_HIEU",   "questionCount": 1, "pointsPerQuestion": 0.2 },
-        { "cognitiveLevel": "VAN_DUNG",     "questionCount": 1, "pointsPerQuestion": 0.2 },
-        { "cognitiveLevel": "VAN_DUNG_CAO", "questionCount": 1, "pointsPerQuestion": 0.2 }
+        {
+          "cognitiveLevel": "NHAN_BIET",
+          "questionCount": 1,
+          "pointsPerQuestion": 0.2
+        },
+        {
+          "cognitiveLevel": "THONG_HIEU",
+          "questionCount": 1,
+          "pointsPerQuestion": 0.2
+        },
+        {
+          "cognitiveLevel": "VAN_DUNG",
+          "questionCount": 1,
+          "pointsPerQuestion": 0.2
+        },
+        {
+          "cognitiveLevel": "VAN_DUNG_CAO",
+          "questionCount": 1,
+          "pointsPerQuestion": 0.2
+        }
       ]
     }
   ]
@@ -276,9 +304,21 @@ Thêm một dòng (dạng bài) vào ma trận đang ở trạng thái DRAFT.
   "questionTypeName": "PT Mũ – Logarit",
   "referenceQuestions": "12,13,47",
   "cells": [
-    { "cognitiveLevel": "NHAN_BIET",  "questionCount": 1, "pointsPerQuestion": 0.2 },
-    { "cognitiveLevel": "THONG_HIEU", "questionCount": 1, "pointsPerQuestion": 0.2 },
-    { "cognitiveLevel": "VAN_DUNG_CAO","questionCount": 1, "pointsPerQuestion": 0.2 }
+    {
+      "cognitiveLevel": "NHAN_BIET",
+      "questionCount": 1,
+      "pointsPerQuestion": 0.2
+    },
+    {
+      "cognitiveLevel": "THONG_HIEU",
+      "questionCount": 1,
+      "pointsPerQuestion": 0.2
+    },
+    {
+      "cognitiveLevel": "VAN_DUNG_CAO",
+      "questionCount": 1,
+      "pointsPerQuestion": 0.2
+    }
   ]
 }
 ```
@@ -371,19 +411,19 @@ ExamMatrixTableResponse
 
 Dựa vào hình ảnh đề minh họa THPT (50 câu, 10 điểm):
 
-| Lớp | Chương                    | Dạng bài              | NB | TH | VD | VDC | Tổng |
-|-----|---------------------------|-----------------------|----|----|----|-----|------|
-| 12  | Đạo Hàm và Ứng Dụng      | Đơn điệu của HS       |  1 |  1 |    |     |    2 |
-| 12  |                           | Cực trị của HS        |  1 |  1 |  1 |   1 |    4 |
-| 12  |                           | Min, Max của hàm số   |    |    |  1 |     |    1 |
-| 12  |                           | Đường Tiệm Cận        |  1 |    |    |     |    1 |
-| 12  |                           | Khảo sát và vẽ đồ thị |  1 |  1 |    |     |    2 |
-| 12  | Hàm Số Mũ – Logarit       | Lũy thừa – Mũ – Log  |  1 |  1 |    |     |    2 |
-| ... | ...                       | ...                   | .. | .. | .. |  .. |  ... |
-| 11  | Tổ Hợp – Xác Suất         | Hoán vị – Chỉnh hợp  |  1 |    |    |     |    1 |
-| 11  |                           | Cấp số cộng/nhân      |  1 |    |    |     |    1 |
-| 11  |                           | Xác suất              |    |  1 |    |     |    1 |
-|     | **Tổng**                  |                       | 20 | 15 | 10 |   5 |   50 |
+| Lớp | Chương              | Dạng bài              | NB  | TH  | VD  | VDC | Tổng |
+| --- | ------------------- | --------------------- | --- | --- | --- | --- | ---- |
+| 12  | Đạo Hàm và Ứng Dụng | Đơn điệu của HS       | 1   | 1   |     |     | 2    |
+| 12  |                     | Cực trị của HS        | 1   | 1   | 1   | 1   | 4    |
+| 12  |                     | Min, Max của hàm số   |     |     | 1   |     | 1    |
+| 12  |                     | Đường Tiệm Cận        | 1   |     |     |     | 1    |
+| 12  |                     | Khảo sát và vẽ đồ thị | 1   | 1   |     |     | 2    |
+| 12  | Hàm Số Mũ – Logarit | Lũy thừa – Mũ – Log   | 1   | 1   |     |     | 2    |
+| ... | ...                 | ...                   | ..  | ..  | ..  | ..  | ...  |
+| 11  | Tổ Hợp – Xác Suất   | Hoán vị – Chỉnh hợp   | 1   |     |     |     | 1    |
+| 11  |                     | Cấp số cộng/nhân      | 1   |     |     |     | 1    |
+| 11  |                     | Xác suất              |     | 1   |     |     | 1    |
+|     | **Tổng**            |                       | 20  | 15  | 10  | 5   | 50   |
 
 ---
 
@@ -480,41 +520,41 @@ VALUES
 
 ## 9. Tóm tắt thay đổi
 
-| File                                          | Loại thay đổi    | Mô tả                                          |
-|-----------------------------------------------|------------------|------------------------------------------------|
-| `entity/Subject.java`                         | **NEW**          | Môn học entity                                 |
-| `entity/GradeSubject.java`                    | **NEW**          | N-N Grade ↔ Subject junction                  |
-| `entity/ExamMatrixRow.java`                   | **NEW**          | Dạng-bài row trong ma trận                    |
-| `entity/Curriculum.java`                      | **UPDATED**      | Thêm `subjectId` FK                           |
-| `entity/ExamMatrix.java`                      | **UPDATED**      | Thêm `curriculumId`, `gradeLevel`             |
-| `entity/ExamMatrixTemplateMapping.java`       | **UPDATED**      | Thêm `matrixRowId` FK                         |
-| `enums/CognitiveLevel.java`                   | **UPDATED**      | Thêm NB/TH/VD/VDC (THPT standard)            |
-| `exception/ErrorCode.java`                    | **UPDATED**      | Thêm error codes cho Subject, row             |
-| `repository/SubjectRepository.java`           | **NEW**          | JPA repo cho Subject                          |
-| `repository/GradeSubjectRepository.java`      | **NEW**          | JPA repo cho GradeSubject                     |
-| `repository/ExamMatrixRowRepository.java`     | **NEW**          | JPA repo cho ExamMatrixRow                    |
-| `dto/request/CreateSubjectRequest.java`       | **NEW**          | Request tạo Subject                           |
-| `dto/request/LinkGradeSubjectRequest.java`    | **NEW**          | Request liên kết Grade-Subject                |
-| `dto/request/BuildExamMatrixRequest.java`     | **NEW**          | Structured matrix builder request             |
-| `dto/request/MatrixRowRequest.java`           | **NEW**          | Một hàng trong ma trận                        |
-| `dto/request/MatrixCellRequest.java`          | **NEW**          | Một ô trong hàng                              |
-| `dto/response/SubjectResponse.java`           | **NEW**          | Response cho Subject                          |
-| `dto/response/MatrixCellResponse.java`        | **NEW**          | Response cho ô ma trận                        |
-| `dto/response/MatrixRowResponse.java`         | **NEW**          | Response cho hàng ma trận                     |
-| `dto/response/MatrixChapterGroupResponse.java`| **NEW**          | Response nhóm theo chương                     |
-| `dto/response/ExamMatrixTableResponse.java`   | **NEW**          | Full hierarchical table response              |
-| `service/SubjectService.java`                 | **NEW**          | Interface service Subject                     |
-| `service/impl/SubjectServiceImpl.java`        | **NEW**          | Implementation SubjectService                 |
-| `service/ExamMatrixService.java`              | **UPDATED**      | Thêm `buildMatrix`, `getMatrixTable`, row ops |
-| `service/impl/ExamMatrixServiceImpl.java`     | **UPDATED**      | Implement new matrix methods                  |
-| `controller/SubjectController.java`           | **NEW**          | REST endpoints cho Subject                    |
-| `controller/ExamMatrixController.java`        | **UPDATED**      | Thêm `/build`, `/table`, `/rows` endpoints   |
+| File                                           | Loại thay đổi | Mô tả                                         |
+| ---------------------------------------------- | ------------- | --------------------------------------------- |
+| `entity/Subject.java`                          | **NEW**       | Môn học entity                                |
+| `entity/GradeSubject.java`                     | **NEW**       | N-N Grade ↔ Subject junction                  |
+| `entity/ExamMatrixRow.java`                    | **NEW**       | Dạng-bài row trong ma trận                    |
+| `entity/Curriculum.java`                       | **UPDATED**   | Thêm `subjectId` FK                           |
+| `entity/ExamMatrix.java`                       | **UPDATED**   | Thêm `curriculumId`, `gradeLevel`             |
+| `entity/ExamMatrixTemplateMapping.java`        | **UPDATED**   | Thêm `matrixRowId` FK                         |
+| `enums/CognitiveLevel.java`                    | **UPDATED**   | Thêm NB/TH/VD/VDC (THPT standard)             |
+| `exception/ErrorCode.java`                     | **UPDATED**   | Thêm error codes cho Subject, row             |
+| `repository/SubjectRepository.java`            | **NEW**       | JPA repo cho Subject                          |
+| `repository/GradeSubjectRepository.java`       | **NEW**       | JPA repo cho GradeSubject                     |
+| `repository/ExamMatrixRowRepository.java`      | **NEW**       | JPA repo cho ExamMatrixRow                    |
+| `dto/request/CreateSubjectRequest.java`        | **NEW**       | Request tạo Subject                           |
+| `dto/request/LinkGradeSubjectRequest.java`     | **NEW**       | Request liên kết Grade-Subject                |
+| `dto/request/BuildExamMatrixRequest.java`      | **NEW**       | Structured matrix builder request             |
+| `dto/request/MatrixRowRequest.java`            | **NEW**       | Một hàng trong ma trận                        |
+| `dto/request/MatrixCellRequest.java`           | **NEW**       | Một ô trong hàng                              |
+| `dto/response/SubjectResponse.java`            | **NEW**       | Response cho Subject                          |
+| `dto/response/MatrixCellResponse.java`         | **NEW**       | Response cho ô ma trận                        |
+| `dto/response/MatrixRowResponse.java`          | **NEW**       | Response cho hàng ma trận                     |
+| `dto/response/MatrixChapterGroupResponse.java` | **NEW**       | Response nhóm theo chương                     |
+| `dto/response/ExamMatrixTableResponse.java`    | **NEW**       | Full hierarchical table response              |
+| `service/SubjectService.java`                  | **NEW**       | Interface service Subject                     |
+| `service/impl/SubjectServiceImpl.java`         | **NEW**       | Implementation SubjectService                 |
+| `service/ExamMatrixService.java`               | **UPDATED**   | Thêm `buildMatrix`, `getMatrixTable`, row ops |
+| `service/impl/ExamMatrixServiceImpl.java`      | **UPDATED**   | Implement new matrix methods                  |
+| `controller/SubjectController.java`            | **NEW**       | REST endpoints cho Subject                    |
+| `controller/ExamMatrixController.java`         | **UPDATED**   | Thêm `/build`, `/table`, `/rows` endpoints    |
 
 ---
 
 ## 10. Ví dụ đầu cuối — Tạo ma trận hoàn chỉnh
 
-> **Kịch bản:** Giáo viên muốn tạo ma trận đề kiểm tra **Toán lớp 12 – Đại Số**, gồm **10 câu trắc nghiệm, 2 điểm** (mỗi câu 0.2đ), lấy từ 2 chương: *Đạo Hàm* (7 câu) và *Hàm Số Mũ-Logarit* (3 câu).
+> **Kịch bản:** Giáo viên muốn tạo ma trận đề kiểm tra **Toán lớp 12 – Đại Số**, gồm **10 câu trắc nghiệm, 2 điểm** (mỗi câu 0.2đ), lấy từ 2 chương: _Đạo Hàm_ (7 câu) và _Hàm Số Mũ-Logarit_ (3 câu).
 
 ---
 
@@ -522,12 +562,12 @@ VALUES
 
 Trước khi gọi `/build`, bạn cần có UUID của:
 
-| Thứ gì | Lấy từ đâu |
-|--------|------------|
-| `curriculumId` | `GET /curricula` → chọn "Toán 12 – Đại Số" |
-| `chapterId` (Đạo Hàm) | `GET /curricula/{id}/chapters` |
-| `chapterId` (Hàm Mũ-Log) | tương tự |
-| `templateId` | `GET /question-templates` (nếu đã có template) |
+| Thứ gì                   | Lấy từ đâu                                     |
+| ------------------------ | ---------------------------------------------- |
+| `curriculumId`           | `GET /curricula` → chọn "Toán 12 – Đại Số"     |
+| `chapterId` (Đạo Hàm)    | `GET /curricula/{id}/chapters`                 |
+| `chapterId` (Hàm Mũ-Log) | tương tự                                       |
+| `templateId`             | `GET /question-templates` (nếu đã có template) |
 
 > Nếu chưa có Curriculum, tạo trước bằng `POST /curricula`.  
 > `templateId` là **optional** — có thể bỏ qua và chỉ dùng `questionTypeName`.
@@ -555,6 +595,7 @@ Content-Type: application/json
 ```
 
 Response:
+
 ```json
 {
   "code": 1000,
@@ -671,6 +712,7 @@ Authorization: Bearer <teacher-token>
 ```
 
 Response thu gọn:
+
 ```json
 {
   "code": 1000,
@@ -689,26 +731,26 @@ Response thu gọn:
             "referenceQuestions": "3,30",
             "countByCognitive": { "NB": 1, "TH": 1 },
             "rowTotalQuestions": 2,
-            "rowTotalPoints": 0.40
+            "rowTotalPoints": 0.4
           },
           {
             "questionTypeName": "Cực trị của hàm số",
             "referenceQuestions": "4,5,39,46",
             "countByCognitive": { "NB": 1, "TH": 1, "VD": 1, "VDC": 1 },
             "rowTotalQuestions": 4,
-            "rowTotalPoints": 0.80
+            "rowTotalPoints": 0.8
           },
           {
             "questionTypeName": "Giá trị lớn nhất / nhỏ nhất của hàm số",
             "referenceQuestions": "12",
             "countByCognitive": { "VD": 1 },
             "rowTotalQuestions": 1,
-            "rowTotalPoints": 0.20
+            "rowTotalPoints": 0.2
           }
         ],
         "totalByCognitive": { "NB": 2, "TH": 2, "VD": 2, "VDC": 1 },
         "chapterTotalQuestions": 7,
-        "chapterTotalPoints": 1.40
+        "chapterTotalPoints": 1.4
       },
       {
         "chapterId": "01950000-0000-7000-8000-cccccccccc02",
@@ -719,24 +761,24 @@ Response thu gọn:
             "referenceQuestions": "21,22",
             "countByCognitive": { "NB": 1, "TH": 1 },
             "rowTotalQuestions": 2,
-            "rowTotalPoints": 0.40
+            "rowTotalPoints": 0.4
           },
           {
             "questionTypeName": "Phương trình Mũ – Logarit",
             "referenceQuestions": "47",
             "countByCognitive": { "VD": 1 },
             "rowTotalQuestions": 1,
-            "rowTotalPoints": 0.20
+            "rowTotalPoints": 0.2
           }
         ],
         "totalByCognitive": { "NB": 1, "TH": 1, "VD": 1 },
         "chapterTotalQuestions": 3,
-        "chapterTotalPoints": 0.60
+        "chapterTotalPoints": 0.6
       }
     ],
     "grandTotalByCognitive": { "NB": 3, "TH": 3, "VD": 3, "VDC": 1 },
     "grandTotalQuestions": 10,
-    "grandTotalPoints": 2.00
+    "grandTotalPoints": 2.0
   }
 }
 ```
@@ -745,22 +787,23 @@ Response thu gọn:
 
 ### Kết quả dạng bảng (tương ứng hình ảnh)
 
-| Chương                   | Dạng bài                        | Trích dẫn | NB | TH | VD | VDC | Tổng |
-|--------------------------|---------------------------------|-----------|----|----|----|-----|------|
-| Đạo Hàm và Ứng Dụng     | Đơn điệu của hàm số             | 3, 30     |  1 |  1 |    |     |    2 |
-|                          | Cực trị của hàm số              | 4,5,39,46 |  1 |  1 |  1 |   1 |    4 |
-|                          | GT lớn nhất / nhỏ nhất HS      | 12        |    |    |  1 |     |    1 |
-|                          | **Tổng chương**                 |           |**2**|**2**|**2**|**1**|**7**|
-| Hàm Số Mũ và Logarit     | Lũy thừa – Mũ – Logarit (căn) | 21, 22    |  1 |  1 |    |     |    2 |
-|                          | Phương trình Mũ – Logarit      | 47        |    |    |  1 |     |    1 |
-|                          | **Tổng chương**                 |           |**1**|**1**|**1**|**0**|**3**|
-| **TỔNG**                 |                                 |           |**3**|**3**|**3**|**1**|**10**|
+| Chương               | Dạng bài                      | Trích dẫn | NB    | TH    | VD    | VDC   | Tổng   |
+| -------------------- | ----------------------------- | --------- | ----- | ----- | ----- | ----- | ------ |
+| Đạo Hàm và Ứng Dụng  | Đơn điệu của hàm số           | 3, 30     | 1     | 1     |       |       | 2      |
+|                      | Cực trị của hàm số            | 4,5,39,46 | 1     | 1     | 1     | 1     | 4      |
+|                      | GT lớn nhất / nhỏ nhất HS     | 12        |       |       | 1     |       | 1      |
+|                      | **Tổng chương**               |           | **2** | **2** | **2** | **1** | **7**  |
+| Hàm Số Mũ và Logarit | Lũy thừa – Mũ – Logarit (căn) | 21, 22    | 1     | 1     |       |       | 2      |
+|                      | Phương trình Mũ – Logarit     | 47        |       |       | 1     |       | 1      |
+|                      | **Tổng chương**               |           | **1** | **1** | **1** | **0** | **3**  |
+| **TỔNG**             |                               |           | **3** | **3** | **3** | **1** | **10** |
 
 ---
 
 ### Bước 4 (tuỳ chọn) — Thêm / xoá dòng sau khi tạo
 
 **Thêm một dạng bài mới:**
+
 ```http
 POST /exam-matrices/{matrixId}/rows
 Authorization: Bearer <teacher-token>
@@ -778,6 +821,7 @@ Content-Type: application/json
 ```
 
 **Xoá một dòng:**
+
 ```http
 DELETE /exam-matrices/{matrixId}/rows/{rowId}
 Authorization: Bearer <teacher-token>

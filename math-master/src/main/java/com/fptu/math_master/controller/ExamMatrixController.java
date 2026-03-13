@@ -1,19 +1,44 @@
 package com.fptu.math_master.controller;
 
-import com.fptu.math_master.dto.request.*;
-import com.fptu.math_master.dto.response.*;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
+import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
+import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
+import com.fptu.math_master.dto.request.ExamMatrixRequest;
+import com.fptu.math_master.dto.request.FinalizePreviewRequest;
+import com.fptu.math_master.dto.request.GeneratePreviewRequest;
+import com.fptu.math_master.dto.request.MatrixRowRequest;
+import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.BatchTemplateMappingsResponse;
+import com.fptu.math_master.dto.response.ExamMatrixResponse;
+import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
+import com.fptu.math_master.dto.response.FinalizePreviewResponse;
+import com.fptu.math_master.dto.response.MatchingTemplatesResponse;
+import com.fptu.math_master.dto.response.MatrixValidationReport;
+import com.fptu.math_master.dto.response.PreviewCandidatesResponse;
+import com.fptu.math_master.dto.response.TemplateMappingResponse;
 import com.fptu.math_master.service.ExamMatrixService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
-import java.util.List;
-import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/exam-matrices")

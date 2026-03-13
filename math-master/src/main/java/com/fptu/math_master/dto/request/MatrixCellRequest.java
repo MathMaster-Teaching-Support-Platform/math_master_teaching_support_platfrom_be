@@ -1,9 +1,16 @@
 package com.fptu.math_master.dto.request;
 
-import com.fptu.math_master.enums.CognitiveLevel;
-import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
-import lombok.*;
+
+import com.fptu.math_master.enums.CognitiveLevel;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * One cell in an exam-matrix row — specifies how many questions of a given

@@ -1,9 +1,14 @@
 package com.fptu.math_master.dto.response;
 
-import com.fptu.math_master.enums.CognitiveLevel;
 import java.math.BigDecimal;
 import java.util.UUID;
-import lombok.*;
+
+import com.fptu.math_master.enums.CognitiveLevel;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * One cell in the exam-matrix table — a single (dạng bài × mức độ) combination.
