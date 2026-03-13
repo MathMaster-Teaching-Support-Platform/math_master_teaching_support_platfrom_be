@@ -202,6 +202,10 @@ public enum ErrorCode {
   ASSESSMENT_LESSON_NOT_IN_MATRIX(
       1120,
       "One or more selected lessons are not available in the chosen exam matrix",
+      HttpStatus.BAD_REQUEST),
+  TEMPLATE_MAPPING_TEMPLATE_MISMATCH(
+      1121,
+      "Requested template does not match the matrix template mapping",
       HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {

@@ -52,4 +52,11 @@ public interface AssessmentQuestionRepository extends JpaRepository<AssessmentQu
           + "JOIN Question q ON aq.questionId = q.id "
           + "WHERE aq.assessmentId = :assessmentId AND q.deletedAt IS NULL")
   List<String> findExistingQuestionTextsByAssessmentId(@Param("assessmentId") UUID assessmentId);
+
+  @Query(
+      "SELECT COUNT(aq) FROM AssessmentQuestion aq "
+          + "WHERE aq.assessmentId = :assessmentId "
+          + "AND aq.matrixTemplateMappingId = :mappingId")
+  long countByAssessmentIdAndMatrixTemplateMappingId(
+      @Param("assessmentId") UUID assessmentId, @Param("mappingId") UUID mappingId);
 }

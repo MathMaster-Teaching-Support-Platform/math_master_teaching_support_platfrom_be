@@ -514,6 +514,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .findByIdAndExamMatrixId(mappingId, matrixId)
             .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
 
+    if (!mapping.getTemplateId().equals(request.getTemplateId())) {
+      throw new AppException(ErrorCode.TEMPLATE_MAPPING_TEMPLATE_MISMATCH);
+    }
+
     QuestionTemplate template =
         questionTemplateRepository
             .findByIdWithCreator(request.getTemplateId())
@@ -663,6 +667,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .findByIdAndExamMatrixId(mappingId, matrixId)
             .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
 
+    if (!mapping.getTemplateId().equals(request.getTemplateId())) {
+      throw new AppException(ErrorCode.TEMPLATE_MAPPING_TEMPLATE_MISMATCH);
+    }
+
     // ── 3. Validate template ─────────────────────────────────────────────
     QuestionTemplate template =
         questionTemplateRepository
@@ -684,8 +692,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
           mappingId);
       // Find all AssessmentQuestion rows linked to this template mapping and remove them
       // across any assessment that references this matrix
-      assessmentRepository.findAll().stream()
-          .filter(a -> matrixId.equals(a.getExamMatrixId()) && a.getDeletedAt() == null)
+      assessmentRepository
+          .findByExamMatrixIdAndNotDeleted(matrixId)
           .forEach(
               a -> {
                 List<AssessmentQuestion> existing =
@@ -763,16 +771,13 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     // ── 6. Overflow check (append mode) ─────────────────────────────────
     if (!Boolean.TRUE.equals(request.getReplaceExisting())) {
       long currentCount =
-          assessmentQuestionRepository
-              .findByAssessmentIdOrderByOrderIndex(
-                  assessmentRepository.findAll().stream()
-                      .filter(a -> matrixId.equals(a.getExamMatrixId()) && a.getDeletedAt() == null)
-                      .map(Assessment::getId)
-                      .findFirst()
-                      .orElse(UUID.randomUUID()))
-              .stream()
-              .filter(aq -> mappingId.equals(aq.getMatrixTemplateMappingId()))
-              .count();
+          assessmentRepository.findByExamMatrixIdAndNotDeleted(matrixId).stream()
+              .mapToLong(
+                  a ->
+                      assessmentQuestionRepository.countByAssessmentIdAndMatrixTemplateMappingId(
+                          a.getId(), mappingId))
+              .max()
+              .orElse(0L);
       long afterAdd = currentCount + validItems.size();
       if (afterAdd > mapping.getQuestionCount()) {
         warnings.add(
@@ -827,9 +832,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
     // ── 8. Write assessment_questions for all assessments using this matrix ──
     List<Assessment> linkedAssessments =
-        assessmentRepository.findAll().stream()
-            .filter(a -> matrixId.equals(a.getExamMatrixId()) && a.getDeletedAt() == null)
-            .collect(Collectors.toList());
+        assessmentRepository.findByExamMatrixIdAndNotDeleted(matrixId);
 
     for (Assessment assessment : linkedAssessments) {
       Integer maxOrder = assessmentQuestionRepository.findMaxOrderIndex(assessment.getId());

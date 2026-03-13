@@ -29,6 +29,10 @@ public interface AssessmentRepository
   @Query("SELECT a FROM Assessment a WHERE a.deletedAt IS NULL")
   Page<Assessment> findByNotDeleted(Pageable pageable);
 
+  @Query(
+      "SELECT a FROM Assessment a WHERE a.examMatrixId = :examMatrixId AND a.deletedAt IS NULL")
+  List<Assessment> findByExamMatrixIdAndNotDeleted(@Param("examMatrixId") UUID examMatrixId);
+
   @Query("SELECT COUNT(s) FROM Submission s WHERE s.assessmentId = :assessmentId")
   Long countSubmissionsByAssessmentId(@Param("assessmentId") UUID assessmentId);
 

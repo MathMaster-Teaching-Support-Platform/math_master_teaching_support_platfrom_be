@@ -11,6 +11,7 @@ import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.AssessmentQuestion;
 import com.fptu.math_master.entity.ExamMatrix;
+import com.fptu.math_master.entity.ExamMatrixTemplateMapping;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
@@ -304,8 +305,17 @@ public class AssessmentServiceImpl implements AssessmentService {
         throw new AppException(ErrorCode.MATRIX_NOT_APPROVED);
       }
 
-      // TODO: Implement proper question count validation for ExamMatrixTemplateMapping architecture
-      // For now, matrix locking logic is deferred
+      List<ExamMatrixTemplateMapping> mappings =
+          examMatrixTemplateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
+      for (ExamMatrixTemplateMapping mapping : mappings) {
+        long actualCount =
+            assessmentQuestionRepository.countByAssessmentIdAndMatrixTemplateMappingId(
+                assessment.getId(), mapping.getId());
+        if (actualCount != mapping.getQuestionCount()) {
+          throw new AppException(ErrorCode.MATRIX_CELL_FILL_INCOMPLETE);
+        }
+      }
+
       examMatrixService.lockMatrix(matrix.getId());
     }
 
