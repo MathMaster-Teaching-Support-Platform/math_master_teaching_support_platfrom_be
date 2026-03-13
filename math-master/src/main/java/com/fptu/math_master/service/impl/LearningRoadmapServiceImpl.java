@@ -48,6 +48,7 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   RoadmapTopicRepository topicRepository;
   GradeRepository gradeRepository;
   AssessmentRepository assessmentRepository;
+  QuestionTemplateRepository questionTemplateRepository;
   MindmapRepository mindmapRepository;
   TopicLearningMaterialRepository materialRepository;
   LessonRepository lessonRepository;
@@ -488,16 +489,17 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   }
 
   private RoadmapTopicResponse mapToTopicResponse(RoadmapTopic topic) {
-    List<AssessmentResponse> assessmentResponses = new ArrayList<>();
+    List<QuestionTemplateResponse> questionTemplateResponses = new ArrayList<>();
     List<MindmapResponse> mindmapResponses = new ArrayList<>();
 
-    // Load assessments and mindmaps from the linked lesson
+    // Load question templates and mindmaps from the linked lesson
     if (topic.getLessonId() != null) {
-      // Fetch assessments for the lesson
-      Page<Assessment> assessmentsPage = assessmentRepository.findByNotDeleted(Pageable.unpaged());
-      assessmentResponses =
-          assessmentsPage.getContent().stream()
-              .map(this::mapToAssessmentResponse)
+      // Fetch question templates for the lesson
+      List<QuestionTemplate> questionTemplates =
+          questionTemplateRepository.findByLessonIdAndNotDeleted(topic.getLessonId());
+      questionTemplateResponses =
+          questionTemplates.stream()
+              .map(this::mapToQuestionTemplateResponse)
               .collect(Collectors.toList());
 
       // Fetch mindmaps for the lesson
@@ -521,7 +523,7 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .estimatedHours(topic.getEstimatedHours())
         .startedAt(topic.getStartedAt())
         .completedAt(topic.getCompletedAt())
-        .assessments(assessmentResponses)
+        .questionTemplates(questionTemplateResponses)
         .mindmaps(mindmapResponses)
         .build();
   }
@@ -576,6 +578,36 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .lessonId(material.getLessonId())
         .questionId(material.getQuestionId())
         .chapterId(material.getChapterId())
+        .build();
+  }
+
+  private QuestionTemplateResponse mapToQuestionTemplateResponse(QuestionTemplate template) {
+    return QuestionTemplateResponse.builder()
+        .id(template.getId())
+        .createdBy(template.getCreatedBy())
+        .creatorName(
+            userRepository
+                .findById(template.getCreatedBy())
+                .map(User::getFullName)
+                .orElse("Unknown"))
+        .name(template.getName())
+        .description(template.getDescription())
+        .templateType(template.getTemplateType())
+        .templateVariant(template.getTemplateVariant())
+        .templateText(template.getTemplateText())
+        .parameters(template.getParameters())
+        .answerFormula(template.getAnswerFormula())
+        .optionsGenerator(template.getOptionsGenerator())
+        .difficultyRules(template.getDifficultyRules())
+        .constraints(template.getConstraints())
+        .cognitiveLevel(template.getCognitiveLevel())
+        .tags(template.getTags())
+        .isPublic(template.getIsPublic())
+        .status(template.getStatus())
+        .usageCount(template.getUsageCount())
+        .avgSuccessRate(template.getAvgSuccessRate())
+        .createdAt(template.getCreatedAt())
+        .updatedAt(template.getUpdatedAt())
         .build();
   }
 }

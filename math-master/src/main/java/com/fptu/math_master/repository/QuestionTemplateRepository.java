@@ -90,4 +90,11 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
       @Param("currentUserId") UUID currentUserId,
       @Param("templateType") QuestionType templateType,
       @Param("cognitiveLevel") CognitiveLevel cognitiveLevel);
+
+  /**
+   * Find all active question templates for a specific lesson.
+   * Used by roadmap service to fetch templates associated with a lesson.
+   */
+  @Query("SELECT t FROM QuestionTemplate t WHERE t.lessonId = :lessonId AND t.deletedAt IS NULL")
+  List<QuestionTemplate> findByLessonIdAndNotDeleted(@Param("lessonId") UUID lessonId);
 }
