@@ -21,8 +21,6 @@ public class AssessmentResponse {
   private UUID id;
   private UUID teacherId;
   private String teacherName;
-  private UUID lessonId;
-  private String lessonTitle;
   private String title;
   private String description;
   private AssessmentType assessmentType;

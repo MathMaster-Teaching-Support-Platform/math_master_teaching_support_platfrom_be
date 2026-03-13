@@ -27,8 +27,6 @@ public class AssessmentRequest {
   @NotNull(message = "Assessment type is required")
   private AssessmentType assessmentType;
 
-  private UUID lessonId;
-
   @Min(value = 1, message = "Time limit must be greater than 0")
   private Integer timeLimitMinutes;
 

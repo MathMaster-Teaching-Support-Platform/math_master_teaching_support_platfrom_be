@@ -55,8 +55,8 @@ public class RoadmapTopicResponse {
   @Schema(description = "When topic was completed")
   private Instant completedAt;
 
-  @Schema(description = "Assessments for this topic (from linked lesson)")
-  private List<AssessmentResponse> assessments;
+  @Schema(description = "Question templates for this topic (from linked lesson)")
+  private List<QuestionTemplateResponse> questionTemplates;
 
   @Schema(description = "Mindmaps for this topic (from linked lesson)")
   private List<MindmapResponse> mindmaps;
