@@ -1,6 +1,8 @@
 package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.Question;
+import com.fptu.math_master.enums.QuestionDifficulty;
+import com.fptu.math_master.enums.QuestionType;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -73,19 +75,26 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       "SELECT q FROM Question q "
           + "WHERE q.deletedAt IS NULL "
           + "AND q.createdBy = :createdBy "
-          + "AND ((:difficulty IS NULL AND :questionType IS NULL) "
-          + "  OR (:difficulty IS NOT NULL AND :questionType IS NULL AND q.difficulty.name() = :difficulty) "
-          + "  OR (:difficulty IS NULL AND :questionType IS NOT NULL AND q.questionType.name() = :questionType) "
-          + "  OR (:difficulty IS NOT NULL AND :questionType IS NOT NULL AND q.difficulty.name() = :difficulty AND q.questionType.name() = :questionType)) "
+          + "AND (:difficulty IS NULL OR q.difficulty = :difficulty) "
+          + "AND (:questionType IS NULL OR q.questionType = :questionType) "
           + "ORDER BY q.createdAt DESC")
   Page<Question> findByFilters(
       @Param("createdBy") UUID createdBy,
-      @Param("difficulty") String difficulty,
-      @Param("questionType") String questionType,
+      @Param("difficulty") QuestionDifficulty difficulty,
+      @Param("questionType") QuestionType questionType,
       Pageable pageable);
 
   @Modifying
   @Query(
       "UPDATE Question q SET q.deletedAt = CURRENT_TIMESTAMP WHERE q.id = :id AND q.deletedAt IS NULL")
   int softDeleteById(@Param("id") UUID id);
+
+  @Query(
+      "SELECT q FROM Question q "
+          + "WHERE q.templateId = :templateId "
+          + "AND q.questionBankId = :bankId "
+          + "AND q.deletedAt IS NULL "
+          + "ORDER BY q.createdAt DESC")
+  List<Question> findApprovedByTemplateIdAndQuestionBankIdAndNotDeleted(
+      @Param("templateId") UUID templateId, @Param("bankId") UUID bankId);
 }

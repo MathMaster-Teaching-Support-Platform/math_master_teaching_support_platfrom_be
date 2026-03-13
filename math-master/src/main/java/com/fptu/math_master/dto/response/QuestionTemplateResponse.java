@@ -43,4 +43,5 @@ public class QuestionTemplateResponse {
   private BigDecimal avgSuccessRate;
   private Instant createdAt;
   private Instant updatedAt;
+  private UUID questionBankId;
 }

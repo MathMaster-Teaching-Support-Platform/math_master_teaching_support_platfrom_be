@@ -10,6 +10,7 @@ import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.Question;
+import com.fptu.math_master.entity.QuestionBank;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
@@ -17,6 +18,7 @@ import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.LessonRepository;
+import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.service.AIEnhancementService;
@@ -49,6 +51,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   AIEnhancementService aiEnhancementService;
   GeminiService geminiService;
   QuestionRepository questionRepository;
+  QuestionBankRepository questionBankRepository;
 
   @Override
   @Transactional
@@ -56,6 +59,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     log.info("Creating question template: {}", request.getName());
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    UUID bankId = request.getQuestionBankId();
+    if (bankId != null) {
+      validateCanUseQuestionBank(bankId, currentUserId);
+    }
 
     List<String> validationErrors = validateTemplateSyntax(request);
     if (!validationErrors.isEmpty()) {
@@ -66,6 +74,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     QuestionTemplate template =
         QuestionTemplate.builder()
             .createdBy(currentUserId)
+            .questionBankId(bankId)
             .name(request.getName())
             .description(request.getDescription())
             .templateType(request.getTemplateType())
@@ -101,6 +110,15 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
+
+    UUID bankId = request.getQuestionBankId();
+    if (bankId != null) {
+      validateCanUseQuestionBank(bankId, currentUserId);
+      template.setQuestionBankId(bankId);
+    } else {
+      // Allow un-assigning from a bank explicitly
+      template.setQuestionBankId(null);
+    }
 
     if (template.getStatus() == TemplateStatus.PUBLISHED) {
       throw new AppException(ErrorCode.TEMPLATE_ALREADY_PUBLISHED);
@@ -634,7 +652,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
    * database connection idle for too long can cause it to be reset.
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
-  private UUID saveQuestionWithOwnTransaction(
+  protected UUID saveQuestionWithOwnTransaction(
       UUID currentUserId,
       QuestionTemplate template,
       GeneratedQuestionSample sample,
@@ -746,6 +764,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .avgSuccessRate(template.getAvgSuccessRate())
             .createdAt(template.getCreatedAt())
             .updatedAt(template.getUpdatedAt())
+            .questionBankId(template.getQuestionBankId())
             .build();
 
     if (template.getCreator() != null) {
@@ -758,6 +777,20 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   private void validateOwnerOrAdmin(UUID ownerId, UUID currentUserId) {
     if (!ownerId.equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
       throw new AppException(ErrorCode.TEMPLATE_ACCESS_DENIED);
+    }
+  }
+
+  private void validateCanUseQuestionBank(UUID bankId, UUID currentUserId) {
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    // owner, admin, or public bank
+    if (!bank.getTeacherId().equals(currentUserId)
+        && !Boolean.TRUE.equals(bank.getIsPublic())
+        && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
     }
   }
 }

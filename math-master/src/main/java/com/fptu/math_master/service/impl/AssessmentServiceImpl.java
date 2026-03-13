@@ -747,66 +747,88 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     ArrayList<Question> result = new ArrayList<>();
 
-    // First, try to reuse existing questions from template if requested
+    // Load the template early so we can consistently scope generation/reuse to its Question Bank
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findById(templateId)
+            .orElseThrow(
+                () -> {
+                  log.error("Template not found: {}", templateId);
+                  return new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND);
+                });
+
+    UUID templateQuestionBankId = template.getQuestionBankId();
+
+    // First, try to reuse existing APPROVED questions from this template (and same bank if known)
     if (reuseApprovedQuestions) {
-      // Try to find existing questions from template
-      List<Question> existingList =
-          questionRepository
-              .findByTemplateIdAndNotDeleted(templateId)
-              .stream()
-              .limit(count)
-              .collect(Collectors.toList());
+      List<Question> existingList;
+
+      if (templateQuestionBankId != null) {
+        existingList =
+            questionRepository
+                .findApprovedByTemplateIdAndQuestionBankIdAndNotDeleted(
+                    templateId, templateQuestionBankId)
+                .stream()
+                .limit(count)
+                .collect(Collectors.toList());
+      } else {
+        existingList =
+            questionRepository.findByTemplateIdAndNotDeleted(templateId).stream()
+                .limit(count)
+                .collect(Collectors.toList());
+      }
+
       result.addAll(existingList);
 
       if (result.size() >= count) {
         if (!result.isEmpty()) {
-          log.info("Reused {} approved questions from template {}", result.size(), templateId);
+          log.info(
+              "Reused {} APPROVED questions from template {}{}",
+              result.size(),
+              templateId,
+              templateQuestionBankId != null
+                  ? " (bankId=" + templateQuestionBankId + ")"
+                  : "");
         }
         return result.stream().limit(count).collect(Collectors.toList());
       }
 
       log.info(
-          "Only {} approved questions available, need {} more",
+          "Only {} reusable APPROVED questions available, need {} more",
           result.size(),
           count - result.size());
     }
 
-    // Load the template
-    QuestionTemplate template =
-        questionTemplateRepository
-            .findById(templateId)
-            .orElseThrow(() -> {
-              log.error("Template not found: {}", templateId);
-              return new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND);
-            });
-    
     // Log template details for debugging
     log.info("Processing template '{}' (ID: {})", template.getName(), templateId);
     log.info("  - Formula: '{}'", template.getAnswerFormula());
     log.info("  - Type: {}", template.getTemplateType());
-    log.info("  - Parameters: {}", template.getParameters() != null ? template.getParameters().keySet() : "none");
+    log.info(
+        "  - Parameters: {}",
+        template.getParameters() != null ? template.getParameters().keySet() : "none");
 
     // Generate remaining questions using AI
     int remainingCount = count - result.size();
     List<UUID> newQuestionIds = new ArrayList<>();
-    
+
     for (int i = 0; i < remainingCount; i++) {
       try {
-        log.debug("Generating question {} of {} from template {}", i + 1, remainingCount, templateId);
-        
+        log.debug(
+            "Generating question {} of {} from template {}", i + 1, remainingCount, templateId);
+
         // Call AI to generate a question sample
         GeneratedQuestionSample sample = aiEnhancementService.generateQuestion(template, i);
-        
+
         // Validate sample has required fields
         if (sample == null) {
           log.error("AI generated null sample for question {} of {}", i + 1, remainingCount);
           continue;
         }
-        
+
         String questionText = sample.getQuestionText();
         String correctAnswerKey = sample.getCorrectAnswer(); // This is the KEY (A/B/C/D)
         String explanation = sample.getExplanation();
-        
+
         // Validate all text fields are actual strings, not null or objects
         if (questionText == null || questionText.trim().isEmpty()) {
           log.warn("Question {} has empty questionText, skipping", i + 1);
@@ -819,18 +841,18 @@ public class AssessmentServiceImpl implements AssessmentService {
         if (explanation == null || explanation.trim().isEmpty()) {
           explanation = "Provided by AI";
         }
-        
+
         // Check if options contain set notation (indicates template formula issue)
         if (sample.getOptions() != null) {
           boolean hasSetNotation = sample.getOptions().values().stream()
               .anyMatch(opt -> opt != null && opt.contains("{") && opt.contains("}"));
           if (hasSetNotation) {
-            log.warn("Question {} has set notation in options (template issue), skipping: {}", 
+            log.warn("Question {} has set notation in options (template issue), skipping: {}",
                 i + 1, sample.getOptions());
             continue;
           }
         }
-        
+
         // Get the actual answer VALUE from the options using the KEY
         String correctAnswer = null;
         if (sample.getOptions() != null && sample.getOptions().containsKey(correctAnswerKey)) {
@@ -841,57 +863,67 @@ public class AssessmentServiceImpl implements AssessmentService {
             log.debug("Extracted answer value '{}' for key '{}' from options", correctAnswer, correctAnswerKey);
           }
         }
-        
+
         if (correctAnswer == null || correctAnswer.isEmpty()) {
           log.warn("Question {} has no valid correctAnswer for key '{}', skipping", i + 1, correctAnswerKey);
           continue;
         }
-        
+
         // Check if answer is the error placeholder
         if ("?".equals(correctAnswer)) {
           log.warn("Question {} has placeholder answer '?', template formula likely failed, skipping", i + 1);
           continue;
         }
-        
+
         // Convert GeneratedQuestionSample to CreateQuestionRequest
-        CreateQuestionRequest createRequest = CreateQuestionRequest.builder()
-            .questionText(questionText.trim())
-            .questionType(template.getTemplateType())
-            .options(convertOptionsToObjectMap(sample.getOptions()))
-            .correctAnswer(correctAnswer.trim())
-            .explanation(explanation.trim())
-            .difficulty(sample.getCalculatedDifficulty() != null ? sample.getCalculatedDifficulty() : com.fptu.math_master.enums.QuestionDifficulty.MEDIUM)
-            .cognitiveLevel(cognitiveLevel)
-            .templateId(templateId)
-            .build();
-        
+        CreateQuestionRequest createRequest =
+            CreateQuestionRequest.builder()
+                .questionText(questionText.trim())
+                .questionType(template.getTemplateType())
+                .options(convertOptionsToObjectMap(sample.getOptions()))
+                .correctAnswer(correctAnswer.trim())
+                .explanation(explanation.trim())
+                .difficulty(
+                    sample.getCalculatedDifficulty() != null
+                        ? sample.getCalculatedDifficulty()
+                        : com.fptu.math_master.enums.QuestionDifficulty.MEDIUM)
+                .cognitiveLevel(cognitiveLevel)
+                .templateId(templateId)
+                // Save into the same Question Bank as the template (if template belongs to a bank)
+                .questionBankId(templateQuestionBankId)
+                .build();
+
         // Validate request before creating question
         if (createRequest.getQuestionText() == null || createRequest.getQuestionText().isEmpty()) {
           log.error("CreateQuestionRequest has null/empty questionText, skipping");
           continue;
         }
-        
+
         // Log detailed info about what we're saving
         log.info("Creating question {} of {}:", i + 1, remainingCount);
         log.info("  - questionText: {}", createRequest.getQuestionText().substring(0, Math.min(50, createRequest.getQuestionText().length())));
         log.info("  - correctAnswer: {}", createRequest.getCorrectAnswer());
         log.info("  - explanation: {}", createRequest.getExplanation().substring(0, Math.min(50, createRequest.getExplanation().length())));
         log.info("  - options: {}", createRequest.getOptions());
-        
+
         // Create the question using QuestionService
         var questionResponse = questionService.createQuestion(createRequest);
-        
+
         // Store the ID for later batch retrieval
         if (questionResponse != null && questionResponse.getId() != null) {
           newQuestionIds.add(questionResponse.getId());
           log.info("Question {} created with ID: {}", i + 1, questionResponse.getId());
         }
-        
+
       } catch (Exception e) {
-        log.error("Failed to generate question {} from template {}: {}", i + 1, templateId, e.getMessage());
+        log.error(
+            "Failed to generate question {} from template {}: {}",
+            i + 1,
+            templateId,
+            e.getMessage());
       }
     }
-    
+
     // Batch retrieve all newly created questions using their IDs
     if (!newQuestionIds.isEmpty()) {
       log.info("Retrieving {} newly created questions from database", newQuestionIds.size());
@@ -904,7 +936,7 @@ public class AssessmentServiceImpl implements AssessmentService {
       }
     }
 
-    log.info("Generated {} new questions from template {}, total now: {}", 
+    log.info("Generated {} new questions from template {}, total now: {}",
         remainingCount - (count - result.size()), templateId, result.size());
     return result;
   }

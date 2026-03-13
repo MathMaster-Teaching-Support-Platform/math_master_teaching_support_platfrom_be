@@ -86,19 +86,19 @@ public class QuestionServiceImpl implements QuestionService {
             .build();
 
     question = questionRepository.save(question);
-    
+
     // Log EXACTLY what was saved to the database
     log.info("Question saved to DB with ID: {}", question.getId());
-    log.info("  - questionText type: {}, value: {}", 
+    log.info("  - questionText type: {}, value: {}",
         question.getQuestionText() == null ? "null" : question.getQuestionText().getClass().getSimpleName(),
         question.getQuestionText() == null ? "null" : question.getQuestionText().substring(0, Math.min(50, question.getQuestionText().length())));
-    log.info("  - correctAnswer type: {}, value: {}", 
+    log.info("  - correctAnswer type: {}, value: {}",
         question.getCorrectAnswer() == null ? "null" : question.getCorrectAnswer().getClass().getSimpleName(),
         question.getCorrectAnswer());
-    log.info("  - explanation type: {}, value: {}", 
+    log.info("  - explanation type: {}, value: {}",
         question.getExplanation() == null ? "null" : question.getExplanation().getClass().getSimpleName(),
         question.getExplanation() == null ? "null" : question.getExplanation().substring(0, Math.min(50, question.getExplanation().length())));
-    
+
     return mapToResponse(question);
   }
 
@@ -360,8 +360,25 @@ public class QuestionServiceImpl implements QuestionService {
           .searchByCreatedBy(currentUserId, searchPattern, pageable)
           .map(this::mapToResponse);
     } else {
-      return questionRepository
-          .findByFilters(currentUserId, difficulty, type, pageable)
+      com.fptu.math_master.enums.QuestionDifficulty difficultyEnum = null;
+      if (difficulty != null && !difficulty.isBlank()) {
+        try {
+          difficultyEnum = com.fptu.math_master.enums.QuestionDifficulty.valueOf(difficulty);
+        } catch (IllegalArgumentException ignored) {
+          // Keep null to mean "no filter" (backward-compatible behavior)
+        }
+      }
+
+      com.fptu.math_master.enums.QuestionType typeEnum = null;
+      if (type != null && !type.isBlank()) {
+        try {
+          typeEnum = com.fptu.math_master.enums.QuestionType.valueOf(type);
+        } catch (IllegalArgumentException ignored) {
+          // Keep null to mean "no filter"
+        }
+      }
+
+      return questionRepository.findByFilters(currentUserId, difficultyEnum, typeEnum, pageable)
           .map(this::mapToResponse);
     }
   }
