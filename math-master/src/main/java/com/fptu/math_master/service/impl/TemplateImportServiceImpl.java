@@ -3,10 +3,14 @@ package com.fptu.math_master.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.response.TemplateImportResponse;
+import com.fptu.math_master.entity.QuestionBank;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.GeminiService;
@@ -38,6 +42,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
 
   GeminiService geminiService;
   QuestionTemplateRepository questionTemplateRepository;
+  QuestionBankRepository questionBankRepository;
   UserRepository userRepository;
   ObjectMapper objectMapper = new ObjectMapper();
 
@@ -51,7 +56,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
 
   @Override
   public TemplateImportResponse importTemplateFromFile(
-      MultipartFile file, String subjectHint, String contextHint) {
+      MultipartFile file, String subjectHint, String contextHint, UUID questionBankId) {
 
     log.info("Importing template from file: {}", file.getOriginalFilename());
 
@@ -63,6 +68,11 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     try {
       // Step 1: Extract text from file
       String extractedText = extractTextFromFile(file);
+
+      UUID currentUserId = getCurrentUserId();
+      if (questionBankId != null) {
+        validateCanUseQuestionBank(questionBankId, currentUserId);
+      }
 
       if (extractedText == null || extractedText.trim().isEmpty()) {
         return createErrorResponse("No text content found in file");
@@ -77,7 +87,8 @@ public class TemplateImportServiceImpl implements TemplateImportService {
       // Step 3: Save as DRAFT if analysis was successful
       if (response.getAnalysisSuccessful() && response.getSuggestedTemplate() != null) {
         try {
-          QuestionTemplate savedTemplate = saveDraftTemplate(response);
+          QuestionTemplate savedTemplate =
+              saveDraftTemplate(response, currentUserId, questionBankId);
           log.info("Saved template as DRAFT with ID: {}", savedTemplate.getId());
         } catch (Exception e) {
           log.error("Failed to save template as DRAFT: {}", e.getMessage(), e);
@@ -850,7 +861,8 @@ public class TemplateImportServiceImpl implements TemplateImportService {
    * @param response The analyzed template import response
    * @return Saved QuestionTemplate entity
    */
-  private QuestionTemplate saveDraftTemplate(TemplateImportResponse response) {
+  private QuestionTemplate saveDraftTemplate(
+      TemplateImportResponse response, UUID currentUserId, UUID questionBankId) {
     TemplateImportResponse.TemplateDraft draft = response.getSuggestedTemplate();
 
     // Convert templateText Map<String, String> to Map<String, Object> for JSONB
@@ -862,7 +874,8 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     // Build QuestionTemplate entity
     QuestionTemplate template =
         QuestionTemplate.builder()
-            .createdBy(getCurrentUserId())
+          .createdBy(currentUserId)
+          .questionBankId(questionBankId)
             .name(draft.getName() != null ? draft.getName() : "Imported Template")
             .description(
                 draft.getDescription() != null
@@ -896,6 +909,30 @@ public class TemplateImportServiceImpl implements TemplateImportService {
         savedTemplate.getStatus());
 
     return savedTemplate;
+  }
+
+  private void validateCanUseQuestionBank(UUID bankId, UUID currentUserId) {
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    if (!bank.getTeacherId().equals(currentUserId)
+        && !Boolean.TRUE.equals(bank.getIsPublic())
+        && !hasRoleAdmin()) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
+    }
+  }
+
+  private boolean hasRoleAdmin() {
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth instanceof JwtAuthenticationToken jwtAuth) {
+      Object scopeClaim = jwtAuth.getToken().getClaims().get("scope");
+      if (scopeClaim instanceof String scopes) {
+        return Arrays.stream(scopes.split(" ")).anyMatch("ROLE_ADMIN"::equals);
+      }
+    }
+    return false;
   }
 
   private UUID getCurrentUserId() {

@@ -265,10 +265,12 @@ public class QuestionTemplateController {
   public ApiResponse<TemplateImportResponse> importTemplateFromFile(
       @RequestParam("file") MultipartFile file,
       @RequestParam(required = false) String subjectHint,
-      @RequestParam(required = false) String contextHint) {
+            @RequestParam(required = false) String contextHint,
+            @RequestParam(required = false) UUID questionBankId) {
     log.info("REST request to import template from file: {}", file.getOriginalFilename());
     TemplateImportResponse response =
-        templateImportService.importTemplateFromFile(file, subjectHint, contextHint);
+                templateImportService.importTemplateFromFile(
+                        file, subjectHint, contextHint, questionBankId);
     String message =
         response.getAnalysisSuccessful()
             ? "Template analysis completed. Please review and edit the suggested template before saving."

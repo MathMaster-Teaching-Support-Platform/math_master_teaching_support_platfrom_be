@@ -1,6 +1,7 @@
 package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.response.TemplateImportResponse;
+import java.util.UUID;
 import org.springframework.web.multipart.MultipartFile;
 
 /** Service for importing question templates from files with AI assistance */
@@ -12,10 +13,11 @@ public interface TemplateImportService {
    * @param file Uploaded file (Word, PDF, or Text)
    * @param subjectHint Optional subject/topic hint
    * @param contextHint Optional context hint
+  * @param questionBankId Optional question bank ID to assign the imported template to
    * @return Analysis and suggested template draft
    */
   TemplateImportResponse importTemplateFromFile(
-      MultipartFile file, String subjectHint, String contextHint);
+    MultipartFile file, String subjectHint, String contextHint, UUID questionBankId);
 
   /**
    * Extract text content from uploaded file
