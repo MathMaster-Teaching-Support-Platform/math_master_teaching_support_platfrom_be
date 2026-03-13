@@ -20,7 +20,8 @@ import org.hibernate.annotations.Nationalized;
     indexes = {
       @Index(name = "idx_mindmap_nodes_mindmap", columnList = "mindmap_id"),
       @Index(name = "idx_mindmap_nodes_parent", columnList = "parent_id"),
-      @Index(name = "idx_mindmap_nodes_order", columnList = "display_order")
+      @Index(name = "idx_mindmap_nodes_order", columnList = "display_order"),
+      @Index(name = "idx_mindmap_nodes_mindmap_order", columnList = "mindmap_id, display_order")
     })
 public class MindmapNode {
 

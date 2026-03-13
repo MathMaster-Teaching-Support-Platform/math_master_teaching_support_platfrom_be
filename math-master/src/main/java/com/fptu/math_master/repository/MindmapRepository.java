@@ -59,6 +59,15 @@ public interface MindmapRepository
   Page<Mindmap> findByTeacherIdAndLessonIdAndNotDeleted(
       @Param("teacherId") UUID teacherId, @Param("lessonId") UUID lessonId, Pageable pageable);
 
+  @Query(
+      "SELECT m FROM Mindmap m "
+          + "LEFT JOIN FETCH m.teacher "
+          + "LEFT JOIN FETCH m.lesson "
+          + "WHERE m.teacherId = :teacherId AND m.lessonId = :lessonId AND m.deletedAt IS NULL "
+          + "ORDER BY m.createdAt DESC")
+  Page<Mindmap> findByTeacherIdAndLessonIdWithDetailsAndNotDeleted(
+      @Param("teacherId") UUID teacherId, @Param("lessonId") UUID lessonId, Pageable pageable);
+
   @Query("SELECT COUNT(m) FROM Mindmap m WHERE m.teacherId = :teacherId AND m.deletedAt IS NULL")
   long countByTeacherId(@Param("teacherId") UUID teacherId);
 }
