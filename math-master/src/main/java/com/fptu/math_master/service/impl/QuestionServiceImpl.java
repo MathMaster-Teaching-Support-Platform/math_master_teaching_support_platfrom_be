@@ -47,18 +47,34 @@ public class QuestionServiceImpl implements QuestionService {
 
   @Override
   public QuestionResponse createQuestion(CreateQuestionRequest request) {
-    log.info("Creating question: {}", request.getQuestionText().substring(0, 50));
+    // Validate LOB fields are not null/empty before saving
+    if (request.getQuestionText() == null || request.getQuestionText().trim().isEmpty()) {
+      log.warn("Question text is empty");
+      throw new AppException(ErrorCode.INVALID_KEY);
+    }
+
+    if (request.getCorrectAnswer() == null || request.getCorrectAnswer().trim().isEmpty()) {
+      log.warn("Correct answer is empty");
+      throw new AppException(ErrorCode.INVALID_KEY);
+    }
+
+    String questionText = request.getQuestionText().trim();
+    log.info("Creating question: {}", questionText.substring(0, Math.min(50, questionText.length())));
 
     UUID currentUserId = getCurrentUserId();
+
+    // Set defaults for optional fields
+    String explanation = request.getExplanation() != null ? request.getExplanation().trim() : "No explanation provided";
+    String correctAnswer = request.getCorrectAnswer().trim();
 
     Question question =
         Question.builder()
             .createdBy(currentUserId)
-            .questionText(request.getQuestionText())
+            .questionText(questionText)
             .questionType(request.getQuestionType())
             .options(request.getOptions())
-            .correctAnswer(request.getCorrectAnswer())
-            .explanation(request.getExplanation())
+            .correctAnswer(correctAnswer)
+            .explanation(explanation)
             .points(request.getPoints())
             .difficulty(request.getDifficulty())
             .cognitiveLevel(request.getCognitiveLevel())
@@ -70,7 +86,19 @@ public class QuestionServiceImpl implements QuestionService {
             .build();
 
     question = questionRepository.save(question);
-    log.info("Question created: {}", question.getId());
+    
+    // Log EXACTLY what was saved to the database
+    log.info("Question saved to DB with ID: {}", question.getId());
+    log.info("  - questionText type: {}, value: {}", 
+        question.getQuestionText() == null ? "null" : question.getQuestionText().getClass().getSimpleName(),
+        question.getQuestionText() == null ? "null" : question.getQuestionText().substring(0, Math.min(50, question.getQuestionText().length())));
+    log.info("  - correctAnswer type: {}, value: {}", 
+        question.getCorrectAnswer() == null ? "null" : question.getCorrectAnswer().getClass().getSimpleName(),
+        question.getCorrectAnswer());
+    log.info("  - explanation type: {}, value: {}", 
+        question.getExplanation() == null ? "null" : question.getExplanation().getClass().getSimpleName(),
+        question.getExplanation() == null ? "null" : question.getExplanation().substring(0, Math.min(50, question.getExplanation().length())));
+    
     return mapToResponse(question);
   }
 

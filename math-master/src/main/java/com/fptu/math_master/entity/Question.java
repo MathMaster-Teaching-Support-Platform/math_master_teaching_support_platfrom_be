@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.*;
-import org.hibernate.annotations.Nationalized;
 import org.hibernate.annotations.Type;
 
 @Builder
@@ -52,23 +51,17 @@ public class Question {
   @Enumerated(EnumType.STRING)
   private QuestionType questionType;
 
-  @Lob
-  @Nationalized
-  @Column(name = "question_text", nullable = false)
+  @Column(name = "question_text", nullable = false, columnDefinition = "TEXT")
   private String questionText;
 
   @Type(JsonBinaryType.class)
   @Column(name = "options", columnDefinition = "jsonb")
   private Map<String, Object> options;
 
-  @Lob
-  @Nationalized
-  @Column(name = "correct_answer")
+  @Column(name = "correct_answer", columnDefinition = "TEXT")
   private String correctAnswer;
 
-  @Lob
-  @Nationalized
-  @Column(name = "explanation")
+  @Column(name = "explanation", columnDefinition = "TEXT")
   private String explanation;
 
   @Column(name = "points", precision = 5, scale = 2)
