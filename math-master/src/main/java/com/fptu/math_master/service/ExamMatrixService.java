@@ -21,6 +21,32 @@ public interface ExamMatrixService {
 
   void deleteExamMatrix(UUID matrixId);
 
+  // ── Structured Matrix Builder ───────────────────────────────────────────
+
+  /**
+   * Build a fully-specified exam matrix in one request.
+   * Creates the {@link com.fptu.math_master.entity.ExamMatrix},
+   * one {@link com.fptu.math_master.entity.ExamMatrixRow} per row spec,
+   * and one {@link com.fptu.math_master.entity.ExamMatrixTemplateMapping} per cell.
+   */
+  ExamMatrixTableResponse buildMatrix(BuildExamMatrixRequest request);
+
+  /**
+   * Return the hierarchical table view of an existing matrix,
+   * grouped by Chapter → Row (dạng bài) → Cells (NB/TH/VD/VDC).
+   */
+  ExamMatrixTableResponse getMatrixTable(UUID matrixId);
+
+  /**
+   * Add a single row (dạng bài) to an existing DRAFT matrix.
+   */
+  ExamMatrixTableResponse addMatrixRow(UUID matrixId, MatrixRowRequest rowRequest);
+
+  /**
+   * Remove a row and all its cells from a DRAFT matrix.
+   */
+  ExamMatrixTableResponse removeMatrixRow(UUID matrixId, UUID rowId);
+
   // ── Template Mappings ───────────────────────────────────────────────────
 
   TemplateMappingResponse addTemplateMapping(UUID matrixId, AddTemplateMappingRequest request);

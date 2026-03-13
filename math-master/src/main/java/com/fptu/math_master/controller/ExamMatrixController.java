@@ -360,4 +360,69 @@ public class ExamMatrixController {
 
     return ApiResponse.<FinalizePreviewResponse>builder().message(message).result(response).build();
   }
+
+  // ── Structured Matrix Builder ───────────────────────────────────────────
+
+  @PostMapping("/build")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Build exam matrix from structured spec",
+      description =
+          "Creates a fully-specified exam matrix in one request. "
+              + "The body defines each 'dạng bài' row with chapter, optional lesson/template, "
+              + "and per-cognitive-level question counts and points. "
+              + "Returns the hierarchical table view (Lớp → Chương → Dạng bài → NB/TH/VD/VDC).")
+  public ApiResponse<ExamMatrixTableResponse> buildMatrix(
+      @Valid @RequestBody BuildExamMatrixRequest request) {
+    log.info("REST request to build structured exam matrix: name={}", request.getName());
+    return ApiResponse.<ExamMatrixTableResponse>builder()
+        .message("Exam matrix built successfully.")
+        .result(examMatrixService.buildMatrix(request))
+        .build();
+  }
+
+  @GetMapping("/{matrixId}/table")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Get exam matrix as table view",
+      description =
+          "Returns the matrix grouped by Chapter → Row (dạng bài) → Cells (NB/TH/VD/VDC), "
+              + "with per-chapter and grand-total aggregates. "
+              + "Matches the visual layout of the Vietnamese THPT exam-matrix diagram.")
+  public ApiResponse<ExamMatrixTableResponse> getMatrixTable(@PathVariable UUID matrixId) {
+    log.info("REST request to get matrix table: {}", matrixId);
+    return ApiResponse.<ExamMatrixTableResponse>builder()
+        .result(examMatrixService.getMatrixTable(matrixId))
+        .build();
+  }
+
+  @PostMapping("/{matrixId}/rows")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Add a row to exam matrix",
+      description =
+          "Appends one 'dạng bài' row (with cells) to an existing DRAFT matrix. "
+              + "Returns the updated table view.")
+  public ApiResponse<ExamMatrixTableResponse> addMatrixRow(
+      @PathVariable UUID matrixId, @Valid @RequestBody MatrixRowRequest request) {
+    log.info("REST request to add row to matrix: {}", matrixId);
+    return ApiResponse.<ExamMatrixTableResponse>builder()
+        .message("Matrix row added successfully.")
+        .result(examMatrixService.addMatrixRow(matrixId, request))
+        .build();
+  }
+
+  @DeleteMapping("/{matrixId}/rows/{rowId}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Remove a row from exam matrix",
+      description = "Deletes a 'dạng bài' row and all its cells. Matrix must be in DRAFT status.")
+  public ApiResponse<ExamMatrixTableResponse> removeMatrixRow(
+      @PathVariable UUID matrixId, @PathVariable UUID rowId) {
+    log.info("REST request to remove row {} from matrix {}", rowId, matrixId);
+    return ApiResponse.<ExamMatrixTableResponse>builder()
+        .message("Matrix row removed successfully.")
+        .result(examMatrixService.removeMatrixRow(matrixId, rowId))
+        .build();
+  }
 }

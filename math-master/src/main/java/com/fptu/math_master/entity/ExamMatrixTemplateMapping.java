@@ -22,9 +22,10 @@ import lombok.*;
           columnNames = {"exam_matrix_id", "template_id"})
     },
     indexes = {
-      @Index(name = "idx_exam_matrix_template_matrix", columnList = "exam_matrix_id"),
-      @Index(name = "idx_exam_matrix_template_template", columnList = "template_id"),
-      @Index(name = "idx_exam_matrix_template_cognitive", columnList = "cognitive_level")
+      @Index(name = "idx_exam_matrix_template_matrix",    columnList = "exam_matrix_id"),
+      @Index(name = "idx_exam_matrix_template_template",  columnList = "template_id"),
+      @Index(name = "idx_exam_matrix_template_cognitive", columnList = "cognitive_level"),
+      @Index(name = "idx_exam_matrix_template_row",       columnList = "matrix_row_id")
     })
 public class ExamMatrixTemplateMapping {
 
@@ -38,6 +39,13 @@ public class ExamMatrixTemplateMapping {
 
   @Column(name = "template_id", nullable = false)
   private UUID templateId;
+
+  /**
+   * Back-reference to the {@link ExamMatrixRow} this cell belongs to.
+   * Null for legacy mappings created without the structured builder.
+   */
+  @Column(name = "matrix_row_id")
+  private UUID matrixRowId;
 
   @Column(name = "cognitive_level", nullable = false)
   @Enumerated(EnumType.STRING)
@@ -65,6 +73,10 @@ public class ExamMatrixTemplateMapping {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "template_id", insertable = false, updatable = false)
   private QuestionTemplate questionTemplate;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "matrix_row_id", insertable = false, updatable = false)
+  private ExamMatrixRow matrixRow;
 
   @OneToMany(
       mappedBy = "examMatrixTemplateMapping",

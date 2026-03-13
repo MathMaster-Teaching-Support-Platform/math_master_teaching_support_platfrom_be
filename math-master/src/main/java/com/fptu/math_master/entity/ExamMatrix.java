@@ -21,7 +21,9 @@ import org.hibernate.annotations.Nationalized;
     indexes = {
       @Index(name = "idx_exam_matrices_teacher", columnList = "teacher_id"),
       @Index(name = "idx_exam_matrices_status", columnList = "status"),
-      @Index(name = "idx_exam_matrices_is_reusable", columnList = "is_reusable")
+      @Index(name = "idx_exam_matrices_is_reusable", columnList = "is_reusable"),
+      @Index(name = "idx_exam_matrices_curriculum", columnList = "curriculum_id"),
+      @Index(name = "idx_exam_matrices_grade", columnList = "grade_level")
     })
 public class ExamMatrix {
 
@@ -32,6 +34,20 @@ public class ExamMatrix {
 
   @Column(name = "teacher_id", nullable = false)
   private UUID teacherId;
+
+  /**
+   * Optional link to the {@link Curriculum} (chương trình) this matrix covers.
+   * Set automatically when using the structured builder API.
+   */
+  @Column(name = "curriculum_id")
+  private UUID curriculumId;
+
+  /**
+   * Cache of the target school-grade level (lớp) for this matrix (e.g. 10, 11, 12).
+   * A matrix may reference content from multiple grades; this is the primary grade.
+   */
+  @Column(name = "grade_level")
+  private Integer gradeLevel;
 
   @Size(max = 255)
   @Nationalized
@@ -69,8 +85,15 @@ public class ExamMatrix {
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
   private User teacher;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "curriculum_id", insertable = false, updatable = false)
+  private Curriculum curriculum;
+
   @OneToMany(mappedBy = "examMatrix", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<ExamMatrixTemplateMapping> templateMappings;
+
+  @OneToMany(mappedBy = "examMatrix", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<ExamMatrixRow> matrixRows;
 
   @PrePersist
   public void prePersist() {

@@ -36,11 +36,15 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
   ExamMatrixRepository examMatrixRepository;
   ExamMatrixTemplateMappingRepository templateMappingRepository;
+  ExamMatrixRowRepository examMatrixRowRepository;
   QuestionTemplateRepository questionTemplateRepository;
   QuestionRepository questionRepository;
   AssessmentRepository assessmentRepository;
   AssessmentQuestionRepository assessmentQuestionRepository;
   UserRepository userRepository;
+  CurriculumRepository curriculumRepository;
+  ChapterRepository chapterRepository;
+  SubjectRepository subjectRepository;
   AIEnhancementService aiEnhancementService;
 
   // ── Matrix CRUD ─────────────────────────────────────────────────────────
@@ -927,6 +931,96 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .build();
   }
 
+  // ── Structured Matrix Builder ───────────────────────────────────────────
+
+  @Override
+  @Transactional
+  public ExamMatrixTableResponse buildMatrix(BuildExamMatrixRequest request) {
+    log.info("Building structured exam matrix: name={}", request.getName());
+
+    UUID currentUserId = getCurrentUserId();
+    validateTeacherRole(currentUserId);
+
+    // Resolve grade level from curriculum when not provided explicitly
+    Integer gradeLevel = request.getGradeLevel();
+    if (gradeLevel == null && request.getCurriculumId() != null) {
+      gradeLevel =
+          curriculumRepository
+              .findByIdAndNotDeleted(request.getCurriculumId())
+              .map(Curriculum::getGrade)
+              .orElse(null);
+    }
+
+    ExamMatrix matrix =
+        ExamMatrix.builder()
+            .teacherId(currentUserId)
+            .curriculumId(request.getCurriculumId())
+            .gradeLevel(gradeLevel)
+            .name(request.getName())
+            .description(request.getDescription())
+            .isReusable(request.getIsReusable() != null ? request.getIsReusable() : false)
+            .totalQuestionsTarget(request.getTotalQuestionsTarget())
+            .totalPointsTarget(request.getTotalPointsTarget())
+            .status(MatrixStatus.DRAFT)
+            .build();
+
+    matrix = examMatrixRepository.save(matrix);
+    final UUID matrixId = matrix.getId();
+
+    // Persist rows and their cells
+    int globalOrder = 1;
+    for (MatrixRowRequest rowSpec : request.getRows()) {
+      persistRow(matrixId, rowSpec, globalOrder++);
+    }
+
+    log.info("Structured matrix built: id={}", matrixId);
+    return buildTableResponse(matrix);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public ExamMatrixTableResponse getMatrixTable(UUID matrixId) {
+    log.info("Fetching matrix table: {}", matrixId);
+    ExamMatrix matrix = loadMatrixOrThrow(matrixId);
+    validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
+    return buildTableResponse(matrix);
+  }
+
+  @Override
+  @Transactional
+  public ExamMatrixTableResponse addMatrixRow(UUID matrixId, MatrixRowRequest rowRequest) {
+    log.info("Adding row to matrix: {}", matrixId);
+    ExamMatrix matrix = loadMatrixOrThrow(matrixId);
+    validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
+    validateNotApprovedOrLocked(matrix);
+
+    List<ExamMatrixRow> existing = examMatrixRowRepository.findByExamMatrixIdOrderByOrderIndex(matrixId);
+    int nextOrder = existing.stream()
+        .mapToInt(r -> r.getOrderIndex() != null ? r.getOrderIndex() : 0)
+        .max().orElse(0) + 1;
+
+    persistRow(matrixId, rowRequest, nextOrder);
+    return buildTableResponse(matrix);
+  }
+
+  @Override
+  @Transactional
+  public ExamMatrixTableResponse removeMatrixRow(UUID matrixId, UUID rowId) {
+    log.info("Removing row {} from matrix {}", rowId, matrixId);
+    ExamMatrix matrix = loadMatrixOrThrow(matrixId);
+    validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
+    validateNotApprovedOrLocked(matrix);
+
+    ExamMatrixRow row =
+        examMatrixRowRepository
+            .findById(rowId)
+            .filter(r -> r.getExamMatrixId().equals(matrixId))
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_ROW_NOT_FOUND));
+
+    examMatrixRowRepository.delete(row);
+    return buildTableResponse(matrix);
+  }
+
   // ── Private helpers ─────────────────────────────────────────────────────
 
   private UUID getCurrentUserId() {
@@ -1081,5 +1175,264 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .updatedAt(t.getUpdatedAt())
         .relevanceScore(computeRelevanceScore(t, requiredType, requiredLevel))
         .build();
+  }
+
+  /**
+   * Persist one {@link ExamMatrixRow} plus all its {@link ExamMatrixTemplateMapping} cells.
+   * If {@code rowSpec.templateId} is given the template must exist; the cell templateId
+   * will always be that template.  When no templateId is supplied a sentinel (same as row
+   * templateId, which may be null) is used — the mapping is still valid for counting purposes.
+   */
+  private void persistRow(UUID matrixId, MatrixRowRequest rowSpec, int orderIndex) {
+    String qTypeName = rowSpec.getQuestionTypeName();
+
+    // If templateId is supplied and questionTypeName is blank, default to template name
+    if ((qTypeName == null || qTypeName.isBlank()) && rowSpec.getTemplateId() != null) {
+      qTypeName = questionTemplateRepository
+          .findById(rowSpec.getTemplateId())
+          .map(QuestionTemplate::getName)
+          .orElse(null);
+    }
+
+    if ((qTypeName == null || qTypeName.isBlank()) && rowSpec.getTemplateId() == null) {
+      throw new AppException(ErrorCode.MATRIX_ROW_QUESTION_TYPE_REQUIRED);
+    }
+
+    ExamMatrixRow row =
+        ExamMatrixRow.builder()
+            .examMatrixId(matrixId)
+            .chapterId(rowSpec.getChapterId())
+            .lessonId(rowSpec.getLessonId())
+            .templateId(rowSpec.getTemplateId())
+            .questionTypeName(qTypeName)
+            .referenceQuestions(rowSpec.getReferenceQuestions())
+            .orderIndex(rowSpec.getOrderIndex() != null ? rowSpec.getOrderIndex() : orderIndex)
+            .build();
+
+    row = examMatrixRowRepository.save(row);
+    final UUID rowId = row.getId();
+
+    // Resolve which templateId to use for the mapping cell — must point to a real template
+    // when provided; otherwise use a placeholder UUID approach is avoided: we require
+    // templateId for mapping cells.  If row has no templateId the teacher must add templates
+    // separately via the legacy addTemplateMapping endpoint.
+    if (rowSpec.getTemplateId() != null) {
+      // Validate template exists
+      questionTemplateRepository
+          .findById(rowSpec.getTemplateId())
+          .filter(t -> t.getDeletedAt() == null)
+          .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+      for (MatrixCellRequest cell : rowSpec.getCells()) {
+        ExamMatrixTemplateMapping mapping =
+            ExamMatrixTemplateMapping.builder()
+                .examMatrixId(matrixId)
+                .templateId(rowSpec.getTemplateId())
+                .matrixRowId(rowId)
+                .cognitiveLevel(cell.getCognitiveLevel())
+                .questionCount(cell.getQuestionCount())
+                .pointsPerQuestion(cell.getPointsPerQuestion())
+                .build();
+        templateMappingRepository.save(mapping);
+      }
+    }
+  }
+
+  /**
+   * Build the full hierarchical {@link ExamMatrixTableResponse} for a matrix.
+   * Groups rows by chapter in order_index order.
+   */
+  private ExamMatrixTableResponse buildTableResponse(ExamMatrix matrix) {
+    UUID matrixId = matrix.getId();
+
+    // Curriculum + subject info
+    String curriculumName = null;
+    UUID subjectId = null;
+    String subjectName = null;
+
+    if (matrix.getCurriculumId() != null) {
+      curriculumRepository
+          .findByIdAndNotDeleted(matrix.getCurriculumId())
+          .ifPresent(
+              c -> {
+                // intentionally captured via final ref
+              });
+
+      var currOpt = curriculumRepository.findByIdAndNotDeleted(matrix.getCurriculumId());
+      if (currOpt.isPresent()) {
+        Curriculum curr = currOpt.get();
+        // set into response fields later via builder
+      }
+    }
+
+    // Load rows ordered by orderIndex
+    List<ExamMatrixRow> rows = examMatrixRowRepository.findByExamMatrixIdOrderByOrderIndex(matrixId);
+
+    // Load all cells for this matrix keyed by rowId
+    List<ExamMatrixTemplateMapping> allCells =
+        templateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
+    Map<UUID, List<ExamMatrixTemplateMapping>> cellsByRow =
+        allCells.stream()
+            .filter(c -> c.getMatrixRowId() != null)
+            .collect(Collectors.groupingBy(ExamMatrixTemplateMapping::getMatrixRowId));
+
+    // Group rows by chapter
+    Map<UUID, List<ExamMatrixRow>> rowsByChapter =
+        rows.stream()
+            .filter(r -> r.getChapterId() != null)
+            .collect(Collectors.groupingBy(ExamMatrixRow::getChapterId, java.util.LinkedHashMap::new, Collectors.toList()));
+
+    // Handle rows without a chapter
+    List<ExamMatrixRow> uncategorised =
+        rows.stream().filter(r -> r.getChapterId() == null).collect(Collectors.toList());
+    if (!uncategorised.isEmpty()) {
+      rowsByChapter.put(null, uncategorised);
+    }
+
+    // Grand-total accumulators
+    Map<String, Integer> grandTotalByCognitive = new LinkedHashMap<>();
+    int grandTotalQuestions = 0;
+    BigDecimal grandTotalPoints = BigDecimal.ZERO;
+
+    List<MatrixChapterGroupResponse> chapterGroups = new ArrayList<>();
+
+    for (Map.Entry<UUID, List<ExamMatrixRow>> entry : rowsByChapter.entrySet()) {
+      UUID chapterId = entry.getKey();
+      List<ExamMatrixRow> chapterRows = entry.getValue();
+
+      String chapterTitle = null;
+      Integer chapterOrder = null;
+      if (chapterId != null) {
+        var chapOpt = chapterRepository.findById(chapterId);
+        if (chapOpt.isPresent()) {
+          chapterTitle = chapOpt.get().getTitle();
+          chapterOrder = chapOpt.get().getOrderIndex();
+        }
+      }
+
+      Map<String, Integer> chapterTotalByCognitive = new LinkedHashMap<>();
+      int chapterTotalQ = 0;
+      BigDecimal chapterTotalPts = BigDecimal.ZERO;
+      List<MatrixRowResponse> rowResponses = new ArrayList<>();
+
+      for (ExamMatrixRow row : chapterRows) {
+        List<ExamMatrixTemplateMapping> cells =
+            cellsByRow.getOrDefault(row.getId(), Collections.emptyList());
+
+        Map<String, Integer> countByCognitive = new LinkedHashMap<>();
+        List<MatrixCellResponse> cellResponses = new ArrayList<>();
+        int rowTotalQ = 0;
+        BigDecimal rowTotalPts = BigDecimal.ZERO;
+
+        for (ExamMatrixTemplateMapping cell : cells) {
+          String label = cognitiveLevelLabel(cell.getCognitiveLevel());
+          int count = cell.getQuestionCount();
+          BigDecimal pts = cell.getPointsPerQuestion().multiply(BigDecimal.valueOf(count));
+
+          countByCognitive.merge(label, count, Integer::sum);
+          rowTotalQ += count;
+          rowTotalPts = rowTotalPts.add(pts);
+
+          cellResponses.add(
+              MatrixCellResponse.builder()
+                  .mappingId(cell.getId())
+                  .cognitiveLevel(cell.getCognitiveLevel())
+                  .cognitiveLevelLabel(label)
+                  .questionCount(count)
+                  .pointsPerQuestion(cell.getPointsPerQuestion())
+                  .totalPoints(pts)
+                  .build());
+        }
+
+        rowResponses.add(
+            MatrixRowResponse.builder()
+                .rowId(row.getId())
+                .chapterId(row.getChapterId())
+                .lessonId(row.getLessonId())
+                .templateId(row.getTemplateId())
+                .questionTypeName(row.getQuestionTypeName())
+                .referenceQuestions(row.getReferenceQuestions())
+                .orderIndex(row.getOrderIndex())
+                .cells(cellResponses)
+                .countByCognitive(countByCognitive)
+                .rowTotalQuestions(rowTotalQ)
+                .rowTotalPoints(rowTotalPts)
+                .build());
+
+        // Accumulate chapter totals
+        countByCognitive.forEach((k, v) -> chapterTotalByCognitive.merge(k, v, Integer::sum));
+        chapterTotalQ += rowTotalQ;
+        chapterTotalPts = chapterTotalPts.add(rowTotalPts);
+      }
+
+      chapterGroups.add(
+          MatrixChapterGroupResponse.builder()
+              .chapterId(chapterId)
+              .chapterTitle(chapterTitle)
+              .chapterOrderIndex(chapterOrder)
+              .rows(rowResponses)
+              .totalByCognitive(chapterTotalByCognitive)
+              .chapterTotalQuestions(chapterTotalQ)
+              .chapterTotalPoints(chapterTotalPts)
+              .build());
+
+      // Accumulate grand totals
+      chapterTotalByCognitive.forEach((k, v) -> grandTotalByCognitive.merge(k, v, Integer::sum));
+      grandTotalQuestions += chapterTotalQ;
+      grandTotalPoints = grandTotalPoints.add(chapterTotalPts);
+    }
+
+    // Resolve curriculum info for the response
+    String finalCurriculumName = null;
+    UUID finalSubjectId = null;
+    String finalSubjectName = null;
+    if (matrix.getCurriculumId() != null) {
+      var currOpt = curriculumRepository.findByIdAndNotDeleted(matrix.getCurriculumId());
+      if (currOpt.isPresent()) {
+        Curriculum curr = currOpt.get();
+        finalCurriculumName = curr.getName();
+        if (curr.getSubjectId() != null) {
+          finalSubjectId = curr.getSubjectId();
+          finalSubjectName = subjectRepository.findById(curr.getSubjectId())
+              .map(Subject::getName).orElse(null);
+        }
+      }
+    }
+
+    String teacherName = userRepository.findById(matrix.getTeacherId())
+        .map(User::getFullName).orElse("Unknown");
+
+    return ExamMatrixTableResponse.builder()
+        .id(matrix.getId())
+        .name(matrix.getName())
+        .description(matrix.getDescription())
+        .teacherId(matrix.getTeacherId())
+        .teacherName(teacherName)
+        .gradeLevel(matrix.getGradeLevel())
+        .curriculumId(matrix.getCurriculumId())
+        .curriculumName(finalCurriculumName)
+        .subjectId(finalSubjectId)
+        .subjectName(finalSubjectName)
+        .isReusable(matrix.getIsReusable())
+        .status(matrix.getStatus())
+        .chapters(chapterGroups)
+        .grandTotalByCognitive(grandTotalByCognitive)
+        .grandTotalQuestions(grandTotalQuestions)
+        .grandTotalPoints(grandTotalPoints)
+        .totalQuestionsTarget(matrix.getTotalQuestionsTarget())
+        .totalPointsTarget(matrix.getTotalPointsTarget())
+        .createdAt(matrix.getCreatedAt())
+        .updatedAt(matrix.getUpdatedAt())
+        .build();
+  }
+
+  /** Maps a {@link CognitiveLevel} to its short Vietnamese label (NB/TH/VD/VDC). */
+  private static String cognitiveLevelLabel(CognitiveLevel level) {
+    return switch (level) {
+      case NHAN_BIET, REMEMBER -> "NB";
+      case THONG_HIEU, UNDERSTAND -> "TH";
+      case VAN_DUNG, APPLY -> "VD";
+      case VAN_DUNG_CAO, ANALYZE, EVALUATE, CREATE -> "VDC";
+    };
   }
 }

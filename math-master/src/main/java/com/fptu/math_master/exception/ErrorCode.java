@@ -206,6 +206,17 @@ public enum ErrorCode {
   TEMPLATE_MAPPING_TEMPLATE_MISMATCH(
       1121,
       "Requested template does not match the matrix template mapping",
+      HttpStatus.BAD_REQUEST),
+  SUBJECT_NOT_FOUND(1122, "Subject not found", HttpStatus.NOT_FOUND),
+  SUBJECT_ALREADY_EXISTS(1123, "Subject with this code already exists", HttpStatus.BAD_REQUEST),
+  GRADE_SUBJECT_ALREADY_EXISTS(
+      1124, "This subject is already linked to the given grade level", HttpStatus.BAD_REQUEST),
+  GRADE_SUBJECT_NOT_FOUND(
+      1125, "No mapping found between this subject and grade level", HttpStatus.NOT_FOUND),
+  EXAM_MATRIX_ROW_NOT_FOUND(1126, "Exam matrix row not found", HttpStatus.NOT_FOUND),
+  MATRIX_ROW_QUESTION_TYPE_REQUIRED(
+      1127,
+      "questionTypeName is required when templateId is not provided",
       HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
