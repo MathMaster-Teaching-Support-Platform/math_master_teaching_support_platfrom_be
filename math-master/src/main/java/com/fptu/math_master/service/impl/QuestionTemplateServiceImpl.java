@@ -29,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -403,37 +404,10 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         } else {
           samples.add(sample);
 
-          // Save question as DRAFT
+          // Save question as DRAFT in its own transaction to prevent connection timeouts
           try {
-            Map<String, Object> generationMetadata = new HashMap<>();
-            generationMetadata.put("status", "DRAFT");
-            generationMetadata.put("sampleIndex", i);
-            generationMetadata.put("usedParameters", sample.getUsedParameters());
-            generationMetadata.put("enhancementApplied", false);
-
-            Question question =
-                Question.builder()
-                    .createdBy(currentUserId)
-                    .templateId(template.getId())
-                    .questionType(template.getTemplateType())
-                    .questionText(sample.getQuestionText())
-                    .options(
-                        sample.getOptions() != null ? new HashMap<>(sample.getOptions()) : null)
-                    .correctAnswer(sample.getCorrectAnswer())
-                    .difficulty(sample.getCalculatedDifficulty())
-                    .cognitiveLevel(template.getCognitiveLevel())
-                    .generationMetadata(generationMetadata)
-                    .build();
-
-            Question savedQuestion = questionRepository.save(question);
-            savedQuestionIds.add(savedQuestion.getId());
-
-            log.info(
-                "Saved test question sample {} as DRAFT with ID: {} (template: {})",
-                i + 1,
-                savedQuestion.getId(),
-                template.getId());
-
+            UUID savedQuestionId = saveQuestionWithOwnTransaction(currentUserId, template, sample, i);
+            savedQuestionIds.add(savedQuestionId);
           } catch (Exception saveException) {
             log.error(
                 "Failed to save test question sample {}: {}",
@@ -465,6 +439,47 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     }
 
     return response;
+  }
+
+  /**
+   * Saves a question in its own transaction to prevent connection timeouts during AI generation.
+   * This is necessary because AI generation (external API calls) can be slow, and keeping a
+   * database connection idle for too long can cause it to be reset.
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  private UUID saveQuestionWithOwnTransaction(
+      UUID currentUserId,
+      QuestionTemplate template,
+      GeneratedQuestionSample sample,
+      int sampleIndex) {
+    Map<String, Object> generationMetadata = new HashMap<>();
+    generationMetadata.put("status", "DRAFT");
+    generationMetadata.put("sampleIndex", sampleIndex);
+    generationMetadata.put("usedParameters", sample.getUsedParameters());
+    generationMetadata.put("enhancementApplied", false);
+
+    Question question =
+        Question.builder()
+            .createdBy(currentUserId)
+            .templateId(template.getId())
+            .questionType(template.getTemplateType())
+            .questionText(sample.getQuestionText())
+            .options(
+                sample.getOptions() != null ? new HashMap<>(sample.getOptions()) : null)
+            .correctAnswer(sample.getCorrectAnswer())
+            .difficulty(sample.getCalculatedDifficulty())
+            .cognitiveLevel(template.getCognitiveLevel())
+            .generationMetadata(generationMetadata)
+            .build();
+
+    Question savedQuestion = questionRepository.save(question);
+    log.info(
+        "Saved test question sample {} as DRAFT with ID: {} (template: {})",
+        sampleIndex + 1,
+        savedQuestion.getId(),
+        template.getId());
+
+    return savedQuestion.getId();
   }
 
   /**
