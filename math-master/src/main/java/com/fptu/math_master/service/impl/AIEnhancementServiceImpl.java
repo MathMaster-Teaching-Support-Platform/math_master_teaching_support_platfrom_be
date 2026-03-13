@@ -68,8 +68,22 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     List<String> errors = new ArrayList<>();
 
     // 1. Validate correct answer hasn't changed
+    // Try to calculate correct answer numerically using formula + parameters first
+    String calculatedCorrectAnswer = null;
+    if (request.getAnswerFormula() != null && request.getParameters() != null) {
+      try {
+        calculatedCorrectAnswer = evaluateFormula(request.getAnswerFormula(), request.getParameters());
+      } catch (Exception e) {
+        log.debug("Could not evaluate formula for validation: {}", e.getMessage());
+      }
+    }
+
+    // Use calculated answer for validation if available, otherwise use the provided answer
+    String answerToValidate = calculatedCorrectAnswer != null ? calculatedCorrectAnswer : request.getCorrectAnswer();
+    
     if (!isSameAnswer(
-        request.getCorrectAnswer(),
+        answerToValidate,
+        request.getRawOptions(),
         response.getCorrectAnswerKey(),
         response.getEnhancedOptions())) {
       errors.add("AI changed the correct answer - this is not allowed");
@@ -415,7 +429,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   }
 
   private boolean isSameAnswer(
-      String originalAnswer, String answerKey, Map<String, String> options) {
+      String originalAnswer,
+      Map<String, String> originalOptions,
+      String answerKey,
+      Map<String, String> options) {
     if (answerKey == null || options == null) {
       return false;
     }
@@ -423,6 +440,18 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     String aiAnswer = options.get(answerKey);
     if (aiAnswer == null) {
       return false;
+    }
+
+    // If we have the original options, find the original answer key for better comparison
+    String originalAnswerKey = null;
+    if (originalOptions != null && originalAnswer != null) {
+      // Find which key has the original answer value
+      for (Map.Entry<String, String> entry : originalOptions.entrySet()) {
+        if (entry.getValue() != null && entry.getValue().equals(originalAnswer)) {
+          originalAnswerKey = entry.getKey();
+          break;
+        }
+      }
     }
 
     // Try numeric comparison first
@@ -655,6 +684,12 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       javax.script.ScriptEngineManager mgr = new javax.script.ScriptEngineManager();
       javax.script.ScriptEngine engine = mgr.getEngineByName("JavaScript");
       if (engine == null) engine = mgr.getEngineByName("graal.js");
+      
+      // If no ScriptEngine available, use simple arithmetic evaluator as fallback
+      if (engine == null) {
+        return evaluateFormulaSimple(formula, params);
+      }
+      
       for (Map.Entry<String, Object> e : params.entrySet()) engine.put(e.getKey(), e.getValue());
       Object result = engine.eval(formula);
       double val = ((Number) result).doubleValue();
@@ -667,8 +702,105 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       return formatted;
     } catch (Exception e) {
       log.warn("Formula evaluation failed '{}': {}", formula, e.getMessage());
+      // Try simple fallback
+      try {
+        return evaluateFormulaSimple(formula, params);
+      } catch (Exception fallbackError) {
+        return "?";
+      }
+    }
+  }
+
+  /**
+   * Simple fallback formula evaluator without ScriptEngine.
+   * Substitutes parameters and evaluates basic arithmetic expressions.
+   */
+  private String evaluateFormulaSimple(String formula, Map<String, Object> params) {
+    try {
+      String expression = formula;
+      
+      // Substitute each parameter with its value
+      for (Map.Entry<String, Object> entry : params.entrySet()) {
+        String paramName = entry.getKey();
+        Object paramValue = entry.getValue();
+        String valueStr = paramValue != null ? paramValue.toString() : "0";
+        // Replace parameter name (as whole word) with its value
+        expression = expression.replaceAll("\\b" + paramName + "\\b", "(" + valueStr + ")");
+      }
+      
+      double result = parseArithmetic(expression);
+      
+      // Format result
+      if (result == Math.floor(result) && !Double.isInfinite(result)) {
+        return String.valueOf((long) result);
+      }
+      String formatted = String.format("%.4f", result);
+      formatted = formatted.replaceAll("0+$", "").replaceAll("\\.$", "");
+      return formatted;
+    } catch (Exception e) {
+      log.debug("Simple formula evaluation failed: {}", e.getMessage());
       return "?";
     }
+  }
+
+  /** Parse and evaluate arithmetic expression like "(1) - (1) / (1)" */
+  private double parseArithmetic(String expr) {
+    expr = expr.replaceAll("\\s+", "");
+    return evaluateAddSub(expr, new int[]{0});
+  }
+
+  private double evaluateAddSub(String expr, int[] pos) {
+    double result = evaluateMulDiv(expr, pos);
+    while (pos[0] < expr.length()) {
+      if (expr.charAt(pos[0]) == '+' || expr.charAt(pos[0]) == '-') {
+        char op = expr.charAt(pos[0]++);
+        double right = evaluateMulDiv(expr, pos);
+        result = op == '+' ? result + right : result - right;
+      } else {
+        break;
+      }
+    }
+    return result;
+  }
+
+  private double evaluateMulDiv(String expr, int[] pos) {
+    double result = evaluatePrimary(expr, pos);
+    while (pos[0] < expr.length()) {
+      if (expr.charAt(pos[0]) == '*' || expr.charAt(pos[0]) == '/') {
+        char op = expr.charAt(pos[0]++);
+        double right = evaluatePrimary(expr, pos);
+        result = op == '*' ? result * right : result / right;
+      } else {
+        break;
+      }
+    }
+    return result;
+  }
+
+  private double evaluatePrimary(String expr, int[] pos) {
+    if (pos[0] >= expr.length()) throw new RuntimeException("Unexpected end");
+    
+    if (expr.charAt(pos[0]) == '(') {
+      pos[0]++;
+      double result = evaluateAddSub(expr, pos);
+      if (pos[0] >= expr.length() || expr.charAt(pos[0]) != ')') {
+        throw new RuntimeException("Missing )");
+      }
+      pos[0]++;
+      return result;
+    }
+    
+    StringBuilder num = new StringBuilder();
+    if (pos[0] < expr.length() && (expr.charAt(pos[0]) == '-' || expr.charAt(pos[0]) == '+')) {
+      num.append(expr.charAt(pos[0]++));
+    }
+    
+    while (pos[0] < expr.length() && (Character.isDigit(expr.charAt(pos[0])) || expr.charAt(pos[0]) == '.')) {
+      num.append(expr.charAt(pos[0]++));
+    }
+    
+    if (num.length() == 0) throw new RuntimeException("Expected number");
+    return Double.parseDouble(num.toString());
   }
 
   /** Fill template text placeholders with actual parameter values */

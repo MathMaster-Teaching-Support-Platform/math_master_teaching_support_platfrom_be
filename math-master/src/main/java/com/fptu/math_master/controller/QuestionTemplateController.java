@@ -1,7 +1,9 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
+import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
+import com.fptu.math_master.dto.response.AIGeneratedTemplatesResponse;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateImportResponse;
@@ -201,6 +203,26 @@ public class QuestionTemplateController {
     return ApiResponse.<QuestionTemplateResponse>builder()
         .message("Template archived successfully")
         .result(questionTemplateService.archiveTemplate(id))
+        .build();
+  }
+
+  @PostMapping("/ai-generate-from-lesson")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Generate templates from lesson using AI",
+      description =
+          "AI analyzes lesson content and generates practical, diverse question templates. "
+              + "Templates are created in DRAFT status and ready for configuration. "
+              + "Teacher can specify the number of templates to generate (default: 1).")
+  public ApiResponse<AIGeneratedTemplatesResponse> aiGenerateTemplatesFromLesson(
+      @Valid @RequestBody AIGenerateTemplatesRequest request) {
+    log.info(
+        "REST request to generate templates from lesson: {}, count: {}",
+        request.getLessonId(),
+        request.getTemplateCount());
+    return ApiResponse.<AIGeneratedTemplatesResponse>builder()
+        .message("Templates generated successfully using AI.")
+        .result(questionTemplateService.aiGenerateTemplates(request))
         .build();
   }
 

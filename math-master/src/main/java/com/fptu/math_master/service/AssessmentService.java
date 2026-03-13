@@ -3,7 +3,9 @@ package com.fptu.math_master.service;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
+import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.enums.AssessmentStatus;
@@ -46,4 +48,15 @@ public interface AssessmentService {
   AssessmentResponse addQuestion(UUID assessmentId, AddQuestionToAssessmentRequest request);
 
   AssessmentResponse removeQuestion(UUID assessmentId, UUID questionId);
+
+  /**
+   * Generate assessment questions from exam matrix templates using AI.
+   * Iterates through all template mappings in the matrix and generates questions.
+   *
+   * @param assessmentId Assessment ID
+   * @param request Generation request with exam matrix ID and options
+   * @return Response with count of generated questions
+   */
+  AssessmentGenerationResponse generateQuestionsFromMatrix(
+      UUID assessmentId, GenerateAssessmentQuestionsRequest request);
 }
