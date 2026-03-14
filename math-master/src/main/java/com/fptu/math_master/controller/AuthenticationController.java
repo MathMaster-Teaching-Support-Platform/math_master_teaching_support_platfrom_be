@@ -1,6 +1,7 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.AuthenticationRequest;
+import com.fptu.math_master.dto.request.GoogleAuthRequest;
 import com.fptu.math_master.dto.request.IntrospectRequest;
 import com.fptu.math_master.dto.request.LogoutRequest;
 import com.fptu.math_master.dto.request.RefreshRequest;
@@ -13,6 +14,8 @@ import com.fptu.math_master.service.AuthenticationService;
 import com.nimbusds.jose.JOSEException;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.text.ParseException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +50,17 @@ public class AuthenticationController {
       @Valid @RequestBody AuthenticationRequest request) {
 
     var result = authenticationService.login(request);
+    return ApiResponse.<AuthenticationResponse>builder().result(result).build();
+  }
+
+  @PostMapping("/google")
+  @Operation(
+      summary = "Google Login",
+      description = "Authenticate user with Google ID token and return access token (JWT).")
+  ApiResponse<AuthenticationResponse> googleLogin(@Valid @RequestBody GoogleAuthRequest request)
+      throws GeneralSecurityException, IOException, JOSEException, ParseException {
+
+    var result = authenticationService.googleLogin(request);
     return ApiResponse.<AuthenticationResponse>builder().result(result).build();
   }
 

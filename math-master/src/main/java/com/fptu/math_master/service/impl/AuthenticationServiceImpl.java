@@ -19,14 +19,21 @@ import com.fptu.math_master.repository.InvalidatedTokenRepository;
 import com.fptu.math_master.repository.RoleRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AuthenticationService;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.text.ParseException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
@@ -115,6 +122,69 @@ public class AuthenticationServiceImpl implements AuthenticationService {
       invalidatedTokenRepository.save(invalidatedToken);
     } catch (AppException exception) {
       log.info("Token already expired");
+    }
+  }
+
+  @Override
+  @Transactional
+  public AuthenticationResponse googleLogin(com.fptu.math_master.dto.request.GoogleAuthRequest request)
+      throws GeneralSecurityException, IOException {
+
+    String clientId = "299660266172-38kfomfcv0pcvrhrg0pas04rhfskqn8u.apps.googleusercontent.com";
+    GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
+        new NetHttpTransport(), new GsonFactory())
+        .setAudience(Collections.singletonList(clientId))
+        .build();
+
+    GoogleIdToken idToken = verifier.verify(request.getToken());
+    if (idToken != null) {
+      GoogleIdToken.Payload payload = idToken.getPayload();
+
+      String email = payload.getEmail();
+      String name = (String) payload.get("name");
+      String pictureUrl = (String) payload.get("picture");
+
+      // Check if user exists
+      var userOpt = userRepository.findByEmailWithRolesAndPermissions(email);
+      User user;
+
+      if (userOpt.isPresent()) {
+        user = userOpt.get();
+      } else {
+        // Auto register
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
+        String randomPassword = UUID.randomUUID().toString();
+
+        user = User.builder()
+            .userName(email.split("@")[0] + "_" + UUID.randomUUID().toString().substring(0, 5))
+            .password(passwordEncoder.encode(randomPassword))
+            .fullName(name)
+            .email(email)
+            .avatar(pictureUrl)
+            .status(Status.ACTIVE)
+            .build();
+
+        Role userRole = roleRepository.findByName(PredefinedRole.STUDENT_ROLE)
+            .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+
+        Set<Role> roles = new HashSet<>();
+        roles.add(userRole);
+        user.setRoles(roles);
+
+        user = userRepository.save(user);
+        log.info("Auto registered Google user with id: {}", user.getId());
+        
+        // Fetch again to ensure roles and permissions are loaded optimally
+        user = userRepository.findByEmailWithRolesAndPermissions(email).orElse(user);
+      }
+
+      var token = generateToken(user);
+      return AuthenticationResponse.builder()
+          .token(token)
+          .expiryTime(new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
+          .build();
+    } else {
+      throw new AppException(ErrorCode.UNAUTHENTICATED);
     }
   }
 
