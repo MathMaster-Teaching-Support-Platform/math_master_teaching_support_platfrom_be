@@ -1,21 +1,19 @@
 package com.fptu.math_master.entity;
 
+import com.fptu.math_master.util.UuidV7Generator;
+import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
-
-import com.fptu.math_master.util.UuidV7Generator;
-
-import jakarta.persistence.*;
 import lombok.*;
 
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
+@Setter
+@MappedSuperclass
 /**
  * The 'BaseEntity' class providing common audit fields for all entities.
  */
-@MappedSuperclass
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public abstract class BaseEntity {
 
   /**

@@ -1,39 +1,32 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.CurriculumCategory;
-import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
 @Entity
 @Table(
     name = "curricula",
@@ -48,12 +41,10 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_curricula_grade_category", columnList = "grade, category"),
       @Index(name = "idx_curricula_subject", columnList = "subject_id")
     })
-public class Curriculum {
-
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+/**
+ * The entity of 'Curriculum'.
+ */
+public class Curriculum extends BaseEntity {
 
   @Size(max = 255)
   @Nationalized
@@ -86,26 +77,6 @@ public class Curriculum {
   @Column(name = "description")
   private String description;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
-  @Column(name = "deleted_at")
-  private Instant deletedAt;
-
   @OneToMany(mappedBy = "curriculum", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<Chapter> chapters;
-
-  @PrePersist
-  public void prePersist() {
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
-  }
 }

@@ -1,8 +1,17 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.RegradeRequestStatus;
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.*;
@@ -11,7 +20,9 @@ import org.hibernate.annotations.Nationalized;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "regrade_requests",
@@ -21,48 +32,71 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_regrade_status", columnList = "status"),
       @Index(name = "idx_regrade_question", columnList = "question_id")
     })
-public class RegradeRequest {
+/**
+ * The entity of 'RegradeRequest'.
+ */
+public class RegradeRequest extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
+  /**
+   * submission_id
+   */
   @Column(name = "submission_id", nullable = false)
   private UUID submissionId;
 
+  /**
+   * question_id
+   */
   @Column(name = "question_id", nullable = false)
   private UUID questionId;
 
+  /**
+   * student_id
+   */
   @Column(name = "student_id", nullable = false)
   private UUID studentId;
 
+  /**
+   * reason
+   */
   @Lob
   @Nationalized
   @Column(name = "reason", nullable = false)
   private String reason;
 
+  /**
+   * status
+   */
   @Column(name = "status")
   @Enumerated(EnumType.STRING)
   private RegradeRequestStatus status;
 
+  /**
+   * teacher_response
+   */
   @Lob
   @Nationalized
   @Column(name = "teacher_response")
   private String teacherResponse;
 
+  /**
+   * reviewed_by
+   */
   @Column(name = "reviewed_by")
   private UUID reviewedBy;
 
+  /**
+   * reviewed_at
+   */
   @Column(name = "reviewed_at")
   private Instant reviewedAt;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with Submission
+   * - Many-to-One with Question
+   * - Many-to-One with User (student)
+   * - Many-to-One with User (reviewer)
+   */
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "submission_id", insertable = false, updatable = false)
   private Submission submission;
@@ -82,12 +116,5 @@ public class RegradeRequest {
   @PrePersist
   public void prePersist() {
     if (status == null) status = RegradeRequestStatus.PENDING;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

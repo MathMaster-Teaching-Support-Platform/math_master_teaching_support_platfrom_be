@@ -1,37 +1,31 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.MatrixStatus;
-import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
 @Entity
 @Table(
     name = "exam_matrices",
@@ -42,12 +36,10 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_exam_matrices_curriculum", columnList = "curriculum_id"),
       @Index(name = "idx_exam_matrices_grade", columnList = "grade_level")
     })
-public class ExamMatrix {
-
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+/**
+ * The entity of 'ExamMatrix'.
+ */
+public class ExamMatrix extends BaseEntity {
 
   @Column(name = "teacher_id", nullable = false)
   private UUID teacherId;
@@ -89,15 +81,6 @@ public class ExamMatrix {
   @Enumerated(EnumType.STRING)
   private MatrixStatus status;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
-  @Column(name = "deleted_at")
-  private Instant deletedAt;
-
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
   private User teacher;
@@ -116,12 +99,5 @@ public class ExamMatrix {
   public void prePersist() {
     if (isReusable == null) isReusable = false;
     if (status == null) status = MatrixStatus.DRAFT;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

@@ -1,9 +1,15 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
 import java.util.UUID;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
@@ -21,7 +27,9 @@ import org.hibernate.annotations.Nationalized;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "student_wishes",
@@ -30,64 +38,84 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_student_wishes_subject", columnList = "subject"),
       @Index(name = "idx_student_wishes_created", columnList = "created_at")
     })
-public class StudentWish {
-
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+public class StudentWish extends BaseEntity {
 
   @Column(name = "student_id", nullable = false)
-  private UUID studentId; // Reference to User (student)
+  private UUID studentId;
 
+  /**
+   * subject
+   */
   @Size(max = 100)
   @Column(name = "subject", length = 100, nullable = false)
-  private String subject; // e.g., "Algebra", "Geometry"
+  private String subject;
 
+  /**
+   * grade_level
+   */
   @Column(name = "grade_level", length = 50)
-  private String gradeLevel; // e.g., "Grade 9", "Grade 10"
+  private String gradeLevel;
 
+  /**
+   * learning_goals
+   */
   @Lob
   @Nationalized
   @Column(name = "learning_goals")
-  private String learningGoals; // Description of what student wants to achieve
+  private String learningGoals;
 
+  /**
+   * preferred_topics
+   */
   @Lob
   @Nationalized
   @Column(name = "preferred_topics")
-  private String preferredTopics; // Comma-separated or JSON list of preferred topics
+  private String preferredTopics;
 
+  /**
+   * weak_areas_to_improve
+   */
   @Lob
   @Nationalized
   @Column(name = "weak_areas_to_improve")
-  private String weakAreasToImprove; // Topics student wants to focus on
+  private String weakAreasToImprove;
 
+  /**
+   * daily_study_minutes
+   */
   @Column(name = "daily_study_minutes", nullable = false)
-  private Integer dailyStudyMinutes = 60; // Minutes per day student can study
+  private Integer dailyStudyMinutes = 60;
 
+  /**
+   * target_accuracy_percentage
+   */
   @Column(name = "target_accuracy_percentage")
-  private Integer targetAccuracyPercentage; // e.g., 90% accuracy goal
+  private Integer targetAccuracyPercentage;
 
+  /**
+   * learning_style_preference
+   */
   @Lob
   @Nationalized
   @Column(name = "learning_style_preference")
-  private String learningStylePreference; // e.g., "visual", "practice", "theory-first"
+  private String learningStylePreference;
 
+  /**
+   * prefer_difficult_challenges
+   */
   @Column(name = "prefer_difficult_challenges")
-  private Boolean preferDifficultChallenges = false; // Whether student likes challenging problems
+  private Boolean preferDifficultChallenges = false;
 
+  /**
+   * is_active
+   */
   @Column(name = "is_active", nullable = false)
   private Boolean isActive = true;
 
-  @Column(name = "created_at", nullable = false)
-  private Instant createdAt;
-
-  @Column(name = "updated_at", nullable = false)
-  private Instant updatedAt;
-
-  @Column(name = "deleted_at")
-  private Instant deletedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with User (student)
+   */
   // Relationships
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "student_id", insertable = false, updatable = false)
@@ -98,12 +126,5 @@ public class StudentWish {
     if (isActive == null) isActive = true;
     if (dailyStudyMinutes == null) dailyStudyMinutes = 60;
     if (preferDifficultChallenges == null) preferDifficultChallenges = false;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

@@ -394,10 +394,10 @@ public class UserServiceImpl implements UserService {
         .banReason(user.getBanReason())
         .banDate(user.getBanDate())
         .roles(roles)
-        .createdDate(user.getCreatedDate())
-        .createdBy(user.getCreatedBy())
-        .updatedDate(user.getUpdatedDate())
-        .updatedBy(user.getUpdatedBy())
+        .createdDate(user.getCreatedAt())
+        .createdBy(user.getCreatedByName())
+        .updatedDate(user.getUpdatedAt())
+        .updatedBy(user.getUpdatedByName())
         .build();
   }
 }

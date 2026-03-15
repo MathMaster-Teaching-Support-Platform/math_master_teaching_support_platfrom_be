@@ -1,12 +1,26 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.annotations.Nationalized;
 
 @Builder
@@ -14,6 +28,7 @@ import org.hibernate.annotations.Nationalized;
 @NoArgsConstructor
 @Getter
 @Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "mindmap_nodes",
@@ -23,41 +38,57 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_mindmap_nodes_order", columnList = "display_order"),
       @Index(name = "idx_mindmap_nodes_mindmap_order", columnList = "mindmap_id, display_order")
     })
-public class MindmapNode {
+/**
+ * The entity of 'MindmapNode'.
+ */
+public class MindmapNode extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
+  /**
+   * mindmap_id
+   */
   @Column(name = "mindmap_id", nullable = false)
   private UUID mindmapId;
 
+  /**
+   * parent_id
+   */
   @Column(name = "parent_id")
   private UUID parentId;
 
+  /**
+   * content
+   */
   @Lob
   @Nationalized
   @Column(name = "content", nullable = false)
   private String content;
 
+  /**
+   * color
+   */
   @Size(max = 50)
   @Column(name = "color", length = 50)
   private String color;
 
+  /**
+   * icon
+   */
   @Size(max = 100)
   @Column(name = "icon", length = 100)
   private String icon;
 
+  /**
+   * display_order
+   */
   @Column(name = "display_order")
   private Integer displayOrder;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with Mindmap
+   * - Many-to-One with MindmapNode (parent)
+   * - One-to-Many with MindmapNode (children)
+   */
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "mindmap_id", insertable = false, updatable = false)
   @ToString.Exclude
@@ -78,12 +109,5 @@ public class MindmapNode {
   @PrePersist
   public void prePersist() {
     if (displayOrder == null) displayOrder = 0;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

@@ -23,7 +23,12 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
-import com.nimbusds.jose.*;
+import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSObject;
+import com.nimbusds.jose.JWSVerifier;
+import com.nimbusds.jose.Payload;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
@@ -127,14 +132,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
   @Override
   @Transactional
-  public AuthenticationResponse googleLogin(com.fptu.math_master.dto.request.GoogleAuthRequest request)
+  public AuthenticationResponse googleLogin(
+      com.fptu.math_master.dto.request.GoogleAuthRequest request)
       throws GeneralSecurityException, IOException {
 
     String clientId = "299660266172-38kfomfcv0pcvrhrg0pas04rhfskqn8u.apps.googleusercontent.com";
-    GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
-        new NetHttpTransport(), new GsonFactory())
-        .setAudience(Collections.singletonList(clientId))
-        .build();
+    GoogleIdTokenVerifier verifier =
+        new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
+            .setAudience(Collections.singletonList(clientId))
+            .build();
 
     GoogleIdToken idToken = verifier.verify(request.getToken());
     if (idToken != null) {
@@ -155,17 +161,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
         String randomPassword = UUID.randomUUID().toString();
 
-        user = User.builder()
-            .userName(email.split("@")[0] + "_" + UUID.randomUUID().toString().substring(0, 5))
-            .password(passwordEncoder.encode(randomPassword))
-            .fullName(name)
-            .email(email)
-            .avatar(pictureUrl)
-            .status(Status.ACTIVE)
-            .build();
+        user =
+            User.builder()
+                .userName(email.split("@")[0] + "_" + UUID.randomUUID().toString().substring(0, 5))
+                .password(passwordEncoder.encode(randomPassword))
+                .fullName(name)
+                .email(email)
+                .avatar(pictureUrl)
+                .status(Status.ACTIVE)
+                .build();
 
-        Role userRole = roleRepository.findByName(PredefinedRole.STUDENT_ROLE)
-            .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+        Role userRole =
+            roleRepository
+                .findByName(PredefinedRole.STUDENT_ROLE)
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
         Set<Role> roles = new HashSet<>();
         roles.add(userRole);
@@ -173,7 +182,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         user = userRepository.save(user);
         log.info("Auto registered Google user with id: {}", user.getId());
-        
+
         // Fetch again to ensure roles and permissions are loaded optimally
         user = userRepository.findByEmailWithRolesAndPermissions(email).orElse(user);
       }
@@ -181,7 +190,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
       var token = generateToken(user);
       return AuthenticationResponse.builder()
           .token(token)
-          .expiryTime(new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
+          .expiryTime(
+              new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
           .build();
     } else {
       throw new AppException(ErrorCode.UNAUTHENTICATED);
@@ -360,10 +370,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         .banReason(user.getBanReason())
         .banDate(user.getBanDate())
         .roles(roles)
-        .createdDate(user.getCreatedDate())
-        .createdBy(user.getCreatedBy())
-        .updatedDate(user.getUpdatedDate())
-        .updatedBy(user.getUpdatedBy())
+        .createdDate(user.getCreatedAt())
+        .createdBy(user.getCreatedByName())
+        .updatedDate(user.getUpdatedAt())
+        .updatedBy(user.getUpdatedByName())
         .build();
   }
 }

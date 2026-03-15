@@ -1,30 +1,38 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.ProfileStatus;
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
 @Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Entity
 @Table(name = "teacher_profiles")
-public class TeacherProfile {
+/**
+ * The entity of 'TeacherProfile'.
+ */
+public class TeacherProfile extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  UUID id;
-
+  /**
+   * Relationships
+   * - One-to-One with User
+   * - Many-to-One with School
+   */
   @OneToOne
   @JoinColumn(name = "user_id", nullable = false, unique = true)
   User user;
@@ -33,36 +41,52 @@ public class TeacherProfile {
   @JoinColumn(name = "school_id", nullable = false)
   School school;
 
+  /**
+   * position
+   */
   @Column(name = "position", nullable = false)
   String position;
 
+  /**
+   * certificate_url
+   */
   @Column(name = "certificate_url")
-  String certificateUrl; // URL của file minh chứng (upload lên cloud storage)
+  String certificateUrl;
 
+  /**
+   * identification_document_url
+   */
   @Column(name = "identification_document_url")
-  String identificationDocumentUrl; // URL của CMND/CCCD
+  String identificationDocumentUrl;
 
+  /**
+   * description
+   */
   @Column(name = "description", columnDefinition = "TEXT")
   String description;
 
+  /**
+   * status
+   */
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false)
   ProfileStatus status;
 
+  /**
+   * admin_comment
+   */
   @Column(name = "admin_comment", columnDefinition = "TEXT")
-  String adminComment; // Lý do từ chối hoặc ghi chú của admin
+  String adminComment;
 
+  /**
+   * reviewed_by
+   */
   @Column(name = "reviewed_by")
-  UUID reviewedBy; // ID của admin đã duyệt
+  UUID reviewedBy;
 
+  /**
+   * reviewed_at
+   */
   @Column(name = "reviewed_at")
   LocalDateTime reviewedAt;
-
-  @CreationTimestamp
-  @Column(name = "created_at", updatable = false)
-  LocalDateTime createdAt;
-
-  @UpdateTimestamp
-  @Column(name = "updated_at")
-  LocalDateTime updatedAt;
 }

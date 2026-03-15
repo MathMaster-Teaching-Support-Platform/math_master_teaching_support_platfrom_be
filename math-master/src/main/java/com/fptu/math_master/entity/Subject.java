@@ -1,27 +1,19 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Lob;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
 import java.util.Set;
-import java.util.UUID;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
 /**
@@ -36,7 +28,9 @@ import org.hibernate.annotations.Nationalized;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "subjects",
@@ -49,12 +43,7 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_subjects_code", columnList = "code"),
       @Index(name = "idx_subjects_active", columnList = "is_active")
     })
-public class Subject {
-
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+public class Subject extends BaseEntity {
 
   /**
    * Full Vietnamese name, e.g. "Đại Số", "Hình Học Giải Tích",
@@ -94,12 +83,6 @@ public class Subject {
   @Column(name = "is_active", nullable = false)
   private Boolean isActive = true;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
   // ── Relationships ────────────────────────────────────────────────────────
 
   @OneToMany(mappedBy = "subject", fetch = FetchType.LAZY)
@@ -113,12 +96,5 @@ public class Subject {
   @PrePersist
   public void prePersist() {
     if (isActive == null) isActive = true;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

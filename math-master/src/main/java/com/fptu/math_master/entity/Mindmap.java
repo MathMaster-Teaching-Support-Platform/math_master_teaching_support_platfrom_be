@@ -1,13 +1,29 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.MindmapStatus;
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.annotations.Nationalized;
 
 @Builder
@@ -15,6 +31,7 @@ import org.hibernate.annotations.Nationalized;
 @NoArgsConstructor
 @Getter
 @Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "mindmaps",
@@ -32,50 +49,66 @@ import org.hibernate.annotations.Nationalized;
           name = "idx_mindmaps_teacher_lesson_deleted_created",
           columnList = "teacher_id, lesson_id, deleted_at, created_at")
     })
-public class Mindmap {
+/**
+ * The entity of 'Mindmap'.
+ */
+public class Mindmap extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
+  /**
+   * teacher_id
+   */
   @Column(name = "teacher_id", nullable = false)
   private UUID teacherId;
 
+  /**
+   * lesson_id
+   */
   @Column(name = "lesson_id")
   private UUID lessonId;
 
+  /**
+   * title
+   */
   @Size(max = 255)
   @Nationalized
   @Column(name = "title", length = 255, nullable = false)
   private String title;
 
+  /**
+   * description
+   */
   @Lob
   @Nationalized
   @Column(name = "description")
   private String description;
 
+  /**
+   * ai_generated
+   */
   @Column(name = "ai_generated")
   private Boolean aiGenerated;
 
+  /**
+   * generation_prompt
+   */
   @Lob
   @Nationalized
   @Column(name = "generation_prompt")
   private String generationPrompt;
 
+  /**
+   * status
+   */
   @Column(name = "status")
   @Enumerated(EnumType.STRING)
   private MindmapStatus status;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
-  @Column(name = "deleted_at")
-  private Instant deletedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with User (teacher)
+   * - Many-to-One with Lesson
+   * - One-to-Many with MindmapNode
+   */
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
   @ToString.Exclude
@@ -97,12 +130,5 @@ public class Mindmap {
   public void prePersist() {
     if (aiGenerated == null) aiGenerated = false;
     if (status == null) status = MindmapStatus.DRAFT;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

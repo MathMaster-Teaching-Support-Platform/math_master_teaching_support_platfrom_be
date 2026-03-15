@@ -1,8 +1,12 @@
 package com.fptu.math_master.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
 @Data
@@ -20,6 +24,6 @@ public class SchoolResponse {
   String phoneNumber;
   String email;
   String website;
-  LocalDateTime createdAt;
-  LocalDateTime updatedAt;
+  Instant createdAt;
+  Instant updatedAt;
 }

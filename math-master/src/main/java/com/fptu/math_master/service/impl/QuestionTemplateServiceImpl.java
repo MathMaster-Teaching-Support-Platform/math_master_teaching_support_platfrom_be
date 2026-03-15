@@ -26,7 +26,14 @@ import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.QuestionTemplateService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -73,7 +80,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
     QuestionTemplate template =
         QuestionTemplate.builder()
-            .createdBy(currentUserId)
             .questionBankId(bankId)
             .name(request.getName())
             .description(request.getDescription())
@@ -90,6 +96,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .status(TemplateStatus.DRAFT)
             .usageCount(0)
             .build();
+    template.setCreatedBy(currentUserId);
 
     template = questionTemplateRepository.save(template);
 
@@ -366,7 +373,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         // Create Question entity
         Question question =
             Question.builder()
-                .createdBy(currentUserId)
                 .templateId(template.getId())
                 .questionType(template.getTemplateType())
                 .questionText(
@@ -385,6 +391,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
                 .cognitiveLevel(template.getCognitiveLevel())
                 .generationMetadata(generationMetadata)
                 .build();
+        question.setCreatedBy(currentUserId);
 
         // Save to database
         Question savedQuestion = questionRepository.save(question);
@@ -510,7 +517,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     if (lesson.getLearningObjectives() != null) {
       content.append("Learning Objectives: ").append(lesson.getLearningObjectives()).append("\n\n");
     }
-    return content.length() > 0
+    return !content.isEmpty()
         ? content.toString()
         : "No detailed content available. Generate templates based on the lesson title: "
             + lesson.getTitle();
@@ -531,7 +538,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       for (Map<String, Object> templateData : templates) {
         QuestionTemplate template =
             QuestionTemplate.builder()
-                .createdBy(currentUserId)
                 .lessonId(lesson.getId())
                 .name((String) templateData.getOrDefault("name", "Generated Template"))
                 .description((String) templateData.getOrDefault("description", ""))
@@ -551,6 +557,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
                 .status(TemplateStatus.DRAFT)
                 .usageCount(0)
                 .build();
+        template.setCreatedBy(currentUserId);
 
         savedTemplates.add(questionTemplateRepository.save(template));
         log.debug("Saved AI-generated template: {}", template.getName());
@@ -666,7 +673,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
     Question question =
         Question.builder()
-            .createdBy(currentUserId)
             .templateId(template.getId())
             .questionType(template.getTemplateType())
             .questionText(sample.getQuestionText())
@@ -676,6 +682,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .cognitiveLevel(template.getCognitiveLevel())
             .generationMetadata(generationMetadata)
             .build();
+    question.setCreatedBy(currentUserId);
 
     Question savedQuestion = questionRepository.save(question);
     log.info(

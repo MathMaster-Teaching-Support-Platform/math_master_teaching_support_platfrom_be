@@ -1,27 +1,28 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.util.UUID;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "permissions",
     uniqueConstraints = {@UniqueConstraint(name = "uk_permission_code", columnNames = "code")})
-public class Permission {
-
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+/**
+ * The entity of 'Permission'.
+ */
+public class Permission extends BaseEntity {
 
   /**
    * Unique permission key used by code checks. Example: "USER_READ", "USER_CREATE", "QUIZ_SUBMIT"

@@ -1,35 +1,29 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "exam_matrix_template_mappings",
@@ -44,12 +38,10 @@ import lombok.NoArgsConstructor;
       @Index(name = "idx_exam_matrix_template_cognitive", columnList = "cognitive_level"),
       @Index(name = "idx_exam_matrix_template_row", columnList = "matrix_row_id")
     })
-public class ExamMatrixTemplateMapping {
-
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+/**
+ * The entity of 'ExamMatrixTemplateMapping'.
+ */
+public class ExamMatrixTemplateMapping extends BaseEntity {
 
   @Column(name = "exam_matrix_id", nullable = false)
   private UUID examMatrixId;
@@ -77,12 +69,6 @@ public class ExamMatrixTemplateMapping {
   @Column(name = "total_points", precision = 6, scale = 2, insertable = false, updatable = false)
   private BigDecimal totalPoints;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "exam_matrix_id", insertable = false, updatable = false)
   private ExamMatrix examMatrix;
@@ -100,15 +86,4 @@ public class ExamMatrixTemplateMapping {
       cascade = CascadeType.ALL,
       orphanRemoval = true)
   private Set<AssessmentQuestion> assessmentQuestions;
-
-  @PrePersist
-  public void prePersist() {
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
-  }
 }

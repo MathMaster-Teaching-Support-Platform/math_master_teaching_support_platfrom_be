@@ -1,28 +1,30 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.Set;
-import java.util.UUID;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "roles",
     uniqueConstraints = {@UniqueConstraint(name = "uk_role_name", columnNames = "name")})
-public class Role {
-
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+/**
+ * The entity of 'Role'.
+ */
+public class Role extends BaseEntity {
 
   /** Example: "ADMIN", "STUDENT" */
   @NotBlank

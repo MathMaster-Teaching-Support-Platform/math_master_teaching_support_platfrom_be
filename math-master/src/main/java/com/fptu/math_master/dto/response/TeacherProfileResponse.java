@@ -1,9 +1,14 @@
 package com.fptu.math_master.dto.response;
 
 import com.fptu.math_master.enums.ProfileStatus;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
 @Data
@@ -28,6 +33,6 @@ public class TeacherProfileResponse {
   UUID reviewedBy;
   String reviewedByName;
   LocalDateTime reviewedAt;
-  LocalDateTime createdAt;
-  LocalDateTime updatedAt;
+  Instant createdAt;
+  Instant updatedAt;
 }

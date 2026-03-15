@@ -1,55 +1,64 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
-import java.time.LocalDateTime;
-import java.util.UUID;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
 @Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Entity
 @Table(name = "schools")
-public class School {
+/**
+ * The entity of 'School'.
+ */
+public class School extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  UUID id;
-
+  /**
+   * name
+   */
   @Column(name = "name", nullable = false, unique = true)
   String name;
 
+  /**
+   * address
+   */
   @Column(name = "address")
   String address;
 
+  /**
+   * city
+   */
   @Column(name = "city")
   String city;
 
+  /**
+   * district
+   */
   @Column(name = "district")
   String district;
 
+  /**
+   * phone_number
+   */
   @Column(name = "phone_number")
   String phoneNumber;
 
+  /**
+   * email
+   */
   @Column(name = "email")
   String email;
 
+  /**
+   * website
+   */
   @Column(name = "website")
   String website;
-
-  @CreationTimestamp
-  @Column(name = "created_at", updatable = false)
-  LocalDateTime createdAt;
-
-  @UpdateTimestamp
-  @Column(name = "updated_at")
-  LocalDateTime updatedAt;
 }

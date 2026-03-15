@@ -2,8 +2,19 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.RoadmapGenerationType;
 import com.fptu.math_master.enums.RoadmapStatus;
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,7 +39,9 @@ import org.hibernate.annotations.Nationalized;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "learning_roadmaps",
@@ -39,67 +52,94 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_roadmaps_grade_level", columnList = "grade_level"),
       @Index(name = "idx_roadmaps_created_at", columnList = "created_at")
     })
-public class LearningRoadmap {
-
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+public class LearningRoadmap extends BaseEntity {
 
   @Column(name = "student_id", nullable = false)
   private UUID studentId;
 
   @Column(name = "teacher_id")
-  private UUID teacherId; // If roadmap was assigned/customized by teacher
+  private UUID teacherId;
 
+  /**
+   * subject
+   */
   @Size(max = 100)
   @Column(name = "subject", length = 100, nullable = false)
-  private String subject; // e.g., "Algebra", "Geometry", "Trigonometry"
+  private String subject;
 
+  /**
+   * grade_level
+   */
   @Size(max = 50)
   @Column(name = "grade_level", length = 50, nullable = false)
-  private String gradeLevel; // e.g., "Grade 9", "Grade 10"
+  private String gradeLevel;
 
+  /**
+   * generation_type
+   */
   @Column(name = "generation_type", nullable = false)
   @Enumerated(EnumType.STRING)
-  private RoadmapGenerationType generationType; // PERSONALIZED, DEFAULT, TEACHER_ASSIGNED
+  private RoadmapGenerationType generationType;
 
+  /**
+   * status
+   */
   @Column(name = "status", nullable = false)
   @Enumerated(EnumType.STRING)
-  private RoadmapStatus status; // GENERATED, IN_PROGRESS, COMPLETED, ARCHIVED
+  private RoadmapStatus status;
 
+  /**
+   * progress_percentage
+   */
   @Column(name = "progress_percentage", nullable = false, precision = 5, scale = 2)
-  private BigDecimal progressPercentage; // 0-100
+  private BigDecimal progressPercentage;
 
+  /**
+   * completed_topics_count
+   */
+  @Builder.Default
   @Column(name = "completed_topics_count", nullable = false)
   private Integer completedTopicsCount = 0;
 
+  /**
+   * total_topics_count
+   */
+  @Builder.Default
   @Column(name = "total_topics_count", nullable = false)
   private Integer totalTopicsCount = 0;
 
+  /**
+   * description
+   */
   @Lob
   @Nationalized
   @Column(name = "description")
-  private String description; // Optional description of the roadmap
+  private String description;
 
+  /**
+   * estimated_completion_days
+   */
   @Column(name = "estimated_completion_days")
-  private Integer estimatedCompletionDays; // Estimated days to complete
+  private Integer estimatedCompletionDays;
 
+  /**
+   * started_at
+   */
   @Column(name = "started_at")
   private Instant startedAt;
 
+  /**
+   * completed_at
+   */
   @Column(name = "completed_at")
   private Instant completedAt;
 
-  @Column(name = "created_at", nullable = false)
-  private Instant createdAt;
-
-  @Column(name = "updated_at", nullable = false)
-  private Instant updatedAt;
-
-  @Column(name = "deleted_at")
-  private Instant deletedAt; // Soft delete
-
+  /**
+   * Relationships
+   * - Many-to-One with User (student)
+   * - Many-to-One with User (teacher)
+   * - One-to-Many with RoadmapTopic
+   */
   // Relationships
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "student_id", insertable = false, updatable = false)
@@ -117,17 +157,11 @@ public class LearningRoadmap {
   private Set<RoadmapTopic> roadmapTopics;
 
   @PrePersist
+  @Override
   public void prePersist() {
     if (status == null) status = RoadmapStatus.GENERATED;
     if (progressPercentage == null) progressPercentage = java.math.BigDecimal.ZERO;
     if (completedTopicsCount == null) completedTopicsCount = 0;
     if (totalTopicsCount == null) totalTopicsCount = 0;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

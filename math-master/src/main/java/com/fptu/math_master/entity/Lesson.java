@@ -2,10 +2,20 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.LessonDifficulty;
 import com.fptu.math_master.enums.LessonStatus;
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import lombok.*;
@@ -14,7 +24,9 @@ import org.hibernate.annotations.Nationalized;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "lessons",
@@ -22,59 +34,82 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_lessons_chapter_id", columnList = "chapter_id"),
       @Index(name = "idx_lessons_status", columnList = "status")
     })
-public class Lesson {
+/**
+ * The entity of 'Lesson'.
+ */
+public class Lesson extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
+  /**
+   * chapter_id
+   */
   @Column(name = "chapter_id", nullable = false)
   private UUID chapterId;
 
+  /**
+   * title
+   */
   @Size(max = 255)
   @Nationalized
   @Column(name = "title", length = 255, nullable = false)
   private String title;
 
+  /**
+   * learning_objectives
+   */
   @Lob
   @Nationalized
   @Column(name = "learning_objectives")
   private String learningObjectives;
 
+  /**
+   * lesson_content
+   */
   @Lob
   @Nationalized
   @Column(name = "lesson_content", nullable = false)
   private String lessonContent;
 
+  /**
+   * summary
+   */
   @Lob
   @Nationalized
   @Column(name = "summary")
   private String summary;
 
+  /**
+   * order_index
+   */
   @Column(name = "order_index")
   private Integer orderIndex;
 
+  /**
+   * duration_minutes
+   */
   @Column(name = "duration_minutes")
   private Integer durationMinutes;
 
+  /**
+   * difficulty
+   */
   @Column(name = "difficulty")
   @Enumerated(EnumType.STRING)
   private LessonDifficulty difficulty;
 
+  /**
+   * status
+   */
   @Column(name = "status")
   @Enumerated(EnumType.STRING)
   private LessonStatus status;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
-  @Column(name = "deleted_at")
-  private Instant deletedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with Chapter
+   * - One-to-Many with LessonPlan
+   * - One-to-Many with QuestionTemplate
+   * - One-to-Many with AssessmentLesson
+   */
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "chapter_id", insertable = false, updatable = false)
   private Chapter chapter;
@@ -91,12 +126,5 @@ public class Lesson {
   @PrePersist
   public void prePersist() {
     if (status == null) status = LessonStatus.DRAFT;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

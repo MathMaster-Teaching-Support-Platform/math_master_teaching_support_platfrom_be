@@ -1,16 +1,22 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.UUID;
 import lombok.*;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
 @Entity
 @Table(
     name = "assessment_questions",
@@ -30,34 +36,47 @@ import lombok.*;
           columnList = "matrix_template_mapping_id"),
       @Index(name = "idx_assessment_questions_order", columnList = "order_index")
     })
-public class AssessmentQuestion {
+/**
+ * The entity of 'AssessmentQuestion'.
+ */
+public class AssessmentQuestion extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
+  /**
+   * assessment_id
+   */
   @Column(name = "assessment_id", nullable = false)
   private UUID assessmentId;
 
+  /**
+   * question_id
+   */
   @Column(name = "question_id", nullable = false)
   private UUID questionId;
 
+  /**
+   * order_index
+   */
   @Column(name = "order_index", nullable = false)
   private Integer orderIndex;
 
+  /**
+   * points_override
+   */
   @Column(name = "points_override", precision = 5, scale = 2)
   private BigDecimal pointsOverride;
 
+  /**
+   * matrix_template_mapping_id
+   */
   @Column(name = "matrix_template_mapping_id")
   private UUID matrixTemplateMappingId;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with Assessment
+   * - Many-to-One with Question
+   * - Many-to-One with ExamMatrixTemplateMapping
+   */
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "assessment_id", insertable = false, updatable = false)
   private Assessment assessment;
@@ -69,15 +88,4 @@ public class AssessmentQuestion {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "matrix_template_mapping_id", insertable = false, updatable = false)
   private ExamMatrixTemplateMapping examMatrixTemplateMapping;
-
-  @PrePersist
-  public void prePersist() {
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
-  }
 }

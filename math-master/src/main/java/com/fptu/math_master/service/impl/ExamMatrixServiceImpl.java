@@ -797,7 +797,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
                         .findByAssessmentIdOrderByOrderIndex(a.getId())
                         .stream()
                         .filter(aq -> mappingId.equals(aq.getMatrixTemplateMappingId()))
-                        .collect(Collectors.toList());
+                        .toList();
                 if (!existing.isEmpty()) {
                   List<UUID> qIds =
                       existing.stream()
@@ -886,9 +886,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     // ── 7. Persist questions ─────────────────────────────────────────────
     List<UUID> savedQuestionIds = new ArrayList<>();
 
-    for (int i = 0; i < validItems.size(); i++) {
-      FinalizePreviewRequest.QuestionItem item = validItems.get(i);
-
+    for (FinalizePreviewRequest.QuestionItem item : validItems) {
       Map<String, Object> metadata =
           item.getGenerationMetadata() != null
               ? new HashMap<>(item.getGenerationMetadata())
@@ -904,7 +902,6 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       Question question =
           Question.builder()
               .questionBankId(request.getQuestionBankId())
-              .createdBy(currentUserId)
               .questionType(item.getQuestionType())
               .questionText(item.getQuestionText())
               .options(optionsJsonb)
@@ -917,6 +914,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               .templateId(template.getId())
               .generationMetadata(metadata)
               .build();
+      question.setCreatedBy(currentUserId);
 
       question = questionRepository.save(question);
       savedQuestionIds.add(question.getId());
@@ -952,7 +950,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         linkedAssessments.isEmpty()
             ? savedQuestionIds.size()
             : assessmentQuestionRepository
-                .findByAssessmentIdOrderByOrderIndex(linkedAssessments.get(0).getId())
+                .findByAssessmentIdOrderByOrderIndex(linkedAssessments.getFirst().getId())
                 .stream()
                 .filter(aq -> mappingId.equals(aq.getMatrixTemplateMappingId()))
                 .count();

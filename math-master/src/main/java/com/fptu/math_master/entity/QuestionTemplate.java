@@ -4,13 +4,24 @@ import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.enums.TemplateVariant;
-import com.fptu.math_master.util.UuidV7Generator;
 import io.hypersistence.utils.hibernate.type.array.StringArrayType;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
-import jakarta.persistence.*;
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -21,8 +32,13 @@ import org.hibernate.annotations.Type;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
+@AttributeOverride(
+    name = "createdBy",
+    column = @Column(name = "created_by", updatable = false, nullable = false))
 @Table(
     name = "question_templates",
     indexes = {
@@ -34,15 +50,10 @@ import org.hibernate.annotations.Type;
       @Index(name = "idx_question_templates_variant", columnList = "template_variant"),
       @Index(name = "idx_question_templates_public", columnList = "is_public")
     })
-public class QuestionTemplate {
-
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
-  @Column(name = "created_by", nullable = false)
-  private UUID createdBy;
+/**
+ * The entity of 'QuestionTemplate'.
+ */
+public class QuestionTemplate extends BaseEntity {
 
   @Column(name = "lesson_id")
   private UUID lessonId;
@@ -132,24 +143,18 @@ public class QuestionTemplate {
   @Column(name = "tags", nullable = false, columnDefinition = "TEXT[]")
   private String[] tags;
 
+  @Builder.Default
   @Column(name = "is_public", nullable = false)
   private Boolean isPublic = false;
 
+  @Builder.Default
   @Column(name = "usage_count", nullable = false)
   private Integer usageCount = 0;
 
   @Column(name = "avg_success_rate", precision = 5, scale = 2)
   private BigDecimal avgSuccessRate;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
-  @Column(name = "deleted_at")
-  private Instant deletedAt;
-
+  @Builder.Default
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false)
   private TemplateStatus status = TemplateStatus.DRAFT;
@@ -174,17 +179,11 @@ public class QuestionTemplate {
   private Set<ExamMatrixTemplateMapping> examMatrixMappings;
 
   @PrePersist
+  @Override
   public void prePersist() {
     if (isPublic == null) isPublic = false;
     if (usageCount == null) usageCount = 0;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
     if (status == null) status = TemplateStatus.DRAFT;
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 
   /** Increment usage count when template is used to generate a question */
@@ -201,7 +200,7 @@ public class QuestionTemplate {
       BigDecimal total =
           this.avgSuccessRate.multiply(BigDecimal.valueOf(this.usageCount)).add(newRate);
       this.avgSuccessRate =
-          total.divide(BigDecimal.valueOf(this.usageCount + 1), 2, RoundingMode.HALF_UP);
+          total.divide(BigDecimal.valueOf((long) (this.usageCount + 1)), 2, RoundingMode.HALF_UP);
     }
   }
 }

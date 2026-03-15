@@ -1,15 +1,21 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
-import java.time.Instant;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.util.UUID;
 import lombok.*;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
 @Entity
 @Table(
     name = "assessment_lessons",
@@ -22,25 +28,28 @@ import lombok.*;
       @Index(name = "idx_assessment_lessons_assessment", columnList = "assessment_id"),
       @Index(name = "idx_assessment_lessons_lesson", columnList = "lesson_id")
     })
-public class AssessmentLesson {
+/**
+ * The entity of 'AssessmentLesson'.
+ */
+public class AssessmentLesson extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
+  /**
+   * assessment_id
+   */
   @Column(name = "assessment_id", nullable = false)
   private UUID assessmentId;
 
+  /**
+   * lesson_id
+   */
   @Column(name = "lesson_id", nullable = false)
   private UUID lessonId;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with Assessment
+   * - Many-to-One with Lesson
+   */
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "assessment_id", insertable = false, updatable = false)
   private Assessment assessment;
@@ -48,15 +57,4 @@ public class AssessmentLesson {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
   private Lesson lesson;
-
-  @PrePersist
-  public void prePersist() {
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
-  }
 }

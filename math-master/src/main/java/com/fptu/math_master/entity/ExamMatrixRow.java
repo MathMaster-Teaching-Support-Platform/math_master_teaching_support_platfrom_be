@@ -1,26 +1,18 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
 /**
@@ -41,7 +33,9 @@ import org.hibernate.annotations.Nationalized;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "exam_matrix_rows",
@@ -52,12 +46,7 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_emr_tpl", columnList = "template_id"),
       @Index(name = "idx_emr_order", columnList = "order_index")
     })
-public class ExamMatrixRow {
-
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+public class ExamMatrixRow extends BaseEntity {
 
   @Column(name = "exam_matrix_id", nullable = false)
   private UUID examMatrixId;
@@ -99,12 +88,6 @@ public class ExamMatrixRow {
   @Column(name = "order_index")
   private Integer orderIndex;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
   // ── Relationships ────────────────────────────────────────────────────────
 
   @ManyToOne(fetch = FetchType.LAZY)
@@ -129,14 +112,4 @@ public class ExamMatrixRow {
 
   // ── Lifecycle hooks ──────────────────────────────────────────────────────
 
-  @PrePersist
-  public void prePersist() {
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
-  }
 }

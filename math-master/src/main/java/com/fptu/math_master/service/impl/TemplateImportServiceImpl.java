@@ -17,7 +17,14 @@ import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.TemplateImportService;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.AccessLevel;
@@ -128,22 +135,17 @@ public class TemplateImportServiceImpl implements TemplateImportService {
       log.info("Extracting text from file type: {}", contentType);
 
       // PDF
-      if (contentType.equals("application/pdf")) {
-        return extractFromPDF(file.getInputStream());
-      }
+      return switch (contentType) {
+        case "application/pdf" -> extractFromPDF(file.getInputStream());
 
-      // Word (DOCX)
-      if (contentType.equals(
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
-        return extractFromDOCX(file.getInputStream());
-      }
+          // Word (DOCX)
+        case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ->
+            extractFromDOCX(file.getInputStream());
 
-      // Plain text
-      if (contentType.equals("text/plain")) {
-        return new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
-      }
-
-      throw new IllegalArgumentException("Unsupported file type: " + contentType);
+          // Plain text
+        case "text/plain" -> new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        default -> throw new IllegalArgumentException("Unsupported file type: " + contentType);
+      };
 
     } catch (IOException e) {
       log.error("Failed to extract text from file: {}", e.getMessage(), e);
@@ -553,8 +555,8 @@ public class TemplateImportServiceImpl implements TemplateImportService {
           if (templateText2 != null) {
             String templateStr = templateText2.values().stream().findFirst().orElse("");
             if (templateStr.contains("{{a}}")
-                && !additionalWarnings.stream()
-                    .anyMatch(w -> w.contains("a=0") || w.contains("a != 0"))) {
+                && additionalWarnings.stream()
+                    .noneMatch(w -> w.contains("a=0") || w.contains("a != 0"))) {
               additionalWarnings.add(
                   "CRITICAL: Add constraint 'a != 0' to prevent division by zero");
             }
@@ -874,7 +876,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     // Build QuestionTemplate entity
     QuestionTemplate template =
         QuestionTemplate.builder()
-            .createdBy(currentUserId)
             .questionBankId(questionBankId)
             .name(draft.getName() != null ? draft.getName() : "Imported Template")
             .description(
@@ -900,6 +901,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
             .isPublic(false)
             .usageCount(0)
             .build();
+    template.setCreatedBy(currentUserId);
 
     // Save to database
     QuestionTemplate savedTemplate = questionTemplateRepository.save(template);
@@ -929,7 +931,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     if (auth instanceof JwtAuthenticationToken jwtAuth) {
       Object scopeClaim = jwtAuth.getToken().getClaims().get("scope");
       if (scopeClaim instanceof String scopes) {
-        return Arrays.stream(scopes.split(" ")).anyMatch("ROLE_ADMIN"::equals);
+        return Arrays.asList(scopes.split(" ")).contains("ROLE_ADMIN");
       }
     }
     return false;
@@ -948,8 +950,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     if (rules == null) {
       return new HashMap<>();
     }
-    Map<String, Object> result = new HashMap<>();
-    result.putAll(rules);
+    Map<String, Object> result = new HashMap<>(rules);
     return result;
   }
 }

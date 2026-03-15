@@ -1,9 +1,17 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import lombok.*;
@@ -12,7 +20,8 @@ import org.hibernate.annotations.Nationalized;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
 @Entity
 @Table(
     name = "chapters",
@@ -25,53 +34,48 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_chapters_curriculum_id", columnList = "curriculum_id"),
       @Index(name = "idx_chapters_order", columnList = "order_index")
     })
-public class Chapter {
+/**
+ * The entity of 'Chapter'.
+ */
+public class Chapter extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
+  /**
+   * curriculum_id
+   */
   @Column(name = "curriculum_id", nullable = false)
   private UUID curriculumId;
 
+  /**
+   * title
+   */
   @Size(max = 255)
   @Nationalized
   @Column(name = "title", length = 255, nullable = false)
   private String title;
 
+  /**
+   * description
+   */
   @Lob
   @Nationalized
   @Column(name = "description")
   private String description;
 
+  /**
+   * order_index
+   */
   @Column(name = "order_index", nullable = false)
   private Integer orderIndex;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
-  @Column(name = "deleted_at")
-  private Instant deletedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with Curriculum
+   * - One-to-Many with Lesson
+   */
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "curriculum_id", insertable = false, updatable = false)
   private Curriculum curriculum;
 
   @OneToMany(mappedBy = "chapter", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<Lesson> lessons;
-
-  @PrePersist
-  public void prePersist() {
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
-  }
 }

@@ -2,8 +2,17 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.TopicStatus;
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,7 +34,9 @@ import org.hibernate.annotations.Nationalized;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "roadmap_topics",
@@ -35,62 +46,93 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_roadmap_topics_status", columnList = "status"),
       @Index(name = "idx_roadmap_topics_sequence", columnList = "sequence_order")
     })
-public class RoadmapTopic {
+public class RoadmapTopic extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
+  /**
+   * roadmap_id
+   */
   @Column(name = "roadmap_id", nullable = false)
   private UUID roadmapId;
 
+  /**
+   * lesson_id
+   */
   @Column(name = "lesson_id")
-  private UUID lessonId; // Reference to lesson entity
+  private UUID lessonId;
 
+  /**
+   * title
+   */
   @Size(max = 255)
   @Nationalized
   @Column(name = "title", length = 255, nullable = false)
-  private String title; // Topic name
+  private String title;
 
+  /**
+   * description
+   */
   @Lob
   @Nationalized
   @Column(name = "description")
   private String description;
 
+  /**
+   * status
+   */
   @Column(name = "status", nullable = false)
   @Enumerated(EnumType.STRING)
-  private TopicStatus status; // NOT_STARTED, IN_PROGRESS, COMPLETED, LOCKED
+  private TopicStatus status;
 
+  /**
+   * difficulty
+   */
   @Column(name = "difficulty", nullable = false)
   @Enumerated(EnumType.STRING)
-  private QuestionDifficulty difficulty; // EASY, MEDIUM, HARD
+  private QuestionDifficulty difficulty;
 
+  /**
+   * sequence_order
+   */
   @Column(name = "sequence_order", nullable = false)
-  private Integer sequenceOrder; // Order in which topics should be learned (1, 2, 3...)
+  private Integer sequenceOrder;
 
+  /**
+   * priority
+   */
+  @Builder.Default
   @Column(name = "priority", nullable = false)
-  private Integer priority =
-      0; // Higher = more important (negative for weak areas = negative numbers)
+  private Integer priority = 0;
 
+  /**
+   * progress_percentage
+   */
   @Column(name = "progress_percentage", nullable = false, precision = 5, scale = 2)
-  private BigDecimal progressPercentage; // 0-100%
+  private BigDecimal progressPercentage;
 
+  /**
+   * estimated_hours
+   */
+  @Builder.Default
   @Column(name = "estimated_hours", nullable = false)
-  private Integer estimatedHours = 1; // Estimated time to complete
+  private Integer estimatedHours = 1;
 
+  /**
+   * started_at
+   */
   @Column(name = "started_at")
   private Instant startedAt;
 
+  /**
+   * completed_at
+   */
   @Column(name = "completed_at")
   private Instant completedAt;
 
-  @Column(name = "created_at", nullable = false)
-  private Instant createdAt;
-
-  @Column(name = "updated_at", nullable = false)
-  private Instant updatedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with LearningRoadmap
+   * - Many-to-One with Lesson
+   */
   // Relationships
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "roadmap_id", insertable = false, updatable = false)
@@ -101,17 +143,11 @@ public class RoadmapTopic {
   private Lesson lesson;
 
   @PrePersist
+  @Override
   public void prePersist() {
     if (status == null) status = TopicStatus.NOT_STARTED;
     if (progressPercentage == null) progressPercentage = BigDecimal.ZERO;
     if (estimatedHours == null) estimatedHours = 1;
     if (priority == null) priority = 0;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

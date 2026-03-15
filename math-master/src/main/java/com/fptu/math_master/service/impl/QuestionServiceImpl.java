@@ -20,6 +20,7 @@ import com.fptu.math_master.util.CSVParser;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
@@ -72,7 +73,6 @@ public class QuestionServiceImpl implements QuestionService {
 
     Question question =
         Question.builder()
-            .createdBy(currentUserId)
             .questionText(questionText)
             .questionType(request.getQuestionType())
             .options(request.getOptions())
@@ -87,6 +87,7 @@ public class QuestionServiceImpl implements QuestionService {
             .questionStatus(QuestionStatus.AI_DRAFT)
             .questionSourceType(QuestionSourceType.MANUAL)
             .build();
+    question.setCreatedBy(currentUserId);
 
     question = questionRepository.save(question);
 
@@ -289,7 +290,6 @@ public class QuestionServiceImpl implements QuestionService {
 
         Question question =
             Question.builder()
-                .createdBy(currentUserId)
                 .questionText(questionRequest.getQuestionText())
                 .questionType(questionRequest.getQuestionType())
                 .options(questionRequest.getOptions())
@@ -304,6 +304,7 @@ public class QuestionServiceImpl implements QuestionService {
                 .questionStatus(QuestionStatus.AI_DRAFT)
                 .questionSourceType(QuestionSourceType.BANK_IMPORTED)
                 .build();
+        question.setCreatedBy(currentUserId);
 
         question = questionRepository.save(question);
 
@@ -352,7 +353,7 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
     // Determine overall status
-    if (response.getSuccessCount() == response.getTotalRows()) {
+    if (Objects.equals(response.getSuccessCount(), response.getTotalRows())) {
       response.setStatus("SUCCESS");
     } else if (response.getSuccessCount() > 0) {
       response.setStatus("PARTIAL_SUCCESS");

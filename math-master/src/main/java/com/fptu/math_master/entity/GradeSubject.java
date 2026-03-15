@@ -1,10 +1,8 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -13,12 +11,8 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import java.time.Instant;
 import java.util.UUID;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 /**
  * N-N join entity between a school grade level (lớp) and a {@link Subject}.
@@ -38,7 +32,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
 @Entity
 @Table(
     name = "grade_subjects",
@@ -52,12 +47,7 @@ import lombok.NoArgsConstructor;
       @Index(name = "idx_grade_subjects_subject", columnList = "subject_id"),
       @Index(name = "idx_grade_subjects_active", columnList = "is_active")
     })
-public class GradeSubject {
-
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+public class GradeSubject extends BaseEntity {
 
   /** School grade level, e.g. 10, 11, 12. */
   @Min(1)
@@ -72,20 +62,14 @@ public class GradeSubject {
   @Column(name = "is_active", nullable = false)
   private Boolean isActive = true;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
   // ── Relationships ────────────────────────────────────────────────────────
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "subject_id", insertable = false, updatable = false)
   private Subject subject;
 
-  // ── Lifecycle hooks ──────────────────────────────────────────────────────
-
   @PrePersist
   public void prePersist() {
     if (isActive == null) isActive = true;
-    if (createdAt == null) createdAt = Instant.now();
   }
 }
