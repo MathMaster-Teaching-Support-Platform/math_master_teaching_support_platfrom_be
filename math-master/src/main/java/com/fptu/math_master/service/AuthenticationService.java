@@ -5,6 +5,7 @@ import com.fptu.math_master.dto.request.GoogleAuthRequest;
 import com.fptu.math_master.dto.request.IntrospectRequest;
 import com.fptu.math_master.dto.request.LogoutRequest;
 import com.fptu.math_master.dto.request.RefreshRequest;
+import com.fptu.math_master.dto.request.RoleSelectionRequest;
 import com.fptu.math_master.dto.request.UserRegistrationRequest;
 import com.fptu.math_master.dto.response.AuthenticationResponse;
 import com.fptu.math_master.dto.response.IntrospectResponse;
@@ -27,4 +28,6 @@ public interface AuthenticationService {
   AuthenticationResponse refreshToken(RefreshRequest request) throws ParseException, JOSEException;
 
   UserResponse register(UserRegistrationRequest request);
+
+  AuthenticationResponse selectRole(RoleSelectionRequest request);
 }

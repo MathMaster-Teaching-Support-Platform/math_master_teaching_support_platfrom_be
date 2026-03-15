@@ -8,16 +8,19 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import org.springframework.web.multipart.MultipartFile;
+
 public interface TeacherProfileService {
 
   /**
    * Submit teacher profile for approval
    *
    * @param request Profile information
+   * @param file Verification document file
    * @param userId Current user ID
    * @return Created profile response
    */
-  TeacherProfileResponse submitProfile(TeacherProfileRequest request, UUID userId);
+  TeacherProfileResponse submitProfile(TeacherProfileRequest request, MultipartFile file, UUID userId);
 
   /**
    * Update pending teacher profile

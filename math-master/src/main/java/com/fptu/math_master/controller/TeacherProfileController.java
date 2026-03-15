@@ -20,7 +20,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/teacher-profiles")
@@ -36,13 +38,14 @@ public class TeacherProfileController {
   @Operation(
       summary = "Submit teacher profile",
       description = "Student submits profile to become a teacher")
-  @PostMapping("/submit")
+  @PostMapping(value = "/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @PreAuthorize("hasRole('STUDENT')")
   public ApiResponse<TeacherProfileResponse> submitProfile(
-      @Valid @RequestBody TeacherProfileRequest request) {
+      @Valid @RequestPart("request") TeacherProfileRequest request,
+      @RequestPart("file") MultipartFile file) {
     UUID userId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
-        .result(teacherProfileService.submitProfile(request, userId))
+        .result(teacherProfileService.submitProfile(request, file, userId))
         .build();
   }
 

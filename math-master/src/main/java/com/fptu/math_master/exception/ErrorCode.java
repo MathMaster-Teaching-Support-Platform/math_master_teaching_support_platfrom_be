@@ -217,6 +217,7 @@ public enum ErrorCode {
   GRADE_SUBJECT_NOT_FOUND(
       1125, "No mapping found between this subject and grade level", HttpStatus.NOT_FOUND),
   EXAM_MATRIX_ROW_NOT_FOUND(1126, "Exam matrix row not found", HttpStatus.NOT_FOUND),
+  INVALID_FILE_FORMAT(2001, "Invalid file format", HttpStatus.BAD_REQUEST),
   MATRIX_ROW_QUESTION_TYPE_REQUIRED(
       1127, "questionTypeName is required when templateId is not provided", HttpStatus.BAD_REQUEST);
 

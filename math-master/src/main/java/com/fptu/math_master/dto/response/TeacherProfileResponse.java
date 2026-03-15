@@ -22,11 +22,12 @@ public class TeacherProfileResponse {
   UUID userId;
   String userName;
   String fullName;
-  UUID schoolId;
   String schoolName;
+  String schoolAddress;
+  String schoolWebsite;
   String position;
-  String certificateUrl;
-  String identificationDocumentUrl;
+  String documentUrl;
+  String documentType;
   String description;
   ProfileStatus status;
   String adminComment;
