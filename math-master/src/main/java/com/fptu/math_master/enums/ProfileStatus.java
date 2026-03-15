@@ -1,7 +1,10 @@
 package com.fptu.math_master.enums;
 
+/**
+ * The enum of 'ProfileStatus'.
+ */
 public enum ProfileStatus {
-  PENDING, // Đang chờ duyệt
-  APPROVED, // Đã được duyệt
-  REJECTED // Bị từ chối
+  PENDING,
+  APPROVED,
+  REJECTED
 }

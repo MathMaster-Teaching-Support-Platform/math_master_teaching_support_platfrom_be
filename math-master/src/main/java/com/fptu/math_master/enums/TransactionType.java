@@ -1,8 +1,11 @@
 package com.fptu.math_master.enums;
 
+/**
+ * The enum of 'TransactionType'.
+ */
 public enum TransactionType {
-  DEPOSIT, // Nạp tiền vào ví
-  WITHDRAWAL, // Rút tiền từ ví
-  PAYMENT, // Thanh toán
-  REFUND // Hoàn tiền
+  DEPOSIT,
+  WITHDRAWAL,
+  PAYMENT,
+  REFUND
 }
