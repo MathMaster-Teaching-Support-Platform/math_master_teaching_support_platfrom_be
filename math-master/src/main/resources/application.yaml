@@ -134,8 +134,9 @@ centrifugo:
 # ================================
 assessment:
   draft:
-    ttl: 86400 # 24 hours in seconds
-    auto-save-interval: 2000 # milliseconds
+    ttl: 86400
+    auto-save-interval: 2000
+
 # ================================
 # Gemini API Configuration (Google AI Studio)
 # ================================
@@ -144,4 +145,3 @@ gemini:
   model: ${GEMINI_MODEL:gemini-2.5-flash}
   base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
   timeout-seconds: 60
-
