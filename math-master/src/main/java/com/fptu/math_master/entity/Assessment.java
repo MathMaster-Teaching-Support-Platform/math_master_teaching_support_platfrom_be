@@ -165,6 +165,7 @@ public class Assessment extends BaseEntity {
    * - One-to-Many with QuizAttempt
    * - Many-to-One with ExamMatrix
    */
+  @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
   private User teacher;
 
