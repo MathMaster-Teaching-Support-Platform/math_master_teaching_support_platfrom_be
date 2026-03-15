@@ -10,7 +10,6 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.LearningRoadmapService;
-import com.fptu.math_master.service.RoadmapAIPlannerService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -22,7 +21,6 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,53 +51,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   TopicLearningMaterialRepository materialRepository;
   LessonRepository lessonRepository;
   UserRepository userRepository;
-  StudentWishRepository studentWishRepository;
-
-  // Services
-  RoadmapAIPlannerService roadmapAIPlannerService;
 
   // ============================================================================
   // ROADMAP GENERATION & RETRIEVAL
   // ============================================================================
-
-  @Override
-  @Transactional
-  public RoadmapDetailResponse generateRoadmapFromWish(UUID wishId) {
-    log.info("Generating AI-powered roadmap from wish: {}", wishId);
-
-    // Extract studentId from JWT token
-    String userId = SecurityContextHolder.getContext().getAuthentication().getName();
-    UUID studentId = UUID.fromString(userId);
-
-    // Get the wish
-    StudentWish wish =
-        studentWishRepository
-            .findById(wishId)
-            .orElseThrow(
-                () -> {
-                  log.error("Wish not found: {}", wishId);
-                  return new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-                });
-
-    // Verify the wish belongs to the student
-    if (!wish.getStudentId().equals(studentId)) {
-      log.warn("Unauthorized access attempt to wish={} by student={}", wishId, studentId);
-      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-    }
-
-    // Check if active roadmap already exists
-    if (existsActiveRoadmap(studentId, wish.getSubject())) {
-      log.warn("Roadmap already exists for student={}, subject={}", studentId, wish.getSubject());
-      return getActiveRoadmapBySubject(studentId, wish.getSubject());
-    }
-
-    // Generate roadmap using AI planner
-    RoadmapDetailResponse result =
-        roadmapAIPlannerService.generateRoadmapFromWish(studentId, wish, wish.getSubject());
-
-    log.info("AI-powered roadmap generated successfully: {}", result.getId());
-    return result;
-  }
 
   @Override
   @Transactional(readOnly = true)
@@ -521,6 +476,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .priority(topic.getPriority())
         .progressPercentage(topic.getProgressPercentage())
         .estimatedHours(topic.getEstimatedHours())
+      .topicAssessmentId(topic.getTopicAssessmentId())
+      .passThresholdPercentage(topic.getPassThresholdPercentage())
         .startedAt(topic.getStartedAt())
         .completedAt(topic.getCompletedAt())
         .questionTemplates(questionTemplateResponses)
@@ -577,6 +534,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .isRequired(material.getIsRequired())
         .lessonId(material.getLessonId())
         .questionId(material.getQuestionId())
+      .assessmentId(material.getAssessmentId())
+      .mindmapId(material.getMindmapId())
         .chapterId(material.getChapterId())
         .build();
   }

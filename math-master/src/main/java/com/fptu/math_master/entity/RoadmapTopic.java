@@ -60,6 +60,9 @@ public class RoadmapTopic extends BaseEntity {
   @Column(name = "lesson_id")
   private UUID lessonId;
 
+  @Column(name = "topic_assessment_id")
+  private UUID topicAssessmentId;
+
   /**
    * title
    */
@@ -109,6 +112,9 @@ public class RoadmapTopic extends BaseEntity {
   @Column(name = "progress_percentage", nullable = false, precision = 5, scale = 2)
   private BigDecimal progressPercentage;
 
+  @Column(name = "pass_threshold_percentage", precision = 5, scale = 2)
+  private BigDecimal passThresholdPercentage;
+
   /**
    * estimated_hours
    */
@@ -142,11 +148,16 @@ public class RoadmapTopic extends BaseEntity {
   @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
   private Lesson lesson;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "topic_assessment_id", insertable = false, updatable = false)
+  private Assessment topicAssessment;
+
   @PrePersist
   @Override
   public void prePersist() {
     if (status == null) status = TopicStatus.NOT_STARTED;
     if (progressPercentage == null) progressPercentage = BigDecimal.ZERO;
+    if (passThresholdPercentage == null) passThresholdPercentage = BigDecimal.valueOf(70);
     if (estimatedHours == null) estimatedHours = 1;
     if (priority == null) priority = 0;
   }

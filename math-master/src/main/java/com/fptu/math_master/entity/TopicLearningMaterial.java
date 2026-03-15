@@ -50,6 +50,12 @@ public class TopicLearningMaterial extends BaseEntity {
   @Column(name = "chapter_id")
   private UUID chapterId;
 
+  @Column(name = "assessment_id")
+  private UUID assessmentId;
+
+  @Column(name = "mindmap_id")
+  private UUID mindmapId;
+
   @Size(max = 255)
   @Nationalized
   @Column(name = "resource_title", length = 255)
@@ -98,6 +104,14 @@ public class TopicLearningMaterial extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "chapter_id", insertable = false, updatable = false)
   private Chapter chapter;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "assessment_id", insertable = false, updatable = false)
+  private Assessment assessment;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "mindmap_id", insertable = false, updatable = false)
+  private Mindmap mindmap;
 
   @PrePersist
   public void prePersist() {

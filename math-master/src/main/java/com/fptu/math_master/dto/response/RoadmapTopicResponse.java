@@ -49,6 +49,12 @@ public class RoadmapTopicResponse {
   @Schema(description = "Estimated hours to complete")
   private Integer estimatedHours;
 
+  @Schema(description = "Assessment linked to this topic")
+  private UUID topicAssessmentId;
+
+  @Schema(description = "Minimum percentage to pass and unlock the next topic")
+  private BigDecimal passThresholdPercentage;
+
   @Schema(description = "When topic was started")
   private Instant startedAt;
 
