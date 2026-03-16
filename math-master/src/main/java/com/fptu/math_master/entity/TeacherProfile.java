@@ -1,12 +1,23 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.enums.ProfileStatus;
-import jakarta.persistence.*;
-
 import java.time.LocalDateTime;
 import java.util.UUID;
-import lombok.*;
-import lombok.experimental.FieldDefaults;
+
+import com.fptu.math_master.enums.ProfileStatus;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
@@ -69,7 +80,6 @@ public class TeacherProfile extends BaseEntity {
   /**
    * description
    */
-  @Lob
   @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 

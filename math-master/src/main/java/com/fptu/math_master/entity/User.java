@@ -1,22 +1,29 @@
 package com.fptu.math_master.entity;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Set;
+
+import org.hibernate.annotations.Nationalized;
+
 import com.fptu.math_master.enums.Gender;
 import com.fptu.math_master.enums.Status;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.Set;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
@@ -77,7 +84,6 @@ public class User extends BaseEntity {
   /**
    * avatar
    */
-  @Lob
   @Column(name = "avatar")
   private String avatar;
 

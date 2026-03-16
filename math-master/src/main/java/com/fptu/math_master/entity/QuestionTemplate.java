@@ -1,9 +1,19 @@
 package com.fptu.math_master.entity;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+import org.hibernate.annotations.Nationalized;
+import org.hibernate.annotations.Type;
+
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.enums.TemplateVariant;
+
 import io.hypersistence.utils.hibernate.type.array.StringArrayType;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.AttributeOverride;
@@ -15,19 +25,16 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
-import org.hibernate.annotations.Type;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
@@ -68,7 +75,6 @@ public class QuestionTemplate extends BaseEntity {
   /**
    * description
    */
-  @Lob
   @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
@@ -123,7 +129,6 @@ public class QuestionTemplate extends BaseEntity {
   private String[] constraints;
 
   /** Theorem statement for PROPOSITIONAL templates - defines the mathematical proposition */
-  @Lob
   @Nationalized
   @Column(name = "theorem_statement")
   private String theoremStatement;
