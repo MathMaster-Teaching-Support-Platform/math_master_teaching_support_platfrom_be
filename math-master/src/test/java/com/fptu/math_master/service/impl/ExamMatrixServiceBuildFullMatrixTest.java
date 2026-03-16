@@ -1,8 +1,38 @@
 package com.fptu.math_master.service.impl;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.InputStream;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,28 +66,6 @@ import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AIEnhancementService;
-import java.io.InputStream;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 /**
  * Unit tests for {@link ExamMatrixServiceImpl#buildMatrix(BuildExamMatrixRequest)}.
@@ -265,12 +273,45 @@ class ExamMatrixServiceBuildFullMatrixTest {
     }
   }
 
+  // ── Step / Pass / Header helpers ────────────────────────────────────────
+
+  private static int stepCounter = 0;
+
+  private static void testHeader(String title) {
+    stepCounter = 0;
+    System.out.println("\n============================================================");
+    System.out.println("  TEST: " + title);
+    System.out.println("============================================================");
+  }
+
+  private static void step(String description) {
+    System.out.println("\n[Step " + (++stepCounter) + "] " + description);
+  }
+
+  private static void pass(String assertion) {
+    System.out.println("  ✓ " + assertion);
+  }
+
+  /** Pretty-prints any object as indented JSON to stdout. */
+  private void prettyPrint(String label, Object obj) {
+    try {
+      String json = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj);
+      System.out.println("  ── " + label + " ──");
+      System.out.println(json);
+    } catch (Exception e) {
+      System.out.println(label + " [serialization error]: " + e.getMessage());
+    }
+  }
+
   /**
    * Compares actual response against expected JSON, ignoring all UUID fields,
    * timestamps, and the CognitiveLevel enum (only the label string is compared).
+   * Also pretty-prints both sides to stdout for visibility.
    */
   private void assertMatchesExpected(
       ExamMatrixTableResponse actual, ExamMatrixTableResponse expected) {
+    prettyPrint("EXPECTED (from JSON fixture)", expected);
+    prettyPrint("ACTUAL   (from service call)", actual);
     assertThat(actual)
         .usingRecursiveComparison()
         .withComparatorForType(BigDecimal::compareTo, BigDecimal.class)
@@ -280,6 +321,7 @@ class ExamMatrixServiceBuildFullMatrixTest {
             ".*cognitiveLevel$"
             )
         .isEqualTo(expected);
+    pass("Actual matches expected (ignoring IDs / timestamps / cognitiveLevel enum)");
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -293,7 +335,9 @@ class ExamMatrixServiceBuildFullMatrixTest {
   @Test
   @DisplayName("buildMatrix — NOT_A_TEACHER when user has no teacher/admin role")
   void should_throw_NOT_A_TEACHER() {
-    // Replace security context with a student role
+    testHeader("NOT_A_TEACHER when user has no teacher/admin role");
+
+    step("Override security context → ROLE_STUDENT (no teacher/admin authority)");
     Jwt studentJwt =
         Jwt.withTokenValue("student-token")
             .header("alg", "RS256")
@@ -311,16 +355,24 @@ class ExamMatrixServiceBuildFullMatrixTest {
     student.setRoles(java.util.Set.of());
     when(userRepository.findByIdWithRoles(TEACHER_ID)).thenReturn(Optional.of(student));
 
+    step("Build a minimal request (content does not matter — auth fails first)");
     BuildExamMatrixRequest request = minimalRequest();
+    prettyPrint("REQUEST", request);
 
+    step("Call buildMatrix() \u2192 expect AppException[NOT_A_TEACHER]");
     assertThatThrownBy(() -> examMatrixService.buildMatrix(request))
         .isInstanceOf(AppException.class)
         .extracting(e -> ((AppException) e).getErrorCode())
         .isEqualTo(ErrorCode.NOT_A_TEACHER);
+    pass("AppException thrown with ErrorCode.NOT_A_TEACHER");
 
+    step("Verify no persistence calls were made");
     verify(examMatrixRepository, never()).save(any());
+    pass("examMatrixRepository.save() \u2192 NEVER called");
     verify(examMatrixRowRepository, never()).save(any());
+    pass("examMatrixRowRepository.save() \u2192 NEVER called");
     verify(templateMappingRepository, never()).save(any());
+    pass("templateMappingRepository.save() \u2192 NEVER called");
   }
 
   /**
@@ -330,6 +382,9 @@ class ExamMatrixServiceBuildFullMatrixTest {
   @Test
   @DisplayName("buildMatrix — MATRIX_ROW_QUESTION_TYPE_REQUIRED when row is missing both")
   void should_throw_MATRIX_ROW_QUESTION_TYPE_REQUIRED() {
+    testHeader("MATRIX_ROW_QUESTION_TYPE_REQUIRED when row has no templateId AND no questionTypeName");
+
+    step("Build a row with templateId=null AND questionTypeName=null");
     MatrixRowRequest badRow =
         MatrixRowRequest.builder()
             .chapterId(CH_DAO_HAM)
@@ -349,15 +404,22 @@ class ExamMatrixServiceBuildFullMatrixTest {
             .totalPointsTarget(PTS)
             .rows(List.of(badRow))
             .build();
+    prettyPrint("REQUEST (bad row: templateId=null, questionTypeName=null)", request);
 
+    step("Call buildMatrix() \u2192 expect AppException[MATRIX_ROW_QUESTION_TYPE_REQUIRED]");
     assertThatThrownBy(() -> examMatrixService.buildMatrix(request))
         .isInstanceOf(AppException.class)
         .extracting(e -> ((AppException) e).getErrorCode())
         .isEqualTo(ErrorCode.MATRIX_ROW_QUESTION_TYPE_REQUIRED);
+    pass("AppException thrown with ErrorCode.MATRIX_ROW_QUESTION_TYPE_REQUIRED");
 
+    step("Verify ExamMatrix was created before exception, but row/cell saves were NOT called");
     verify(examMatrixRepository).save(any(ExamMatrix.class));
+    pass("examMatrixRepository.save() \u2192 1\u00d7 (matrix header persisted before validation)");
     verify(examMatrixRowRepository, never()).save(any());
+    pass("examMatrixRowRepository.save() \u2192 NEVER called");
     verify(templateMappingRepository, never()).save(any());
+    pass("templateMappingRepository.save() \u2192 NEVER called");
   }
 
   /**
@@ -367,14 +429,19 @@ class ExamMatrixServiceBuildFullMatrixTest {
   @Test
   @DisplayName("buildMatrix — QUESTION_TEMPLATE_NOT_FOUND for missing template")
   void should_throw_QUESTION_TEMPLATE_NOT_FOUND() {
+    testHeader("QUESTION_TEMPLATE_NOT_FOUND for non-existent templateId");
+
+    step("Stub questionTemplateRepository.findById(fakeId) \u2192 empty");
     UUID fakeTemplateId = UUID.randomUUID();
     when(questionTemplateRepository.findById(fakeTemplateId)).thenReturn(Optional.empty());
+    System.out.println("    fakeTemplateId = " + fakeTemplateId);
 
+    step("Build request with that fake templateId");
     MatrixRowRequest rowWithBadTemplate =
         MatrixRowRequest.builder()
             .chapterId(CH_DAO_HAM)
             .templateId(fakeTemplateId)
-            .questionTypeName("Dạng bài test")
+            .questionTypeName("D\u1ea1ng b\u00e0i test")
             .referenceQuestions("1")
             .orderIndex(1)
             .cells(List.of(cell(CognitiveLevel.NHAN_BIET, 1)))
@@ -389,15 +456,22 @@ class ExamMatrixServiceBuildFullMatrixTest {
             .totalPointsTarget(PTS)
             .rows(List.of(rowWithBadTemplate))
             .build();
+    prettyPrint("REQUEST", request);
 
+    step("Call buildMatrix() \u2192 expect AppException[QUESTION_TEMPLATE_NOT_FOUND]");
     assertThatThrownBy(() -> examMatrixService.buildMatrix(request))
         .isInstanceOf(AppException.class)
         .extracting(e -> ((AppException) e).getErrorCode())
         .isEqualTo(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND);
+    pass("AppException thrown with ErrorCode.QUESTION_TEMPLATE_NOT_FOUND");
 
+    step("Verify matrix + row were saved before template lookup, but cell save was NOT called");
     verify(examMatrixRepository).save(any(ExamMatrix.class));
+    pass("examMatrixRepository.save() \u2192 1\u00d7");
     verify(examMatrixRowRepository).save(any(ExamMatrixRow.class));
+    pass("examMatrixRowRepository.save() \u2192 1\u00d7 (row saved before template resolved)");
     verify(templateMappingRepository, never()).save(any());
+    pass("templateMappingRepository.save() \u2192 NEVER called");
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -411,13 +485,18 @@ class ExamMatrixServiceBuildFullMatrixTest {
   @Test
   @DisplayName("buildMatrix — minimal matrix matches expected_minimal_matrix.json")
   void should_build_minimal_matrix() throws Exception {
+    testHeader("Minimal matrix (1 chapter, 1 row, 1 cell NB\u00d73, 2\u0111/c\u00e2u)");
+
+    step("Load expected JSON from /fixtures/exam-matrix/expected_minimal_matrix.json");
     ExamMatrixTableResponse expected =
         loadExpected("/fixtures/exam-matrix/expected_minimal_matrix.json");
+    pass("Fixture loaded successfully");
 
+    step("Build request: Tr\u1eafc Nghi\u1ec7m, Ch\u01b0\u01a1ng \u0110\u1ea1o H\u00e0m, NB=3, 2.00\u0111/c\u00e2u");
     BuildExamMatrixRequest request =
         BuildExamMatrixRequest.builder()
-            .name("Đề kiểm tra đơn giản")
-            .description("Ma trận tối thiểu – 1 chương, 1 dòng, 1 ô")
+            .name("\u0110\u1ec1 ki\u1ec3m tra \u0111\u01a1n gi\u1ea3n")
+            .description("Ma tr\u1eadn t\u1ed1i thi\u1ec3u \u2013 1 ch\u01b0\u01a1ng, 1 d\u00f2ng, 1 \u00f4")
             .curriculumId(CURRICULUM_ID)
             .gradeLevel(10)
             .isReusable(false)
@@ -428,7 +507,7 @@ class ExamMatrixServiceBuildFullMatrixTest {
                     MatrixRowRequest.builder()
                         .chapterId(CH_DAO_HAM)
                         .templateId(TEMPLATE_ID)
-                        .questionTypeName("Trắc Nghiệm")
+                        .questionTypeName("Tr\u1eafc Nghi\u1ec7m")
                         .orderIndex(1)
                         .cells(
                             List.of(
@@ -439,21 +518,36 @@ class ExamMatrixServiceBuildFullMatrixTest {
                                     .build()))
                         .build()))
             .build();
+    prettyPrint("REQUEST", request);
 
+    step("Call examMatrixService.buildMatrix(request)");
     ExamMatrixTableResponse actual = examMatrixService.buildMatrix(request);
+    pass("Service returned without exception");
 
+    step("Assert actual matches expected JSON");
     assertMatchesExpected(actual, expected);
 
+    step("Verify repository interactions");
     verify(examMatrixRepository).save(any(ExamMatrix.class));
+    pass("examMatrixRepository.save() \u2192 1\u00d7");
     verify(examMatrixRowRepository).save(any(ExamMatrixRow.class));
+    pass("examMatrixRowRepository.save() \u2192 1\u00d7");
     verify(templateMappingRepository).save(any(ExamMatrixTemplateMapping.class));
+    pass("templateMappingRepository.save() \u2192 1\u00d7");
     verify(questionTemplateRepository).findById(TEMPLATE_ID);
+    pass("questionTemplateRepository.findById(TEMPLATE_ID) \u2192 1\u00d7");
     verify(examMatrixRowRepository).findByExamMatrixIdOrderByOrderIndex(matrixId);
+    pass("findByExamMatrixIdOrderByOrderIndex \u2192 1\u00d7");
     verify(templateMappingRepository).findByExamMatrixIdOrderByCreatedAt(matrixId);
+    pass("findByExamMatrixIdOrderByCreatedAt \u2192 1\u00d7");
     verify(chapterRepository).findById(CH_DAO_HAM);
+    pass("chapterRepository.findById(CH_DAO_HAM) \u2192 1\u00d7");
     verify(userRepository).findById(TEACHER_ID);
+    pass("userRepository.findById(TEACHER_ID) \u2192 1\u00d7");
     verify(curriculumRepository).findByIdAndNotDeleted(CURRICULUM_ID);
+    pass("curriculumRepository.findByIdAndNotDeleted(CURRICULUM_ID) \u2192 1\u00d7");
     verify(subjectRepository).findById(SUBJECT_ID);
+    pass("subjectRepository.findById(SUBJECT_ID) \u2192 1\u00d7");
   }
 
   /**
@@ -463,24 +557,47 @@ class ExamMatrixServiceBuildFullMatrixTest {
   @Test
   @DisplayName("buildMatrix — full THPT 50-question matrix matches expected_full_thpt_matrix.json")
   void should_build_full_thpt_matrix() throws Exception {
+    testHeader("Full THPT 50-question matrix (9 chapters, 26 rows, 47 cells)");
+    System.out.println("  Distribution: NB=20 | TH=15 | VD=10 | VDC=5 | Total=50 | 0.20\u0111/c\u00e2u = 10.00\u0111");
+
+    step("Load expected JSON from /fixtures/exam-matrix/expected_full_thpt_matrix.json");
     ExamMatrixTableResponse expected =
         loadExpected("/fixtures/exam-matrix/expected_full_thpt_matrix.json");
+    pass("Fixture loaded: " + expected.getChapters().size() + " chapters");
 
-    ExamMatrixTableResponse actual =
-        examMatrixService.buildMatrix(buildFullTHPTMatrixRequest());
+    step("Build full 50-question request (9 chapters, 26 rows)");
+    BuildExamMatrixRequest request = buildFullTHPTMatrixRequest();
+    prettyPrint("REQUEST", request);
 
+    step("Call examMatrixService.buildMatrix(request)");
+    ExamMatrixTableResponse actual = examMatrixService.buildMatrix(request);
+    pass("Service returned. chapters=" + actual.getChapters().size()
+        + ", savedRows=" + savedRows.size() + ", savedCells=" + savedCells.size());
+
+    step("Assert actual matches expected JSON");
     assertMatchesExpected(actual, expected);
 
+    step("Verify repository interaction counts");
     verify(examMatrixRepository).save(any(ExamMatrix.class));
+    pass("examMatrixRepository.save() \u2192 1\u00d7");
     verify(examMatrixRowRepository, times(26)).save(any(ExamMatrixRow.class));
+    pass("examMatrixRowRepository.save() \u2192 26\u00d7");
     verify(templateMappingRepository, times(47)).save(any(ExamMatrixTemplateMapping.class));
+    pass("templateMappingRepository.save() \u2192 47\u00d7");
     verify(questionTemplateRepository, times(26)).findById(TEMPLATE_ID);
+    pass("questionTemplateRepository.findById(TEMPLATE_ID) \u2192 26\u00d7");
     verify(examMatrixRowRepository).findByExamMatrixIdOrderByOrderIndex(matrixId);
+    pass("findByExamMatrixIdOrderByOrderIndex \u2192 1\u00d7");
     verify(templateMappingRepository).findByExamMatrixIdOrderByCreatedAt(matrixId);
+    pass("findByExamMatrixIdOrderByCreatedAt \u2192 1\u00d7");
     verify(chapterRepository, times(9)).findById(any());
+    pass("chapterRepository.findById \u2192 9\u00d7 (one per unique chapter)");
     verify(userRepository).findById(TEACHER_ID);
+    pass("userRepository.findById(TEACHER_ID) \u2192 1\u00d7");
     verify(curriculumRepository).findByIdAndNotDeleted(CURRICULUM_ID);
+    pass("curriculumRepository.findByIdAndNotDeleted \u2192 1\u00d7");
     verify(subjectRepository).findById(SUBJECT_ID);
+    pass("subjectRepository.findById(SUBJECT_ID) \u2192 1\u00d7");
   }
 
   /**
@@ -489,9 +606,12 @@ class ExamMatrixServiceBuildFullMatrixTest {
   @Test
   @DisplayName("buildMatrix — auto-resolves gradeLevel from curriculum when not provided")
   void should_auto_resolve_grade_level_from_curriculum() {
+    testHeader("Auto-resolve gradeLevel from curriculum (gradeLevel=null in request)");
+
+    step("Build request with gradeLevel=null \u2014 service should read curriculum.grade=12");
     BuildExamMatrixRequest request =
         BuildExamMatrixRequest.builder()
-            .name("Ma Trận Tự Lấy Lớp")
+            .name("Ma Tr\u1eadn T\u1ef1 L\u1ea5y L\u1edbp")
             .curriculumId(CURRICULUM_ID)
             .gradeLevel(null)
             .totalQuestionsTarget(1)
@@ -500,22 +620,35 @@ class ExamMatrixServiceBuildFullMatrixTest {
                 List.of(
                     row(
                         CH_DAO_HAM,
-                        "Đơn điệu của HS",
+                        "\u0110\u01a1n \u0111i\u1ec7u c\u1ee7a HS",
                         "1",
                         new AtomicInteger(1),
                         cell(CognitiveLevel.NHAN_BIET, 1))))
             .build();
+    prettyPrint("REQUEST (gradeLevel=null)", request);
 
+    step("Call examMatrixService.buildMatrix(request)");
     ExamMatrixTableResponse actual = examMatrixService.buildMatrix(request);
+    pass("Service returned without exception");
+    prettyPrint("ACTUAL", actual);
 
+    step("Assert gradeLevel was auto-resolved to 12 from curriculum");
     assertThat(actual.getGradeLevel()).isEqualTo(12);
-    assertThat(actual.getStatus()).isEqualTo(MatrixStatus.DRAFT);
+    pass("actual.getGradeLevel() == 12 (resolved from curriculum.grade)");
 
-    // gradeLevel resolution calls curriculum repo, + 1 more in buildTableResponse
+    step("Assert matrix status is DRAFT");
+    assertThat(actual.getStatus()).isEqualTo(MatrixStatus.DRAFT);
+    pass("actual.getStatus() == DRAFT");
+
+    step("Verify curriculumRepository called 2\u00d7 (1 for grade resolve + 1 in buildTableResponse)");
     verify(curriculumRepository, times(2)).findByIdAndNotDeleted(CURRICULUM_ID);
+    pass("curriculumRepository.findByIdAndNotDeleted \u2192 2\u00d7");
     verify(examMatrixRepository).save(any(ExamMatrix.class));
+    pass("examMatrixRepository.save() \u2192 1\u00d7");
     verify(examMatrixRowRepository).save(any(ExamMatrixRow.class));
+    pass("examMatrixRowRepository.save() \u2192 1\u00d7");
     verify(templateMappingRepository).save(any(ExamMatrixTemplateMapping.class));
+    pass("templateMappingRepository.save() \u2192 1\u00d7");
   }
 
   /**
@@ -524,11 +657,14 @@ class ExamMatrixServiceBuildFullMatrixTest {
   @Test
   @DisplayName("buildMatrix — rows without templateId persist no cells")
   void should_not_persist_cells_when_no_template() {
+    testHeader("Rows with templateId=null \u2192 no cells persisted");
+
+    step("Build row with templateId=null (manual row, no template link)");
     MatrixRowRequest rowNoTemplate =
         MatrixRowRequest.builder()
             .chapterId(CH_DAO_HAM)
             .templateId(null)
-            .questionTypeName("Dạng bài thủ công")
+            .questionTypeName("D\u1ea1ng b\u00e0i th\u1ee7 c\u00f4ng")
             .referenceQuestions("1,2")
             .orderIndex(1)
             .cells(
@@ -539,28 +675,44 @@ class ExamMatrixServiceBuildFullMatrixTest {
 
     BuildExamMatrixRequest request =
         BuildExamMatrixRequest.builder()
-            .name("Ma Trận Không Template")
+            .name("Ma Tr\u1eadn Kh\u00f4ng Template")
             .curriculumId(CURRICULUM_ID)
             .gradeLevel(12)
             .totalQuestionsTarget(3)
             .totalPointsTarget(new BigDecimal("0.60"))
             .rows(List.of(rowNoTemplate))
             .build();
+    prettyPrint("REQUEST", request);
 
+    step("Call examMatrixService.buildMatrix(request)");
     ExamMatrixTableResponse actual = examMatrixService.buildMatrix(request);
+    pass("Service returned without exception");
+    prettyPrint("ACTUAL", actual);
 
+    step("Assert matrix has 1 chapter and status DRAFT");
     assertThat(actual.getStatus()).isEqualTo(MatrixStatus.DRAFT);
+    pass("actual.getStatus() == DRAFT");
     assertThat(actual.getChapters()).hasSize(1);
+    pass("actual.getChapters().size() == 1");
 
+    step("Assert row has no cells and rowTotalQuestions == 0");
     MatrixRowResponse rowResp = actual.getChapters().getFirst().getRows().getFirst();
-    assertThat(rowResp.getQuestionTypeName()).isEqualTo("Dạng bài thủ công");
+    assertThat(rowResp.getQuestionTypeName()).isEqualTo("D\u1ea1ng b\u00e0i th\u1ee7 c\u00f4ng");
+    pass("rowResp.getQuestionTypeName() == \"D\u1ea1ng b\u00e0i th\u1ee7 c\u00f4ng\"");
     assertThat(rowResp.getCells()).isEmpty();
+    pass("rowResp.getCells() is empty (no cells because templateId=null)");
     assertThat(rowResp.getRowTotalQuestions()).isZero();
+    pass("rowResp.getRowTotalQuestions() == 0");
 
+    step("Verify no cell/template repository calls were made");
     verify(examMatrixRepository).save(any(ExamMatrix.class));
+    pass("examMatrixRepository.save() \u2192 1\u00d7");
     verify(examMatrixRowRepository).save(any(ExamMatrixRow.class));
+    pass("examMatrixRowRepository.save() \u2192 1\u00d7");
     verify(templateMappingRepository, never()).save(any(ExamMatrixTemplateMapping.class));
+    pass("templateMappingRepository.save() \u2192 NEVER called");
     verify(questionTemplateRepository, never()).findById(any());
+    pass("questionTemplateRepository.findById() \u2192 NEVER called");
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
