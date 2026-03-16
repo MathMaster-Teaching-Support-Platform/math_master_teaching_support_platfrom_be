@@ -53,4 +53,6 @@ public class UserRegistrationRequest {
 
   @Past(message = "Date of birth must be in the past")
   LocalDate dob;
+
+  String role;
 }

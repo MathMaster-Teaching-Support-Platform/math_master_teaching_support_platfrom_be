@@ -13,8 +13,8 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.RoleRepository;
 import com.fptu.math_master.repository.TeacherProfileRepository;
 import com.fptu.math_master.repository.UserRepository;
-import com.fptu.math_master.service.FileStorageService;
 import com.fptu.math_master.service.TeacherProfileService;
+import com.fptu.math_master.service.UploadService;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -38,14 +38,14 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   TeacherProfileRepository teacherProfileRepository;
   UserRepository userRepository;
   RoleRepository roleRepository;
-  FileStorageService fileStorageService;
+  UploadService uploadService;
 
   @Override
   @Transactional
   public TeacherProfileResponse submitProfile(
-      TeacherProfileRequest request, MultipartFile file, UUID userId) {
+      TeacherProfileRequest request, java.util.List<MultipartFile> files, UUID userId) {
     log.info(
-        "User {} submitting teacher profile with file: {}", userId, file.getOriginalFilename());
+        "User {} submitting teacher profile with {} files", userId, files.size());
 
     // Check if user exists
     User user =
@@ -58,8 +58,8 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
       throw new AppException(ErrorCode.PROFILE_ALREADY_EXISTS);
     }
 
-    // Save physical file
-    String documentUrl = fileStorageService.storeFile(file, "verification");
+    // Save physical files as a zip
+    String documentUrl = uploadService.uploadFilesAsZip(files, "verification", "verification_docs");
 
     // Create new profile
     TeacherProfile profile =
@@ -69,14 +69,13 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
             .schoolAddress(request.getSchoolAddress())
             .schoolWebsite(request.getSchoolWebsite())
             .position(request.getPosition())
-            .documentUrl(documentUrl)
-            .documentType(request.getDocumentType())
+            .verificationDocumentKey(documentUrl)
             .description(request.getDescription())
             .status(ProfileStatus.PENDING)
             .build();
 
     profile = teacherProfileRepository.save(profile);
-    log.info("Teacher profile submitted successfully for user {}", userId);
+    log.info("Teacher profile submitted successfully for user {} with document: {}", userId, documentUrl);
 
     return mapToResponse(profile);
   }
@@ -101,7 +100,6 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     profile.setSchoolAddress(request.getSchoolAddress());
     profile.setSchoolWebsite(request.getSchoolWebsite());
     profile.setPosition(request.getPosition());
-    profile.setDocumentType(request.getDocumentType());
     profile.setDescription(request.getDescription());
 
     // If updating a rejected profile, reset status to PENDING
@@ -229,8 +227,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
             .schoolAddress(profile.getSchoolAddress())
             .schoolWebsite(profile.getSchoolWebsite())
             .position(profile.getPosition())
-            .documentUrl(profile.getDocumentUrl())
-            .documentType(profile.getDocumentType())
+            .verificationDocumentKey(profile.getVerificationDocumentKey())
             .description(profile.getDescription())
             .status(profile.getStatus())
             .adminComment(profile.getAdminComment())

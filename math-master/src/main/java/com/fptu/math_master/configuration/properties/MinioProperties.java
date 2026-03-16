@@ -19,4 +19,6 @@ public class MinioProperties {
   @NotBlank private String secretKey;
 
   @NotBlank private String templateBucket = "slide-templates";
+
+  @NotBlank private String verificationBucket = "teacher-verifications";
 }

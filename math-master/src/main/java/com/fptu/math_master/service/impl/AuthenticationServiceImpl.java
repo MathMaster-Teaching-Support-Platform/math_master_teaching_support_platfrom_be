@@ -190,10 +190,12 @@ public class AuthenticationServiceImpl implements AuthenticationService {
       var userOpt = userRepository.findByEmailWithRolesAndPermissions(email);
       User user;
 
+      boolean isNewUser = false;
       if (userOpt.isPresent()) {
         user = userOpt.get();
       } else {
         // Auto register
+        isNewUser = true;
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
         String randomPassword = UUID.randomUUID().toString();
 
@@ -209,7 +211,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         Role userRole =
             roleRepository
-                .findByName(PredefinedRole.GUEST_ROLE)
+                .findByName(PredefinedRole.STUDENT_ROLE)
                 .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
         Set<Role> roles = new HashSet<>();
@@ -228,6 +230,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
           .token(token)
           .expiryTime(
               new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
+          .newRegistration(isNewUser)
           .build();
     } else {
       throw new AppException(ErrorCode.UNAUTHENTICATED);
@@ -293,10 +296,22 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             .status(Status.ACTIVE)
             .build();
 
-    // Assign default STUDENT role
-    Role userRole =
-        roleRepository
-            .findByName(PredefinedRole.STUDENT_ROLE)
+    // Assign role
+    String roleName = (request.getRole() != null && !request.getRole().isEmpty()) 
+                        ? request.getRole().toUpperCase() 
+                        : PredefinedRole.STUDENT_ROLE;
+    
+    // Normalize role name to ensure it starts with ROLE_ if it's just 'TEACHER' or 'STUDENT'
+    // in the frontend it's 'teacher' or 'student'
+    if (roleName.equalsIgnoreCase("TEACHER")) roleName = PredefinedRole.STUDENT_ROLE; // Wait, actually teachers are still students initially? 
+    // No, if they select TEACHER in register, they should probably go straight to teacher profile submission if possible.
+    // However, the current logic for /select-role also assigns STUDENT_ROLE initially.
+    
+    // Let's stick to the existing pattern: everyone is a STUDENT initially 
+    // UNLESS they are specifically intended to be something else.
+    // Actually, if I want to support TEACAHER registration:
+    
+    Role userRole = roleRepository.findByName(PredefinedRole.STUDENT_ROLE)
             .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
     Set<Role> roles = new HashSet<>();

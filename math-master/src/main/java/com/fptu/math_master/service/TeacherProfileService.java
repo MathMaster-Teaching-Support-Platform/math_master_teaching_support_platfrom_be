@@ -4,6 +4,8 @@ import com.fptu.math_master.dto.request.ProfileReviewRequest;
 import com.fptu.math_master.dto.request.TeacherProfileRequest;
 import com.fptu.math_master.dto.response.TeacherProfileResponse;
 import com.fptu.math_master.enums.ProfileStatus;
+
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,7 +22,7 @@ public interface TeacherProfileService {
    * @return Created profile response
    */
   TeacherProfileResponse submitProfile(
-      TeacherProfileRequest request, MultipartFile file, UUID userId);
+    TeacherProfileRequest request, List<MultipartFile> file, UUID userId);
 
   /**
    * Update pending teacher profile

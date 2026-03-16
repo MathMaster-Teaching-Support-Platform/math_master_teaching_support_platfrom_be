@@ -97,7 +97,7 @@ public class AuthenticationController {
   @PostMapping("/select-role")
   @Operation(
       summary = "Select user role",
-      description = "After Google login, guest user selects their role (Teacher or Student).")
+      description = "After Google login, new user selects their role (Teacher or Student).")
   ApiResponse<AuthenticationResponse> selectRole(@Valid @RequestBody RoleSelectionRequest request) {
     var result = authenticationService.selectRole(request);
     return ApiResponse.<AuthenticationResponse>builder().result(result).build();

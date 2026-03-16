@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
-@RequestMapping("/api/teacher-profiles")
+@RequestMapping("/teacher-profiles")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
@@ -42,10 +42,10 @@ public class TeacherProfileController {
   @PreAuthorize("hasRole('STUDENT')")
   public ApiResponse<TeacherProfileResponse> submitProfile(
       @Valid @RequestPart("request") TeacherProfileRequest request,
-      @RequestPart("file") MultipartFile file) {
+      @RequestPart("files") java.util.List<MultipartFile> files) {
     UUID userId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
-        .result(teacherProfileService.submitProfile(request, file, userId))
+        .result(teacherProfileService.submitProfile(request, files, userId))
         .build();
   }
 

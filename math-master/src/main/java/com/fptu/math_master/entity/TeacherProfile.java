@@ -66,16 +66,10 @@ public class TeacherProfile extends BaseEntity {
   private String position;
 
   /**
-   * document_url
+   * verification_document_key
    */
-  @Column(name = "document_url", nullable = false)
-  private String documentUrl;
-
-  /**
-   * document_type
-   */
-  @Column(name = "document_type", nullable = false)
-  private String documentType;
+  @Column(name = "verification_document_key")
+  private String verificationDocumentKey;
 
   /**
    * description

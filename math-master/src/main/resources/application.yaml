@@ -158,3 +158,4 @@ minio:
   access-key: ${MINIO_ACCESS_KEY:minioadmin}
   secret-key: ${MINIO_SECRET_KEY:minioadmin}
   template-bucket: ${MINIO_TEMPLATE_BUCKET:slide-templates}
+  verification-bucket: ${MINIO_VERIFICATION_BUCKET:teacher-verifications}
