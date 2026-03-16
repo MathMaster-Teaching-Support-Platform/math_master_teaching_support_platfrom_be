@@ -23,6 +23,12 @@ public class RoadmapSummaryResponse {
   @Schema(description = "Roadmap ID")
   private UUID id;
 
+  @Schema(description = "Student ID")
+  private UUID studentId;
+
+  @Schema(description = "Student full name")
+  private String studentName;
+
   @Schema(description = "Subject name")
   private String subject;
 

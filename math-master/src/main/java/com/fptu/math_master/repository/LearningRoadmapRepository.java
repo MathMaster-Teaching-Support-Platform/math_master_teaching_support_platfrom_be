@@ -71,4 +71,17 @@ public interface LearningRoadmapRepository extends JpaRepository<LearningRoadmap
           + "AND r.deletedAt IS NULL AND r.createdAt >= :fromDate ORDER BY r.createdAt DESC")
   List<LearningRoadmap> findRecentRoadmaps(
       @Param("studentId") UUID studentId, @Param("fromDate") java.time.Instant fromDate);
+
+  @Query(
+      "SELECT r FROM LearningRoadmap r "
+          + "WHERE r.deletedAt IS NULL "
+          + "AND ("
+          + ":name IS NULL OR :name = '' OR "
+          + "EXISTS ("
+          + "SELECT 1 FROM User u WHERE u.id = r.studentId "
+          + "AND LOWER(COALESCE(u.fullName, '')) LIKE LOWER(CONCAT('%', :name, '%'))"
+          + ")"
+          + ")")
+  Page<LearningRoadmap> findAllForAdminWithStudentNameSearch(
+      @Param("name") String name, Pageable pageable);
 }
