@@ -72,9 +72,11 @@ public class Curriculum extends BaseEntity {
   @JoinColumn(name = "subject_id", insertable = false, updatable = false)
   private Subject subject;
 
+  /**
+   * description
+   */
   @Lob
-  @Nationalized
-  @Column(name = "description")
+  @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
   @OneToMany(mappedBy = "curriculum", cascade = CascadeType.ALL, orphanRemoval = true)

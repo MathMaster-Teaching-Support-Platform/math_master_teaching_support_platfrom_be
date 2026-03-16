@@ -63,9 +63,11 @@ public class ExamMatrix extends BaseEntity {
   @Column(name = "name", length = 255, nullable = false)
   private String name;
 
+  /**
+   * description
+   */
   @Lob
-  @Nationalized
-  @Column(name = "description")
+  @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
   @Column(name = "is_reusable", nullable = false)

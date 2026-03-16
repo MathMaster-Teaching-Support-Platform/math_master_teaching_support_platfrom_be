@@ -65,7 +65,10 @@ public class QuestionTemplate extends BaseEntity {
   @Column(name = "name", nullable = false, columnDefinition = "TEXT")
   private String name;
 
-  @Nationalized
+  /**
+   * description
+   */
+  @Lob
   @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 

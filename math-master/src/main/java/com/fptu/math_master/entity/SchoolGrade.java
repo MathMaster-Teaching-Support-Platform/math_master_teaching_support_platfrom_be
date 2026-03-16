@@ -1,11 +1,6 @@
 package com.fptu.math_master.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Index;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.*;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -47,18 +42,14 @@ public class SchoolGrade extends BaseEntity {
   @Column(name = "name", length = 100, nullable = false)
   private String name;
 
-  @Nationalized
+  /**
+   * description
+   */
+  @Lob
   @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
   @Builder.Default
   @Column(name = "is_active", nullable = false)
   private Boolean isActive = true;
-
-  @PrePersist
-  public void prePersistSchoolGrade() {
-    if (isActive == null) {
-      isActive = true;
-    }
-  }
 }

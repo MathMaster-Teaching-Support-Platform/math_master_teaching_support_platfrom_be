@@ -66,9 +66,11 @@ public class Subject extends BaseEntity {
   @Column(name = "code", length = 50, nullable = false)
   private String code;
 
+  /**
+   * description
+   */
   @Lob
-  @Nationalized
-  @Column(name = "description")
+  @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
   /** Lowest grade level this subject appears in (1–12). Null = unrestricted. */

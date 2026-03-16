@@ -2,15 +2,8 @@ package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.TransactionStatus;
 import com.fptu.math_master.enums.TransactionType;
-import jakarta.persistence.AttributeOverride;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import lombok.*;
@@ -67,7 +60,8 @@ public class Transaction extends BaseEntity {
   /**
    * description
    */
-  @Column(name = "description", length = 500)
+  @Lob
+  @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
   /**

@@ -1,9 +1,6 @@
 package com.fptu.math_master.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.*;
@@ -39,8 +36,10 @@ public class Permission extends BaseEntity {
   @Column(name = "name", length = 255, nullable = false)
   private String name;
 
-  @Size(max = 500)
-  @Nationalized
-  @Column(name = "description", length = 500)
+  /**
+   * description
+   */
+  @Lob
+  @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 }

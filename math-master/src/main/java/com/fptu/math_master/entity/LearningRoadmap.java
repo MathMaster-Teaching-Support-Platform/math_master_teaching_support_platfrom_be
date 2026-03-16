@@ -112,8 +112,7 @@ public class LearningRoadmap extends BaseEntity {
    * description
    */
   @Lob
-  @Nationalized
-  @Column(name = "description")
+  @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
   /**

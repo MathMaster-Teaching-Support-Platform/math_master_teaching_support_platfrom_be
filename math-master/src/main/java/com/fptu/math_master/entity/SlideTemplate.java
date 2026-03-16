@@ -1,10 +1,6 @@
 package com.fptu.math_master.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Index;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -36,7 +32,10 @@ public class SlideTemplate extends BaseEntity {
   @Column(name = "name", length = 255, nullable = false)
   private String name;
 
-  @Nationalized
+  /**
+   * description
+   */
+  @Lob
   @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
