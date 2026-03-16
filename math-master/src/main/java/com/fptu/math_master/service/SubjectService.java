@@ -20,10 +20,10 @@ public interface SubjectService {
   /** List subjects available for a given grade level. */
   List<SubjectResponse> getSubjectsByGrade(Integer gradeLevel);
 
-  /** Link a subject to a grade level (N-N). */
+  /** Assign a subject to a grade level. */
   SubjectResponse linkToGrade(UUID subjectId, LinkGradeSubjectRequest request);
 
-  /** Unlink a subject from a grade level. */
+  /** Remove grade assignment from a subject. */
   void unlinkFromGrade(UUID subjectId, Integer gradeLevel);
 
   /** Deactivate (soft-delete) a subject. */

@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 @SecurityRequirement(name = "bearerAuth")
-@Tag(name = "Subjects", description = "Math subject (môn học) management — Grade ↔ Subject N-N")
+@Tag(name = "Subjects", description = "Math subject (môn học) management by school grade")
 public class SubjectController {
 
   SubjectService subjectService;
@@ -43,7 +43,10 @@ public class SubjectController {
           "Admin creates a math subject such as 'Đại Số', 'Hình Học', 'Giải Tích', 'Tổ Hợp - Xác Suất'.")
   public ApiResponse<SubjectResponse> createSubject(
       @Valid @RequestBody CreateSubjectRequest request) {
-    log.info("REST request to create subject: code={}", request.getCode());
+    log.info(
+      "REST request to create subject: name={}, schoolGradeId={}",
+      request.getName(),
+      request.getSchoolGradeId());
     return ApiResponse.<SubjectResponse>builder()
         .message("Subject created successfully.")
         .result(subjectService.createSubject(request))
@@ -82,7 +85,7 @@ public class SubjectController {
   @PreAuthorize("hasRole('ADMIN')")
   @Operation(
       summary = "Link subject to a grade level",
-      description = "Creates a Grade ↔ Subject N-N mapping, e.g. grade=12 ↔ Đại Số.")
+      description = "Assigns the subject to a school grade level, e.g. grade=12.")
   public ApiResponse<SubjectResponse> linkToGrade(
       @PathVariable UUID subjectId, @Valid @RequestBody LinkGradeSubjectRequest request) {
     log.info("REST request to link subject {} to grade {}", subjectId, request.getGradeLevel());

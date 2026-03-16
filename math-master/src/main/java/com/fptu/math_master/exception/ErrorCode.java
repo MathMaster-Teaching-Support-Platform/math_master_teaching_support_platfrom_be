@@ -218,7 +218,9 @@ public enum ErrorCode {
       1125, "No mapping found between this subject and grade level", HttpStatus.NOT_FOUND),
   EXAM_MATRIX_ROW_NOT_FOUND(1126, "Exam matrix row not found", HttpStatus.NOT_FOUND),
   MATRIX_ROW_QUESTION_TYPE_REQUIRED(
-      1127, "questionTypeName is required when templateId is not provided", HttpStatus.BAD_REQUEST);
+      1127, "questionTypeName is required when templateId is not provided", HttpStatus.BAD_REQUEST),
+  SCHOOL_GRADE_NOT_FOUND(1128, "School grade not found", HttpStatus.NOT_FOUND),
+  SCHOOL_GRADE_ALREADY_EXISTS(1129, "School grade already exists", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

@@ -3,16 +3,19 @@ package com.fptu.math_master.service.impl;
 import com.fptu.math_master.dto.request.CreateSubjectRequest;
 import com.fptu.math_master.dto.request.LinkGradeSubjectRequest;
 import com.fptu.math_master.dto.response.SubjectResponse;
-import com.fptu.math_master.entity.GradeSubject;
+import com.fptu.math_master.entity.SchoolGrade;
 import com.fptu.math_master.entity.Subject;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
-import com.fptu.math_master.repository.GradeSubjectRepository;
+import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.service.SubjectService;
+import java.text.Normalizer;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -26,23 +29,31 @@ import org.springframework.transaction.annotation.Transactional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class SubjectServiceImpl implements SubjectService {
 
+  private static final Pattern NON_ASCII_WORD = Pattern.compile("[^A-Z0-9]+");
+  private static final Pattern COMBINING_MARKS = Pattern.compile("\\p{M}");
+
   SubjectRepository subjectRepository;
-  GradeSubjectRepository gradeSubjectRepository;
+  SchoolGradeRepository schoolGradeRepository;
 
   @Override
   @Transactional
   public SubjectResponse createSubject(CreateSubjectRequest request) {
-    log.info("Creating subject: code={}", request.getCode());
-    if (subjectRepository.existsByCode(request.getCode())) {
-      throw new AppException(ErrorCode.SUBJECT_ALREADY_EXISTS);
-    }
+    log.info(
+        "Creating subject: name={}, schoolGradeId={}", request.getName(), request.getSchoolGradeId());
+
+    SchoolGrade schoolGrade =
+        schoolGradeRepository
+            .findByIdAndNotDeleted(request.getSchoolGradeId())
+            .filter(g -> g.getDeletedAt() == null && Boolean.TRUE.equals(g.getIsActive()))
+            .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+
+    String subjectCode = generateUniqueCode(request.getName());
+
     Subject subject =
         Subject.builder()
             .name(request.getName())
-            .code(request.getCode())
-            .description(request.getDescription())
-            .gradeMin(request.getGradeMin())
-            .gradeMax(request.getGradeMax())
+            .code(subjectCode)
+            .schoolGradeId(schoolGrade.getId())
             .isActive(true)
             .build();
     subject = subjectRepository.save(subject);
@@ -77,16 +88,15 @@ public class SubjectServiceImpl implements SubjectService {
   @Transactional
   public SubjectResponse linkToGrade(UUID subjectId, LinkGradeSubjectRequest request) {
     Subject subject = loadOrThrow(subjectId);
-    if (gradeSubjectRepository.existsByGradeLevelAndSubjectId(request.getGradeLevel(), subjectId)) {
-      throw new AppException(ErrorCode.GRADE_SUBJECT_ALREADY_EXISTS);
-    }
-    GradeSubject link =
-        GradeSubject.builder()
-            .subjectId(subjectId)
-            .gradeLevel(request.getGradeLevel())
-            .isActive(true)
-            .build();
-    gradeSubjectRepository.save(link);
+
+    SchoolGrade schoolGrade =
+        schoolGradeRepository
+            .findByGradeLevel(request.getGradeLevel())
+            .filter(g -> g.getDeletedAt() == null && Boolean.TRUE.equals(g.getIsActive()))
+            .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+
+    subject.setSchoolGradeId(schoolGrade.getId());
+    subjectRepository.save(subject);
     log.info("Linked subject {} to grade {}", subjectId, request.getGradeLevel());
     return buildResponse(subject);
   }
@@ -94,13 +104,12 @@ public class SubjectServiceImpl implements SubjectService {
   @Override
   @Transactional
   public void unlinkFromGrade(UUID subjectId, Integer gradeLevel) {
-    loadOrThrow(subjectId);
-    GradeSubject link =
-        gradeSubjectRepository
-            .findByGradeLevelAndSubjectId(gradeLevel, subjectId)
-            .orElseThrow(() -> new AppException(ErrorCode.GRADE_SUBJECT_NOT_FOUND));
-    link.setIsActive(false);
-    gradeSubjectRepository.save(link);
+    Subject subject = loadOrThrow(subjectId);
+    if (subject.getSchoolGrade() == null || !subject.getSchoolGrade().getGradeLevel().equals(gradeLevel)) {
+      throw new AppException(ErrorCode.GRADE_SUBJECT_NOT_FOUND);
+    }
+    subject.setSchoolGradeId(null);
+    subjectRepository.save(subject);
     log.info("Unlinked subject {} from grade {}", subjectId, gradeLevel);
   }
 
@@ -122,11 +131,10 @@ public class SubjectServiceImpl implements SubjectService {
   }
 
   private SubjectResponse buildResponse(Subject subject) {
-    List<Integer> grades =
-        gradeSubjectRepository.findBySubjectIdAndIsActiveTrue(subject.getId()).stream()
-            .map(GradeSubject::getGradeLevel)
-            .sorted()
-            .collect(Collectors.toList());
+    Integer primaryGradeLevel =
+      subject.getSchoolGrade() != null ? subject.getSchoolGrade().getGradeLevel() : null;
+    List<Integer> gradeLevels =
+      primaryGradeLevel == null ? List.of() : List.of(primaryGradeLevel);
 
     return SubjectResponse.builder()
         .id(subject.getId())
@@ -135,10 +143,36 @@ public class SubjectServiceImpl implements SubjectService {
         .description(subject.getDescription())
         .gradeMin(subject.getGradeMin())
         .gradeMax(subject.getGradeMax())
+      .primaryGradeLevel(primaryGradeLevel)
+      .schoolGradeId(subject.getSchoolGradeId())
         .isActive(subject.getIsActive())
-        .gradeLevels(grades)
+      .gradeLevels(gradeLevels)
         .createdAt(subject.getCreatedAt())
         .updatedAt(subject.getUpdatedAt())
         .build();
   }
+
+  private String generateUniqueCode(String subjectName) {
+    String normalized =
+        COMBINING_MARKS
+            .matcher(Normalizer.normalize(subjectName, Normalizer.Form.NFD))
+            .replaceAll("");
+    String baseCode =
+        NON_ASCII_WORD
+            .matcher(normalized.toUpperCase(Locale.ROOT))
+            .replaceAll("_")
+            .replaceAll("^_+|_+$", "");
+    if (baseCode.isBlank()) {
+      baseCode = "SUBJECT";
+    }
+
+    String candidate = baseCode;
+    int suffix = 1;
+    while (subjectRepository.existsByCode(candidate)) {
+      suffix++;
+      candidate = baseCode + "_" + suffix;
+    }
+    return candidate;
+  }
+
 }

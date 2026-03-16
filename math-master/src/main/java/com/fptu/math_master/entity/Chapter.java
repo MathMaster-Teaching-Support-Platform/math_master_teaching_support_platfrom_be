@@ -27,11 +27,12 @@ import org.hibernate.annotations.Nationalized;
     name = "chapters",
     uniqueConstraints = {
       @UniqueConstraint(
-          name = "uq_chapters_curriculum_order",
-          columnNames = {"curriculum_id", "order_index"})
+          name = "uq_chapters_subject_order",
+          columnNames = {"subject_id", "order_index"})
     },
     indexes = {
       @Index(name = "idx_chapters_curriculum_id", columnList = "curriculum_id"),
+      @Index(name = "idx_chapters_subject_id", columnList = "subject_id"),
       @Index(name = "idx_chapters_order", columnList = "order_index")
     })
 /**
@@ -42,8 +43,12 @@ public class Chapter extends BaseEntity {
   /**
    * curriculum_id
    */
-  @Column(name = "curriculum_id", nullable = false)
+  @Column(name = "curriculum_id")
   private UUID curriculumId;
+
+  /** Direct ERD relationship: each Chapter belongs to one Subject. */
+  @Column(name = "subject_id")
+  private UUID subjectId;
 
   /**
    * title
@@ -75,6 +80,10 @@ public class Chapter extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "curriculum_id", insertable = false, updatable = false)
   private Curriculum curriculum;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "subject_id", insertable = false, updatable = false)
+  private Subject subject;
 
   @OneToMany(mappedBy = "chapter", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<Lesson> lessons;

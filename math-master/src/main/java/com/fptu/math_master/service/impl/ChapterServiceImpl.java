@@ -7,7 +7,7 @@ import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ChapterRepository;
-import com.fptu.math_master.repository.CurriculumRepository;
+import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.service.ChapterService;
 import java.time.Instant;
 import java.util.List;
@@ -27,28 +27,25 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChapterServiceImpl implements ChapterService {
 
   ChapterRepository chapterRepository;
-  CurriculumRepository curriculumRepository;
+  SubjectRepository subjectRepository;
 
   @Override
   @Transactional
   public ChapterResponse createChapter(CreateChapterRequest request) {
-    // Validate curriculum exists
-    curriculumRepository
-        .findById(request.getCurriculumId())
-        .filter(c -> c.getDeletedAt() == null)
-        .orElseThrow(() -> new AppException(ErrorCode.CURRICULUM_NOT_FOUND));
+    subjectRepository
+      .findById(request.getSubjectId())
+      .filter(s -> s.getDeletedAt() == null && Boolean.TRUE.equals(s.getIsActive()))
+      .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
 
     int orderIndex =
         request.getOrderIndex() != null
             ? request.getOrderIndex()
-            : chapterRepository
-                    .countByCurriculumIdAndNotDeleted(request.getCurriculumId())
-                    .intValue()
+        : chapterRepository.countBySubjectIdAndNotDeleted(request.getSubjectId()).intValue()
                 + 1;
 
     Chapter chapter =
         Chapter.builder()
-            .curriculumId(request.getCurriculumId())
+        .subjectId(request.getSubjectId())
             .title(request.getTitle())
             .description(request.getDescription())
             .orderIndex(orderIndex)
@@ -64,12 +61,19 @@ public class ChapterServiceImpl implements ChapterService {
 
   @Override
   public List<ChapterResponse> getChaptersByCurriculumId(UUID curriculumId) {
-    curriculumRepository
-        .findById(curriculumId)
-        .filter(c -> c.getDeletedAt() == null)
-        .orElseThrow(() -> new AppException(ErrorCode.CURRICULUM_NOT_FOUND));
-
     return chapterRepository.findByCurriculumIdAndNotDeleted(curriculumId).stream()
+        .map(this::toResponse)
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  public List<ChapterResponse> getChaptersBySubjectId(UUID subjectId) {
+    subjectRepository
+        .findById(subjectId)
+        .filter(s -> s.getDeletedAt() == null && Boolean.TRUE.equals(s.getIsActive()))
+        .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
+
+    return chapterRepository.findBySubjectIdAndNotDeleted(subjectId).stream()
         .map(this::toResponse)
         .collect(Collectors.toList());
   }
@@ -108,7 +112,7 @@ public class ChapterServiceImpl implements ChapterService {
   private ChapterResponse toResponse(Chapter c) {
     return ChapterResponse.builder()
         .id(c.getId())
-        .curriculumId(c.getCurriculumId())
+        .subjectId(c.getSubjectId())
         .title(c.getTitle())
         .description(c.getDescription())
         .orderIndex(c.getOrderIndex())

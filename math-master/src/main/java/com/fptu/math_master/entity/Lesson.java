@@ -125,6 +125,7 @@ public class Lesson extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (status == null) status = LessonStatus.DRAFT;
   }
 }

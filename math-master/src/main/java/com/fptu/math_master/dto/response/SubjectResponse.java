@@ -20,6 +20,8 @@ public class SubjectResponse {
   private String description;
   private Integer gradeMin;
   private Integer gradeMax;
+  private Integer primaryGradeLevel;
+  private java.util.UUID schoolGradeId;
   private Boolean isActive;
 
   /** Grade levels this subject is mapped to. */

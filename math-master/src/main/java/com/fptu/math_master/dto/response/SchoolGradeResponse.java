@@ -11,12 +11,13 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ChapterResponse {
+public class SchoolGradeResponse {
+
   private UUID id;
-  private UUID subjectId;
-  private String title;
+  private Integer gradeLevel;
+  private String name;
   private String description;
-  private Integer orderIndex;
+  private Boolean active;
   private Instant createdAt;
   private Instant updatedAt;
 }
