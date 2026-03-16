@@ -73,6 +73,7 @@ public class ApplicationInitLogicImpl implements ApplicationInitLogic {
     Role studentRole = createRoleIfNotExists(PredefinedRole.STUDENT_ROLE, studentPermissions);
     Role teacherRole = createRoleIfNotExists(PredefinedRole.TEACHER_ROLE, teacherPermissions);
     Role adminRole = createRoleIfNotExists(PredefinedRole.ADMIN_ROLE, allPermissions);
+    Role guestRole = createRoleIfNotExists(PredefinedRole.GUEST_ROLE, new HashSet<>());
 
     log.debug(LOG_CREATING_USERS);
     createUserIfNotExists(properties.getAdmin(), adminRole);
