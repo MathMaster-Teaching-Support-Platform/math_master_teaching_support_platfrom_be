@@ -19,9 +19,12 @@ public interface SubjectRepository extends JpaRepository<Subject, UUID> {
 
   @Query(
       """
-      SELECT DISTINCT s FROM Subject s
-      JOIN s.gradeSubjects gs
-      WHERE gs.gradeLevel = :grade AND gs.isActive = true AND s.isActive = true
+      SELECT s FROM Subject s
+      JOIN s.schoolGrade sg
+      WHERE s.isActive = true
+        AND sg.gradeLevel = :grade
+        AND sg.isActive = true
+        AND sg.deletedAt IS NULL
       ORDER BY s.name
       """)
   List<Subject> findActiveByGradeLevel(@Param("grade") Integer grade);

@@ -16,8 +16,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CreateChapterRequest {
 
-  @NotNull(message = "curriculumId is required")
-  private UUID curriculumId;
+  @NotNull(message = "subjectId is required")
+  private UUID subjectId;
 
   @NotBlank(message = "title is required")
   @Size(max = 255, message = "title must not exceed 255 characters")
@@ -25,7 +25,7 @@ public class CreateChapterRequest {
 
   private String description;
 
-  /** Display order within the curriculum. Auto-assigned (last+1) if omitted. */
+  /** Display order within the subject. Auto-assigned (last+1) if omitted. */
   @Positive(message = "orderIndex must be positive")
   private Integer orderIndex;
 }

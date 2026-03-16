@@ -12,6 +12,8 @@ public interface ChapterService {
 
   ChapterResponse getChapterById(UUID id);
 
+  List<ChapterResponse> getChaptersBySubjectId(UUID subjectId);
+
   List<ChapterResponse> getChaptersByCurriculumId(UUID curriculumId);
 
   ChapterResponse updateChapter(UUID id, UpdateChapterRequest request);

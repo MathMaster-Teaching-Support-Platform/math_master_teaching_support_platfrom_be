@@ -1,9 +1,10 @@
 package com.fptu.math_master.dto.request;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,12 +14,16 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreateSubjectRequest {
+public class CreateSchoolGradeRequest {
 
-  @NotBlank(message = "Name is required")
-  @Size(max = 255, message = "Name must not exceed 255 characters")
+  @NotNull
+  @Min(1)
+  @Max(12)
+  private Integer gradeLevel;
+
+  @NotBlank
+  @Size(max = 100)
   private String name;
 
-  @NotNull(message = "schoolGradeId is required")
-  private UUID schoolGradeId;
+  private String description;
 }

@@ -34,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
-@Tag(name = "Chapters", description = "CRUD for chapters within a curriculum")
+@Tag(name = "Chapters", description = "CRUD for chapters within a subject")
 @SecurityRequirement(name = "bearerAuth")
 public class ChapterController {
 
@@ -44,13 +44,13 @@ public class ChapterController {
   @Operation(
       summary = "Create a chapter",
       description =
-          "Creates a new chapter inside a curriculum. orderIndex is auto-assigned if omitted.")
+        "Creates a new chapter inside a subject. orderIndex is auto-assigned if omitted.")
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   public ApiResponse<ChapterResponse> createChapter(
       @Valid @RequestBody CreateChapterRequest request) {
-    log.info("POST /chapters – curriculumId={}", request.getCurriculumId());
+    log.info("POST /chapters – subjectId={}", request.getSubjectId());
     return ApiResponse.<ChapterResponse>builder()
         .result(chapterService.createChapter(request))
         .build();
@@ -74,6 +74,17 @@ public class ChapterController {
     log.info("GET /chapters/curriculum/{}", curriculumId);
     return ApiResponse.<List<ChapterResponse>>builder()
         .result(chapterService.getChaptersByCurriculumId(curriculumId))
+        .build();
+  }
+
+  @Operation(
+      summary = "List chapters by subject",
+      description = "Returns all active chapters for a subject, ordered by orderIndex.")
+  @GetMapping("/subject/{subjectId}")
+  public ApiResponse<List<ChapterResponse>> getChaptersBySubject(@PathVariable UUID subjectId) {
+    log.info("GET /chapters/subject/{}", subjectId);
+    return ApiResponse.<List<ChapterResponse>>builder()
+        .result(chapterService.getChaptersBySubjectId(subjectId))
         .build();
   }
 

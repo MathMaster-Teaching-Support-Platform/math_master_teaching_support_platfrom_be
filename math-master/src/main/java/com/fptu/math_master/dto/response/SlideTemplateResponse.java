@@ -11,12 +11,14 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ChapterResponse {
+public class SlideTemplateResponse {
+
   private UUID id;
-  private UUID subjectId;
-  private String title;
+  private String name;
   private String description;
-  private Integer orderIndex;
+  private String originalFileName;
+  private String contentType;
+  private boolean active;
   private Instant createdAt;
   private Instant updatedAt;
 }

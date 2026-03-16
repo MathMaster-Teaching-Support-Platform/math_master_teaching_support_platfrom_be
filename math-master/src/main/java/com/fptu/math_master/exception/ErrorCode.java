@@ -219,7 +219,9 @@ public enum ErrorCode {
   EXAM_MATRIX_ROW_NOT_FOUND(1126, "Exam matrix row not found", HttpStatus.NOT_FOUND),
   INVALID_FILE_FORMAT(2001, "Invalid file format", HttpStatus.BAD_REQUEST),
   MATRIX_ROW_QUESTION_TYPE_REQUIRED(
-      1127, "questionTypeName is required when templateId is not provided", HttpStatus.BAD_REQUEST);
+      1127, "questionTypeName is required when templateId is not provided", HttpStatus.BAD_REQUEST),
+  SCHOOL_GRADE_NOT_FOUND(1128, "School grade not found", HttpStatus.NOT_FOUND),
+  SCHOOL_GRADE_ALREADY_EXISTS(1129, "School grade already exists", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

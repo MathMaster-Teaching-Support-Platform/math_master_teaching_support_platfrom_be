@@ -98,12 +98,17 @@ public class GlobalExceptionHandler {
    */
   @ExceptionHandler(value = MethodArgumentNotValidException.class)
   ResponseEntity<ApiResponse<Void>> handlingValidation(MethodArgumentNotValidException exception) {
-    String enumKey = exception.getFieldError().getDefaultMessage();
+    String validationMessage =
+        exception.getFieldError() != null
+            ? exception.getFieldError().getDefaultMessage()
+            : ErrorCode.INVALID_KEY.getMessage();
 
     ErrorCode errorCode = ErrorCode.INVALID_KEY;
     Map<String, Object> attributes = null;
+    boolean mappedFromEnum = false;
     try {
-      errorCode = ErrorCode.valueOf(enumKey);
+      errorCode = ErrorCode.valueOf(validationMessage);
+      mappedFromEnum = true;
 
       var constraintViolation =
           exception.getBindingResult().getAllErrors().getFirst().unwrap(ConstraintViolation.class);
@@ -113,16 +118,20 @@ public class GlobalExceptionHandler {
       log.info(attributes.toString());
 
     } catch (IllegalArgumentException e) {
-      log.warn("Invalid error code: {}", enumKey);
+      log.warn("Invalid error code: {}", validationMessage);
     }
 
     ApiResponse<Void> apiResponse = new ApiResponse<>();
 
     apiResponse.setCode(errorCode.getCode());
-    apiResponse.setMessage(
-        Objects.nonNull(attributes)
-            ? mapAttribute(errorCode.getMessage(), attributes)
-            : errorCode.getMessage());
+    if (!mappedFromEnum) {
+      apiResponse.setMessage(validationMessage);
+    } else {
+      apiResponse.setMessage(
+          Objects.nonNull(attributes)
+              ? mapAttribute(errorCode.getMessage(), attributes)
+              : errorCode.getMessage());
+    }
 
     return ResponseEntity.badRequest().body(apiResponse);
   }

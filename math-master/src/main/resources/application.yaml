@@ -1,6 +1,10 @@
 spring:
   application:
     name: math-master
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
   devtools:
     restart:
       enabled: false
@@ -145,3 +149,12 @@ gemini:
   model: ${GEMINI_MODEL:gemini-2.5-flash}
   base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
   timeout-seconds: 60
+
+# ================================
+# MinIO Object Storage
+# ================================
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  template-bucket: ${MINIO_TEMPLATE_BUCKET:slide-templates}

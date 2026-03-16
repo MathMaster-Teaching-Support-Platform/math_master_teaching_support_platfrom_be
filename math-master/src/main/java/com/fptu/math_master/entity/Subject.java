@@ -4,7 +4,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -13,6 +15,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import java.util.Set;
+import java.util.UUID;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
@@ -41,7 +44,8 @@ import org.hibernate.annotations.Nationalized;
     },
     indexes = {
       @Index(name = "idx_subjects_code", columnList = "code"),
-      @Index(name = "idx_subjects_active", columnList = "is_active")
+      @Index(name = "idx_subjects_active", columnList = "is_active"),
+      @Index(name = "idx_subjects_school_grade", columnList = "school_grade_id")
     })
 public class Subject extends BaseEntity {
 
@@ -83,10 +87,21 @@ public class Subject extends BaseEntity {
   @Column(name = "is_active", nullable = false)
   private Boolean isActive = true;
 
+  /** Direct ERD relationship: each Subject belongs to one SchoolGrade (lop). */
+  @Column(name = "school_grade_id")
+  private UUID schoolGradeId;
+
   // ── Relationships ────────────────────────────────────────────────────────
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "school_grade_id", insertable = false, updatable = false)
+  private SchoolGrade schoolGrade;
 
   @OneToMany(mappedBy = "subject", fetch = FetchType.LAZY)
   private Set<GradeSubject> gradeSubjects;
+
+  @OneToMany(mappedBy = "subject", fetch = FetchType.LAZY)
+  private Set<Chapter> chapters;
 
   @OneToMany(mappedBy = "subject", fetch = FetchType.LAZY)
   private Set<Curriculum> curricula;
@@ -95,6 +110,7 @@ public class Subject extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (isActive == null) isActive = true;
   }
 }
