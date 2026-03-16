@@ -60,4 +60,7 @@ public interface RoadmapTopicRepository extends JpaRepository<RoadmapTopic, UUID
           + "AND t.sequenceOrder < :sequenceOrder AND t.status != 'COMPLETED'")
   boolean arePrerequisitesCompleted(
       @Param("roadmapId") UUID roadmapId, @Param("sequenceOrder") Integer sequenceOrder);
+
+  Optional<RoadmapTopic> findFirstByRoadmapIdAndSequenceOrderGreaterThanOrderBySequenceOrderAsc(
+      UUID roadmapId, Integer sequenceOrder);
 }

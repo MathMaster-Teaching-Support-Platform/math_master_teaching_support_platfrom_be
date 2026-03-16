@@ -38,6 +38,12 @@ public class TopicMaterialResponse {
   @Schema(description = "Question ID (if applicable)")
   private UUID questionId;
 
+  @Schema(description = "Assessment ID (if applicable)")
+  private UUID assessmentId;
+
+  @Schema(description = "Mindmap ID (if applicable)")
+  private UUID mindmapId;
+
   @Schema(description = "Chapter ID (for context)")
   private UUID chapterId;
 }

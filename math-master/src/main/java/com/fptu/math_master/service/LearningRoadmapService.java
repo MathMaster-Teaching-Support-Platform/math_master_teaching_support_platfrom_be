@@ -32,21 +32,6 @@ public interface LearningRoadmapService {
   // ============================================================================
 
   /**
-   * Generate an AI-powered roadmap based on student wishes
-   *
-   * <p>Logic:
-   * - Get student's learning wishes for the subject
-   * - Fetch student's performance data
-   * - Use AI (Gemini) to analyze and prioritize topics
-   * - Apply decision rules: weak topics get priority, preferred topics included, etc.
-   * - Generate personalized learning path
-   *
-   * @param wishId the student wish ID to use for generation
-   * @return detailed roadmap generated from student wishes and AI recommendations
-   */
-  RoadmapDetailResponse generateRoadmapFromWish(UUID wishId);
-
-  /**
    * Get existing roadmap by ID with all details
    */
   RoadmapDetailResponse getRoadmapById(UUID roadmapId);

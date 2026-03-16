@@ -1,11 +1,6 @@
 package com.fptu.math_master.controller;
 
-import com.fptu.math_master.dto.request.AuthenticationRequest;
-import com.fptu.math_master.dto.request.GoogleAuthRequest;
-import com.fptu.math_master.dto.request.IntrospectRequest;
-import com.fptu.math_master.dto.request.LogoutRequest;
-import com.fptu.math_master.dto.request.RefreshRequest;
-import com.fptu.math_master.dto.request.UserRegistrationRequest;
+import com.fptu.math_master.dto.request.*;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.AuthenticationResponse;
 import com.fptu.math_master.dto.response.IntrospectResponse;
@@ -97,5 +92,14 @@ public class AuthenticationController {
 
     authenticationService.logout(request);
     return ApiResponse.<Void>builder().build();
+  }
+
+  @PostMapping("/select-role")
+  @Operation(
+      summary = "Select user role",
+      description = "After Google login, guest user selects their role (Teacher or Student).")
+  ApiResponse<AuthenticationResponse> selectRole(@Valid @RequestBody RoleSelectionRequest request) {
+    var result = authenticationService.selectRole(request);
+    return ApiResponse.<AuthenticationResponse>builder().result(result).build();
   }
 }

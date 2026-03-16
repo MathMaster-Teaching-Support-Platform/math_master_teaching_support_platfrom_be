@@ -37,31 +37,31 @@ public class TeacherProfile extends BaseEntity {
   @JoinColumn(name = "user_id", nullable = false, unique = true)
   User user;
 
-  @ManyToOne
-  @JoinColumn(name = "school_id", nullable = false)
-  School school;
+  /** school_name */
+  @Column(name = "school_name", nullable = false)
+  String schoolName;
 
-  /**
-   * position
-   */
+  /** school_address */
+  @Column(name = "school_address")
+  String schoolAddress;
+
+  /** school_website */
+  @Column(name = "school_website")
+  String schoolWebsite;
+
+  /** position */
   @Column(name = "position", nullable = false)
   String position;
 
-  /**
-   * certificate_url
-   */
-  @Column(name = "certificate_url")
-  String certificateUrl;
+  /** document_url */
+  @Column(name = "document_url", nullable = false)
+  String documentUrl;
 
-  /**
-   * identification_document_url
-   */
-  @Column(name = "identification_document_url")
-  String identificationDocumentUrl;
+  /** document_type */
+  @Column(name = "document_type", nullable = false)
+  String documentType;
 
-  /**
-   * description
-   */
+  /** description */
   @Column(name = "description", columnDefinition = "TEXT")
   String description;
 
