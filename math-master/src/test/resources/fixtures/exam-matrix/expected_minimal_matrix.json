@@ -1,0 +1,44 @@
+{
+  "name": "Đề kiểm tra đơn giản",
+  "description": "Ma trận tối thiểu – 1 chương, 1 dòng, 1 ô",
+  "gradeLevel": 10,
+  "isReusable": false,
+  "status": "DRAFT",
+  "teacherName": "Nguyễn Văn A",
+  "curriculumName": "Toán 12 – Đề Minh Họa THPT",
+  "subjectName": "Toán",
+  "totalQuestionsTarget": 5,
+  "totalPointsTarget": 10.0,
+  "grandTotalQuestions": 3,
+  "grandTotalPoints": 6.0,
+  "grandTotalByCognitive": {
+    "NB": 3
+  },
+  "chapters": [
+    {
+      "chapterTitle": "ĐẠO HÀM VÀ ỨNG DỤNG",
+      "chapterOrderIndex": 1,
+      "chapterTotalQuestions": 3,
+      "chapterTotalPoints": 6.0,
+      "totalByCognitive": { "NB": 3 },
+      "rows": [
+        {
+          "questionTypeName": "Trắc Nghiệm",
+          "referenceQuestions": null,
+          "orderIndex": 1,
+          "rowTotalQuestions": 3,
+          "rowTotalPoints": 6.0,
+          "countByCognitive": { "NB": 3 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 3,
+              "pointsPerQuestion": 2.0,
+              "totalPoints": 6.0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
