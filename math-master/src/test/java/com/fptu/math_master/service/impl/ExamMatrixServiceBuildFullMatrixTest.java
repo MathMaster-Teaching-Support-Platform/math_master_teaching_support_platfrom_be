@@ -275,9 +275,9 @@ class ExamMatrixServiceBuildFullMatrixTest {
         .usingRecursiveComparison()
         .withComparatorForType(BigDecimal::compareTo, BigDecimal.class)
         .ignoringFieldsMatchingRegexes(
-            ".*[Ii]d$", // id, teacherId, curriculumId, subjectId, rowId, ...
-            ".*At$", // createdAt, updatedAt
-            ".*cognitiveLevel$" // CognitiveLevel enum — compare label instead
+            ".*[Ii]d$",
+            ".*At$",
+            ".*cognitiveLevel$"
             )
         .isEqualTo(expected);
   }
