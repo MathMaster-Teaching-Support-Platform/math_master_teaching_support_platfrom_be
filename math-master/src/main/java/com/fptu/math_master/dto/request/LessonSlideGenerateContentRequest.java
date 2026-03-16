@@ -16,10 +16,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class LessonSlideGenerateContentRequest {
 
-  @NotNull
-  @Min(1)
-  @Max(12)
-  private Integer gradeLevel;
+
+  @NotNull private UUID schoolGradeId;
 
   @NotNull private UUID subjectId;
 

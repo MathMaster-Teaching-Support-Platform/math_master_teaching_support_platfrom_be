@@ -1,5 +1,6 @@
 package com.fptu.math_master.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.LessonSlideConfirmContentRequest;
@@ -13,6 +14,7 @@ import com.fptu.math_master.dto.response.LessonSlideJsonItemResponse;
 import com.fptu.math_master.dto.response.SlideTemplateResponse;
 import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.entity.Lesson;
+import com.fptu.math_master.entity.SchoolGrade;
 import com.fptu.math_master.entity.SlideTemplate;
 import com.fptu.math_master.entity.Subject;
 import com.fptu.math_master.exception.AppException;
@@ -22,6 +24,7 @@ import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SlideTemplateRepository;
 import com.fptu.math_master.repository.SubjectRepository;
+import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.LessonSlideService;
 import com.fptu.math_master.util.SecurityUtils;
 import io.minio.BucketExistsArgs;
@@ -70,6 +73,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   SlideTemplateRepository slideTemplateRepository;
   MinioClient minioClient;
   MinioProperties minioProperties;
+  GeminiService geminiService;
+  ObjectMapper objectMapper;
 
   @Override
   @Transactional(readOnly = true)
@@ -77,10 +82,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       LessonSlideGenerateContentRequest request) {
     validateTeacherRole();
 
-    boolean gradeExists = schoolGradeRepository.existsByGradeLevelAndIsActiveTrue(request.getGradeLevel());
-    if (!gradeExists) {
-      throw new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND);
-    }
+    SchoolGrade requestedGrade = resolveRequestedGrade(request);
 
     Subject subject =
         subjectRepository.findById(request.getSubjectId()).orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
@@ -89,7 +91,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
 
     if (subject.getSchoolGrade() == null
-        || !subject.getSchoolGrade().getGradeLevel().equals(request.getGradeLevel())
+        || !subject.getSchoolGrade().getId().equals(requestedGrade.getId())
         || Boolean.FALSE.equals(subject.getSchoolGrade().getIsActive())
         || subject.getSchoolGrade().getDeletedAt() != null) {
       throw new AppException(ErrorCode.INVALID_SUBJECT);
@@ -115,7 +117,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
 
     int slideCount = request.getSlideCount() == null ? 10 : request.getSlideCount();
-    DeckSections deckSections = buildDeckSections(lesson, request.getAdditionalPrompt());
+    DeckSections deckSections = buildDeckSectionsWithAi(lesson, request.getAdditionalPrompt());
     List<LessonSlideJsonItemResponse> slides = buildPreviewSlides(deckSections, slideCount);
 
     return LessonSlideGeneratedContentResponse.builder()
@@ -127,6 +129,17 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         .slides(slides)
         .additionalPrompt(request.getAdditionalPrompt())
         .build();
+  }
+
+  private SchoolGrade resolveRequestedGrade(LessonSlideGenerateContentRequest request) {
+    SchoolGrade grade =
+        schoolGradeRepository
+            .findByIdAndNotDeleted(request.getSchoolGradeId())
+            .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+    if (Boolean.FALSE.equals(grade.getIsActive())) {
+      throw new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND);
+    }
+    return grade;
   }
 
   @Override
@@ -588,6 +601,147 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         lessonContent);
   }
 
+  private DeckSections buildDeckSectionsWithAi(Lesson lesson, String additionalPrompt) {
+    DeckSections fallback = buildDeckSections(lesson, additionalPrompt);
+
+    try {
+      String prompt = buildSlideDeckPrompt(lesson, additionalPrompt);
+      String aiResponse = geminiService.sendMessage(prompt);
+      AiDeckSections aiDeck = parseAiDeckSections(aiResponse);
+      if (aiDeck == null) {
+        return fallback;
+      }
+
+      String aiSummary = nonBlankOrDefault(aiDeck.lessonSummary, fallback.lessonSummary());
+      String aiObjectives =
+          nonBlankOrDefault(aiDeck.learningObjectives, fallback.learningObjectives());
+      String aiOpening = nonBlankOrDefault(aiDeck.opening, fallback.opening());
+      String aiMainPart1 = nonBlankOrDefault(aiDeck.mainPart1, fallback.mainPart1());
+      String aiMainPart2 = nonBlankOrDefault(aiDeck.mainPart2, fallback.mainPart2());
+      String aiMainPart3 = nonBlankOrDefault(aiDeck.mainPart3, fallback.mainPart3());
+      String aiExample = nonBlankOrDefault(aiDeck.examplePart, fallback.examplePart());
+      String aiPractice = nonBlankOrDefault(aiDeck.practicePart, fallback.practicePart());
+      String aiClosing = nonBlankOrDefault(aiDeck.closingSummary, fallback.closingSummary());
+
+      String aiFullContent =
+          joinSections(
+              aiMainPart1,
+              aiMainPart2,
+              aiMainPart3,
+              aiExample,
+              aiPractice,
+              aiClosing,
+              nonBlankOrDefault(aiDeck.additionalNotes, ""));
+
+      return new DeckSections(
+          safe(lesson.getTitle()),
+          aiSummary,
+          aiSummary,
+          aiObjectives,
+          aiOpening,
+          aiMainPart1,
+          aiMainPart2,
+          aiMainPart3,
+          aiExample,
+          aiPractice,
+          aiClosing,
+          nonBlankOrDefault(aiFullContent, fallback.fullLessonContent()));
+    } catch (Exception ex) {
+      log.warn("Gemini slide content generation failed, fallback to lesson data", ex);
+      return fallback;
+    }
+  }
+
+  private AiDeckSections parseAiDeckSections(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+
+    try {
+      String cleaned = raw.trim();
+      if (cleaned.startsWith("```json")) {
+        cleaned = cleaned.substring(7);
+      } else if (cleaned.startsWith("```")) {
+        cleaned = cleaned.substring(3);
+      }
+      if (cleaned.endsWith("```")) {
+        cleaned = cleaned.substring(0, cleaned.length() - 3);
+      }
+      cleaned = cleaned.trim();
+
+      int start = cleaned.indexOf('{');
+      int end = cleaned.lastIndexOf('}');
+      if (start >= 0 && end > start) {
+        cleaned = cleaned.substring(start, end + 1);
+      }
+
+      return objectMapper.readValue(cleaned, AiDeckSections.class);
+    } catch (Exception ex) {
+      log.warn("Failed to parse AI deck sections response", ex);
+      return null;
+    }
+  }
+
+  private String buildSlideDeckPrompt(Lesson lesson, String additionalPrompt) {
+    String lessonTitle = safe(lesson.getTitle());
+    String lessonContent = safe(lesson.getLessonContent());
+    String lessonSummary = safe(lesson.getSummary());
+    String learningObjectives = safe(lesson.getLearningObjectives());
+    String opening = safe(additionalPrompt);
+
+    return """
+        Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
+        Hãy soạn nội dung trình chiếu đầy đủ cho bài học theo cấu trúc 10 slide.
+
+        THÔNG TIN ĐẦU VÀO:
+        - lessonTitle: %s
+        - existingSummary: %s
+        - existingLearningObjectives: %s
+        - additionalPrompt: %s
+        - rawLessonContent:
+        %s
+
+        YÊU CẦU:
+        - Viết bằng tiếng Việt có dấu.
+        - Nội dung phải cụ thể, không lặp lại cùng một câu giữa các phần.
+        - Mỗi mục mainPart1/mainPart2/mainPart3/examplePart/practicePart cần có nhiều ý (dạng gạch đầu dòng ngắn, tách dòng bằng ký tự xuống dòng \n).
+        - closingSummary phải tóm tắt được kiến thức trọng tâm và nhấn mạnh cách áp dụng.
+        - Không thêm markdown, không thêm giải thích ngoài JSON.
+
+        Trả về CHI DUY NHAT mot JSON object dung schema sau:
+        {
+          "lessonSummary": "...",
+          "learningObjectives": "...",
+          "opening": "...",
+          "mainPart1": "...",
+          "mainPart2": "...",
+          "mainPart3": "...",
+          "examplePart": "...",
+          "practicePart": "...",
+          "closingSummary": "...",
+          "additionalNotes": "..."
+        }
+        """
+        .formatted(lessonTitle, lessonSummary, learningObjectives, opening, lessonContent);
+  }
+
+  private String nonBlankOrDefault(String value, String fallback) {
+    if (value == null || value.isBlank()) {
+      return safe(fallback);
+    }
+    return value.trim();
+  }
+
+  private String joinSections(String... sections) {
+    List<String> lines = new ArrayList<>();
+    for (String section : sections) {
+      if (section != null && !section.isBlank()) {
+        lines.add(section.trim());
+      }
+    }
+    return String.join("\n\n", lines);
+  }
+
   private List<String> splitIntoFiveChunks(String content) {
     List<String> paragraphs = new ArrayList<>();
     if (content != null && !content.isBlank()) {
@@ -641,6 +795,19 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       String practicePart,
       String closingSummary,
       String fullLessonContent) {}
+
+  private static class AiDeckSections {
+    public String lessonSummary;
+    public String learningObjectives;
+    public String opening;
+    public String mainPart1;
+    public String mainPart2;
+    public String mainPart3;
+    public String examplePart;
+    public String practicePart;
+    public String closingSummary;
+    public String additionalNotes;
+  }
 
   private void ensureTemplateBucketExists() {
     try {
