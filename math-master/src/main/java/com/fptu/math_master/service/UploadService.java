@@ -21,6 +21,14 @@ public interface UploadService {
   String uploadFilesAsZip(java.util.List<MultipartFile> files, String directory, String zipName);
 
   /**
+   * Get a pre-signed URL for downloading a file
+   * @param key Path/Key to the file
+   * @param bucketName The bucket containing the file
+   * @return A pre-signed URL valid for a short period
+   */
+  String getPresignedUrl(String key, String bucketName);
+
+  /**
    * Delete a file from Minio
    * @param filePath Path/Key to the file
    */

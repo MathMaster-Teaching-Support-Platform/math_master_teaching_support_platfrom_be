@@ -39,7 +39,7 @@ public class MinioUploadServiceImpl implements UploadService {
   @Override
   public String uploadFilesAsZip(List<MultipartFile> files, String directory, String zipName) {
     String bucketName = minioProperties.getVerificationBucket();
-    
+
     try {
       ensureBucketExists(bucketName);
 
@@ -48,7 +48,7 @@ public class MinioUploadServiceImpl implements UploadService {
       try (ZipOutputStream zos = new ZipOutputStream(baos)) {
         for (MultipartFile file : files) {
           if (file.isEmpty()) continue;
-          
+
           String fileName = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()));
           ZipEntry entry = new ZipEntry(fileName);
           zos.putNextEntry(entry);
@@ -104,13 +104,29 @@ public class MinioUploadServiceImpl implements UploadService {
               .build());
 
       log.info("File uploaded successfully to Minio: {}/{}", bucketName, objectName);
-      
+
       // Return the object path (bucket/directory/filename) or just directory/filename
       // For now, let's return the full path that can be used to construct a link or used in delete
       return objectName;
     } catch (Exception e) {
       log.error("Error uploading file to Minio", e);
       throw new RuntimeException("Could not upload file to Minio", e);
+    }
+  }
+
+  @Override
+  public String getPresignedUrl(String key, String bucketName) {
+    try {
+      return minioClient.getPresignedObjectUrl(
+          io.minio.GetPresignedObjectUrlArgs.builder()
+              .method(io.minio.http.Method.GET)
+              .bucket(bucketName)
+              .object(key)
+              .expiry(60 * 60) // 1 hour
+              .build());
+    } catch (Exception e) {
+      log.error("Error generating pre-signed URL for Minio: {}/{}", bucketName, key, e);
+      throw new RuntimeException("Could not generate download URL", e);
     }
   }
 

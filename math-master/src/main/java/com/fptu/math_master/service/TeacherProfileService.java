@@ -76,6 +76,14 @@ public interface TeacherProfileService {
   long countPendingProfiles();
 
   /**
+   * Get a pre-signed download URL for the teacher's verification document
+   *
+   * @param profileId Profile ID
+   * @return Pre-signed URL string
+   */
+  String getDownloadUrl(UUID profileId);
+
+  /**
    * Delete profile (only if PENDING or REJECTED)
    *
    * @param userId Current user ID

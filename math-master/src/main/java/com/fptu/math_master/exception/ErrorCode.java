@@ -221,6 +221,7 @@ public enum ErrorCode {
   MATRIX_ROW_QUESTION_TYPE_REQUIRED(
       1127, "questionTypeName is required when templateId is not provided", HttpStatus.BAD_REQUEST),
   SCHOOL_GRADE_NOT_FOUND(1128, "School grade not found", HttpStatus.NOT_FOUND),
+  DOCUMENT_NOT_FOUND(1129, "Document not found", HttpStatus.NOT_FOUND),
   SCHOOL_GRADE_ALREADY_EXISTS(1129, "School grade already exists", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {

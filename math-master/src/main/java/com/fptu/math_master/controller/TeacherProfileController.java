@@ -125,6 +125,15 @@ public class TeacherProfileController {
     return ApiResponse.<Long>builder().result(teacherProfileService.countPendingProfiles()).build();
   }
 
+  @Operation(
+      summary = "Get download URL for verification document",
+      description = "Admin gets a pre-signed URL to download the ZIP file")
+  @GetMapping("/{profileId}/download")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<String> getDownloadUrl(@PathVariable UUID profileId) {
+    return ApiResponse.<String>builder().result(teacherProfileService.getDownloadUrl(profileId)).build();
+  }
+
   private UUID getCurrentUserId() {
     var auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth

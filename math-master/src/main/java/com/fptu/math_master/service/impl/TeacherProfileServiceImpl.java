@@ -1,5 +1,6 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.ProfileReviewRequest;
 import com.fptu.math_master.dto.request.TeacherProfileRequest;
@@ -39,6 +40,8 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   UserRepository userRepository;
   RoleRepository roleRepository;
   UploadService uploadService;
+  MinioProperties minioProperties;
+  com.fptu.math_master.service.EmailService emailService;
 
   @Override
   @Transactional
@@ -191,6 +194,16 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     profile = teacherProfileRepository.save(profile);
     log.info("Profile {} reviewed with status {}", profileId, request.getStatus());
 
+    // Send email notification to teacher
+    String teacherEmail = profile.getUser().getEmail();
+    String teacherName = profile.getUser().getFullName();
+    
+    if (request.getStatus() == ProfileStatus.APPROVED) {
+        emailService.sendTeacherApprovalEmail(teacherEmail, teacherName);
+    } else if (request.getStatus() == ProfileStatus.REJECTED) {
+        emailService.sendTeacherRejectionEmail(teacherEmail, teacherName, request.getAdminComment());
+    }
+
     return mapToResponse(profile);
   }
 
@@ -214,6 +227,21 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
     teacherProfileRepository.delete(profile);
     log.info("Profile deleted for user {}", userId);
+  }
+
+  @Override
+  public String getDownloadUrl(UUID profileId) {
+    TeacherProfile profile =
+        teacherProfileRepository
+            .findById(profileId)
+            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+
+    if (profile.getVerificationDocumentKey() == null) {
+      throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
+    }
+
+    return uploadService.getPresignedUrl(
+        profile.getVerificationDocumentKey(), minioProperties.getVerificationBucket());
   }
 
   private TeacherProfileResponse mapToResponse(TeacherProfile profile) {
