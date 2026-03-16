@@ -21,11 +21,7 @@ public interface LessonSlideService {
   SlideTemplateResponse uploadTemplate(String name, String description, MultipartFile file);
 
   SlideTemplateResponse updateTemplate(
-      UUID templateId,
-      String name,
-      String description,
-      Boolean active,
-      MultipartFile file);
+      UUID templateId, String name, String description, Boolean active, MultipartFile file);
 
   List<SlideTemplateResponse> getTemplates(boolean activeOnly);
 

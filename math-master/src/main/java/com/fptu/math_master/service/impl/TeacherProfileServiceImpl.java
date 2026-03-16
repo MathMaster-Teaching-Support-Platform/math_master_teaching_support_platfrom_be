@@ -42,8 +42,10 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
   @Override
   @Transactional
-  public TeacherProfileResponse submitProfile(TeacherProfileRequest request, MultipartFile file, UUID userId) {
-    log.info("User {} submitting teacher profile with file: {}", userId, file.getOriginalFilename());
+  public TeacherProfileResponse submitProfile(
+      TeacherProfileRequest request, MultipartFile file, UUID userId) {
+    log.info(
+        "User {} submitting teacher profile with file: {}", userId, file.getOriginalFilename());
 
     // Check if user exists
     User user =

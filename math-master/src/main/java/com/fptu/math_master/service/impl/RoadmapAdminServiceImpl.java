@@ -77,7 +77,9 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   public Page<RoadmapSummaryResponse> getAllRoadmaps(String name, Pageable pageable) {
     String normalizedName = name == null ? null : name.trim();
 
-    return roadmapRepository.findAllForAdminWithStudentNameSearch(normalizedName, pageable).map(this::mapToSummaryResponse);
+    return roadmapRepository
+        .findAllForAdminWithStudentNameSearch(normalizedName, pageable)
+        .map(this::mapToSummaryResponse);
   }
 
   @Override
@@ -192,7 +194,8 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
-    placementQuestionMappingRepository.deleteByPlacementAssessmentId(request.getPlacementAssessmentId());
+    placementQuestionMappingRepository.deleteByPlacementAssessmentId(
+        request.getPlacementAssessmentId());
 
     for (PlacementQuestionMappingRequest mappingRequest : request.getMappings()) {
       if (questionRepository.findById(mappingRequest.getQuestionId()).isEmpty()) {

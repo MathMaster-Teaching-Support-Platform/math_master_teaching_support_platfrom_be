@@ -6,5 +6,6 @@ import java.util.UUID;
 
 public interface PlacementTestService {
 
-  StudentRoadmapProgressResponse submitPlacementTest(UUID studentId, SubmitPlacementTestRequest request);
+  StudentRoadmapProgressResponse submitPlacementTest(
+      UUID studentId, SubmitPlacementTestRequest request);
 }

@@ -44,7 +44,7 @@ public class ChapterController {
   @Operation(
       summary = "Create a chapter",
       description =
-        "Creates a new chapter inside a subject. orderIndex is auto-assigned if omitted.")
+          "Creates a new chapter inside a subject. orderIndex is auto-assigned if omitted.")
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")

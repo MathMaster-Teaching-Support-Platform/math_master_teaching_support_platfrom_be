@@ -7,9 +7,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface PlacementQuestionMappingRepository extends JpaRepository<PlacementQuestionMapping, UUID> {
+public interface PlacementQuestionMappingRepository
+    extends JpaRepository<PlacementQuestionMapping, UUID> {
 
-  List<PlacementQuestionMapping> findByPlacementAssessmentIdOrderByOrderIndex(UUID placementAssessmentId);
+  List<PlacementQuestionMapping> findByPlacementAssessmentIdOrderByOrderIndex(
+      UUID placementAssessmentId);
 
   void deleteByPlacementAssessmentId(UUID placementAssessmentId);
 }

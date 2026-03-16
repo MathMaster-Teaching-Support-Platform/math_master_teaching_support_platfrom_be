@@ -27,7 +27,9 @@ import org.hibernate.annotations.Nationalized;
 @Table(
     name = "school_grades",
     uniqueConstraints = {
-      @UniqueConstraint(name = "uq_school_grades_level", columnNames = {"grade_level"})
+      @UniqueConstraint(
+          name = "uq_school_grades_level",
+          columnNames = {"grade_level"})
     },
     indexes = {
       @Index(name = "idx_school_grades_level", columnList = "grade_level"),

@@ -11,5 +11,6 @@ public interface RoadmapProgressService {
 
   StudentRoadmapProgressResponse getRoadmapProgress(UUID studentId, UUID roadmapId);
 
-  StudentRoadmapProgressResponse submitTopicAssessment(UUID studentId, SubmitTopicAssessmentRequest request);
+  StudentRoadmapProgressResponse submitTopicAssessment(
+      UUID studentId, SubmitTopicAssessmentRequest request);
 }

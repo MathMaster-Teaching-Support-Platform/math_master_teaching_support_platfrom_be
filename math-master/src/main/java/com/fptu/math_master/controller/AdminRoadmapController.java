@@ -27,8 +27,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -43,7 +43,9 @@ public class AdminRoadmapController {
 
   @GetMapping
   @PreAuthorize("hasRole('ADMIN')")
-  @Operation(summary = "Get all roadmaps", description = "Get all roadmaps with pagination and optional student name search")
+  @Operation(
+      summary = "Get all roadmaps",
+      description = "Get all roadmaps with pagination and optional student name search")
   public ApiResponse<Page<RoadmapSummaryResponse>> getAllRoadmaps(
       @RequestParam(required = false) String name,
       @RequestParam(defaultValue = "0") int page,
@@ -90,7 +92,10 @@ public class AdminRoadmapController {
   @Operation(summary = "Soft delete roadmap", description = "Archive roadmap via soft delete")
   public ApiResponse<String> softDeleteRoadmap(@PathVariable UUID id) {
     roadmapAdminService.softDeleteRoadmap(id);
-    return ApiResponse.<String>builder().message("Roadmap archived successfully").result("OK").build();
+    return ApiResponse.<String>builder()
+        .message("Roadmap archived successfully")
+        .result("OK")
+        .build();
   }
 
   @PostMapping("/{id}/topics")

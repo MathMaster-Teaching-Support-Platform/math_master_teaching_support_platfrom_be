@@ -54,7 +54,8 @@ public class PlacementTestServiceImpl implements PlacementTestService {
     }
 
     List<PlacementQuestionMapping> mappings =
-        mappingRepository.findByPlacementAssessmentIdOrderByOrderIndex(submission.getAssessmentId());
+        mappingRepository.findByPlacementAssessmentIdOrderByOrderIndex(
+            submission.getAssessmentId());
 
     if (mappings.isEmpty()) {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
@@ -79,7 +80,8 @@ public class PlacementTestServiceImpl implements PlacementTestService {
       }
     }
 
-    List<RoadmapTopic> topics = topicRepository.findByRoadmapIdOrderBySequenceOrder(request.getRoadmapId());
+    List<RoadmapTopic> topics =
+        topicRepository.findByRoadmapIdOrderBySequenceOrder(request.getRoadmapId());
     if (topics.isEmpty()) {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }

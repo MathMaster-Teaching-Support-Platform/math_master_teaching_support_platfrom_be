@@ -15,8 +15,7 @@ public interface SlideTemplateRepository extends JpaRepository<SlideTemplate, UU
   @Query("SELECT st FROM SlideTemplate st WHERE st.id = :id AND st.deletedAt IS NULL")
   Optional<SlideTemplate> findByIdAndNotDeleted(@Param("id") UUID id);
 
-  @Query(
-      "SELECT st FROM SlideTemplate st WHERE st.deletedAt IS NULL ORDER BY st.createdAt DESC")
+  @Query("SELECT st FROM SlideTemplate st WHERE st.deletedAt IS NULL ORDER BY st.createdAt DESC")
   List<SlideTemplate> findAllNotDeleted();
 
   @Query(

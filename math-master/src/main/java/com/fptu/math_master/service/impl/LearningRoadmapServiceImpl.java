@@ -476,8 +476,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .priority(topic.getPriority())
         .progressPercentage(topic.getProgressPercentage())
         .estimatedHours(topic.getEstimatedHours())
-      .topicAssessmentId(topic.getTopicAssessmentId())
-      .passThresholdPercentage(topic.getPassThresholdPercentage())
+        .topicAssessmentId(topic.getTopicAssessmentId())
+        .passThresholdPercentage(topic.getPassThresholdPercentage())
         .startedAt(topic.getStartedAt())
         .completedAt(topic.getCompletedAt())
         .questionTemplates(questionTemplateResponses)
@@ -534,8 +534,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .isRequired(material.getIsRequired())
         .lessonId(material.getLessonId())
         .questionId(material.getQuestionId())
-      .assessmentId(material.getAssessmentId())
-      .mindmapId(material.getMindmapId())
+        .assessmentId(material.getAssessmentId())
+        .mindmapId(material.getMindmapId())
         .chapterId(material.getChapterId())
         .build();
   }

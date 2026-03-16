@@ -39,7 +39,9 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
-@Tag(name = "Lesson Slides", description = "Teacher workflow for AI lesson content and PPTX generation")
+@Tag(
+    name = "Lesson Slides",
+    description = "Teacher workflow for AI lesson content and PPTX generation")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("hasRole('TEACHER')")
 public class LessonSlideController {
@@ -122,20 +124,19 @@ public class LessonSlideController {
         .body(fileData.content());
   }
 
-        @PostMapping("/generate-pptx-from-json")
-        @Operation(summary = "Generate PPTX from confirmed JSON slide structure")
-        public ResponseEntity<byte[]> generatePptxFromJson(
-        @Valid @RequestBody LessonSlideGeneratePptxFromJsonRequest request) {
-          LessonSlideService.BinaryFileData fileData = lessonSlideService.generatePptxFromJson(request);
-          return ResponseEntity.ok()
-          .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(fileData.fileName()))
-          .contentType(MediaType.parseMediaType(fileData.contentType()))
-          .body(fileData.content());
-        }
+  @PostMapping("/generate-pptx-from-json")
+  @Operation(summary = "Generate PPTX from confirmed JSON slide structure")
+  public ResponseEntity<byte[]> generatePptxFromJson(
+      @Valid @RequestBody LessonSlideGeneratePptxFromJsonRequest request) {
+    LessonSlideService.BinaryFileData fileData = lessonSlideService.generatePptxFromJson(request);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(fileData.fileName()))
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+  }
 
   private String contentDisposition(String fileName) {
-    return "attachment; filename*=UTF-8''" +
-        java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8)
-            .replace("+", "%20");
+    return "attachment; filename*=UTF-8''"
+        + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
   }
 }

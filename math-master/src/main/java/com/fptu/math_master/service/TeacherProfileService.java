@@ -7,7 +7,6 @@ import com.fptu.math_master.enums.ProfileStatus;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
 import org.springframework.web.multipart.MultipartFile;
 
 public interface TeacherProfileService {
@@ -20,7 +19,8 @@ public interface TeacherProfileService {
    * @param userId Current user ID
    * @return Created profile response
    */
-  TeacherProfileResponse submitProfile(TeacherProfileRequest request, MultipartFile file, UUID userId);
+  TeacherProfileResponse submitProfile(
+      TeacherProfileRequest request, MultipartFile file, UUID userId);
 
   /**
    * Update pending teacher profile

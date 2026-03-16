@@ -365,7 +365,7 @@ public class ApplicationInitLogicImpl implements ApplicationInitLogic {
         .fullName(userConfig.getFullname())
         .email(userConfig.getEmail())
         .status(Status.ACTIVE)
-      .roles(roles)
+        .roles(roles)
         .build();
   }
 
