@@ -1,17 +1,20 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.CreateAdminRoadmapRequest;
-import com.fptu.math_master.dto.request.CreatePlacementTestRequest;
+import com.fptu.math_master.dto.request.CreateRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapTopicRequest;
+import com.fptu.math_master.dto.request.LinkTopicMaterialsRequest;
 import com.fptu.math_master.dto.request.UpdateAdminRoadmapRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.RoadmapDetailResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
 import com.fptu.math_master.dto.response.RoadmapTopicResponse;
+import com.fptu.math_master.dto.response.TopicMaterialResponse;
 import com.fptu.math_master.service.RoadmapAdminService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -67,7 +70,9 @@ public class AdminRoadmapController {
 
   @PostMapping
   @PreAuthorize("hasRole('ADMIN')")
-  @Operation(summary = "Create roadmap", description = "Create admin-managed roadmap for a student")
+  @Operation(
+      summary = "Create roadmap",
+      description = "Create admin-managed general roadmap template for all students")
   public ApiResponse<RoadmapDetailResponse> createRoadmap(
       @Valid @RequestBody CreateAdminRoadmapRequest request) {
     return ApiResponse.<RoadmapDetailResponse>builder()
@@ -109,17 +114,47 @@ public class AdminRoadmapController {
         .build();
   }
 
-  @PostMapping("/placement-tests")
+  @PostMapping("/{roadmapId}/topics/{topicId}/materials/link-by-question")
   @PreAuthorize("hasRole('ADMIN')")
   @Operation(
-      summary = "Configure placement test mappings",
-      description = "Bind placement assessment questions to roadmap topics")
-  public ApiResponse<String> createPlacementTest(
-      @Valid @RequestBody CreatePlacementTestRequest request) {
-    roadmapAdminService.createPlacementTest(request);
-    return ApiResponse.<String>builder()
-        .message("Placement test mappings configured successfully")
-        .result("OK")
+      summary = "Link topic materials by question ID",
+      description =
+          "Link lesson slides, question, mindmaps, and documents to a topic based on one question ID and admin config")
+  public ApiResponse<List<TopicMaterialResponse>> linkTopicMaterialsByQuestion(
+      @PathVariable UUID roadmapId,
+      @PathVariable UUID topicId,
+      @Valid @RequestBody LinkTopicMaterialsRequest request) {
+    return ApiResponse.<List<TopicMaterialResponse>>builder()
+        .message("Topic materials linked successfully")
+        .result(roadmapAdminService.linkTopicMaterials(roadmapId, topicId, request))
         .build();
   }
+
+  @GetMapping("/topics/{topicId}/materials/by-question/{questionId}")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(
+      summary = "Get topic materials by question ID",
+      description = "Get materials already linked to a topic for a specific question ID")
+  public ApiResponse<List<TopicMaterialResponse>> getTopicMaterialsByQuestion(
+      @PathVariable UUID topicId, @PathVariable UUID questionId) {
+    return ApiResponse.<List<TopicMaterialResponse>>builder()
+        .result(roadmapAdminService.getTopicMaterialsByQuestion(topicId, questionId))
+        .build();
+  }
+
+    @PostMapping("/{roadmapId}/entry-test")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+            summary = "Configure roadmap entry test",
+            description =
+                    "Configure one entry test assessment and question-to-topic mapping to detect student start topic")
+    public ApiResponse<String> configureRoadmapEntryTest(
+            @PathVariable UUID roadmapId, @Valid @RequestBody CreateRoadmapEntryTestRequest request) {
+        roadmapAdminService.configureEntryTest(roadmapId, request);
+        return ApiResponse.<String>builder()
+                .message("Roadmap entry test configured successfully")
+                .result("OK")
+                .build();
+    }
+
 }

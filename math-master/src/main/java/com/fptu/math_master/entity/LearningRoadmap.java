@@ -59,11 +59,19 @@ import lombok.Setter;
     })
 public class LearningRoadmap extends BaseEntity {
 
-  @Column(name = "student_id", nullable = false)
+  @Column(name = "student_id", nullable = true)
   private UUID studentId;
 
   @Column(name = "teacher_id")
   private UUID teacherId;
+
+  /**
+   * name - Display name for the roadmap (used for admin templates or custom naming).
+   * Example: "Toán học lớp 6 cho người mới bắt đầu"
+   */
+  @Size(max = 255)
+  @Column(name = "name", length = 255)
+  private String name;
 
   /**
    * subject

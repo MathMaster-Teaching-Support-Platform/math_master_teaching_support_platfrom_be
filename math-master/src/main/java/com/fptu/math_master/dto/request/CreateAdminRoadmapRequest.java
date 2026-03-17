@@ -1,29 +1,37 @@
 package com.fptu.math_master.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.FieldDefaults;
 
+/**
+ * Request to create a general roadmap template for all students
+ * Example: "Toán học lớp 6 cho người mới bắt đầu"
+ * Admin only creates the template, students browse and choose it
+ */
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class CreateAdminRoadmapRequest {
 
-  @NotNull(message = "Student ID is required")
-  private UUID studentId;
+  @NotBlank(message = "Roadmap name is required (e.g., 'Toán học lớp 6 cho người mới bắt đầu')")
+  String name;
 
   @NotBlank(message = "Subject is required")
-  private String subject;
+  String subject;
 
   @NotBlank(message = "Grade level is required")
-  private String gradeLevel;
+  String gradeLevel;
 
-  private String description;
+  @NotBlank(message = "Description is required")
+  String description;
 
-  private Integer estimatedCompletionDays;
+  @Builder.Default
+  Integer estimatedDays = 30;
 }

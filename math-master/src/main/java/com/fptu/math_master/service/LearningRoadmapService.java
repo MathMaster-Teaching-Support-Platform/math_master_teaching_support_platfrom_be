@@ -51,11 +51,6 @@ public interface LearningRoadmapService {
    */
   List<RoadmapSummaryResponse> getStudentRoadmapsList(UUID studentId);
 
-  /**
-   * Get roadmaps assigned by a teacher
-   */
-  List<RoadmapSummaryResponse> getTeacherAssignedRoadmaps(UUID teacherId);
-
   // ============================================================================
   // PROGRESS TRACKING
   // ============================================================================
@@ -110,23 +105,6 @@ public interface LearningRoadmapService {
    * Get learning materials by resource type
    */
   List<TopicMaterialResponse> getMaterialsByType(UUID topicId, String resourceType);
-
-  /**
-   * Link learning material (lesson/question) to a topic
-   *
-   * <p>Used when:
-   * - Generating roadmap and matching resources
-   * - Teacher customizing roadmap with additional materials
-   *
-   * @param topicId target topic
-   * @param lessonId lesson to link (optional)
-   * @param questionId question to link (optional)
-   * @param resourceType type of resource
-   * @param isRequired whether material is mandatory
-   * @return created material response
-   */
-  TopicMaterialResponse linkMaterialToTopic(
-      UUID topicId, UUID lessonId, UUID questionId, String resourceType, Boolean isRequired);
 
   /**
    * Remove material from topic

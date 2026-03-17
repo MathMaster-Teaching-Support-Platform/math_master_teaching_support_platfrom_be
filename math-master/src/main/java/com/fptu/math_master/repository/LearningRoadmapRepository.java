@@ -84,4 +84,12 @@ public interface LearningRoadmapRepository extends JpaRepository<LearningRoadmap
           + ")")
   Page<LearningRoadmap> findAllForAdminWithStudentNameSearch(
       @Param("name") String name, Pageable pageable);
+
+  @Query(
+      "SELECT r FROM LearningRoadmap r "
+          + "WHERE r.deletedAt IS NULL "
+          + "AND r.generationType = com.fptu.math_master.enums.RoadmapGenerationType.ADMIN_TEMPLATE "
+          + "AND (:name IS NULL OR :name = '' OR LOWER(COALESCE(r.name, '')) LIKE LOWER(CONCAT('%', :name, '%'))) "
+          + "ORDER BY r.createdAt DESC")
+  Page<LearningRoadmap> findAdminTemplates(@Param("name") String name, Pageable pageable);
 }

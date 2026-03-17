@@ -11,10 +11,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SubmitPlacementTestRequest {
-
-  @NotNull(message = "Roadmap ID is required")
-  private UUID roadmapId;
+public class SubmitRoadmapEntryTestRequest {
 
   @NotNull(message = "Submission ID is required")
   private UUID submissionId;

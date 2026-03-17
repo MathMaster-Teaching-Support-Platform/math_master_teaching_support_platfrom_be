@@ -6,7 +6,6 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
@@ -26,22 +25,25 @@ import lombok.Setter;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
-    name = "placement_question_mappings",
+    name = "roadmap_entry_question_mappings",
     uniqueConstraints = {
       @UniqueConstraint(
-          name = "uq_placement_question_mappings",
-          columnNames = {"placement_assessment_id", "question_id"})
+          name = "uq_roadmap_entry_question",
+          columnNames = {"roadmap_id", "question_id"})
     },
     indexes = {
-      @Index(name = "idx_placement_mappings_assessment", columnList = "placement_assessment_id"),
-      @Index(name = "idx_placement_mappings_question", columnList = "question_id"),
-      @Index(name = "idx_placement_mappings_topic", columnList = "roadmap_topic_id"),
-      @Index(name = "idx_placement_mappings_order", columnList = "order_index")
+      @Index(name = "idx_roadmap_entry_roadmap", columnList = "roadmap_id"),
+      @Index(name = "idx_roadmap_entry_assessment", columnList = "assessment_id"),
+      @Index(name = "idx_roadmap_entry_question", columnList = "question_id"),
+      @Index(name = "idx_roadmap_entry_topic", columnList = "roadmap_topic_id")
     })
-public class PlacementQuestionMapping extends BaseEntity {
+public class RoadmapEntryQuestionMapping extends BaseEntity {
 
-  @Column(name = "placement_assessment_id", nullable = false)
-  private UUID placementAssessmentId;
+  @Column(name = "roadmap_id", nullable = false)
+  private UUID roadmapId;
+
+  @Column(name = "assessment_id", nullable = false)
+  private UUID assessmentId;
 
   @Column(name = "question_id", nullable = false)
   private UUID questionId;
@@ -49,15 +51,15 @@ public class PlacementQuestionMapping extends BaseEntity {
   @Column(name = "roadmap_topic_id", nullable = false)
   private UUID roadmapTopicId;
 
-  @Column(name = "weight", precision = 5, scale = 2, nullable = false)
-  private BigDecimal weight;
-
-  @Column(name = "order_index", nullable = false)
+  @Column(name = "order_index")
   private Integer orderIndex;
 
+  @Column(name = "weight", precision = 8, scale = 4)
+  private BigDecimal weight;
+
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "placement_assessment_id", insertable = false, updatable = false)
-  private Assessment placementAssessment;
+  @JoinColumn(name = "roadmap_id", insertable = false, updatable = false)
+  private LearningRoadmap roadmap;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "question_id", insertable = false, updatable = false)
@@ -67,9 +69,7 @@ public class PlacementQuestionMapping extends BaseEntity {
   @JoinColumn(name = "roadmap_topic_id", insertable = false, updatable = false)
   private RoadmapTopic roadmapTopic;
 
-  @PrePersist
-  public void prePersist() {
-    if (weight == null) weight = BigDecimal.ONE;
-    if (orderIndex == null) orderIndex = 1;
-  }
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "assessment_id", insertable = false, updatable = false)
+  private Assessment assessment;
 }
