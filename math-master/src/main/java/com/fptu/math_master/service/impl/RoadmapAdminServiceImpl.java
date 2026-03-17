@@ -15,6 +15,7 @@ import com.fptu.math_master.entity.Answer;
 import com.fptu.math_master.entity.LearningRoadmap;
 import com.fptu.math_master.entity.RoadmapEntryQuestionMapping;
 import com.fptu.math_master.entity.RoadmapTopic;
+import com.fptu.math_master.entity.Subject;
 import com.fptu.math_master.entity.Submission;
 import com.fptu.math_master.entity.TopicLearningMaterial;
 import com.fptu.math_master.entity.User;
@@ -31,6 +32,7 @@ import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.RoadmapEntryQuestionMappingRepository;
 import com.fptu.math_master.repository.RoadmapTopicRepository;
 import com.fptu.math_master.repository.SubmissionRepository;
+import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.repository.TopicLearningMaterialRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.LearningRoadmapService;
@@ -68,17 +70,21 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   TopicLearningMaterialRepository materialRepository;
   RoadmapEntryQuestionMappingRepository roadmapEntryQuestionMappingRepository;
   SubmissionRepository submissionRepository;
+  SubjectRepository subjectRepository;
   AnswerRepository answerRepository;
   UserRepository userRepository;
   LearningRoadmapService learningRoadmapService;
 
   @Override
   public RoadmapDetailResponse createRoadmap(CreateAdminRoadmapRequest request) {
+    Subject subject = resolveSubject(request.getSubjectId());
+
     LearningRoadmap roadmap =
         LearningRoadmap.builder()
             .name(request.getName())
-            .subject(request.getSubject())
-            .gradeLevel(request.getGradeLevel())
+            .subjectId(subject.getId())
+            .subject(subject.getName())
+            .gradeLevel(resolveGradeLevel(subject))
             .description(request.getDescription())
             .estimatedCompletionDays(request.getEstimatedDays())
             .generationType(RoadmapGenerationType.ADMIN_TEMPLATE)
@@ -126,11 +132,11 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
-    if (request.getSubject() != null && !request.getSubject().isBlank()) {
-      roadmap.setSubject(request.getSubject().trim());
-    }
-    if (request.getGradeLevel() != null && !request.getGradeLevel().isBlank()) {
-      roadmap.setGradeLevel(request.getGradeLevel().trim());
+    if (request.getSubjectId() != null) {
+      Subject subject = resolveSubject(request.getSubjectId());
+      roadmap.setSubjectId(subject.getId());
+      roadmap.setSubject(subject.getName());
+      roadmap.setGradeLevel(resolveGradeLevel(subject));
     }
     if (request.getDescription() != null) {
       roadmap.setDescription(request.getDescription());
@@ -382,6 +388,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .id(roadmap.getId())
       .name(roadmap.getName())
         .studentId(roadmap.getStudentId())
+        .subjectId(roadmap.getSubjectId())
         .studentName(studentName)
         .subject(roadmap.getSubject())
         .gradeLevel(roadmap.getGradeLevel())
@@ -407,5 +414,29 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .mindmapId(material.getMindmapId())
         .chapterId(material.getChapterId())
         .build();
+  }
+
+  private Subject resolveSubject(UUID subjectId) {
+    Subject subject =
+        subjectRepository
+            .findById(subjectId)
+            .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
+
+    if (subject.getDeletedAt() != null) {
+      throw new AppException(ErrorCode.SUBJECT_NOT_FOUND);
+    }
+
+    return subject;
+  }
+
+  private String resolveGradeLevel(Subject subject) {
+    if (subject.getSchoolGrade() == null
+        || subject.getSchoolGrade().getDeletedAt() != null
+        || subject.getSchoolGrade().getName() == null
+        || subject.getSchoolGrade().getName().isBlank()) {
+      throw new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND);
+    }
+
+    return subject.getSchoolGrade().getName().trim();
   }
 }

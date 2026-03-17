@@ -1,6 +1,8 @@
 package com.fptu.math_master.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,11 +25,8 @@ public class CreateAdminRoadmapRequest {
   @NotBlank(message = "Roadmap name is required (e.g., 'Toán học lớp 6 cho người mới bắt đầu')")
   String name;
 
-  @NotBlank(message = "Subject is required")
-  String subject;
-
-  @NotBlank(message = "Grade level is required")
-  String gradeLevel;
+  @NotNull(message = "Subject ID is required")
+  UUID subjectId;
 
   @NotBlank(message = "Description is required")
   String description;

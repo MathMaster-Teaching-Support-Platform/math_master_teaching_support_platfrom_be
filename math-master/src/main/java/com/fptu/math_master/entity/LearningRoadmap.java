@@ -53,6 +53,7 @@ import lombok.Setter;
     indexes = {
       @Index(name = "idx_roadmaps_student", columnList = "student_id"),
       @Index(name = "idx_roadmaps_student_subject", columnList = "student_id, subject"),
+      @Index(name = "idx_roadmaps_subject_id", columnList = "subject_id"),
       @Index(name = "idx_roadmaps_status", columnList = "status"),
       @Index(name = "idx_roadmaps_grade_level", columnList = "grade_level"),
       @Index(name = "idx_roadmaps_created_at", columnList = "created_at")
@@ -64,6 +65,9 @@ public class LearningRoadmap extends BaseEntity {
 
   @Column(name = "teacher_id")
   private UUID teacherId;
+
+  @Column(name = "subject_id")
+  private UUID subjectId;
 
   /**
    * name - Display name for the roadmap (used for admin templates or custom naming).
@@ -159,6 +163,10 @@ public class LearningRoadmap extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
   private User teacher;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "subject_id", insertable = false, updatable = false)
+  private Subject subjectRef;
 
   @OneToMany(
       mappedBy = "roadmap",

@@ -34,6 +34,9 @@ public class RoadmapDetailResponse {
   @Schema(description = "Teacher ID (if assigned by teacher)")
   private UUID teacherId;
 
+  @Schema(description = "Subject ID")
+  private UUID subjectId;
+
   @Schema(description = "Subject name")
   private String subject;
 
