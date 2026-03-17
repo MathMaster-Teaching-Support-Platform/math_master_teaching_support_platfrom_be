@@ -178,6 +178,7 @@ public class LearningRoadmap extends BaseEntity {
   @PrePersist
   @Override
   public void prePersist() {
+    super.prePersist();
     if (status == null) status = RoadmapStatus.GENERATED;
     if (progressPercentage == null) progressPercentage = java.math.BigDecimal.ZERO;
     if (completedTopicsCount == null) completedTopicsCount = 0;
