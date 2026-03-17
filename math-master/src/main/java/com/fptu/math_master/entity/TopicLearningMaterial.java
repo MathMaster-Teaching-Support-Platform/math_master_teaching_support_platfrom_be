@@ -114,7 +114,9 @@ public class TopicLearningMaterial extends BaseEntity {
   private Mindmap mindmap;
 
   @PrePersist
+  @Override
   public void prePersist() {
+    super.prePersist();
     if (isRequired == null) isRequired = true;
   }
 }

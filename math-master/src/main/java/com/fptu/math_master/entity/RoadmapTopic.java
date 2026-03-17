@@ -160,6 +160,7 @@ public class RoadmapTopic extends BaseEntity {
   @PrePersist
   @Override
   public void prePersist() {
+    super.prePersist();
     if (status == null) status = TopicStatus.NOT_STARTED;
     if (progressPercentage == null) progressPercentage = BigDecimal.ZERO;
     if (passThresholdPercentage == null) passThresholdPercentage = BigDecimal.valueOf(70);
