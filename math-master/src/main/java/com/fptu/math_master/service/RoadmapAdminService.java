@@ -2,7 +2,6 @@ package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.CreateAdminRoadmapRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapEntryTestRequest;
-import com.fptu.math_master.dto.request.LinkTopicMaterialsRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapTopicRequest;
 import com.fptu.math_master.dto.request.SubmitRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.UpdateAdminRoadmapRequest;
@@ -30,14 +29,9 @@ public interface RoadmapAdminService {
 
   RoadmapTopicResponse addTopic(UUID roadmapId, CreateRoadmapTopicRequest request);
 
-  List<TopicMaterialResponse> linkTopicMaterials(
-      UUID roadmapId, UUID topicId, LinkTopicMaterialsRequest request);
-
   List<TopicMaterialResponse> getTopicMaterials(UUID topicId);
 
   List<TopicMaterialResponse> getMaterialsByType(UUID topicId, String resourceType);
-
-  List<TopicMaterialResponse> getTopicMaterialsByQuestion(UUID topicId, UUID questionId);
 
   void configureEntryTest(UUID roadmapId, CreateRoadmapEntryTestRequest request);
 
