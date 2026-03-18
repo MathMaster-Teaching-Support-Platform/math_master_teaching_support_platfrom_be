@@ -2,10 +2,8 @@ package com.fptu.math_master.dto.request;
 
 import com.fptu.math_master.enums.Gender;
 import com.fptu.math_master.enums.Status;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.Past;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
+
 import java.time.LocalDate;
 import java.util.Set;
 import lombok.AccessLevel;
@@ -33,6 +31,7 @@ public class UserUpdateRequest {
   @Size(min = 2, max = 50, message = "Full name must be between 2 and 50 characters")
   String fullName;
 
+  @NotBlank(message = "Email is required")
   @Email(message = "Email must be valid")
   @Size(max = 50, message = "Email must not exceed 50 characters")
   String email;
