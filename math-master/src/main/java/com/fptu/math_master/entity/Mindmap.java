@@ -128,6 +128,7 @@ public class Mindmap extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (aiGenerated == null) aiGenerated = false;
     if (status == null) status = MindmapStatus.DRAFT;
   }

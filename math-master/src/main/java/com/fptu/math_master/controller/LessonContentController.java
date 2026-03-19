@@ -105,6 +105,15 @@ public class LessonContentController {
         .build();
   }
 
+  @GetMapping("/chapters/{chapterId}/lessons")
+  @Operation(summary = "List lessons of a chapter")
+  public ApiResponse<List<LessonResponse>> getLessonsByChapter(@PathVariable UUID chapterId) {
+    log.info("GET /lessons/chapters/{}/lessons", chapterId);
+    return ApiResponse.<List<LessonResponse>>builder()
+        .result(lessonService.getLessonsByChapterId(chapterId))
+        .build();
+  }
+
   // -----------------------------------------------------------------------
   // Delete
   // -----------------------------------------------------------------------

@@ -29,5 +29,7 @@ public interface SubjectRepository extends JpaRepository<Subject, UUID> {
       """)
   List<Subject> findActiveByGradeLevel(@Param("grade") Integer grade);
 
+  List<Subject> findBySchoolGradeIdAndIsActiveTrueOrderByName(UUID schoolGradeId);
+
   boolean existsByCode(String code);
 }

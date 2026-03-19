@@ -18,18 +18,22 @@ public interface LessonSlideService {
 
   LessonResponse confirmLessonContent(UUID lessonId, LessonSlideConfirmContentRequest request);
 
-  SlideTemplateResponse uploadTemplate(String name, String description, MultipartFile file);
+  SlideTemplateResponse uploadTemplate(
+      String name, String description, MultipartFile file, MultipartFile previewImage);
 
   SlideTemplateResponse updateTemplate(
       UUID templateId,
       String name,
       String description,
       Boolean active,
-      MultipartFile file);
+      MultipartFile file,
+      MultipartFile previewImage);
 
   List<SlideTemplateResponse> getTemplates(boolean activeOnly);
 
   BinaryFileData downloadTemplate(UUID templateId);
+
+  BinaryFileData downloadTemplatePreviewImage(UUID templateId);
 
   BinaryFileData generatePptx(LessonSlideGeneratePptxRequest request);
 

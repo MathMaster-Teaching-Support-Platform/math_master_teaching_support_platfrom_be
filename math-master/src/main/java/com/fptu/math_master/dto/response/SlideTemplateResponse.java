@@ -18,6 +18,7 @@ public class SlideTemplateResponse {
   private String description;
   private String originalFileName;
   private String contentType;
+  private String previewImage;
   private boolean active;
   private Instant createdAt;
   private Instant updatedAt;

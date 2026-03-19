@@ -17,6 +17,7 @@ spring:
 
     hikari:
       pool-name: HikariPool
+      auto-commit: false
       maximum-pool-size: 10
       minimum-idle: 2
       connection-timeout: 30000
