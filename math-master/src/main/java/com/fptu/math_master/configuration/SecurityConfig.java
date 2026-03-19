@@ -1,9 +1,7 @@
 package com.fptu.math_master.configuration;
 
 import java.util.Arrays;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,6 +18,10 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -30,15 +32,15 @@ public class SecurityConfig {
   CustomJwtDecoder customJwtDecoder;
 
   private static final String[] PUBLIC_POST_ENDPOINTS = {
-    "/auth/register",
-    "/auth/login",
-    "/auth/google",
-    "/auth/introspect",
-    "/auth/logout",
-    "/auth/refresh",
+    "/api/auth/register",
+    "/api/auth/login",
+    "/api/auth/google",
+    "/api/auth/introspect",
+    "/api/auth/logout",
+    "/api/auth/refresh",
     "/api/payment/webhook",
-    "/ai/chat",
-    "/question-templates/import-from-file",
+    "/api/ai/chat",
+    "/api/question-templates/import-from-file",
   };
 
   private static final String[] PUBLIC_GET_ENDPOINTS = {
@@ -46,8 +48,8 @@ public class SecurityConfig {
     "/actuator/health",
     "/actuator/info",
     "/actuator/mappings",
-    "/ai/test",
-    "/lessons/**",
+    "/api/ai/test",
+    "/api/lessons/**",
   };
 
   private static final String[] SWAGGER_WHITELIST = {
@@ -97,6 +99,7 @@ public class SecurityConfig {
         Arrays.asList(
             "http://localhost:5173",
             "http://localhost:3000",
+            "http://localhost:3001",
             "https://nhducminhqt.name.vn",
             "http://nhducminhqt.name.vn"));
 
