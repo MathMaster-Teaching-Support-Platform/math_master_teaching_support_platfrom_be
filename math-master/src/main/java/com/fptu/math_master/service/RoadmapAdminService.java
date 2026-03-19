@@ -5,6 +5,7 @@ import com.fptu.math_master.dto.request.CreateRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapTopicRequest;
 import com.fptu.math_master.dto.request.SubmitRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.UpdateAdminRoadmapRequest;
+import com.fptu.math_master.dto.request.UpdateRoadmapTopicRequest;
 import com.fptu.math_master.dto.response.RoadmapDetailResponse;
 import com.fptu.math_master.dto.response.RoadmapEntryTestResultResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
@@ -28,6 +29,10 @@ public interface RoadmapAdminService {
   void softDeleteRoadmap(UUID roadmapId);
 
   RoadmapTopicResponse addTopic(UUID roadmapId, CreateRoadmapTopicRequest request);
+
+  RoadmapTopicResponse updateTopic(UUID roadmapId, UUID topicId, UpdateRoadmapTopicRequest request);
+
+  void softDeleteTopic(UUID roadmapId, UUID topicId);
 
   List<TopicMaterialResponse> getTopicMaterials(UUID topicId);
 

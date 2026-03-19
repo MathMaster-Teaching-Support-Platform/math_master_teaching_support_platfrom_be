@@ -6,6 +6,7 @@ import com.fptu.math_master.dto.request.CreateRoadmapTopicRequest;
 import com.fptu.math_master.dto.request.RoadmapEntryQuestionMappingRequest;
 import com.fptu.math_master.dto.request.SubmitRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.UpdateAdminRoadmapRequest;
+import com.fptu.math_master.dto.request.UpdateRoadmapTopicRequest;
 import com.fptu.math_master.dto.response.RoadmapDetailResponse;
 import com.fptu.math_master.dto.response.RoadmapEntryTestResultResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
@@ -175,6 +176,10 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
             .findById(roadmapId)
             .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
+    if (roadmap.getDeletedAt() != null) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    }
+
     RoadmapTopic topic =
         RoadmapTopic.builder()
             .roadmapId(roadmapId)
@@ -196,52 +201,100 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
     topic = topicRepository.save(topic);
 
-    List<UUID> lessonIds = request.getLessonIds();
-    if (lessonIds != null && !lessonIds.isEmpty()) {
-      Set<UUID> uniqueLessonIds =
-          lessonIds.stream().filter(id -> id != null).collect(Collectors.toSet());
+    upsertTopicLessonMaterials(topic.getId(), request.getLessonIds());
 
-      long existingLessonCount =
-          lessonRepository.findAllById(uniqueLessonIds).stream().filter(l -> l.getDeletedAt() == null).count();
-      if (existingLessonCount != uniqueLessonIds.size()) {
-        throw new AppException(ErrorCode.LESSON_NOT_FOUND);
-      }
-
-      int sequenceOrder = 1;
-      List<TopicLearningMaterial> materials = new ArrayList<>();
-      for (UUID lessonId : lessonIds) {
-        if (lessonId == null) {
-          continue;
-        }
-
-        UUID chapterId =
-            lessonRepository
-                .findByIdAndNotDeleted(lessonId)
-                .map(lesson -> lesson.getChapterId())
-                .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
-
-        materials.add(
-            TopicLearningMaterial.builder()
-                .topicId(topic.getId())
-                .lessonId(lessonId)
-                .chapterId(chapterId)
-                .resourceType("LESSON")
-                .resourceTitle("Lesson")
-                .sequenceOrder(sequenceOrder++)
-                .isRequired(true)
-                .build());
-      }
-
-      if (!materials.isEmpty()) {
-        materialRepository.saveAll(materials);
-      }
-    }
-
-    long totalTopics = topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmapId).size();
+    long totalTopics = countActiveTopics(roadmapId);
     roadmap.setTotalTopicsCount((int) totalTopics);
     roadmapRepository.save(roadmap);
 
     return learningRoadmapService.getTopicDetails(topic.getId());
+  }
+
+  @Override
+  public RoadmapTopicResponse updateTopic(UUID roadmapId, UUID topicId, UpdateRoadmapTopicRequest request) {
+    LearningRoadmap roadmap =
+        roadmapRepository
+            .findById(roadmapId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+    if (roadmap.getDeletedAt() != null) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    }
+
+    RoadmapTopic topic =
+        topicRepository.findById(topicId).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+    if (topic.getDeletedAt() != null || !topic.getRoadmapId().equals(roadmapId)) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    }
+
+    if (request.getTitle() != null) {
+      topic.setTitle(request.getTitle());
+    }
+    if (request.getDescription() != null) {
+      topic.setDescription(request.getDescription());
+    }
+    if (request.getSequenceOrder() != null) {
+      topic.setSequenceOrder(request.getSequenceOrder());
+    }
+    if (request.getPriority() != null) {
+      topic.setPriority(request.getPriority());
+    }
+    if (request.getEstimatedHours() != null) {
+      topic.setEstimatedHours(request.getEstimatedHours());
+    }
+    if (request.getTopicAssessmentId() != null) {
+      topic.setTopicAssessmentId(request.getTopicAssessmentId());
+    }
+    if (request.getPassThresholdPercentage() != null) {
+      topic.setPassThresholdPercentage(request.getPassThresholdPercentage());
+    }
+    if (request.getDifficulty() != null) {
+      topic.setDifficulty(request.getDifficulty());
+    }
+    if (request.getStatus() != null) {
+      topic.setStatus(request.getStatus());
+    }
+
+    topicRepository.save(topic);
+
+    if (request.getLessonIds() != null) {
+      upsertTopicLessonMaterials(topicId, request.getLessonIds());
+    }
+
+    return learningRoadmapService.getTopicDetails(topicId);
+  }
+
+  @Override
+  public void softDeleteTopic(UUID roadmapId, UUID topicId) {
+    LearningRoadmap roadmap =
+        roadmapRepository
+            .findById(roadmapId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+    if (roadmap.getDeletedAt() != null) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    }
+
+    RoadmapTopic topic =
+        topicRepository.findById(topicId).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+    if (!topic.getRoadmapId().equals(roadmapId)) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    }
+
+    if (topic.getDeletedAt() != null) {
+      return;
+    }
+
+    topic.setDeletedAt(Instant.now());
+    topicRepository.save(topic);
+
+    roadmapEntryQuestionMappingRepository.deleteByRoadmapTopicId(topicId);
+
+    long totalTopics = countActiveTopics(roadmapId);
+    roadmap.setTotalTopicsCount((int) totalTopics);
+    roadmapRepository.save(roadmap);
   }
 
   @Override
@@ -414,6 +467,59 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .mindmapId(material.getMindmapId())
         .chapterId(material.getChapterId())
         .build();
+  }
+
+  private long countActiveTopics(UUID roadmapId) {
+    return topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmapId).stream()
+        .filter(topic -> topic.getDeletedAt() == null)
+        .count();
+  }
+
+  private void upsertTopicLessonMaterials(UUID topicId, List<UUID> lessonIds) {
+    materialRepository.deleteByTopicIdAndResourceType(topicId, "LESSON");
+
+    if (lessonIds == null || lessonIds.isEmpty()) {
+      return;
+    }
+
+    Set<UUID> uniqueLessonIds = lessonIds.stream().filter(id -> id != null).collect(Collectors.toSet());
+
+    long existingLessonCount =
+        lessonRepository.findAllById(uniqueLessonIds).stream()
+            .filter(lesson -> lesson.getDeletedAt() == null)
+            .count();
+    if (existingLessonCount != uniqueLessonIds.size()) {
+      throw new AppException(ErrorCode.LESSON_NOT_FOUND);
+    }
+
+    int sequenceOrder = 1;
+    List<TopicLearningMaterial> materials = new ArrayList<>();
+    for (UUID lessonId : lessonIds) {
+      if (lessonId == null) {
+        continue;
+      }
+
+      UUID chapterId =
+          lessonRepository
+              .findByIdAndNotDeleted(lessonId)
+              .map(lesson -> lesson.getChapterId())
+              .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+      materials.add(
+          TopicLearningMaterial.builder()
+              .topicId(topicId)
+              .lessonId(lessonId)
+              .chapterId(chapterId)
+              .resourceType("LESSON")
+              .resourceTitle("Lesson")
+              .sequenceOrder(sequenceOrder++)
+              .isRequired(true)
+              .build());
+    }
+
+    if (!materials.isEmpty()) {
+      materialRepository.saveAll(materials);
+    }
   }
 
   private Subject resolveSubject(UUID subjectId) {

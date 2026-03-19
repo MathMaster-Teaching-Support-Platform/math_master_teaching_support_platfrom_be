@@ -4,6 +4,7 @@ import com.fptu.math_master.dto.request.CreateAdminRoadmapRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapTopicRequest;
 import com.fptu.math_master.dto.request.UpdateAdminRoadmapRequest;
+import com.fptu.math_master.dto.request.UpdateRoadmapTopicRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.RoadmapDetailResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
@@ -108,6 +109,30 @@ public class AdminRoadmapController {
     return ApiResponse.<RoadmapTopicResponse>builder()
         .message("Roadmap topic created successfully")
         .result(roadmapAdminService.addTopic(id, request))
+        .build();
+  }
+
+  @PutMapping("/{roadmapId}/topics/{topicId}")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(summary = "Update roadmap topic", description = "Update roadmap topic metadata")
+  public ApiResponse<RoadmapTopicResponse> updateTopic(
+      @PathVariable UUID roadmapId,
+      @PathVariable UUID topicId,
+      @Valid @RequestBody UpdateRoadmapTopicRequest request) {
+    return ApiResponse.<RoadmapTopicResponse>builder()
+        .message("Roadmap topic updated successfully")
+        .result(roadmapAdminService.updateTopic(roadmapId, topicId, request))
+        .build();
+  }
+
+  @DeleteMapping("/{roadmapId}/topics/{topicId}")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(summary = "Soft delete roadmap topic", description = "Archive roadmap topic via soft delete")
+  public ApiResponse<String> softDeleteTopic(@PathVariable UUID roadmapId, @PathVariable UUID topicId) {
+    roadmapAdminService.softDeleteTopic(roadmapId, topicId);
+    return ApiResponse.<String>builder()
+        .message("Roadmap topic archived successfully")
+        .result("OK")
         .build();
   }
 

@@ -34,4 +34,6 @@ public interface TopicLearningMaterialRepository
    * Find materials linked to specific question
    */
   List<TopicLearningMaterial> findByQuestionIdAndTopicId(UUID questionId, UUID topicId);
+
+  void deleteByTopicIdAndResourceType(UUID topicId, String resourceType);
 }
