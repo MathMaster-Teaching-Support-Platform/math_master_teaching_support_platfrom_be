@@ -65,6 +65,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private static final Pattern NON_ALNUM = Pattern.compile("[^a-zA-Z0-9._-]");
   private static final String PPTX_MIME =
       "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  private static final String PNG_MIME = "image/png";
+  private static final String JPG_MIME = "image/jpeg";
+  private static final String WEBP_MIME = "image/webp";
 
   LessonRepository lessonRepository;
   ChapterRepository chapterRepository;
@@ -171,13 +174,17 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   @Override
   @Transactional
-  public SlideTemplateResponse uploadTemplate(String name, String description, MultipartFile file) {
+  public SlideTemplateResponse uploadTemplate(
+      String name, String description, MultipartFile file, MultipartFile previewImage) {
     validateTeacherRole();
     validatePptxFile(file);
+    validatePreviewImage(previewImage);
     ensureTemplateBucketExists();
 
     UUID userId = SecurityUtils.getCurrentUserId();
     String objectKey = buildObjectKey(file.getOriginalFilename());
+    String previewImageObjectKey = null;
+    String previewImageContentType = null;
 
     try {
       minioClient.putObject(
@@ -187,6 +194,18 @@ public class LessonSlideServiceImpl implements LessonSlideService {
               .contentType(file.getContentType() == null ? PPTX_MIME : file.getContentType())
               .stream(file.getInputStream(), file.getSize(), -1)
               .build());
+
+      if (previewImage != null && !previewImage.isEmpty()) {
+        previewImageObjectKey = buildPreviewImageObjectKey(previewImage.getOriginalFilename());
+        previewImageContentType = resolvePreviewImageContentType(previewImage);
+        minioClient.putObject(
+            PutObjectArgs.builder()
+                .bucket(minioProperties.getTemplateBucket())
+                .object(previewImageObjectKey)
+                .contentType(previewImageContentType)
+                .stream(previewImage.getInputStream(), previewImage.getSize(), -1)
+                .build());
+      }
     } catch (Exception ex) {
       log.error("Failed to upload template to minio", ex);
       throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
@@ -199,6 +218,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             .originalFileName(file.getOriginalFilename())
             .contentType(file.getContentType() == null ? PPTX_MIME : file.getContentType())
             .objectKey(objectKey)
+            .previewImageObjectKey(previewImageObjectKey)
+            .previewImageContentType(previewImageContentType)
             .bucketName(minioProperties.getTemplateBucket())
             .uploadedBy(userId)
             .isActive(true)
@@ -210,8 +231,14 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   @Override
   @Transactional
   public SlideTemplateResponse updateTemplate(
-      UUID templateId, String name, String description, Boolean active, MultipartFile file) {
+      UUID templateId,
+      String name,
+      String description,
+      Boolean active,
+      MultipartFile file,
+      MultipartFile previewImage) {
     validateTeacherRole();
+    validatePreviewImage(previewImage);
 
     SlideTemplate template =
         slideTemplateRepository
@@ -251,6 +278,26 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       template.setContentType(file.getContentType() == null ? PPTX_MIME : file.getContentType());
     }
 
+    if (previewImage != null && !previewImage.isEmpty()) {
+      String previewObjectKey = buildPreviewImageObjectKey(previewImage.getOriginalFilename());
+      String previewContentType = resolvePreviewImageContentType(previewImage);
+      try {
+        minioClient.putObject(
+            PutObjectArgs.builder()
+                .bucket(minioProperties.getTemplateBucket())
+                .object(previewObjectKey)
+                .contentType(previewContentType)
+                .stream(previewImage.getInputStream(), previewImage.getSize(), -1)
+                .build());
+      } catch (Exception ex) {
+        log.error("Failed to update template preview image in minio", ex);
+        throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+      }
+
+      template.setPreviewImageObjectKey(previewObjectKey);
+      template.setPreviewImageContentType(previewContentType);
+    }
+
     return toTemplateResponse(slideTemplateRepository.save(template));
   }
 
@@ -276,6 +323,28 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
     byte[] content = readObject(template.getBucketName(), template.getObjectKey());
     return new BinaryFileData(content, template.getOriginalFileName(), template.getContentType());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BinaryFileData downloadTemplatePreviewImage(UUID templateId) {
+    validateTeacherRole();
+
+    SlideTemplate template =
+        slideTemplateRepository
+            .findByIdAndNotDeleted(templateId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+    if (template.getPreviewImageObjectKey() == null || template.getPreviewImageObjectKey().isBlank()) {
+      throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+    }
+
+    byte[] content = readObject(template.getBucketName(), template.getPreviewImageObjectKey());
+    String contentType =
+        (template.getPreviewImageContentType() == null || template.getPreviewImageContentType().isBlank())
+            ? PNG_MIME
+            : template.getPreviewImageContentType();
+    return new BinaryFileData(content, "template-preview-image", contentType);
   }
 
   @Override
@@ -612,7 +681,16 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       String prompt = buildSlideDeckPrompt(lesson, additionalPrompt);
       String aiResponse = geminiService.sendMessage(prompt);
       AiDeckSections aiDeck = parseAiDeckSections(aiResponse);
-      if (aiDeck == null) {
+      if (aiDeck == null || !hasEnoughAiContent(aiDeck)) {
+        String taggedPrompt = buildSlideDeckTaggedPrompt(lesson, additionalPrompt);
+        String taggedResponse = geminiService.sendMessage(taggedPrompt);
+        AiDeckSections taggedDeck = parseTaggedDeckSections(taggedResponse);
+        if (taggedDeck != null && hasEnoughAiContent(taggedDeck)) {
+          aiDeck = taggedDeck;
+        }
+      }
+      if (aiDeck == null || !hasEnoughAiContent(aiDeck)) {
+        log.warn("Gemini did not return usable slide deck content. Falling back to lesson data");
         return fallback;
       }
 
@@ -654,6 +732,35 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       log.warn("Gemini slide content generation failed, fallback to lesson data", ex);
       return fallback;
     }
+  }
+
+  private boolean hasEnoughAiContent(AiDeckSections aiDeck) {
+    int filled = 0;
+    if (aiDeck.lessonSummary != null && !aiDeck.lessonSummary.isBlank()) {
+      filled++;
+    }
+    if (aiDeck.learningObjectives != null && !aiDeck.learningObjectives.isBlank()) {
+      filled++;
+    }
+    if (aiDeck.mainPart1 != null && !aiDeck.mainPart1.isBlank()) {
+      filled++;
+    }
+    if (aiDeck.mainPart2 != null && !aiDeck.mainPart2.isBlank()) {
+      filled++;
+    }
+    if (aiDeck.mainPart3 != null && !aiDeck.mainPart3.isBlank()) {
+      filled++;
+    }
+    if (aiDeck.examplePart != null && !aiDeck.examplePart.isBlank()) {
+      filled++;
+    }
+    if (aiDeck.practicePart != null && !aiDeck.practicePart.isBlank()) {
+      filled++;
+    }
+    if (aiDeck.closingSummary != null && !aiDeck.closingSummary.isBlank()) {
+      filled++;
+    }
+    return filled >= 6;
   }
 
   private AiDeckSections parseAiDeckSections(String raw) {
@@ -727,6 +834,108 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         }
         """
         .formatted(lessonTitle, lessonSummary, learningObjectives, opening, lessonContent);
+  }
+
+  private String buildSlideDeckTaggedPrompt(Lesson lesson, String additionalPrompt) {
+    String lessonTitle = safe(lesson.getTitle());
+    String lessonContent = safe(lesson.getLessonContent());
+    String lessonSummary = safe(lesson.getSummary());
+    String learningObjectives = safe(lesson.getLearningObjectives());
+    String opening = safe(additionalPrompt);
+
+    return """
+        Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
+        Hãy soạn nội dung đầy đủ cho bài trình chiếu 10 slide.
+
+        THÔNG TIN ĐẦU VÀO:
+        - lessonTitle: %s
+        - existingSummary: %s
+        - existingLearningObjectives: %s
+        - additionalPrompt: %s
+        - rawLessonContent:
+        %s
+
+        YÊU CẦU:
+        - Viết tiếng Việt có dấu, nội dung cụ thể, không lặp lại giữa các phần.
+        - Mỗi phần mainPart1/mainPart2/mainPart3/examplePart/practicePart có nhiều ý và xuống dòng rõ ràng.
+        - Chỉ trả về đúng định dạng marker dưới đây, không thêm markdown.
+
+        [LESSON_SUMMARY]
+        ...
+        [LEARNING_OBJECTIVES]
+        ...
+        [OPENING]
+        ...
+        [MAIN_PART_1]
+        ...
+        [MAIN_PART_2]
+        ...
+        [MAIN_PART_3]
+        ...
+        [EXAMPLE_PART]
+        ...
+        [PRACTICE_PART]
+        ...
+        [CLOSING_SUMMARY]
+        ...
+        [ADDITIONAL_NOTES]
+        ...
+        """
+        .formatted(lessonTitle, lessonSummary, learningObjectives, opening, lessonContent);
+  }
+
+  private AiDeckSections parseTaggedDeckSections(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+
+    AiDeckSections deck = new AiDeckSections();
+    deck.lessonSummary = extractTagged(raw, "LESSON_SUMMARY");
+    deck.learningObjectives = extractTagged(raw, "LEARNING_OBJECTIVES");
+    deck.opening = extractTagged(raw, "OPENING");
+    deck.mainPart1 = extractTagged(raw, "MAIN_PART_1");
+    deck.mainPart2 = extractTagged(raw, "MAIN_PART_2");
+    deck.mainPart3 = extractTagged(raw, "MAIN_PART_3");
+    deck.examplePart = extractTagged(raw, "EXAMPLE_PART");
+    deck.practicePart = extractTagged(raw, "PRACTICE_PART");
+    deck.closingSummary = extractTagged(raw, "CLOSING_SUMMARY");
+    deck.additionalNotes = extractTagged(raw, "ADDITIONAL_NOTES");
+
+    return hasEnoughAiContent(deck) ? deck : null;
+  }
+
+  private String extractTagged(String raw, String tag) {
+    String startTag = "[" + tag + "]";
+    int start = raw.indexOf(startTag);
+    if (start < 0) {
+      return "";
+    }
+
+    int contentStart = start + startTag.length();
+    int nextTagStart = raw.length();
+    int cursor = contentStart;
+    while (cursor < raw.length()) {
+      int openBracket = raw.indexOf('[', cursor);
+      if (openBracket < 0) {
+        break;
+      }
+      int closeBracket = raw.indexOf(']', openBracket + 1);
+      if (closeBracket < 0) {
+        break;
+      }
+      String candidateTag = raw.substring(openBracket + 1, closeBracket);
+      if (!candidateTag.isBlank()) {
+        nextTagStart = openBracket;
+        break;
+      }
+      cursor = closeBracket + 1;
+    }
+
+    String value = raw.substring(contentStart, nextTagStart).trim();
+    if (value.startsWith(":")) {
+      value = value.substring(1).trim();
+    }
+    return value;
   }
 
   private String nonBlankOrDefault(String value, String fallback) {
@@ -852,6 +1061,31 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
   }
 
+  private void validatePreviewImage(MultipartFile previewImage) {
+    if (previewImage == null || previewImage.isEmpty()) {
+      return;
+    }
+
+    String fileName = previewImage.getOriginalFilename();
+    String lowerFileName = fileName == null ? "" : fileName.toLowerCase();
+    String contentType = previewImage.getContentType();
+
+    boolean validExtension =
+        lowerFileName.endsWith(".png")
+            || lowerFileName.endsWith(".jpg")
+            || lowerFileName.endsWith(".jpeg")
+            || lowerFileName.endsWith(".webp");
+
+    boolean validContentType =
+        PNG_MIME.equalsIgnoreCase(contentType)
+            || JPG_MIME.equalsIgnoreCase(contentType)
+            || WEBP_MIME.equalsIgnoreCase(contentType);
+
+    if (!validExtension && !validContentType) {
+      throw new AppException(ErrorCode.INVALID_TEMPLATE_SYNTAX);
+    }
+  }
+
   private String buildObjectKey(String originalFileName) {
     String normalized =
         originalFileName == null
@@ -864,6 +1098,41 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         + System.currentTimeMillis()
         + "-"
         + sanitized;
+  }
+
+  private String buildPreviewImageObjectKey(String originalFileName) {
+    String normalized =
+        originalFileName == null
+            ? "preview.png"
+            : Normalizer.normalize(originalFileName, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+    String sanitized = NON_ALNUM.matcher(normalized).replaceAll("_");
+    return "slide-templates-preview/"
+        + UUID.randomUUID()
+        + "/"
+        + System.currentTimeMillis()
+        + "-"
+        + sanitized;
+  }
+
+  private String resolvePreviewImageContentType(MultipartFile previewImage) {
+    String contentType = previewImage.getContentType();
+    if (contentType != null && !contentType.isBlank()) {
+      return contentType;
+    }
+
+    String fileName = previewImage.getOriginalFilename();
+    if (fileName == null) {
+      return PNG_MIME;
+    }
+
+    String lower = fileName.toLowerCase();
+    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+      return JPG_MIME;
+    }
+    if (lower.endsWith(".webp")) {
+      return WEBP_MIME;
+    }
+    return PNG_MIME;
   }
 
   private String buildOutputFileName(String lessonTitle) {
@@ -908,10 +1177,18 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         .description(template.getDescription())
         .originalFileName(template.getOriginalFileName())
         .contentType(template.getContentType())
+        .previewImage(buildPreviewImagePath(template))
         .active(Boolean.TRUE.equals(template.getIsActive()))
         .createdAt(template.getCreatedAt())
         .updatedAt(template.getUpdatedAt())
         .build();
+  }
+
+  private String buildPreviewImagePath(SlideTemplate template) {
+    if (template.getPreviewImageObjectKey() == null || template.getPreviewImageObjectKey().isBlank()) {
+      return null;
+    }
+    return "/lesson-slides/templates/" + template.getId() + "/preview-image";
   }
 
   private void validateTeacherRole() {

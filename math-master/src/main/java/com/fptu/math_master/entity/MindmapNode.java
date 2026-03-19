@@ -108,6 +108,7 @@ public class MindmapNode extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (displayOrder == null) displayOrder = 0;
   }
 }

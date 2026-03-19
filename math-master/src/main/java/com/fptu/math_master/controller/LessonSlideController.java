@@ -73,10 +73,11 @@ public class LessonSlideController {
   public ApiResponse<SlideTemplateResponse> uploadTemplate(
       @RequestParam("name") String name,
       @RequestParam(value = "description", required = false) String description,
-      @RequestParam("file") MultipartFile file) {
+    @RequestParam("file") MultipartFile file,
+    @RequestParam(value = "previewImage", required = false) MultipartFile previewImage) {
     return ApiResponse.<SlideTemplateResponse>builder()
         .message("Template uploaded successfully")
-        .result(lessonSlideService.uploadTemplate(name, description, file))
+      .result(lessonSlideService.uploadTemplate(name, description, file, previewImage))
         .build();
   }
 
@@ -87,10 +88,13 @@ public class LessonSlideController {
       @RequestParam(value = "name", required = false) String name,
       @RequestParam(value = "description", required = false) String description,
       @RequestParam(value = "active", required = false) Boolean active,
-      @RequestParam(value = "file", required = false) MultipartFile file) {
+      @RequestParam(value = "file", required = false) MultipartFile file,
+      @RequestParam(value = "previewImage", required = false) MultipartFile previewImage) {
     return ApiResponse.<SlideTemplateResponse>builder()
         .message("Template updated successfully")
-        .result(lessonSlideService.updateTemplate(templateId, name, description, active, file))
+        .result(
+            lessonSlideService.updateTemplate(
+                templateId, name, description, active, file, previewImage))
         .build();
   }
 
@@ -109,6 +113,16 @@ public class LessonSlideController {
     LessonSlideService.BinaryFileData fileData = lessonSlideService.downloadTemplate(templateId);
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(fileData.fileName()))
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+  }
+
+  @GetMapping("/templates/{templateId}/preview-image")
+  @Operation(summary = "Download template preview image")
+  public ResponseEntity<byte[]> downloadTemplatePreviewImage(@PathVariable UUID templateId) {
+    LessonSlideService.BinaryFileData fileData =
+        lessonSlideService.downloadTemplatePreviewImage(templateId);
+    return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(fileData.contentType()))
         .body(fileData.content());
   }

@@ -56,6 +56,14 @@ public class SlideTemplate extends BaseEntity {
   @Column(name = "object_key", length = 500, nullable = false)
   private String objectKey;
 
+  @Size(max = 500)
+  @Column(name = "preview_image_object_key", length = 500)
+  private String previewImageObjectKey;
+
+  @Size(max = 100)
+  @Column(name = "preview_image_content_type", length = 100)
+  private String previewImageContentType;
+
   @Size(max = 100)
   @Column(name = "bucket_name", length = 100, nullable = false)
   private String bucketName;
