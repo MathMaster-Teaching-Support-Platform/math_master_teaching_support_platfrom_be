@@ -5,6 +5,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 
 @Getter
+/**
+ * The exception to 'AppException'.
+ */
 public enum ErrorCode {
   UNCATEGORIZED_EXCEPTION(9999, "Uncategorized error", HttpStatus.INTERNAL_SERVER_ERROR),
   INVALID_KEY(1001, "Uncategorized error", HttpStatus.BAD_REQUEST),
@@ -59,6 +62,14 @@ public enum ErrorCode {
       HttpStatus.BAD_REQUEST),
   ASSESSMENT_NO_QUESTIONS(
       1044, "Assessment must have at least one question to publish", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_ZERO_TOTAL_POINTS(
+      1044, "Total points across all questions must be greater than 0", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_IS_CLOSED(
+      1093, "Assessment is closed and cannot be modified or unpublished", HttpStatus.BAD_REQUEST),
+  MATRIX_CELL_FILL_INCOMPLETE(
+      1094,
+      "Not all matrix cells have their required question count filled in assessment_questions",
+      HttpStatus.BAD_REQUEST),
   ASSESSMENT_INVALID_SCHEDULE(1045, "Start date must be before end date", HttpStatus.BAD_REQUEST),
   ASSESSMENT_START_DATE_PAST(1046, "Start date cannot be in the past", HttpStatus.BAD_REQUEST),
   ASSESSMENT_NOT_PUBLISHED(1047, "Assessment is not published", HttpStatus.BAD_REQUEST),
@@ -98,7 +109,120 @@ public enum ErrorCode {
   QUESTION_TEMPLATE_NOT_FOUND(1075, "Question template not found", HttpStatus.NOT_FOUND),
   INVALID_TEMPLATE_SYNTAX(1076, "Invalid template syntax", HttpStatus.BAD_REQUEST),
   TEMPLATE_GENERATION_FAILED(
-      1077, "Failed to generate question from template", HttpStatus.INTERNAL_SERVER_ERROR);
+      1077, "Failed to generate question from template", HttpStatus.INTERNAL_SERVER_ERROR),
+  MINDMAP_NOT_FOUND(1078, "Mindmap not found", HttpStatus.NOT_FOUND),
+  MINDMAP_ACCESS_DENIED(
+      1079, "You do not have permission to access this mindmap", HttpStatus.FORBIDDEN),
+  MINDMAP_NODE_NOT_FOUND(1080, "Mindmap node not found", HttpStatus.NOT_FOUND),
+  MINDMAP_GENERATION_FAILED(
+      1081, "Failed to generate mindmap from AI", HttpStatus.INTERNAL_SERVER_ERROR),
+  INVALID_MINDMAP_STRUCTURE(1082, "Invalid mindmap structure", HttpStatus.BAD_REQUEST),
+  FINALIZE_EMPTY_QUESTIONS(1083, "questions list must not be empty", HttpStatus.BAD_REQUEST),
+  QUESTION_TEXT_BLANK(
+      1084, "questionText must not be blank for one or more questions", HttpStatus.BAD_REQUEST),
+  MCQ_INVALID_OPTIONS(
+      1085,
+      "MCQ questions must have exactly 4 options (A, B, C, D) with no duplicates",
+      HttpStatus.BAD_REQUEST),
+  MCQ_INVALID_CORRECT_OPTION(
+      1086, "correctAnswer for MCQ must be one of A, B, C, D", HttpStatus.BAD_REQUEST),
+  CELL_EXCEEDS_TARGET(
+      1087,
+      "Adding these questions would exceed the cell's target question count",
+      HttpStatus.BAD_REQUEST),
+  TEMPLATE_NOT_USABLE(
+      1088,
+      "Template is in DRAFT status and cannot be used for finalisation",
+      HttpStatus.BAD_REQUEST),
+  TEMPLATE_ALREADY_PUBLISHED(1093, "Template is already published", HttpStatus.BAD_REQUEST),
+  TEMPLATE_ALREADY_ARCHIVED(1094, "Template is already archived", HttpStatus.BAD_REQUEST),
+  TEMPLATE_ACCESS_DENIED(
+      1100, "You do not have permission to access this template", HttpStatus.FORBIDDEN),
+  LESSON_NOT_FOUND(1089, "Lesson not found", HttpStatus.NOT_FOUND),
+  CHAPTER_NOT_FOUND(1090, "Chapter not found", HttpStatus.NOT_FOUND),
+  LESSON_GENERATION_FAILED(
+      1091, "Failed to generate lesson content from AI", HttpStatus.INTERNAL_SERVER_ERROR),
+  LESSON_ACCESS_DENIED(
+      1092, "You do not have permission to access this lesson", HttpStatus.FORBIDDEN),
+  EXAM_MATRIX_APPROVED(
+      1095,
+      "Exam matrix is already approved and cannot be modified. Reset the matrix first.",
+      HttpStatus.BAD_REQUEST),
+  CHAPTER_NOT_IN_LESSON(
+      1096, "The specified chapter does not belong to this lesson", HttpStatus.BAD_REQUEST),
+  CELL_QUESTION_COUNT_MISMATCH(
+      1097,
+      "Number of selected questions does not match the cell's required count",
+      HttpStatus.BAD_REQUEST),
+  CELL_QUESTION_DIMENSION_MISMATCH(
+      1098,
+      "One or more questions do not match the cell's difficulty or cognitive level",
+      HttpStatus.BAD_REQUEST),
+  ASSESSMENT_MATRIX_APPROVED_WHILE_PUBLISHED(
+      1099,
+      "Cannot approve matrix while assessment is already published or closed",
+      HttpStatus.BAD_REQUEST),
+  SUBMISSION_ALREADY_GRADED(1101, "Submission has already been graded", HttpStatus.BAD_REQUEST),
+  ANSWER_SUBMISSION_MISMATCH(
+      1102, "Answer does not belong to the specified submission", HttpStatus.BAD_REQUEST),
+  GRADING_ACCESS_DENIED(
+      1103, "You do not have permission to grade this submission", HttpStatus.FORBIDDEN),
+  REGRADE_REQUEST_ALREADY_PENDING(
+      1104, "A regrade request for this question is already pending", HttpStatus.BAD_REQUEST),
+  REGRADE_REQUEST_NOT_PENDING(
+      1105,
+      "Regrade request is not in PENDING status and cannot be responded to",
+      HttpStatus.BAD_REQUEST),
+
+  ASSESSMENT_ALREADY_CLOSED(1106, "Assessment is already closed", HttpStatus.BAD_REQUEST),
+  MATRIX_NOT_APPROVED_FOR_RESET(
+      1107, "Only an APPROVED matrix can be reset to DRAFT", HttpStatus.BAD_REQUEST),
+  QUESTION_ALREADY_IN_ASSESSMENT(
+      1108, "Question is already part of this assessment", HttpStatus.BAD_REQUEST),
+  QUESTION_NOT_IN_ASSESSMENT(
+      1109, "Question does not belong to this assessment", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_QUESTION_EDIT_BLOCKED(
+      1110,
+      "Questions can only be managed on DRAFT non-matrix assessments",
+      HttpStatus.BAD_REQUEST),
+  SUBMISSION_ALREADY_INVALIDATED(
+      1111, "Submission has already been invalidated", HttpStatus.BAD_REQUEST),
+  SUBMISSION_INVALIDATION_BLOCKED(
+      1112, "Only SUBMITTED or GRADED submissions can be invalidated", HttpStatus.BAD_REQUEST),
+  SUBMISSION_RESULT_NOT_AVAILABLE(
+      1113,
+      "Your result is not available yet — grades have not been released",
+      HttpStatus.FORBIDDEN),
+  QUESTION_EDIT_BLOCKED(
+      1114, "Questions used in a published assessment cannot be edited", HttpStatus.BAD_REQUEST),
+  QUESTION_DELETE_BLOCKED(
+      1115, "Questions used in an assessment cannot be deleted", HttpStatus.BAD_REQUEST),
+  REGRADE_DEADLINE_PASSED(
+      1116, "The regrade request window for this submission has closed", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_CLONE_BLOCKED(1117, "Cannot clone a deleted assessment", HttpStatus.BAD_REQUEST),
+  CURRICULUM_NOT_FOUND(1118, "Curriculum not found", HttpStatus.NOT_FOUND),
+  CURRICULUM_ALREADY_EXISTS(1119, "Curriculum already exists", HttpStatus.BAD_REQUEST),
+  ASSESSMENT_LESSON_NOT_IN_MATRIX(
+      1120,
+      "One or more selected lessons are not available in the chosen exam matrix",
+      HttpStatus.BAD_REQUEST),
+  TEMPLATE_MAPPING_TEMPLATE_MISMATCH(
+      1121,
+      "Requested template does not match the matrix template mapping",
+      HttpStatus.BAD_REQUEST),
+  SUBJECT_NOT_FOUND(1122, "Subject not found", HttpStatus.NOT_FOUND),
+  SUBJECT_ALREADY_EXISTS(1123, "Subject with this code already exists", HttpStatus.BAD_REQUEST),
+  GRADE_SUBJECT_ALREADY_EXISTS(
+      1124, "This subject is already linked to the given grade level", HttpStatus.BAD_REQUEST),
+  GRADE_SUBJECT_NOT_FOUND(
+      1125, "No mapping found between this subject and grade level", HttpStatus.NOT_FOUND),
+  EXAM_MATRIX_ROW_NOT_FOUND(1126, "Exam matrix row not found", HttpStatus.NOT_FOUND),
+  INVALID_FILE_FORMAT(2001, "Invalid file format", HttpStatus.BAD_REQUEST),
+  MATRIX_ROW_QUESTION_TYPE_REQUIRED(
+      1127, "questionTypeName is required when templateId is not provided", HttpStatus.BAD_REQUEST),
+  SCHOOL_GRADE_NOT_FOUND(1128, "School grade not found", HttpStatus.NOT_FOUND),
+  DOCUMENT_NOT_FOUND(1129, "Document not found", HttpStatus.NOT_FOUND),
+  SCHOOL_GRADE_ALREADY_EXISTS(1129, "School grade already exists", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

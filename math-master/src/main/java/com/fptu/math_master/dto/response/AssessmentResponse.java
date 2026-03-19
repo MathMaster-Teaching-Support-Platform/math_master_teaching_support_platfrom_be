@@ -1,9 +1,12 @@
 package com.fptu.math_master.dto.response;
 
+import com.fptu.math_master.enums.AssessmentMode;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AssessmentType;
+import com.fptu.math_master.enums.AttemptScoringPolicy;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,8 +22,8 @@ public class AssessmentResponse {
   private UUID id;
   private UUID teacherId;
   private String teacherName;
-  private UUID lessonId;
-  private String lessonTitle;
+  private List<UUID> lessonIds;
+  private List<String> lessonTitles;
   private String title;
   private String description;
   private AssessmentType assessmentType;
@@ -30,7 +33,12 @@ public class AssessmentResponse {
   private Instant endDate;
   private Boolean randomizeQuestions;
   private Boolean showCorrectAnswers;
-  private Boolean hasMatrix;
+  private AssessmentMode assessmentMode;
+  private UUID examMatrixId;
+  private Boolean allowMultipleAttempts;
+  private Integer maxAttempts;
+  private AttemptScoringPolicy attemptScoringPolicy;
+  private Boolean showScoreImmediately;
   private AssessmentStatus status;
   private Long totalQuestions;
   private BigDecimal totalPoints;

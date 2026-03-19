@@ -125,11 +125,9 @@ public class QuestionBankController {
   @Operation(
       summary = "Search and filter question banks",
       description =
-          "Search question banks with filters: subject, grade level, public/private status, and search term. "
+          "Search question banks with filters: public/private status and search term. "
               + "Returns both owned and public question banks. Supports sorting and pagination.")
   public ApiResponse<Page<QuestionBankResponse>> searchQuestionBanks(
-      @RequestParam(required = false) String subject,
-      @RequestParam(required = false) String gradeLevel,
       @RequestParam(required = false) Boolean isPublic,
       @RequestParam(required = false) String searchTerm,
       @RequestParam(defaultValue = "0") int page,
@@ -138,9 +136,7 @@ public class QuestionBankController {
       @RequestParam(defaultValue = "DESC") String sortDirection) {
 
     log.info(
-        "REST request to search question banks - subject: {}, gradeLevel: {}, isPublic: {}, searchTerm: {}",
-        subject,
-        gradeLevel,
+        "REST request to search question banks - isPublic: {}, searchTerm: {}",
         isPublic,
         searchTerm);
 
@@ -152,9 +148,7 @@ public class QuestionBankController {
     Pageable pageable = PageRequest.of(page, size, sort);
 
     return ApiResponse.<Page<QuestionBankResponse>>builder()
-        .result(
-            questionBankService.searchQuestionBanks(
-                subject, gradeLevel, isPublic, searchTerm, pageable))
+        .result(questionBankService.searchQuestionBanks(isPublic, searchTerm, pageable))
         .build();
   }
 

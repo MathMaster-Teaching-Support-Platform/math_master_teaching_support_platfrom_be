@@ -1,21 +1,21 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.ProfileReviewRequest;
 import com.fptu.math_master.dto.request.TeacherProfileRequest;
 import com.fptu.math_master.dto.response.TeacherProfileResponse;
 import com.fptu.math_master.entity.Role;
-import com.fptu.math_master.entity.School;
 import com.fptu.math_master.entity.TeacherProfile;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.ProfileStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.RoleRepository;
-import com.fptu.math_master.repository.SchoolRepository;
 import com.fptu.math_master.repository.TeacherProfileRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.TeacherProfileService;
+import com.fptu.math_master.service.UploadService;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -28,6 +28,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -38,12 +39,16 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   TeacherProfileRepository teacherProfileRepository;
   UserRepository userRepository;
   RoleRepository roleRepository;
-  SchoolRepository schoolRepository;
+  UploadService uploadService;
+  MinioProperties minioProperties;
+  com.fptu.math_master.service.EmailService emailService;
 
   @Override
   @Transactional
-  public TeacherProfileResponse submitProfile(TeacherProfileRequest request, UUID userId) {
-    log.info("User {} submitting teacher profile", userId);
+  public TeacherProfileResponse submitProfile(
+      TeacherProfileRequest request, java.util.List<MultipartFile> files, UUID userId) {
+    log.info(
+        "User {} submitting teacher profile with {} files", userId, files.size());
 
     // Check if user exists
     User user =
@@ -56,26 +61,24 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
       throw new AppException(ErrorCode.PROFILE_ALREADY_EXISTS);
     }
 
-    // Check if school exists
-    School school =
-        schoolRepository
-            .findById(request.getSchoolId())
-            .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
+    // Save physical files as a zip
+    String documentUrl = uploadService.uploadFilesAsZip(files, "verification", "verification_docs");
 
     // Create new profile
     TeacherProfile profile =
         TeacherProfile.builder()
             .user(user)
-            .school(school)
+            .schoolName(request.getSchoolName())
+            .schoolAddress(request.getSchoolAddress())
+            .schoolWebsite(request.getSchoolWebsite())
             .position(request.getPosition())
-            .certificateUrl(request.getCertificateUrl())
-            .identificationDocumentUrl(request.getIdentificationDocumentUrl())
+            .verificationDocumentKey(documentUrl)
             .description(request.getDescription())
             .status(ProfileStatus.PENDING)
             .build();
 
     profile = teacherProfileRepository.save(profile);
-    log.info("Teacher profile submitted successfully for user {}", userId);
+    log.info("Teacher profile submitted successfully for user {} with document: {}", userId, documentUrl);
 
     return mapToResponse(profile);
   }
@@ -95,17 +98,11 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
       throw new AppException(ErrorCode.PROFILE_CANNOT_BE_MODIFIED);
     }
 
-    // Check if school exists
-    School school =
-        schoolRepository
-            .findById(request.getSchoolId())
-            .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_NOT_FOUND));
-
     // Update profile fields
-    profile.setSchool(school);
+    profile.setSchoolName(request.getSchoolName());
+    profile.setSchoolAddress(request.getSchoolAddress());
+    profile.setSchoolWebsite(request.getSchoolWebsite());
     profile.setPosition(request.getPosition());
-    profile.setCertificateUrl(request.getCertificateUrl());
-    profile.setIdentificationDocumentUrl(request.getIdentificationDocumentUrl());
     profile.setDescription(request.getDescription());
 
     // If updating a rejected profile, reset status to PENDING
@@ -197,6 +194,16 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     profile = teacherProfileRepository.save(profile);
     log.info("Profile {} reviewed with status {}", profileId, request.getStatus());
 
+    // Send email notification to teacher
+    String teacherEmail = profile.getUser().getEmail();
+    String teacherName = profile.getUser().getFullName();
+    
+    if (request.getStatus() == ProfileStatus.APPROVED) {
+        emailService.sendTeacherApprovalEmail(teacherEmail, teacherName);
+    } else if (request.getStatus() == ProfileStatus.REJECTED) {
+        emailService.sendTeacherRejectionEmail(teacherEmail, teacherName, request.getAdminComment());
+    }
+
     return mapToResponse(profile);
   }
 
@@ -222,6 +229,21 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     log.info("Profile deleted for user {}", userId);
   }
 
+  @Override
+  public String getDownloadUrl(UUID profileId) {
+    TeacherProfile profile =
+        teacherProfileRepository
+            .findById(profileId)
+            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+
+    if (profile.getVerificationDocumentKey() == null) {
+      throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
+    }
+
+    return uploadService.getPresignedUrl(
+        profile.getVerificationDocumentKey(), minioProperties.getVerificationBucket());
+  }
+
   private TeacherProfileResponse mapToResponse(TeacherProfile profile) {
     TeacherProfileResponse response =
         TeacherProfileResponse.builder()
@@ -229,11 +251,11 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
             .userId(profile.getUser().getId())
             .userName(profile.getUser().getUserName())
             .fullName(profile.getUser().getFullName())
-            .schoolId(profile.getSchool().getId())
-            .schoolName(profile.getSchool().getName())
+            .schoolName(profile.getSchoolName())
+            .schoolAddress(profile.getSchoolAddress())
+            .schoolWebsite(profile.getSchoolWebsite())
             .position(profile.getPosition())
-            .certificateUrl(profile.getCertificateUrl())
-            .identificationDocumentUrl(profile.getIdentificationDocumentUrl())
+            .verificationDocumentKey(profile.getVerificationDocumentKey())
             .description(profile.getDescription())
             .status(profile.getStatus())
             .adminComment(profile.getAdminComment())

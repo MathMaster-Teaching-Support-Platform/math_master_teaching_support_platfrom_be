@@ -1,55 +1,90 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionType;
-import com.fptu.math_master.util.UuidV7Generator;
-import io.hypersistence.utils.hibernate.type.array.StringArrayType;
-import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import lombok.*;
+
 import org.hibernate.annotations.Nationalized;
 import org.hibernate.annotations.Type;
+
+import com.fptu.math_master.enums.CognitiveLevel;
+import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.enums.TemplateStatus;
+import com.fptu.math_master.enums.TemplateVariant;
+
+import io.hypersistence.utils.hibernate.type.array.StringArrayType;
+import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
+@AttributeOverride(
+    name = "createdBy",
+    column = @Column(name = "created_by", updatable = false, nullable = false))
 @Table(
     name = "question_templates",
     indexes = {
       @Index(name = "idx_question_templates_created_by", columnList = "created_by"),
+      @Index(name = "idx_question_templates_lesson", columnList = "lesson_id"),
+      @Index(name = "idx_question_templates_question_bank", columnList = "question_bank_id"),
       @Index(name = "idx_question_templates_tags", columnList = "tags"),
       @Index(name = "idx_question_templates_cognitive", columnList = "cognitive_level"),
+      @Index(name = "idx_question_templates_variant", columnList = "template_variant"),
       @Index(name = "idx_question_templates_public", columnList = "is_public")
     })
-public class QuestionTemplate {
+/**
+ * The entity of 'QuestionTemplate'.
+ */
+public class QuestionTemplate extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+  @Column(name = "lesson_id")
+  private UUID lessonId;
 
-  @Column(name = "created_by", nullable = false)
-  private UUID createdBy;
+  @Column(name = "question_bank_id")
+  private UUID questionBankId;
 
   @Nationalized
   @Column(name = "name", nullable = false, columnDefinition = "TEXT")
   private String name;
 
-  @Nationalized
+  /**
+   * description
+   */
   @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
   @Column(name = "template_type", nullable = false)
   @Enumerated(EnumType.STRING)
   private QuestionType templateType;
+
+  @Column(name = "template_variant")
+  @Enumerated(EnumType.STRING)
+  private TemplateVariant templateVariant;
 
   /**
    * Multi-language support for question template text Example: {"en": "What is {x} + {y}?", "vi":
@@ -60,37 +95,53 @@ public class QuestionTemplate {
   private Map<String, Object> templateText;
 
   /**
-   * Parameters that can be substituted in the template Example: {"x": {"type": "integer", "min": 1,
-   * "max": 100}, "y": {"type": "integer", "min": 1, "max": 100}}
+   * Parameters that can be substituted in the template (PARAMETRIC variant)
+   * Example: {"x": {"type": "integer", "min": 1, "max": 100}, "y": {"type": "integer", "min": 1, "max": 100}}
+   * Nullable for PROPOSITIONAL templates
    */
   @Type(JsonBinaryType.class)
-  @Column(name = "parameters", nullable = false, columnDefinition = "jsonb")
+  @Column(name = "parameters", columnDefinition = "jsonb")
   private Map<String, Object> parameters;
 
-  /** Formula to calculate the correct answer Example: "x + y" or "Math.sqrt(x^2 + y^2)" */
-  @Column(name = "answer_formula", nullable = false, columnDefinition = "TEXT")
+  /** Formula to calculate the correct answer (PARAMETRIC variant) Example: "x + y" or "Math.sqrt(x^2 + y^2)" */
+  @Column(name = "answer_formula", columnDefinition = "TEXT")
   private String answerFormula;
 
   /**
-   * Configuration for generating multiple choice options Example: {"type": "around_answer",
-   * "count": 4, "range": 10}
+   * Configuration for generating multiple choice options (PARAMETRIC variant)
+   * Example: {"type": "around_answer", "count": 4, "range": 10}
    */
   @Type(JsonBinaryType.class)
   @Column(name = "options_generator", columnDefinition = "jsonb")
   private Map<String, Object> optionsGenerator;
 
   /**
-   * Rules for determining difficulty based on parameters Example: {"easy": "x < 10 AND y < 10",
-   * "medium": "x < 50 AND y < 50", "hard": "x >= 50 OR y >= 50"}
+   * Rules for determining difficulty based on parameters (PARAMETRIC variant)
+   * Example: {"easy": "x < 10 AND y < 10", "medium": "x < 50 AND y < 50", "hard": "x >= 50 OR y >= 50"}
    */
   @Type(JsonBinaryType.class)
-  @Column(name = "difficulty_rules", nullable = false, columnDefinition = "jsonb")
+  @Column(name = "difficulty_rules", columnDefinition = "jsonb")
   private Map<String, Object> difficultyRules;
 
-  /** Constraints for parameter generation Example: ["x < y", "x + y < 1000"] */
+  /** Constraints for parameter generation (PARAMETRIC variant) Example: ["x < y", "x + y < 1000"] */
   @Type(StringArrayType.class)
   @Column(name = "constraints", columnDefinition = "TEXT[]")
   private String[] constraints;
+
+  /** Theorem statement for PROPOSITIONAL templates - defines the mathematical proposition */
+  @Nationalized
+  @Column(name = "theorem_statement")
+  private String theoremStatement;
+
+  /** Statement mutations for PROPOSITIONAL templates - variations of the theorem */
+  @Type(JsonBinaryType.class)
+  @Column(name = "statement_mutations", columnDefinition = "jsonb")
+  private Map<String, Object> statementMutations;
+
+  /** Question stem variations for both PARAMETRIC and PROPOSITIONAL templates */
+  @Type(JsonBinaryType.class)
+  @Column(name = "stem_variants", columnDefinition = "jsonb")
+  private Map<String, Object> stemVariants;
 
   @Column(name = "cognitive_level", nullable = false)
   @Enumerated(EnumType.STRING)
@@ -100,43 +151,47 @@ public class QuestionTemplate {
   @Column(name = "tags", nullable = false, columnDefinition = "TEXT[]")
   private String[] tags;
 
+  @Builder.Default
   @Column(name = "is_public", nullable = false)
   private Boolean isPublic = false;
 
+  @Builder.Default
   @Column(name = "usage_count", nullable = false)
   private Integer usageCount = 0;
 
   @Column(name = "avg_success_rate", precision = 5, scale = 2)
   private BigDecimal avgSuccessRate;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
-  @Column(name = "deleted_at")
-  private Instant deletedAt;
+  @Builder.Default
+  @Enumerated(EnumType.STRING)
+  @Column(name = "status", nullable = false)
+  private TemplateStatus status = TemplateStatus.DRAFT;
 
   // Relationships
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by", insertable = false, updatable = false)
   private User creator;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
+  private Lesson lesson;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
+  private QuestionBank questionBank;
+
   @OneToMany(mappedBy = "questionTemplate", cascade = CascadeType.ALL)
   private Set<Question> questions;
 
+  @OneToMany(mappedBy = "questionTemplate", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<ExamMatrixTemplateMapping> examMatrixMappings;
+
   @PrePersist
+  @Override
   public void prePersist() {
     if (isPublic == null) isPublic = false;
     if (usageCount == null) usageCount = 0;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
+    if (status == null) status = TemplateStatus.DRAFT;
   }
 
   /** Increment usage count when template is used to generate a question */
@@ -153,7 +208,7 @@ public class QuestionTemplate {
       BigDecimal total =
           this.avgSuccessRate.multiply(BigDecimal.valueOf(this.usageCount)).add(newRate);
       this.avgSuccessRate =
-          total.divide(BigDecimal.valueOf(this.usageCount + 1), 2, RoundingMode.HALF_UP);
+          total.divide(BigDecimal.valueOf((long) (this.usageCount + 1)), 2, RoundingMode.HALF_UP);
     }
   }
 }

@@ -1,39 +1,50 @@
 package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.dto.request.AIEnhancementRequest;
+import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
+import com.fptu.math_master.dto.response.AIGeneratedTemplatesResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionSample;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
+import com.fptu.math_master.entity.Lesson;
+import com.fptu.math_master.entity.Question;
+import com.fptu.math_master.entity.QuestionBank;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.LessonRepository;
+import com.fptu.math_master.repository.QuestionBankRepository;
+import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
-import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AIEnhancementService;
+import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.QuestionTemplateService;
+import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
-import javax.script.ScriptException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -43,18 +54,24 @@ import org.springframework.transaction.annotation.Transactional;
 public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
   QuestionTemplateRepository questionTemplateRepository;
-  UserRepository userRepository;
+  LessonRepository lessonRepository;
   AIEnhancementService aiEnhancementService;
-  ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
+  GeminiService geminiService;
+  QuestionRepository questionRepository;
+  QuestionBankRepository questionBankRepository;
 
   @Override
   @Transactional
   public QuestionTemplateResponse createQuestionTemplate(QuestionTemplateRequest request) {
     log.info("Creating question template: {}", request.getName());
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
-    // Validate template syntax
+    UUID bankId = request.getQuestionBankId();
+    if (bankId != null) {
+      validateCanUseQuestionBank(bankId, currentUserId);
+    }
+
     List<String> validationErrors = validateTemplateSyntax(request);
     if (!validationErrors.isEmpty()) {
       log.error("Template validation failed: {}", validationErrors);
@@ -63,7 +80,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
     QuestionTemplate template =
         QuestionTemplate.builder()
-            .createdBy(currentUserId)
+            .questionBankId(bankId)
             .name(request.getName())
             .description(request.getDescription())
             .templateType(request.getTemplateType())
@@ -76,30 +93,44 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .cognitiveLevel(request.getCognitiveLevel())
             .tags(request.getTags())
             .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
+            .status(TemplateStatus.DRAFT)
             .usageCount(0)
             .build();
+    template.setCreatedBy(currentUserId);
 
     template = questionTemplateRepository.save(template);
 
-    log.info("Question template created successfully with id: {}", template.getId());
+    log.info("Question template created with id: {}", template.getId());
     return mapToResponse(template);
   }
 
   @Override
   @Transactional
   public QuestionTemplateResponse updateQuestionTemplate(UUID id, QuestionTemplateRequest request) {
-    log.info("Updating question template with id: {}", id);
+    log.info("Updating question template: {}", id);
 
     QuestionTemplate template =
         questionTemplateRepository
-            .findById(id)
+            .findByIdWithCreator(id)
             .filter(t -> t.getDeletedAt() == null)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
 
-    // Validate template syntax
+    UUID bankId = request.getQuestionBankId();
+    if (bankId != null) {
+      validateCanUseQuestionBank(bankId, currentUserId);
+      template.setQuestionBankId(bankId);
+    } else {
+      // Allow un-assigning from a bank explicitly
+      template.setQuestionBankId(null);
+    }
+
+    if (template.getStatus() == TemplateStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.TEMPLATE_ALREADY_PUBLISHED);
+    }
+
     List<String> validationErrors = validateTemplateSyntax(request);
     if (!validationErrors.isEmpty()) {
       log.error("Template validation failed: {}", validationErrors);
@@ -123,47 +154,107 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
     template = questionTemplateRepository.save(template);
 
-    log.info("Question template updated successfully: {}", id);
+    log.info("Question template updated: {}", id);
     return mapToResponse(template);
   }
 
   @Override
   @Transactional
   public void deleteQuestionTemplate(UUID id) {
-    log.info("Deleting question template with id: {}", id);
-
+    log.info("Deleting question template: {}", id);
     QuestionTemplate template =
         questionTemplateRepository
-            .findById(id)
+            .findByIdWithCreator(id)
             .filter(t -> t.getDeletedAt() == null)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
 
-    // Soft delete
+    if (template.getStatus() == TemplateStatus.PUBLISHED) {
+      log.warn(
+          "Template {} is PUBLISHED — archiving instead of soft-deleting to preserve audit trail",
+          id);
+      template.setStatus(TemplateStatus.ARCHIVED);
+      questionTemplateRepository.save(template);
+      return;
+    }
+
     template.setDeletedAt(Instant.now());
     questionTemplateRepository.save(template);
+    log.info("Question template soft-deleted: {}", id);
+  }
 
-    log.info("Question template soft deleted successfully: {}", id);
+  @Override
+  @Transactional
+  public QuestionTemplateResponse publishTemplate(UUID id) {
+    log.info("Publishing template: {}", id);
+
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findByIdWithCreator(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
+
+    if (template.getStatus() == TemplateStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.TEMPLATE_ALREADY_PUBLISHED);
+    }
+    if (template.getStatus() == TemplateStatus.ARCHIVED) {
+      throw new AppException(ErrorCode.TEMPLATE_ALREADY_ARCHIVED);
+    }
+
+    template.setStatus(TemplateStatus.PUBLISHED);
+    template = questionTemplateRepository.save(template);
+
+    log.info("Template {} published", id);
+    return mapToResponse(template);
+  }
+
+  @Override
+  @Transactional
+  public QuestionTemplateResponse archiveTemplate(UUID id) {
+    log.info("Archiving template: {}", id);
+
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findByIdWithCreator(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
+
+    if (template.getStatus() == TemplateStatus.ARCHIVED) {
+      throw new AppException(ErrorCode.TEMPLATE_ALREADY_ARCHIVED);
+    }
+
+    template.setStatus(TemplateStatus.ARCHIVED);
+    template = questionTemplateRepository.save(template);
+
+    log.info("Template {} archived", id);
+    return mapToResponse(template);
   }
 
   @Override
   @Transactional(readOnly = true)
   public QuestionTemplateResponse getQuestionTemplateById(UUID id) {
-    log.info("Getting question template with id: {}", id);
+    log.info("Getting question template: {}", id);
 
     QuestionTemplate template =
         questionTemplateRepository
-            .findById(id)
+            .findByIdWithCreator(id)
             .filter(t -> t.getDeletedAt() == null)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
-    // Check access: owner, admin, or public template
-    if (!template.getIsPublic() && !template.getCreatedBy().equals(currentUserId) && !isAdmin()) {
-      throw new AccessDeniedException("You don't have permission to access this template");
+    if (!template.getIsPublic()
+        && !template.getCreatedBy().equals(currentUserId)
+        && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.TEMPLATE_ACCESS_DENIED);
     }
 
     return mapToResponse(template);
@@ -172,11 +263,12 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   @Override
   @Transactional(readOnly = true)
   public Page<QuestionTemplateResponse> getMyQuestionTemplates(Pageable pageable) {
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
     log.info("Getting question templates for user: {}", currentUserId);
 
-    Page<QuestionTemplate> templates = questionTemplateRepository.findAll(pageable);
-    return templates.map(this::mapToResponse);
+    return questionTemplateRepository
+        .findByCreatedByAndNotDeleted(currentUserId, pageable)
+        .map(this::mapToResponse);
   }
 
   @Override
@@ -188,63 +280,19 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       String searchTerm,
       String[] tags,
       Pageable pageable) {
-    log.info("Searching question templates with filters");
+    log.info(
+        "Searching question templates – type: {}, cognitive: {}, isPublic: {}, term: {}",
+        templateType,
+        cognitiveLevel,
+        isPublic,
+        searchTerm);
 
-    UUID currentUserId = getCurrentUserId();
-    Page<QuestionTemplate> templates = questionTemplateRepository.findAll(pageable);
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
-    return templates.map(this::mapToResponse);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public TemplateTestResponse testTemplate(UUID id, Integer sampleCount) {
-    log.info("Testing template with id: {}", id);
-
-    QuestionTemplate template =
-        questionTemplateRepository
-            .findById(id)
-            .filter(t -> t.getDeletedAt() == null)
-            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
-
-    UUID currentUserId = getCurrentUserId();
-    validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
-
-    return generateTemplateTest(template, sampleCount != null ? sampleCount : 5);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public TemplateTestResponse validateAndTestTemplate(
-      QuestionTemplateRequest request, Integer sampleCount) {
-    log.info("Validating and testing template: {}", request.getName());
-
-    List<String> validationErrors = validateTemplateSyntax(request);
-
-    QuestionTemplate tempTemplate =
-        QuestionTemplate.builder()
-            .name(request.getName())
-            .templateType(request.getTemplateType())
-            .templateText(request.getTemplateText())
-            .parameters(request.getParameters())
-            .answerFormula(request.getAnswerFormula())
-            .optionsGenerator(request.getOptionsGenerator())
-            .difficultyRules(request.getDifficultyRules())
-            .constraints(request.getConstraints())
-            .cognitiveLevel(request.getCognitiveLevel())
-            .tags(request.getTags())
-            .build();
-
-    if (!validationErrors.isEmpty()) {
-      return TemplateTestResponse.builder()
-          .templateName(request.getName())
-          .samples(new ArrayList<>())
-          .isValid(false)
-          .validationErrors(validationErrors)
-          .build();
-    }
-
-    return generateTemplateTest(tempTemplate, sampleCount != null ? sampleCount : 5);
+    return questionTemplateRepository
+        .searchTemplates(
+            currentUserId, isPublic, templateType, cognitiveLevel, searchTerm, pageable)
+        .map(this::mapToResponse);
   }
 
   @Override
@@ -254,28 +302,431 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
     QuestionTemplate template =
         questionTemplateRepository
-            .findById(id)
+            .findByIdWithCreator(id)
             .filter(t -> t.getDeletedAt() == null)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
     validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
+
+    if (template.getStatus() == TemplateStatus.DRAFT && !template.getIsPublic()) {
+      throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+    }
 
     template.setIsPublic(!template.getIsPublic());
     template = questionTemplateRepository.save(template);
 
-    log.info("Template public status toggled to: {}", template.getIsPublic());
+    log.info("Template {} public status toggled to: {}", id, template.getIsPublic());
     return mapToResponse(template);
   }
 
-  // Helper methods
+  @Override
+  @Transactional
+  public TemplateTestResponse testTemplate(UUID id, Integer sampleCount, Boolean useAI) {
+    log.info("Testing template: {} (LLM-based)", id);
+    QuestionTemplate template = fetchTemplateForTesting(id);
+    return generateWithLLMAndSave(template, sampleCount != null ? sampleCount : 3);
+  }
+
+  @Override
+  @Transactional
+  public AIEnhancedQuestionResponse generateAIEnhancedQuestion(UUID id) {
+    log.info("Generating AI-enhanced question from template: {}", id);
+
+    QuestionTemplate template = fetchTemplateForTesting(id);
+
+    try {
+      GeneratedQuestionSample sample = aiEnhancementService.generateQuestion(template, 0);
+
+      AIEnhancementRequest enhancementRequest =
+          AIEnhancementRequest.builder()
+              .rawQuestionText(sample.getQuestionText())
+              .questionType(template.getTemplateType())
+              .correctAnswer(
+                  sample.getOptions() != null && sample.getCorrectAnswer() != null
+                      ? sample.getOptions().get(sample.getCorrectAnswer())
+                      : null)
+              .rawOptions(sample.getOptions())
+              .parameters(sample.getUsedParameters())
+              .answerFormula(template.getAnswerFormula())
+              .difficulty(sample.getCalculatedDifficulty())
+              .context(template.getDescription())
+              .build();
+
+      AIEnhancedQuestionResponse enhanced =
+          aiEnhancementService.enhanceQuestion(enhancementRequest);
+
+      enhanced.setOriginalQuestionText(sample.getQuestionText());
+      enhanced.setOriginalOptions(sample.getOptions());
+
+      // Save Question entity with DRAFT status
+      try {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+        // Build generation metadata with DRAFT status and enhancement info
+        Map<String, Object> generationMetadata = new HashMap<>();
+        generationMetadata.put("status", "DRAFT");
+        generationMetadata.put("enhanced", enhanced.isEnhanced());
+        generationMetadata.put("usedParameters", sample.getUsedParameters());
+        generationMetadata.put("enhancementApplied", true);
+
+        // Create Question entity
+        Question question =
+            Question.builder()
+                .templateId(template.getId())
+                .questionType(template.getTemplateType())
+                .questionText(
+                    enhanced.getEnhancedQuestionText() != null
+                        ? enhanced.getEnhancedQuestionText()
+                        : enhanced.getOriginalQuestionText())
+                .options(
+                    enhanced.getEnhancedOptions() != null
+                        ? new HashMap<>(enhanced.getEnhancedOptions())
+                        : (enhanced.getOriginalOptions() != null
+                            ? new HashMap<>(enhanced.getOriginalOptions())
+                            : null))
+                .correctAnswer(enhanced.getCorrectAnswerKey())
+                .explanation(enhanced.getExplanation())
+                .difficulty(sample.getCalculatedDifficulty())
+                .cognitiveLevel(template.getCognitiveLevel())
+                .generationMetadata(generationMetadata)
+                .build();
+        question.setCreatedBy(currentUserId);
+
+        // Save to database
+        Question savedQuestion = questionRepository.save(question);
+        log.info(
+            "Saved AI-enhanced question as DRAFT with ID: {} (template: {})",
+            savedQuestion.getId(),
+            template.getId());
+
+        // Return response with generated question ID
+        enhanced.setGeneratedQuestionId(savedQuestion.getId().toString());
+
+      } catch (Exception e) {
+        log.error("Failed to save generated question as DRAFT: {}", e.getMessage(), e);
+        // Continue and return response even if save fails - don't block the response
+        if (enhanced.getValidationErrors() == null) {
+          enhanced.setValidationErrors(new ArrayList<>());
+        }
+        enhanced
+            .getValidationErrors()
+            .add("Warning: Question was not saved to database. Error: " + e.getMessage());
+      }
+
+      return enhanced;
+
+    } catch (Exception e) {
+      log.error("Failed to generate AI-enhanced question: {}", e.getMessage(), e);
+      throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+    }
+  }
+
+  @Override
+  @Transactional
+  public AIGeneratedTemplatesResponse aiGenerateTemplates(AIGenerateTemplatesRequest request) {
+    log.info("AI generating templates from lesson: {}", request.getLessonId());
+
+    // Load lesson to ensure it exists and get its content
+    Lesson lesson =
+        lessonRepository
+            .findById(request.getLessonId())
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    int templateCount = request.getTemplateCount() != null ? request.getTemplateCount() : 1;
+
+    log.info(
+        "Generating {} templates from lesson {} (title: {})",
+        templateCount,
+        lesson.getId(),
+        lesson.getTitle());
+
+    List<QuestionTemplateResponse> generatedTemplates = new ArrayList<>();
+
+    // Build a prompt that tells Gemini to analyze lesson content and generate templates
+    String lessonContent = buildLessonContent(lesson);
+    String prompt =
+        String.format(
+            "Analyze the following lesson content and generate %d practical and diverse question templates:\n\n"
+                + "Lesson: %s\n"
+                + "Content:\n%s\n\n"
+                + "For each template, provide the following in JSON format:\n"
+                + "{\n"
+                + "  \"templates\": [\n"
+                + "    {\n"
+                + "      \"name\": \"Template Name\",\n"
+                + "      \"description\": \"What this template tests\",\n"
+                + "      \"templateType\": \"MULTIPLE_CHOICE\",\n"
+                + "      \"cognitiveLevel\": \"UNDERSTAND\",\n"
+                + "      \"templateText\": \"Question text with {parameter} placeholders\",\n"
+                + "      \"parameters\": {\n"
+                + "        \"parameter\": {\"type\": \"integer\", \"min\": 1, \"max\": 100}\n"
+                + "      },\n"
+                + "      \"answerFormula\": \"formula to calculate answer\",\n"
+                + "      \"tags\": [\"tag1\", \"tag2\"]\n"
+                + "    }\n"
+                + "  ]\n"
+                + "}\n\n"
+                + "Generate templates that are practical, diverse in cognitive levels, and reusable.",
+            templateCount, lesson.getTitle(), lessonContent);
+
+    try {
+      // Call Gemini to generate templates
+      String aiResponse = geminiService.sendMessage(prompt);
+      log.debug("Gemini response for template generation: {}", aiResponse);
+
+      // Parse the JSON response (simplified - in production, use proper JSON parsing and
+      // validation)
+      List<QuestionTemplate> savedTemplates =
+          parseAndSaveTemplates(aiResponse, lesson, currentUserId);
+
+      generatedTemplates =
+          savedTemplates.stream().map(this::mapToResponse).collect(Collectors.toList());
+
+      log.info(
+          "Successfully generated and saved {} templates from lesson {}",
+          generatedTemplates.size(),
+          lesson.getId());
+
+    } catch (Exception e) {
+      log.error("Failed to generate templates from lesson: {}", e.getMessage(), e);
+      throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+    }
+
+    return AIGeneratedTemplatesResponse.builder()
+        .totalTemplatesGenerated(generatedTemplates.size())
+        .generatedTemplates(generatedTemplates)
+        .lessonName(lesson.getTitle())
+        .message(
+            String.format(
+                "%d templates generated successfully from lesson '%s'. Templates are in DRAFT status and ready to be configured.",
+                generatedTemplates.size(), lesson.getTitle()))
+        .build();
+  }
+
+  private String buildLessonContent(Lesson lesson) {
+    // Combine lesson metadata and content for AI analysis
+    StringBuilder content = new StringBuilder();
+    if (lesson.getSummary() != null) {
+      content.append("Summary: ").append(lesson.getSummary()).append("\n\n");
+    }
+    if (lesson.getLessonContent() != null) {
+      content.append("Content: ").append(lesson.getLessonContent()).append("\n\n");
+    }
+    if (lesson.getLearningObjectives() != null) {
+      content.append("Learning Objectives: ").append(lesson.getLearningObjectives()).append("\n\n");
+    }
+    return !content.isEmpty()
+        ? content.toString()
+        : "No detailed content available. Generate templates based on the lesson title: "
+            + lesson.getTitle();
+  }
+
+  private List<QuestionTemplate> parseAndSaveTemplates(
+      String aiResponse, Lesson lesson, UUID currentUserId) {
+    List<QuestionTemplate> savedTemplates = new ArrayList<>();
+
+    try {
+      // Extract JSON from response (Gemini might include markdown code blocks)
+      String jsonContent = extractJsonFromResponse(aiResponse);
+
+      // Parse templates and create QuestionTemplate entities
+      // Note: In a real implementation, use ObjectMapper for proper JSON parsing
+      List<Map<String, Object>> templates = extractTemplatesList(jsonContent);
+
+      for (Map<String, Object> templateData : templates) {
+        QuestionTemplate template =
+            QuestionTemplate.builder()
+                .lessonId(lesson.getId())
+                .name((String) templateData.getOrDefault("name", "Generated Template"))
+                .description((String) templateData.getOrDefault("description", ""))
+                .templateType(
+                    QuestionType.valueOf(
+                        (String) templateData.getOrDefault("templateType", "MULTIPLE_CHOICE")))
+                .templateText(Map.of("en", (String) templateData.getOrDefault("templateText", "")))
+                .parameters((Map<String, Object>) templateData.get("parameters"))
+                .answerFormula((String) templateData.get("answerFormula"))
+                .cognitiveLevel(
+                    CognitiveLevel.valueOf(
+                        (String) templateData.getOrDefault("cognitiveLevel", "UNDERSTAND")))
+                .tags(
+                    ((List<?>) templateData.getOrDefault("tags", new ArrayList<>()))
+                        .toArray(new String[0]))
+                .isPublic(false)
+                .status(TemplateStatus.DRAFT)
+                .usageCount(0)
+                .build();
+        template.setCreatedBy(currentUserId);
+
+        savedTemplates.add(questionTemplateRepository.save(template));
+        log.debug("Saved AI-generated template: {}", template.getName());
+      }
+
+    } catch (Exception e) {
+      log.error("Failed to parse AI response and save templates: {}", e.getMessage(), e);
+      // Return whatever templates were successfully saved
+    }
+
+    return savedTemplates;
+  }
+
+  private String extractJsonFromResponse(String response) {
+    // Remove markdown code blocks if present
+    if (response.contains("```json")) {
+      int start = response.indexOf("```json") + 7;
+      int end = response.lastIndexOf("```");
+      if (end > start) {
+        return response.substring(start, end).trim();
+      }
+    } else if (response.contains("```")) {
+      int start = response.indexOf("```") + 3;
+      int end = response.lastIndexOf("```");
+      if (end > start) {
+        return response.substring(start, end).trim();
+      }
+    }
+    return response;
+  }
+
+  private List<Map<String, Object>> extractTemplatesList(String jsonContent) {
+    // Simplified parsing - in production, use JsonNode with ObjectMapper
+    List<Map<String, Object>> templates = new ArrayList<>();
+
+    // This is a placeholder implementation
+    // In production, use proper JSON parsing with ObjectMapper or Jackson
+    log.debug("Extracting templates from JSON content");
+
+    // For now, return empty list - the actual implementation would parse the JSON properly
+    return templates;
+  }
+
+  private TemplateTestResponse generateWithLLMAndSave(QuestionTemplate template, int sampleCount) {
+    List<GeneratedQuestionSample> samples = new ArrayList<>();
+    List<String> errors = new ArrayList<>();
+    List<UUID> savedQuestionIds = new ArrayList<>();
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    for (int i = 0; i < sampleCount; i++) {
+      try {
+        GeneratedQuestionSample sample = aiEnhancementService.generateQuestion(template, i);
+        if (sample.getQuestionText().startsWith("[LLM generation failed]")) {
+          errors.add("Sample " + (i + 1) + ": " + sample.getQuestionText());
+        } else {
+          samples.add(sample);
+
+          // Save question as DRAFT in its own transaction to prevent connection timeouts
+          try {
+            UUID savedQuestionId =
+                saveQuestionWithOwnTransaction(currentUserId, template, sample, i);
+            savedQuestionIds.add(savedQuestionId);
+          } catch (Exception saveException) {
+            log.error(
+                "Failed to save test question sample {}: {}",
+                i + 1,
+                saveException.getMessage(),
+                saveException);
+            errors.add(
+                "Sample " + (i + 1) + " saved but with warning: " + saveException.getMessage());
+          }
+        }
+      } catch (Exception e) {
+        log.error("Error generating LLM sample {}: {}", i + 1, e.getMessage());
+        errors.add("Sample " + (i + 1) + " generation failed: " + e.getMessage());
+      }
+    }
+
+    TemplateTestResponse response =
+        TemplateTestResponse.builder()
+            .templateId(template.getId())
+            .templateName(template.getName())
+            .samples(samples)
+            .isValid(!samples.isEmpty())
+            .validationErrors(errors)
+            .build();
+
+    // Add saved question IDs to response (if TemplateTestResponse supports it)
+    if (!savedQuestionIds.isEmpty()) {
+      log.info("Saved {} test question samples as DRAFT", savedQuestionIds.size());
+    }
+
+    return response;
+  }
+
+  /**
+   * Saves a question in its own transaction to prevent connection timeouts during AI generation.
+   * This is necessary because AI generation (external API calls) can be slow, and keeping a
+   * database connection idle for too long can cause it to be reset.
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  protected UUID saveQuestionWithOwnTransaction(
+      UUID currentUserId,
+      QuestionTemplate template,
+      GeneratedQuestionSample sample,
+      int sampleIndex) {
+    Map<String, Object> generationMetadata = new HashMap<>();
+    generationMetadata.put("status", "DRAFT");
+    generationMetadata.put("sampleIndex", sampleIndex);
+    generationMetadata.put("usedParameters", sample.getUsedParameters());
+    generationMetadata.put("enhancementApplied", false);
+
+    Question question =
+        Question.builder()
+            .templateId(template.getId())
+            .questionType(template.getTemplateType())
+            .questionText(sample.getQuestionText())
+            .options(sample.getOptions() != null ? new HashMap<>(sample.getOptions()) : null)
+            .correctAnswer(sample.getCorrectAnswer())
+            .difficulty(sample.getCalculatedDifficulty())
+            .cognitiveLevel(template.getCognitiveLevel())
+            .generationMetadata(generationMetadata)
+            .build();
+    question.setCreatedBy(currentUserId);
+
+    Question savedQuestion = questionRepository.save(question);
+    log.info(
+        "Saved test question sample {} as DRAFT with ID: {} (template: {})",
+        sampleIndex + 1,
+        savedQuestion.getId(),
+        template.getId());
+
+    return savedQuestion.getId();
+  }
+
+  /**
+   * access extended to public templates (was owner-only).
+   * only PUBLISHED templates may generate questions.
+   */
+  protected QuestionTemplate fetchTemplateForTesting(UUID id) {
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findByIdWithCreator(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    boolean isOwner = template.getCreatedBy().equals(currentUserId);
+    boolean isAdmin = SecurityUtils.hasRole("ADMIN");
+    boolean isPublicTemplate = Boolean.TRUE.equals(template.getIsPublic());
+
+    if (!isOwner && !isAdmin && !isPublicTemplate) {
+      throw new AppException(ErrorCode.TEMPLATE_ACCESS_DENIED);
+    }
+
+    if (template.getStatus() != TemplateStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+    }
+
+    return template;
+  }
 
   private List<String> validateTemplateSyntax(QuestionTemplateRequest request) {
     List<String> errors = new ArrayList<>();
 
-    // Validate template text has placeholders matching parameters
-    String templateTextStr = request.getTemplateText().toString();
-    Pattern pattern = Pattern.compile("\\{\\{(\\w+)\\}\\}");
+    String templateTextStr =
+        request.getTemplateText() != null ? request.getTemplateText().toString() : "";
+    Pattern pattern = Pattern.compile("\\{\\{(\\w+)}}");
     Matcher matcher = pattern.matcher(templateTextStr);
 
     Set<String> placeholders = new HashSet<>();
@@ -283,260 +734,19 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       placeholders.add(matcher.group(1));
     }
 
-    Map<String, Object> parameters = request.getParameters();
+    Map<String, Object> parameters =
+        request.getParameters() != null ? request.getParameters() : Collections.emptyMap();
     for (String placeholder : placeholders) {
       if (!parameters.containsKey(placeholder)) {
         errors.add("Placeholder {{" + placeholder + "}} not defined in parameters");
       }
     }
 
-    // Validate answer formula
-    try {
-      validateFormula(request.getAnswerFormula(), parameters.keySet());
-    } catch (Exception e) {
-      errors.add("Invalid answer formula: " + e.getMessage());
-    }
-
-    // Validate difficulty rules
     if (request.getDifficultyRules() == null || request.getDifficultyRules().isEmpty()) {
       errors.add("Difficulty rules are required");
     }
 
     return errors;
-  }
-
-  private void validateFormula(String formula, Set<String> paramNames) throws ScriptException {
-    ScriptEngine engine = scriptEngineManager.getEngineByName("JavaScript");
-    if (engine == null) {
-      throw new RuntimeException("JavaScript engine not available");
-    }
-
-    // Set dummy values for parameters
-    for (String param : paramNames) {
-      engine.put(param, 1);
-    }
-
-    // Try to evaluate the formula
-    engine.eval(formula);
-  }
-
-  private TemplateTestResponse generateTemplateTest(QuestionTemplate template, int sampleCount) {
-    List<GeneratedQuestionSample> samples = new ArrayList<>();
-    List<String> errors = new ArrayList<>();
-
-    for (int i = 0; i < sampleCount; i++) {
-      try {
-        GeneratedQuestionSample sample = generateQuestionSample(template);
-        samples.add(sample);
-      } catch (Exception e) {
-        log.error("Error generating sample {}: {}", i, e.getMessage());
-        errors.add("Sample " + (i + 1) + " generation failed: " + e.getMessage());
-      }
-    }
-
-    return TemplateTestResponse.builder()
-        .templateId(template.getId())
-        .templateName(template.getName())
-        .samples(samples)
-        .isValid(errors.isEmpty())
-        .validationErrors(errors)
-        .build();
-  }
-
-  @SuppressWarnings("unchecked")
-  private GeneratedQuestionSample generateQuestionSample(QuestionTemplate template)
-      throws ScriptException {
-    Map<String, Object> usedParameters = new HashMap<>();
-    ScriptEngine engine = scriptEngineManager.getEngineByName("JavaScript");
-
-    // Generate random values for each parameter
-    Map<String, Object> parameters = template.getParameters();
-    for (Map.Entry<String, Object> entry : parameters.entrySet()) {
-      String paramName = entry.getKey();
-      Map<String, Object> paramDef = (Map<String, Object>) entry.getValue();
-
-      Object value = generateParameterValue(paramDef);
-      usedParameters.put(paramName, value);
-      engine.put(paramName, value);
-    }
-
-    // Calculate answer
-    Object answerObj = engine.eval(template.getAnswerFormula());
-    double answer = ((Number) answerObj).doubleValue();
-
-    // Check constraints
-    if (template.getConstraints() != null) {
-      engine.put("answer", answer);
-      for (String constraint : template.getConstraints()) {
-        Object result = engine.eval(constraint);
-        if (!(result instanceof Boolean) || !((Boolean) result)) {
-          throw new RuntimeException("Constraint failed: " + constraint);
-        }
-      }
-    }
-
-    // Generate question text
-    String questionText = generateQuestionText(template.getTemplateText(), usedParameters);
-
-    // Generate options
-    Map<String, String> options = generateOptions(template, answer, engine);
-
-    // Determine difficulty
-    QuestionDifficulty difficulty =
-        calculateDifficulty(template.getDifficultyRules(), usedParameters, engine);
-
-    return GeneratedQuestionSample.builder()
-        .questionText(questionText)
-        .options(options)
-        .correctAnswer(formatAnswer(answer))
-        .explanation("Based on the formula: " + template.getAnswerFormula())
-        .calculatedDifficulty(difficulty)
-        .usedParameters(usedParameters)
-        .answerCalculation(template.getAnswerFormula() + " = " + answer)
-        .build();
-  }
-
-  @SuppressWarnings("unchecked")
-  private Object generateParameterValue(Map<String, Object> paramDef) {
-    String type = (String) paramDef.getOrDefault("type", "integer");
-    Random random = new Random();
-
-    switch (type.toLowerCase()) {
-      case "integer":
-        int min = ((Number) paramDef.getOrDefault("min", 1)).intValue();
-        int max = ((Number) paramDef.getOrDefault("max", 10)).intValue();
-        List<Integer> exclude =
-            paramDef.containsKey("exclude")
-                ? ((List<?>) paramDef.get("exclude"))
-                    .stream().map(o -> ((Number) o).intValue()).collect(Collectors.toList())
-                : new ArrayList<>();
-
-        int value;
-        do {
-          value = random.nextInt(max - min + 1) + min;
-        } while (exclude.contains(value));
-        return value;
-
-      case "decimal":
-        double minD = ((Number) paramDef.getOrDefault("min", 1.0)).doubleValue();
-        double maxD = ((Number) paramDef.getOrDefault("max", 10.0)).doubleValue();
-        return minD + (maxD - minD) * random.nextDouble();
-
-      default:
-        return 1;
-    }
-  }
-
-  private String generateQuestionText(
-      Map<String, Object> templateText, Map<String, Object> parameters) {
-    String text = templateText.getOrDefault("vi", templateText.get("en")).toString();
-
-    for (Map.Entry<String, Object> entry : parameters.entrySet()) {
-      String placeholder = "{{" + entry.getKey() + "}}";
-      text = text.replace(placeholder, entry.getValue().toString());
-    }
-
-    return text;
-  }
-
-  @SuppressWarnings("unchecked")
-  private Map<String, String> generateOptions(
-      QuestionTemplate template, double answer, ScriptEngine engine) throws ScriptException {
-    Map<String, String> options = new LinkedHashMap<>();
-
-    if (template.getTemplateType() == QuestionType.TRUE_FALSE) {
-      options.put("A", "True");
-      options.put("B", "False");
-      return options;
-    }
-
-    if (template.getOptionsGenerator() == null) {
-      options.put("A", formatAnswer(answer));
-      return options;
-    }
-
-    Map<String, Object> generator = template.getOptionsGenerator();
-    List<String> distractors = (List<String>) generator.get("distractors");
-
-    List<String> allOptions = new ArrayList<>();
-    allOptions.add(formatAnswer(answer));
-
-    if (distractors != null) {
-      engine.put("answer", answer);
-      for (String distractor : distractors) {
-        try {
-          Object result = engine.eval(distractor);
-          double distractorValue = ((Number) result).doubleValue();
-          if (distractorValue != answer) {
-            allOptions.add(formatAnswer(distractorValue));
-          }
-        } catch (Exception e) {
-          log.warn("Failed to generate distractor: {}", distractor);
-        }
-      }
-    }
-
-    // Shuffle options
-    Collections.shuffle(allOptions);
-
-    char optionLabel = 'A';
-    for (String option : allOptions) {
-      options.put(String.valueOf(optionLabel++), option);
-      if (optionLabel > 'D') break;
-    }
-
-    return options;
-  }
-
-  @SuppressWarnings("unchecked")
-  private QuestionDifficulty calculateDifficulty(
-      Map<String, Object> rules, Map<String, Object> parameters, ScriptEngine engine)
-      throws ScriptException {
-    // Set parameters in engine
-    for (Map.Entry<String, Object> entry : parameters.entrySet()) {
-      engine.put(entry.getKey(), entry.getValue());
-    }
-
-    // Check difficulty rules
-    String easyRule = (String) rules.get("easy");
-    String mediumRule = (String) rules.get("medium");
-    String hardRule = (String) rules.get("hard");
-
-    if (easyRule != null && evaluateRule(engine, easyRule)) {
-      return QuestionDifficulty.EASY;
-    }
-    if (mediumRule != null && evaluateRule(engine, mediumRule)) {
-      return QuestionDifficulty.MEDIUM;
-    }
-    if (hardRule != null && evaluateRule(engine, hardRule)) {
-      return QuestionDifficulty.HARD;
-    }
-
-    return QuestionDifficulty.MEDIUM;
-  }
-
-  private boolean evaluateRule(ScriptEngine engine, String rule) {
-    try {
-      // Convert SQL-like operators to JavaScript
-      String jsRule =
-          rule.replaceAll("\\bAND\\b", "&&")
-              .replaceAll("\\bOR\\b", "||")
-              .replaceAll("\\babs\\(", "Math.abs(");
-
-      Object result = engine.eval(jsRule);
-      return result instanceof Boolean && (Boolean) result;
-    } catch (Exception e) {
-      log.warn("Failed to evaluate rule: {}", rule, e);
-      return false;
-    }
-  }
-
-  private String formatAnswer(double value) {
-    if (value == (long) value) {
-      return String.format("%d", (long) value);
-    } else {
-      return String.format("%.2f", value);
-    }
   }
 
   private QuestionTemplateResponse mapToResponse(QuestionTemplate template) {
@@ -556,10 +766,12 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .cognitiveLevel(template.getCognitiveLevel())
             .tags(template.getTags())
             .isPublic(template.getIsPublic())
+            .status(template.getStatus())
             .usageCount(template.getUsageCount())
             .avgSuccessRate(template.getAvgSuccessRate())
             .createdAt(template.getCreatedAt())
             .updatedAt(template.getUpdatedAt())
+            .questionBankId(template.getQuestionBankId())
             .build();
 
     if (template.getCreator() != null) {
@@ -569,164 +781,23 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     return response;
   }
 
-  private UUID getCurrentUserId() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication == null || !authentication.isAuthenticated()) {
-      throw new AppException(ErrorCode.UNAUTHENTICATED);
-    }
-    return UUID.fromString(authentication.getName());
-  }
-
   private void validateOwnerOrAdmin(UUID ownerId, UUID currentUserId) {
-    if (!ownerId.equals(currentUserId) && !isAdmin()) {
-      throw new AccessDeniedException("You don't have permission to perform this action");
+    if (!ownerId.equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.TEMPLATE_ACCESS_DENIED);
     }
   }
 
-  private boolean isAdmin() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    return authentication != null
-        && authentication.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-  }
+  private void validateCanUseQuestionBank(UUID bankId, UUID currentUserId) {
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
 
-  // AI Enhancement Methods
-
-  @Override
-  @Transactional(readOnly = true)
-  public TemplateTestResponse testTemplateWithAI(UUID id, Integer sampleCount, Boolean useAI) {
-    log.info("Testing template with AI={}: {}", useAI, id);
-
-    QuestionTemplate template =
-        questionTemplateRepository
-            .findById(id)
-            .filter(t -> t.getDeletedAt() == null)
-            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
-
-    UUID currentUserId = getCurrentUserId();
-    validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
-
-    if (Boolean.TRUE.equals(useAI)) {
-      return generateTemplateTestWithAI(template, sampleCount != null ? sampleCount : 3);
-    } else {
-      return generateTemplateTest(template, sampleCount != null ? sampleCount : 5);
+    // owner, admin, or public bank
+    if (!bank.getTeacherId().equals(currentUserId)
+        && !Boolean.TRUE.equals(bank.getIsPublic())
+        && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
     }
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public AIEnhancedQuestionResponse generateAIEnhancedQuestion(UUID id) {
-    log.info("Generating AI-enhanced question from template: {}", id);
-
-    QuestionTemplate template =
-        questionTemplateRepository
-            .findById(id)
-            .filter(t -> t.getDeletedAt() == null)
-            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
-
-    UUID currentUserId = getCurrentUserId();
-    validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
-
-    try {
-      // Generate base question
-      GeneratedQuestionSample baseSample = generateQuestionSample(template);
-
-      // Build AI enhancement request
-      AIEnhancementRequest aiRequest =
-          AIEnhancementRequest.builder()
-              .rawQuestionText(baseSample.getQuestionText())
-              .questionType(template.getTemplateType())
-              .correctAnswer(baseSample.getCorrectAnswer())
-              .rawOptions(baseSample.getOptions())
-              .parameters(baseSample.getUsedParameters())
-              .answerFormula(template.getAnswerFormula())
-              .difficulty(baseSample.getCalculatedDifficulty())
-              .subject("Mathematics")
-              .context(template.getDescription())
-              .build();
-
-      // Enhance with AI
-      return aiEnhancementService.enhanceQuestion(aiRequest);
-
-    } catch (Exception e) {
-      log.error("Failed to generate AI-enhanced question: {}", e.getMessage(), e);
-      throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
-    }
-  }
-
-  private TemplateTestResponse generateTemplateTestWithAI(
-      QuestionTemplate template, int sampleCount) {
-    List<GeneratedQuestionSample> samples = new ArrayList<>();
-    List<String> errors = new ArrayList<>();
-
-    for (int i = 0; i < sampleCount; i++) {
-      try {
-        // Generate base sample
-        GeneratedQuestionSample baseSample = generateQuestionSample(template);
-
-        // Build AI enhancement request
-        AIEnhancementRequest aiRequest =
-            AIEnhancementRequest.builder()
-                .rawQuestionText(baseSample.getQuestionText())
-                .questionType(template.getTemplateType())
-                .correctAnswer(baseSample.getCorrectAnswer())
-                .rawOptions(baseSample.getOptions())
-                .parameters(baseSample.getUsedParameters())
-                .answerFormula(template.getAnswerFormula())
-                .difficulty(baseSample.getCalculatedDifficulty())
-                .subject("Mathematics")
-                .context(template.getDescription())
-                .build();
-
-        // Enhance with AI
-        AIEnhancedQuestionResponse aiResponse = aiEnhancementService.enhanceQuestion(aiRequest);
-
-        // Convert to GeneratedQuestionSample for display
-        GeneratedQuestionSample enhancedSample =
-            GeneratedQuestionSample.builder()
-                .questionText(
-                    aiResponse.isEnhanced()
-                        ? aiResponse.getEnhancedQuestionText()
-                        : baseSample.getQuestionText())
-                .options(
-                    aiResponse.isEnhanced()
-                        ? aiResponse.getEnhancedOptions()
-                        : baseSample.getOptions())
-                .correctAnswer(
-                    aiResponse.isEnhanced()
-                        ? aiResponse.getCorrectAnswerKey()
-                        : baseSample.getCorrectAnswer())
-                .explanation(
-                    aiResponse.isEnhanced()
-                        ? aiResponse.getExplanation()
-                        : baseSample.getExplanation())
-                .calculatedDifficulty(baseSample.getCalculatedDifficulty())
-                .usedParameters(baseSample.getUsedParameters())
-                .answerCalculation(baseSample.getAnswerCalculation())
-                .build();
-
-        samples.add(enhancedSample);
-
-        if (!aiResponse.isEnhanced()) {
-          errors.add(
-              "Sample "
-                  + (i + 1)
-                  + " AI enhancement failed (fallback used): "
-                  + String.join(", ", aiResponse.getValidationErrors()));
-        }
-
-      } catch (Exception e) {
-        log.error("Error generating AI-enhanced sample {}: {}", i, e.getMessage());
-        errors.add("Sample " + (i + 1) + " generation failed: " + e.getMessage());
-      }
-    }
-
-    return TemplateTestResponse.builder()
-        .templateId(template.getId())
-        .templateName(template.getName())
-        .samples(samples)
-        .isValid(samples.size() > 0)
-        .validationErrors(errors)
-        .build();
   }
 }

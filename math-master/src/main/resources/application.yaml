@@ -1,9 +1,30 @@
 spring:
   application:
     name: math-master
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
   devtools:
     restart:
       enabled: false
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:nsn15102004@gmail.com}
+    password: ${MAIL_PASSWORD:avpq ilzm egtk uhdh}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false
 
   datasource:
     url: jdbc:postgresql://ep-green-mouse-ahwgiq0a-pooler.c-3.us-east-1.aws.neon.tech:5432/neondb?sslmode=require
@@ -13,6 +34,7 @@ spring:
 
     hikari:
       pool-name: HikariPool
+      auto-commit: false
       maximum-pool-size: 10
       minimum-idle: 2
       connection-timeout: 30000
@@ -28,7 +50,7 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: none
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -134,13 +156,26 @@ centrifugo:
 # ================================
 assessment:
   draft:
-    ttl: 86400 # 24 hours in seconds
-    auto-save-interval: 2000 # milliseconds
-#happy-new-year-2026
+    ttl: 86400
+    auto-save-interval: 2000
+
 # ================================
-# Ollama API Configuration
+# Gemini API Configuration (Google AI Studio)
 # ================================
-ollama:
-  base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-  model: ${OLLAMA_MODEL:llama3}
-  timeout-seconds: 600
+gemini:
+  api-key: ${GEMINI_API_KEY:AIzaSyC80Q3fDX-n3-XmcT04KbWI5B72RZwiWWc}
+  model: ${GEMINI_MODEL:gemini-2.5-flash}
+  base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+  timeout-seconds: 60
+
+# ================================
+# MinIO Object Storage
+# ================================
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  template-bucket: ${MINIO_TEMPLATE_BUCKET:slide-templates}
+  verification-bucket: ${MINIO_VERIFICATION_BUCKET:teacher-verifications}
+
+# = [REMOVED DUPLICATE SPRING BLOCK]

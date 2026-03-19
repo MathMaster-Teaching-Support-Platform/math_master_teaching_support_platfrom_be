@@ -1,8 +1,17 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.SubmissionStatus;
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -11,7 +20,9 @@ import lombok.*;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "quiz_attempts",
@@ -27,56 +38,90 @@ import lombok.*;
       @Index(name = "idx_quiz_attempts_number", columnList = "attempt_number"),
       @Index(name = "idx_quiz_attempts_status", columnList = "status")
     })
-public class QuizAttempt {
+/**
+ * The entity of 'QuizAttempt'.
+ */
+public class QuizAttempt extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
+  /**
+   * submission_id
+   */
   @Column(name = "submission_id", nullable = false)
   private UUID submissionId;
 
+  /**
+   * assessment_id
+   */
   @Column(name = "assessment_id", nullable = false)
   private UUID assessmentId;
 
+  /**
+   * student_id
+   */
   @Column(name = "student_id", nullable = false)
   private UUID studentId;
 
+  /**
+   * attempt_number
+   */
   @Column(name = "attempt_number", nullable = false)
   private Integer attemptNumber;
 
+  /**
+   * score
+   */
   @Column(name = "score", precision = 5, scale = 2)
   private BigDecimal score;
 
+  /**
+   * max_score
+   */
   @Column(name = "max_score", precision = 5, scale = 2)
   private BigDecimal maxScore;
 
+  /**
+   * percentage
+   */
   @Column(name = "percentage", precision = 5, scale = 2)
   private BigDecimal percentage;
 
+  /**
+   * status
+   */
   @Column(name = "status")
   @Enumerated(EnumType.STRING)
   private SubmissionStatus status;
 
+  /**
+   * started_at
+   */
   @Column(name = "started_at")
   private Instant startedAt;
 
+  /**
+   * submitted_at
+   */
   @Column(name = "submitted_at")
   private Instant submittedAt;
 
+  /**
+   * time_spent_seconds
+   */
   @Column(name = "time_spent_seconds")
   private Integer timeSpentSeconds;
 
+  /**
+   * ip_address
+   */
   @Column(name = "ip_address", columnDefinition = "inet")
   private String ipAddress;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with Submission
+   * - Many-to-One with Assessment
+   * - Many-to-One with User (student)
+   */
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "submission_id", insertable = false, updatable = false)
   private Submission submission;
@@ -93,12 +138,5 @@ public class QuizAttempt {
   public void prePersist() {
     if (status == null) status = SubmissionStatus.IN_PROGRESS;
     if (startedAt == null) startedAt = Instant.now();
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

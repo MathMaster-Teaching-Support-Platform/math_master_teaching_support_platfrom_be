@@ -2,6 +2,7 @@ package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.QuizAttempt;
+import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.SubmissionStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
@@ -94,6 +95,31 @@ public class AssessmentAutoSubmitServiceImpl implements AssessmentAutoSubmitServ
 
     if (!expiredAttempts.isEmpty()) {
       log.info("Auto-submitted {} expired attempts", expiredAttempts.size());
+    }
+  }
+
+  @Override
+  @Scheduled(fixedRate = 300_000) // every 5 minutes
+  @Transactional
+  public void autoCloseExpiredAssessments() {
+    log.debug("Checking for assessments to auto-close...");
+    Instant now = Instant.now();
+
+    List<Assessment> expired = assessmentRepository.findPublishedAssessmentsWithExpiredEndDate(now);
+
+    for (Assessment assessment : expired) {
+      try {
+        assessment.setStatus(AssessmentStatus.CLOSED);
+        assessmentRepository.save(assessment);
+        log.info(
+            "Auto-closed assessment {} (endDate={})", assessment.getId(), assessment.getEndDate());
+      } catch (Exception e) {
+        log.error("Failed to auto-close assessment {}", assessment.getId(), e);
+      }
+    }
+
+    if (!expired.isEmpty()) {
+      log.info("Auto-closed {} expired assessment(s)", expired.size());
     }
   }
 }

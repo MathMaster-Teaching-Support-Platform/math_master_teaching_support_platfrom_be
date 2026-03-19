@@ -18,6 +18,7 @@ public class AnswerGradeResponse {
   private UUID questionId;
   private String questionText;
   private String answerText;
+  private String correctAnswer;
   private Boolean isCorrect;
   private BigDecimal pointsEarned;
   private BigDecimal maxPoints;

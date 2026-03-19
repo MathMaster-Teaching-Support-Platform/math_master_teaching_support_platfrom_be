@@ -1,7 +1,8 @@
 package com.fptu.math_master.dto.request;
 
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
@@ -21,11 +22,11 @@ public class ExamMatrixRequest {
 
   private String description;
 
-  @Min(value = 1, message = "Total questions must be at least 1")
-  private Integer totalQuestions;
+  private Boolean isReusable;
 
-  @Min(value = 0, message = "Total points must be at least 0")
-  private BigDecimal totalPoints;
+  @Positive(message = "Total questions target must be greater than 0")
+  private Integer totalQuestionsTarget;
 
-  private Integer timeLimitMinutes;
+  @DecimalMin(value = "0.01", message = "Total points target must be greater than 0")
+  private BigDecimal totalPointsTarget;
 }

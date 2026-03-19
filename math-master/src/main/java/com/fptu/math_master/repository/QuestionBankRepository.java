@@ -26,22 +26,6 @@ public interface QuestionBankRepository
   Page<QuestionBank> findPublicQuestionBanks(Pageable pageable);
 
   @Query(
-      "SELECT qb FROM QuestionBank qb "
-          + "WHERE qb.deletedAt IS NULL "
-          + "AND (qb.teacherId = :teacherId OR qb.isPublic = true) "
-          + "AND (:subject IS NULL OR qb.subject = :subject) "
-          + "AND (:gradeLevel IS NULL OR qb.gradeLevel = :gradeLevel) "
-          + "AND (:isPublic IS NULL OR qb.isPublic = :isPublic) "
-          + "AND (:searchTerm IS NULL OR LOWER(qb.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
-  Page<QuestionBank> findWithFilters(
-      @Param("teacherId") UUID teacherId,
-      @Param("subject") String subject,
-      @Param("gradeLevel") String gradeLevel,
-      @Param("isPublic") Boolean isPublic,
-      @Param("searchTerm") String searchTerm,
-      Pageable pageable);
-
-  @Query(
       "SELECT COUNT(q) FROM Question q WHERE q.questionBankId = :questionBankId AND q.deletedAt IS NULL")
   Long countQuestionsByQuestionBankId(@Param("questionBankId") UUID questionBankId);
 

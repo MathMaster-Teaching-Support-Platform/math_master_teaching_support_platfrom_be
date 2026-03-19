@@ -1,7 +1,10 @@
 package com.fptu.math_master.dto.response;
 
 import com.fptu.math_master.enums.CognitiveLevel;
+import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.enums.TemplateStatus;
+import com.fptu.math_master.enums.TemplateVariant;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
@@ -23,17 +26,22 @@ public class QuestionTemplateResponse {
   private String name;
   private String description;
   private QuestionType templateType;
+  private TemplateVariant templateVariant;
   private Map<String, Object> templateText;
   private Map<String, Object> parameters;
   private String answerFormula;
   private Map<String, Object> optionsGenerator;
   private Map<String, Object> difficultyRules;
+  private String topic;
+  private QuestionDifficulty difficulty;
   private String[] constraints;
   private CognitiveLevel cognitiveLevel;
   private String[] tags;
   private Boolean isPublic;
+  private TemplateStatus status;
   private Integer usageCount;
   private BigDecimal avgSuccessRate;
   private Instant createdAt;
   private Instant updatedAt;
+  private UUID questionBankId;
 }

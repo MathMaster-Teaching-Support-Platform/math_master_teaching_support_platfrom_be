@@ -1,0 +1,645 @@
+{
+  "name": "Ma Trận Đề Minh Họa THPT 2025",
+  "description": "Ma trận đề thi thử THPT Quốc Gia môn Toán – 50 câu, 10 điểm",
+  "gradeLevel": 12,
+  "isReusable": true,
+  "status": "DRAFT",
+  "teacherName": "Nguyễn Văn A",
+  "curriculumName": "Toán 12 – Đề Minh Họa THPT",
+  "subjectName": "Toán",
+  "totalQuestionsTarget": 50,
+  "totalPointsTarget": 10.0,
+  "grandTotalQuestions": 50,
+  "grandTotalPoints": 10.0,
+  "grandTotalByCognitive": {
+    "NB": 20,
+    "TH": 15,
+    "VD": 10,
+    "VDC": 5
+  },
+  "chapters": [
+    {
+      "chapterTitle": "ĐẠO HÀM VÀ ỨNG DỤNG",
+      "chapterOrderIndex": 1,
+      "chapterTotalQuestions": 10,
+      "chapterTotalPoints": 2.0,
+      "totalByCognitive": { "NB": 4, "TH": 4, "VD": 1, "VDC": 1 },
+      "rows": [
+        {
+          "questionTypeName": "Đơn điệu của HS",
+          "referenceQuestions": "3,30",
+          "orderIndex": 1,
+          "rowTotalQuestions": 2,
+          "rowTotalPoints": 0.4,
+          "countByCognitive": { "NB": 1, "TH": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "Cực trị của HS",
+          "referenceQuestions": "4,5,39,46",
+          "orderIndex": 2,
+          "rowTotalQuestions": 4,
+          "rowTotalPoints": 0.8,
+          "countByCognitive": { "NB": 1, "TH": 1, "VD": 1, "VDC": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "VD",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "VDC",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "Min, Max của hàm số",
+          "referenceQuestions": "31",
+          "orderIndex": 3,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "TH": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "Đường Tiệm Cận",
+          "referenceQuestions": "6",
+          "orderIndex": 4,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "NB": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "Khảo sát và vẽ đồ thị",
+          "referenceQuestions": "7,8",
+          "orderIndex": 5,
+          "rowTotalQuestions": 2,
+          "rowTotalPoints": 0.4,
+          "countByCognitive": { "NB": 1, "TH": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapterTitle": "HÀM SỐ MŨ - LOGARIT",
+      "chapterOrderIndex": 2,
+      "chapterTotalQuestions": 8,
+      "chapterTotalPoints": 1.6,
+      "totalByCognitive": { "NB": 2, "TH": 2, "VD": 2, "VDC": 2 },
+      "rows": [
+        {
+          "questionTypeName": "Lũy thừa – Mũ – Logarit",
+          "referenceQuestions": "9,11",
+          "orderIndex": 6,
+          "rowTotalQuestions": 2,
+          "rowTotalPoints": 0.4,
+          "countByCognitive": { "NB": 1, "TH": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "HS Mũ – Logarit",
+          "referenceQuestions": "10",
+          "orderIndex": 7,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "TH": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "PT Mũ – Logarit",
+          "referenceQuestions": "12,13,47",
+          "orderIndex": 8,
+          "rowTotalQuestions": 3,
+          "rowTotalPoints": 0.6,
+          "countByCognitive": { "NB": 1, "VD": 1, "VDC": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "VD",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "VDC",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "BPT Mũ – Logarit",
+          "referenceQuestions": "32,40",
+          "orderIndex": 9,
+          "rowTotalQuestions": 2,
+          "rowTotalPoints": 0.4,
+          "countByCognitive": { "VD": 1, "VDC": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "VD",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "VDC",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapterTitle": "SỐ PHỨC",
+      "chapterOrderIndex": 3,
+      "chapterTotalQuestions": 6,
+      "chapterTotalPoints": 1.2,
+      "totalByCognitive": { "NB": 3, "TH": 1, "VD": 1, "VDC": 1 },
+      "rows": [
+        {
+          "questionTypeName": "Định nghĩa và tính chất",
+          "referenceQuestions": "18,20,34,42,49",
+          "orderIndex": 10,
+          "rowTotalQuestions": 5,
+          "rowTotalPoints": 1.0,
+          "countByCognitive": { "NB": 2, "TH": 1, "VD": 1, "VDC": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 2,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.4
+            },
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "VD",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "VDC",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "Phép Toán",
+          "referenceQuestions": "19",
+          "orderIndex": 11,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "NB": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapterTitle": "NGUYÊN HÀM – TÍCH PHÂN",
+      "chapterOrderIndex": 4,
+      "chapterTotalQuestions": 8,
+      "chapterTotalPoints": 1.6,
+      "totalByCognitive": { "NB": 3, "TH": 2, "VD": 2, "VDC": 1 },
+      "rows": [
+        {
+          "questionTypeName": "Nguyên hàm",
+          "referenceQuestions": "14,15,33",
+          "orderIndex": 12,
+          "rowTotalQuestions": 3,
+          "rowTotalPoints": 0.6,
+          "countByCognitive": { "NB": 2, "TH": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 2,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.4
+            },
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "Tích phân",
+          "referenceQuestions": "16,17,41,48",
+          "orderIndex": 13,
+          "rowTotalQuestions": 4,
+          "rowTotalPoints": 0.8,
+          "countByCognitive": { "NB": 1, "TH": 1, "VD": 1, "VDC": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "VD",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "VDC",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "Ứng dụng TP tính diện tích",
+          "referenceQuestions": "44",
+          "orderIndex": 14,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "VD": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "VD",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapterTitle": "KHỐI ĐA DIỆN",
+      "chapterOrderIndex": 5,
+      "chapterTotalQuestions": 3,
+      "chapterTotalPoints": 0.6,
+      "totalByCognitive": { "NB": 1, "TH": 1, "VD": 1 },
+      "rows": [
+        {
+          "questionTypeName": "Thể tích khối đa diện",
+          "referenceQuestions": "21,22,43",
+          "orderIndex": 15,
+          "rowTotalQuestions": 3,
+          "rowTotalPoints": 0.6,
+          "countByCognitive": { "NB": 1, "TH": 1, "VD": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "VD",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapterTitle": "KHỐI TRÒN XOAY",
+      "chapterOrderIndex": 6,
+      "chapterTotalQuestions": 2,
+      "chapterTotalPoints": 0.4,
+      "totalByCognitive": { "NB": 2 },
+      "rows": [
+        {
+          "questionTypeName": "Khối nón",
+          "referenceQuestions": "23",
+          "orderIndex": 16,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "NB": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "Khối trụ",
+          "referenceQuestions": "24",
+          "orderIndex": 17,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "NB": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapterTitle": "GIẢI TÍCH TRONG KHÔNG GIAN",
+      "chapterOrderIndex": 7,
+      "chapterTotalQuestions": 8,
+      "chapterTotalPoints": 1.6,
+      "totalByCognitive": { "NB": 3, "TH": 3, "VD": 2 },
+      "rows": [
+        {
+          "questionTypeName": "PP tọa độ",
+          "referenceQuestions": "25",
+          "orderIndex": 18,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "NB": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "PT mặt cầu",
+          "referenceQuestions": "26,37,50",
+          "orderIndex": 19,
+          "rowTotalQuestions": 3,
+          "rowTotalPoints": 0.6,
+          "countByCognitive": { "NB": 1, "TH": 1, "VD": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            },
+            {
+              "cognitiveLevelLabel": "VD",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "PT mặt phẳng",
+          "referenceQuestions": "27",
+          "orderIndex": 20,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "NB": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "PT đường thẳng",
+          "referenceQuestions": "28,38,45",
+          "orderIndex": 21,
+          "rowTotalQuestions": 3,
+          "rowTotalPoints": 0.6,
+          "countByCognitive": { "TH": 2, "VD": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 2,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.4
+            },
+            {
+              "cognitiveLevelLabel": "VD",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapterTitle": "TỔ HỢP – XÁC SUẤT",
+      "chapterOrderIndex": 8,
+      "chapterTotalQuestions": 3,
+      "chapterTotalPoints": 0.6,
+      "totalByCognitive": { "NB": 2, "TH": 1 },
+      "rows": [
+        {
+          "questionTypeName": "Hoán vị - Chỉnh hợp – Tổ hợp",
+          "referenceQuestions": "1",
+          "orderIndex": 22,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "NB": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "Cấp số cộng (cấp số nhân)",
+          "referenceQuestions": "2",
+          "orderIndex": 23,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "NB": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "NB",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "Xác suất",
+          "referenceQuestions": "29",
+          "orderIndex": 24,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "TH": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapterTitle": "HÌNH HỌC KHÔNG GIAN",
+      "chapterOrderIndex": 9,
+      "chapterTotalQuestions": 2,
+      "chapterTotalPoints": 0.4,
+      "totalByCognitive": { "VD": 1, "TH": 1 },
+      "rows": [
+        {
+          "questionTypeName": "Góc",
+          "referenceQuestions": "35",
+          "orderIndex": 25,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "VD": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "VD",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        },
+        {
+          "questionTypeName": "Khoảng cách",
+          "referenceQuestions": "36",
+          "orderIndex": 26,
+          "rowTotalQuestions": 1,
+          "rowTotalPoints": 0.2,
+          "countByCognitive": { "TH": 1 },
+          "cells": [
+            {
+              "cognitiveLevelLabel": "TH",
+              "questionCount": 1,
+              "pointsPerQuestion": 0.2,
+              "totalPoints": 0.2
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

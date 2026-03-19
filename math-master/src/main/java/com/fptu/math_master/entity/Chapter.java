@@ -1,73 +1,93 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.Size;
-import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
-import lombok.*;
+
 import org.hibernate.annotations.Nationalized;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
 @Entity
 @Table(
     name = "chapters",
     uniqueConstraints = {
       @UniqueConstraint(
-          name = "uq_chapters_lesson_order",
-          columnNames = {"lesson_id", "order_index"})
+          name = "uq_chapters_subject_order",
+          columnNames = {"subject_id", "order_index"})
     },
     indexes = {
-      @Index(name = "idx_chapters_lesson_id", columnList = "lesson_id"),
+      @Index(name = "idx_chapters_curriculum_id", columnList = "curriculum_id"),
+      @Index(name = "idx_chapters_subject_id", columnList = "subject_id"),
       @Index(name = "idx_chapters_order", columnList = "order_index")
     })
-public class Chapter {
+/**
+ * The entity of 'Chapter'.
+ */
+public class Chapter extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+  /**
+   * curriculum_id
+   */
+  @Column(name = "curriculum_id")
+  private UUID curriculumId;
 
-  @Column(name = "lesson_id", nullable = false)
-  private UUID lessonId;
+  /** Direct ERD relationship: each Chapter belongs to one Subject. */
+  @Column(name = "subject_id")
+  private UUID subjectId;
 
+  /**
+   * title
+   */
   @Size(max = 255)
   @Nationalized
   @Column(name = "title", length = 255, nullable = false)
   private String title;
 
-  @Lob
-  @Nationalized
-  @Column(name = "description")
+  /**
+   * description
+   */
+  @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
+  /**
+   * order_index
+   */
   @Column(name = "order_index", nullable = false)
   private Integer orderIndex;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
-  @Column(name = "deleted_at")
-  private Instant deletedAt;
+  /**
+   * Relationships
+   * - Many-to-One with Curriculum
+   * - One-to-Many with Lesson
+   */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "curriculum_id", insertable = false, updatable = false)
+  private Curriculum curriculum;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
-  private Lesson lesson;
+  @JoinColumn(name = "subject_id", insertable = false, updatable = false)
+  private Subject subject;
 
-  @PrePersist
-  public void prePersist() {
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
-  }
+  @OneToMany(mappedBy = "chapter", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<Lesson> lessons;
 }

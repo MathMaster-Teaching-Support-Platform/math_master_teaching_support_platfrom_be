@@ -1,44 +1,33 @@
 package com.fptu.math_master.dto.request;
 
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
-import com.fptu.math_master.enums.QuestionType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
-import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * One cell in an exam-matrix row — specifies how many questions of a given
+ * cognitive level to draw from the parent {@link MatrixRowRequest}.
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class MatrixCellRequest {
 
-  @NotNull(message = "Chapter ID is required")
-  private UUID chapterId;
-
-  private String topic;
-
-  @NotNull(message = "Cognitive level is required")
+  @NotNull(message = "cognitiveLevel is required")
   private CognitiveLevel cognitiveLevel;
 
-  @NotNull(message = "Difficulty is required")
-  private QuestionDifficulty difficulty;
+  @NotNull(message = "questionCount is required")
+  @Min(value = 1, message = "questionCount must be at least 1")
+  private Integer questionCount;
 
-  private QuestionType questionType;
-
-  @NotNull(message = "Number of questions is required")
-  @Min(value = 0, message = "Number of questions must be at least 0")
-  private Integer numQuestions;
-
-  @NotNull(message = "Points per question is required")
-  @DecimalMin(value = "0.0", message = "Points per question must be at least 0")
+  @NotNull(message = "pointsPerQuestion is required")
+  @DecimalMin(value = "0.01", message = "pointsPerQuestion must be > 0")
   private BigDecimal pointsPerQuestion;
-
-  private String notes;
 }

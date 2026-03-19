@@ -10,3 +10,8 @@
 
 # Maven / Gradle build
 target/
+
+# Logs
+logs/*.log
+logs/*.txt
+*.logs

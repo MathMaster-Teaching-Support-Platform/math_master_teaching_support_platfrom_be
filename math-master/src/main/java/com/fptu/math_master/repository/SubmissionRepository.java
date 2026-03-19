@@ -53,4 +53,11 @@ public interface SubmissionRepository extends JpaRepository<Submission, UUID> {
       "SELECT COUNT(s) FROM Submission s WHERE s.assessmentId = :assessmentId AND s.status = :status")
   Long countByAssessmentIdAndStatus(
       @Param("assessmentId") UUID assessmentId, @Param("status") SubmissionStatus status);
+
+  @Query(
+      "SELECT COUNT(s) FROM Submission s "
+          + "JOIN s.assessment a "
+          + "WHERE a.teacherId = :teacherId AND s.status = :status")
+  Long countByTeacherIdAndStatus(
+      @Param("teacherId") UUID teacherId, @Param("status") SubmissionStatus status);
 }

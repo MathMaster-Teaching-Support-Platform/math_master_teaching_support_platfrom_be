@@ -1,17 +1,30 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.UUID;
-import lombok.*;
+
 import org.hibernate.annotations.Nationalized;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "grade_audit_logs",
@@ -20,36 +33,54 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_grade_audit_submission", columnList = "submission_id"),
       @Index(name = "idx_grade_audit_teacher", columnList = "teacher_id")
     })
-public class GradeAuditLog {
+/**
+ * The entity of 'GradeAuditLog'.
+ */
+public class GradeAuditLog extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
+  /**
+   * submission_id
+   */
   @Column(name = "submission_id")
   private UUID submissionId;
 
+  /**
+   * answer_id
+   */
   @Column(name = "answer_id")
   private UUID answerId;
 
+  /**
+   * teacher_id
+   */
   @Column(name = "teacher_id", nullable = false)
   private UUID teacherId;
 
+  /**
+   * old_points
+   */
   @Column(name = "old_points", precision = 5, scale = 2)
   private BigDecimal oldPoints;
 
+  /**
+   * new_points
+   */
   @Column(name = "new_points", precision = 5, scale = 2)
   private BigDecimal newPoints;
 
-  @Lob
+  /**
+   * reason
+   */
   @Nationalized
   @Column(name = "reason")
   private String reason;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with Submission
+   * - Many-to-One with Answer
+   * - Many-to-One with User (teacher)
+   */
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "submission_id", insertable = false, updatable = false)
   private Submission submission;
@@ -61,9 +92,4 @@ public class GradeAuditLog {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
   private User teacher;
-
-  @PrePersist
-  public void prePersist() {
-    if (createdAt == null) createdAt = Instant.now();
-  }
 }

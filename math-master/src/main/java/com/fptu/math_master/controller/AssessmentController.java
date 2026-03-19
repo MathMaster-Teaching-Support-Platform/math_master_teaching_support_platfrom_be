@@ -1,8 +1,12 @@
 package com.fptu.math_master.controller;
 
+import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
+import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.enums.AssessmentStatus;
@@ -39,7 +43,9 @@ public class AssessmentController {
       description =
           "Teacher creates a new assessment (quiz/test/exam/homework). "
               + "Title is required (max 255 chars), description is optional. "
-              + "Can set type, link to lesson, time limit, passing score, schedule, and options. "
+              + "Must select an examMatrixId and one or more lessonIds. "
+              + "Selected lessonIds are validated to ensure they belong to the chosen matrix. "
+              + "Can set type, time limit, passing score, schedule, and options. "
               + "Status is DRAFT by default. Redirects to Assessment Builder after creation.")
   public ApiResponse<AssessmentResponse> createAssessment(
       @Valid @RequestBody AssessmentRequest request) {
@@ -56,6 +62,7 @@ public class AssessmentController {
       summary = "Update assessment",
       description =
           "Update assessment details. Only DRAFT assessments can be edited. "
+              + "When updating matrix/lessons, selected lessonIds must remain valid for examMatrixId. "
               + "Published assessments cannot be modified unless unpublished first.")
   public ApiResponse<AssessmentResponse> updateAssessment(
       @PathVariable UUID id, @Valid @RequestBody AssessmentRequest request) {
@@ -194,13 +201,10 @@ public class AssessmentController {
               + "Pagination supported (default 20 items/page).")
   public ApiResponse<Page<AssessmentResponse>> getMyAssessments(
       @RequestParam(required = false) AssessmentStatus status,
-      @RequestParam(required = false) UUID lessonId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(defaultValue = "createdAt") String sortBy,
       @RequestParam(defaultValue = "DESC") String sortDirection) {
-
-    log.info("REST request to get my assessments - status: {}, lessonId: {}", status, lessonId);
 
     Sort sort =
         sortDirection.equalsIgnoreCase("ASC")
@@ -210,7 +214,7 @@ public class AssessmentController {
     Pageable pageable = PageRequest.of(page, size, sort);
 
     return ApiResponse.<Page<AssessmentResponse>>builder()
-        .result(assessmentService.getMyAssessments(status, lessonId, pageable))
+        .result(assessmentService.getMyAssessments(status, pageable))
         .build();
   }
 
@@ -246,6 +250,100 @@ public class AssessmentController {
     log.info("REST request to check publish permission for assessment: {}", id);
     return ApiResponse.<Boolean>builder()
         .result(assessmentService.canPublishAssessment(id))
+        .build();
+  }
+
+  @PostMapping("/{id}/close")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Close assessment",
+      description = "Permanently close a PUBLISHED assessment. No further attempts are allowed.")
+  public ApiResponse<AssessmentResponse> closeAssessment(@PathVariable UUID id) {
+    log.info("REST request to close assessment: {}", id);
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Assessment closed successfully.")
+        .result(assessmentService.closeAssessment(id))
+        .build();
+  }
+
+  @PostMapping("/{id}/clone")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Clone assessment",
+      description = "Create a DRAFT copy of an existing assessment. Matrix is NOT cloned.")
+  public ApiResponse<AssessmentResponse> cloneAssessment(
+      @PathVariable UUID id, @Valid @RequestBody CloneAssessmentRequest request) {
+    log.info("REST request to clone assessment: {}", id);
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Assessment cloned successfully.")
+        .result(assessmentService.cloneAssessment(id, request))
+        .build();
+  }
+
+  @PostMapping("/{assessmentId}/questions")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Add question to assessment",
+      description = "Add an existing question to a non-matrix DRAFT assessment.")
+  public ApiResponse<AssessmentResponse> addQuestion(
+      @PathVariable UUID assessmentId, @Valid @RequestBody AddQuestionToAssessmentRequest request) {
+    log.info(
+        "REST request to add question {} to assessment {}", request.getQuestionId(), assessmentId);
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Question added to assessment.")
+        .result(assessmentService.addQuestion(assessmentId, request))
+        .build();
+  }
+
+  @DeleteMapping("/{assessmentId}/questions/{questionId}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Remove question from assessment",
+      description = "Remove a question from a non-matrix DRAFT assessment.")
+  public ApiResponse<AssessmentResponse> removeQuestion(
+      @PathVariable UUID assessmentId, @PathVariable UUID questionId) {
+    log.info("REST request to remove question {} from assessment {}", questionId, assessmentId);
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Question removed from assessment.")
+        .result(assessmentService.removeQuestion(assessmentId, questionId))
+        .build();
+  }
+
+  @PostMapping("/generate-from-matrix")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Generate assessment from exam matrix (simplified)",
+      description =
+          "One-step assessment generation: auto-creates assessment and generates questions from exam matrix. "
+              + "Only requires examMatrixId. Automatically names assessment from matrix name. "
+              + "Perfect for quick assessment creation with minimal input.")
+  public ApiResponse<AssessmentResponse> generateAssessmentFromMatrix(
+      @Valid @RequestBody GenerateAssessmentQuestionsRequest request) {
+    log.info("REST request to auto-generate assessment from matrix: {}", request.getExamMatrixId());
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Assessment generated successfully from exam matrix with all questions.")
+        .result(assessmentService.generateAssessmentFromMatrix(request))
+        .build();
+  }
+
+  @PostMapping("/{assessmentId}/generate")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Generate assessment questions from exam matrix",
+      description =
+          "Generate questions from exam matrix templates using AI. "
+              + "Iterates through all template mappings in the matrix and generates required number of questions. "
+              + "Can optionally reuse previously approved questions.")
+  public ApiResponse<AssessmentGenerationResponse> generateQuestionsFromMatrix(
+      @PathVariable UUID assessmentId,
+      @Valid @RequestBody GenerateAssessmentQuestionsRequest request) {
+    log.info(
+        "REST request to generate questions from matrix {} for assessment {}",
+        request.getExamMatrixId(),
+        assessmentId);
+    return ApiResponse.<AssessmentGenerationResponse>builder()
+        .message("Questions generated successfully from exam matrix.")
+        .result(assessmentService.generateQuestionsFromMatrix(assessmentId, request))
         .build();
   }
 }

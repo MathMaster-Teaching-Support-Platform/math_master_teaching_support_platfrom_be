@@ -1,97 +1,135 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.enums.LessonDifficulty;
-import com.fptu.math_master.enums.LessonStatus;
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.Size;
-import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-import lombok.*;
+
 import org.hibernate.annotations.Nationalized;
+
+import com.fptu.math_master.enums.LessonDifficulty;
+import com.fptu.math_master.enums.LessonStatus;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "lessons",
     indexes = {
-      @Index(name = "idx_lessons_teacher_id", columnList = "teacher_id"),
-      @Index(name = "idx_lessons_status", columnList = "status"),
-      @Index(name = "idx_lessons_subject", columnList = "subject"),
-      @Index(name = "idx_lessons_grade_level", columnList = "grade_level"),
-      @Index(name = "idx_lessons_teacher_status", columnList = "teacher_id, status")
+      @Index(name = "idx_lessons_chapter_id", columnList = "chapter_id"),
+      @Index(name = "idx_lessons_status", columnList = "status")
     })
-public class Lesson {
+/**
+ * The entity of 'Lesson'.
+ */
+public class Lesson extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
+  /**
+   * chapter_id
+   */
+  @Column(name = "chapter_id", nullable = false)
+  private UUID chapterId;
 
-  @Column(name = "teacher_id", nullable = false)
-  private UUID teacherId;
-
+  /**
+   * title
+   */
   @Size(max = 255)
   @Nationalized
   @Column(name = "title", length = 255, nullable = false)
   private String title;
 
-  @Lob
+  /**
+   * learning_objectives
+   */
   @Nationalized
-  @Column(name = "description")
-  private String description;
+  @Column(name = "learning_objectives")
+  private String learningObjectives;
 
-  @Size(max = 100)
-  @Column(name = "subject", length = 100)
-  private String subject;
+  /**
+   * lesson_content
+   */
+  @Nationalized
+  @Column(name = "lesson_content", nullable = false)
+  private String lessonContent;
 
-  @Size(max = 50)
-  @Column(name = "grade_level", length = 50)
-  private String gradeLevel;
+  /**
+   * summary
+   */
+  @Nationalized
+  @Column(name = "summary")
+  private String summary;
 
+  /**
+   * order_index
+   */
+  @Column(name = "order_index")
+  private Integer orderIndex;
+
+  /**
+   * duration_minutes
+   */
   @Column(name = "duration_minutes")
   private Integer durationMinutes;
 
+  /**
+   * difficulty
+   */
   @Column(name = "difficulty")
   @Enumerated(EnumType.STRING)
   private LessonDifficulty difficulty;
 
+  /**
+   * status
+   */
   @Column(name = "status")
   @Enumerated(EnumType.STRING)
   private LessonStatus status;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
-  @Column(name = "deleted_at")
-  private Instant deletedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with Chapter
+   * - One-to-Many with LessonPlan
+   * - One-to-Many with QuestionTemplate
+   * - One-to-Many with AssessmentLesson
+   */
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
-  private User teacher;
+  @JoinColumn(name = "chapter_id", insertable = false, updatable = false)
+  private Chapter chapter;
 
   @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
-  private Set<Chapter> chapters;
+  private Set<LessonPlan> lessonPlans;
 
-  @OneToOne(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
-  private LessonPlan lessonPlan;
+  @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<QuestionTemplate> questionTemplates;
+
+  @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<AssessmentLesson> assessmentLessons;
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (status == null) status = LessonStatus.DRAFT;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

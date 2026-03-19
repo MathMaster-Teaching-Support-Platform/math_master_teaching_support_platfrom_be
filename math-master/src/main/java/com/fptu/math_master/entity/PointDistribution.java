@@ -1,18 +1,28 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.DistributionType;
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.UUID;
 import lombok.*;
 
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
     name = "point_distribution",
@@ -26,43 +36,60 @@ import lombok.*;
       @Index(name = "idx_point_distribution_type", columnList = "distribution_type"),
       @Index(name = "idx_point_distribution_key", columnList = "category_key")
     })
-public class PointDistribution {
+/**
+ * The entity of 'PointDistribution'.
+ */
+public class PointDistribution extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  private UUID id;
-
+  /**
+   * matrix_id
+   */
   @Column(name = "matrix_id", nullable = false)
   private UUID matrixId;
 
+  /**
+   * distribution_type
+   */
   @Column(name = "distribution_type", nullable = false)
   @Enumerated(EnumType.STRING)
   private DistributionType distributionType;
 
+  /**
+   * category_key
+   */
   @Size(max = 100)
   @Column(name = "category_key", length = 100, nullable = false)
   private String categoryKey;
 
+  /**
+   * category_value
+   */
   @Size(max = 255)
   @Column(name = "category_value", length = 255, nullable = false)
   private String categoryValue;
 
+  /**
+   * num_questions
+   */
   @Column(name = "num_questions", nullable = false)
   private Integer numQuestions;
 
+  /**
+   * total_points
+   */
   @Column(name = "total_points", nullable = false, precision = 6, scale = 2)
   private BigDecimal totalPoints;
 
+  /**
+   * percentage
+   */
   @Column(name = "percentage", precision = 5, scale = 2)
   private BigDecimal percentage;
 
-  @Column(name = "created_at")
-  private Instant createdAt;
-
-  @Column(name = "updated_at")
-  private Instant updatedAt;
-
+  /**
+   * Relationships
+   * - Many-to-One with ExamMatrix
+   */
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "matrix_id", insertable = false, updatable = false)
   private ExamMatrix examMatrix;
@@ -71,12 +98,5 @@ public class PointDistribution {
   public void prePersist() {
     if (numQuestions == null) numQuestions = 0;
     if (totalPoints == null) totalPoints = BigDecimal.ZERO;
-    if (createdAt == null) createdAt = Instant.now();
-    if (updatedAt == null) updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = Instant.now();
   }
 }

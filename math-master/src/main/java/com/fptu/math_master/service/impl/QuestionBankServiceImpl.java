@@ -7,11 +7,11 @@ import com.fptu.math_master.entity.User;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.QuestionBankRepository;
+import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.QuestionBankService;
+import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +19,6 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,139 +29,85 @@ import org.springframework.transaction.annotation.Transactional;
 public class QuestionBankServiceImpl implements QuestionBankService {
 
   QuestionBankRepository questionBankRepository;
+  QuestionRepository questionRepository;
   UserRepository userRepository;
-
-  private static final List<String> MATH_SUBJECT = Arrays.asList("Math");
 
   @Override
   @Transactional
   public QuestionBankResponse createQuestionBank(QuestionBankRequest request) {
     log.info("Creating question bank: {}", request.getName());
-
-    UUID currentUserId = getCurrentUserId();
-    validateTeacherRole(currentUserId);
-    validateSubject(request.getSubject());
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
     QuestionBank questionBank =
         QuestionBank.builder()
             .teacherId(currentUserId)
             .name(request.getName())
             .description(request.getDescription())
-            .subject(request.getSubject())
-            .gradeLevel(request.getGradeLevel())
             .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
             .build();
 
     questionBank = questionBankRepository.save(questionBank);
 
-    log.info("Question bank created successfully with id: {}", questionBank.getId());
-    return mapToResponse(questionBank);
+    log.info("Question bank created with id: {}", questionBank.getId());
+    return mapSingleToResponse(questionBank);
   }
 
   @Override
   @Transactional
   public QuestionBankResponse updateQuestionBank(UUID id, QuestionBankRequest request) {
-    log.info("Updating question bank with id: {}", id);
+    log.info("Updating question bank: {}", id);
 
     QuestionBank questionBank =
         questionBankRepository
             .findByIdAndNotDeleted(id)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
     validateOwnerOrAdmin(questionBank.getTeacherId(), currentUserId);
-    validateSubject(request.getSubject());
 
-    // Check if questions are in use and warn
-    if (questionBankRepository.hasQuestionsInUse(id)) {
-      log.warn("Question bank {} has questions in use in assessments", id);
+    boolean inUse = questionBankRepository.hasQuestionsInUse(id);
+    if (inUse) {
+      throw new AppException(ErrorCode.QUESTION_BANK_HAS_QUESTIONS_IN_USE);
     }
 
     questionBank.setName(request.getName());
     questionBank.setDescription(request.getDescription());
-    questionBank.setSubject(request.getSubject());
-    questionBank.setGradeLevel(request.getGradeLevel());
     if (request.getIsPublic() != null) {
       questionBank.setIsPublic(request.getIsPublic());
     }
 
     questionBank = questionBankRepository.save(questionBank);
 
-    log.info("Question bank updated successfully: {}", id);
-    return mapToResponse(questionBank);
+    log.info("Question bank updated: {}", id);
+    return mapSingleToResponse(questionBank);
   }
 
   @Override
   @Transactional
   public void deleteQuestionBank(UUID id) {
-    log.info("Deleting question bank with id: {}", id);
+    log.info("Deleting question bank: {}", id);
 
     QuestionBank questionBank =
         questionBankRepository
             .findByIdAndNotDeleted(id)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
     validateOwnerOrAdmin(questionBank.getTeacherId(), currentUserId);
 
-    // Soft delete
+    if (questionBankRepository.hasQuestionsInUse(id)) {
+      throw new AppException(ErrorCode.QUESTION_BANK_HAS_QUESTIONS_IN_USE);
+    }
+
+    int detached = questionRepository.detachFreeQuestionsFromBank(id);
+    if (detached > 0) {
+      log.info("Detached {} free questions from bank {} before soft-delete", detached, id);
+    }
+
     questionBank.setDeletedAt(Instant.now());
     questionBankRepository.save(questionBank);
 
-    log.info("Question bank soft deleted successfully: {}", id);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public QuestionBankResponse getQuestionBankById(UUID id) {
-    log.info("Getting question bank with id: {}", id);
-
-    QuestionBank questionBank =
-        questionBankRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
-
-    UUID currentUserId = getCurrentUserId();
-
-    // Check access: owner, admin, or public
-    if (!questionBank.getTeacherId().equals(currentUserId)
-        && !questionBank.getIsPublic()
-        && !isAdmin(currentUserId)) {
-      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
-    }
-
-    return mapToResponse(questionBank);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public Page<QuestionBankResponse> getMyQuestionBanks(Pageable pageable) {
-    log.info("Getting my question banks");
-
-    UUID currentUserId = getCurrentUserId();
-    Page<QuestionBank> questionBanks =
-        questionBankRepository.findByTeacherIdAndNotDeleted(currentUserId, pageable);
-
-    return questionBanks.map(this::mapToResponse);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public Page<QuestionBankResponse> searchQuestionBanks(
-      String subject, String gradeLevel, Boolean isPublic, String searchTerm, Pageable pageable) {
-    log.info(
-        "Searching question banks with filters - subject: {}, gradeLevel: {}, isPublic: {}, searchTerm: {}",
-        subject,
-        gradeLevel,
-        isPublic,
-        searchTerm);
-
-    UUID currentUserId = getCurrentUserId();
-    Page<QuestionBank> questionBanks =
-        questionBankRepository.findWithFilters(
-            currentUserId, subject, gradeLevel, isPublic, searchTerm, pageable);
-
-    return questionBanks.map(this::mapToResponse);
+    log.info("Question bank soft-deleted: {}", id);
   }
 
   @Override
@@ -175,14 +120,61 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             .findByIdAndNotDeleted(id)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
     validateOwnerOrAdmin(questionBank.getTeacherId(), currentUserId);
 
     questionBank.setIsPublic(!questionBank.getIsPublic());
     questionBank = questionBankRepository.save(questionBank);
 
     log.info("Question bank public status toggled to: {}", questionBank.getIsPublic());
-    return mapToResponse(questionBank);
+    return mapSingleToResponse(questionBank);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public QuestionBankResponse getQuestionBankById(UUID id) {
+    log.info("Getting question bank: {}", id);
+
+    QuestionBank questionBank =
+        questionBankRepository
+            .findByIdAndNotDeleted(id)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    // owner, admin, or public bank
+    if (!questionBank.getTeacherId().equals(currentUserId)
+        && !questionBank.getIsPublic()
+        && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
+    }
+
+    return mapSingleToResponse(questionBank);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<QuestionBankResponse> getMyQuestionBanks(Pageable pageable) {
+    log.info("Getting my question banks");
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    return questionBankRepository
+        .findByTeacherIdAndNotDeleted(currentUserId, pageable)
+        .map(this::mapSingleToResponse);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<QuestionBankResponse> searchQuestionBanks(
+      Boolean isPublic, String searchTerm, Pageable pageable) {
+    log.info("Searching question banks – searchTerm: {}, isPublic: {}", searchTerm, isPublic);
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    return questionBankRepository
+        .findByTeacherIdAndNotDeleted(currentUserId, pageable)
+        .map(this::mapSingleToResponse);
   }
 
   @Override
@@ -193,73 +185,31 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             .findByIdAndNotDeleted(id)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
 
-    UUID currentUserId = getCurrentUserId();
-    return questionBank.getTeacherId().equals(currentUserId) || isAdmin(currentUserId);
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    return questionBank.getTeacherId().equals(currentUserId) || SecurityUtils.hasRole("ADMIN");
   }
 
   @Override
   @Transactional(readOnly = true)
   public boolean canDeleteQuestionBank(UUID id) {
-    return canEditQuestionBank(id);
-  }
-
-  // Helper methods
-
-  private UUID getCurrentUserId() {
-    String username = SecurityContextHolder.getContext().getAuthentication().getName();
-    User user =
-        userRepository
-            .findByUserName(username)
-            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-    return user.getId();
-  }
-
-  private void validateTeacherRole(UUID userId) {
-    User user =
-        userRepository
-            .findByIdWithRoles(userId)
-            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
-    boolean isTeacher =
-        user.getRoles().stream()
-            .anyMatch(role -> role.getName().equals("TEACHER") || role.getName().equals("ADMIN"));
-
-    if (!isTeacher) {
-      throw new AppException(ErrorCode.NOT_A_TEACHER);
+    if (!canEditQuestionBank(id)) {
+      return false;
     }
-  }
-
-  private boolean isAdmin(UUID userId) {
-    User user =
-        userRepository
-            .findByIdWithRoles(userId)
-            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
-    return user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+    return !questionBankRepository.hasQuestionsInUse(id);
   }
 
   private void validateOwnerOrAdmin(UUID ownerId, UUID currentUserId) {
-    if (!ownerId.equals(currentUserId) && !isAdmin(currentUserId)) {
+    if (!ownerId.equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
       throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
     }
   }
 
-  private void validateSubject(String subject) {
-    if (subject != null && !MATH_SUBJECT.contains(subject)) {
-      throw new AppException(ErrorCode.INVALID_SUBJECT);
-    }
-  }
-
-  private QuestionBankResponse mapToResponse(QuestionBank questionBank) {
+  private QuestionBankResponse mapSingleToResponse(QuestionBank questionBank) {
     Long questionCount =
         questionBankRepository.countQuestionsByQuestionBankId(questionBank.getId());
 
-    // Get teacher name
     String teacherName =
-        userRepository
-            .findById(questionBank.getTeacherId())
-            .map(User::getFullName)
-            .orElse("Unknown");
+        userRepository.findById(questionBank.getTeacherId()).map(User::getFullName).orElse(null);
 
     return QuestionBankResponse.builder()
         .id(questionBank.getId())
@@ -267,8 +217,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         .teacherName(teacherName)
         .name(questionBank.getName())
         .description(questionBank.getDescription())
-        .subject(questionBank.getSubject())
-        .gradeLevel(questionBank.getGradeLevel())
         .isPublic(questionBank.getIsPublic())
         .questionCount(questionCount)
         .createdAt(questionBank.getCreatedAt())

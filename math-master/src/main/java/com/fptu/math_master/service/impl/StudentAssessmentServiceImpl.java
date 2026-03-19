@@ -4,12 +4,14 @@ import com.fptu.math_master.dto.request.*;
 import com.fptu.math_master.dto.response.*;
 import com.fptu.math_master.entity.*;
 import com.fptu.math_master.enums.AssessmentStatus;
+import com.fptu.math_master.enums.AttemptScoringPolicy;
 import com.fptu.math_master.enums.SubmissionStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.*;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -285,7 +287,15 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
   }
 
   private UUID getCurrentUserId() {
-    return UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName());
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth
+        instanceof
+        org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+                jwtAuth) {
+      String sub = jwtAuth.getToken().getSubject();
+      return UUID.fromString(sub);
+    }
+    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 
   private boolean isAssessmentAvailable(Assessment assessment, Instant now) {
@@ -468,12 +478,20 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
   }
 
   private Submission createSubmission(Assessment assessment, UUID studentId) {
+    Double rawMaxScore = assessmentRepository.calculateTotalPoints(assessment.getId());
+    BigDecimal maxScore =
+        rawMaxScore != null && rawMaxScore > 0
+            ? new BigDecimal(rawMaxScore.toString())
+            : BigDecimal.ZERO;
+
     Submission submission =
         Submission.builder()
             .assessmentId(assessment.getId())
             .studentId(studentId)
             .status(SubmissionStatus.IN_PROGRESS)
             .startedAt(Instant.now())
+            .maxScore(maxScore)
+            .gradesReleased(false)
             .build();
 
     return submissionRepository.save(submission);
@@ -529,6 +547,52 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     if (allSubmitted && !attempts.isEmpty()) {
       submission.setStatus(SubmissionStatus.SUBMITTED);
       submission.setSubmittedAt(Instant.now());
+
+      Assessment assessment =
+          assessmentRepository
+              .findById(submission.getAssessmentId())
+              .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+      AttemptScoringPolicy policy =
+          assessment.getAttemptScoringPolicy() != null
+              ? assessment.getAttemptScoringPolicy()
+              : AttemptScoringPolicy.BEST;
+
+      List<BigDecimal> attemptScores =
+          attempts.stream()
+              .filter(a -> a.getScore() != null)
+              .map(QuizAttempt::getScore)
+              .collect(Collectors.toList());
+
+      if (!attemptScores.isEmpty()) {
+        BigDecimal policyScore;
+        switch (policy) {
+          case LATEST:
+            policyScore =
+                attempts.stream()
+                    .filter(a -> a.getScore() != null)
+                    .findFirst()
+                    .map(QuizAttempt::getScore)
+                    .orElse(BigDecimal.ZERO);
+            break;
+          case AVERAGE:
+            policyScore =
+                attemptScores.stream()
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .divide(BigDecimal.valueOf(attemptScores.size()), 2, RoundingMode.HALF_UP);
+            break;
+          case BEST:
+          default:
+            policyScore = attemptScores.stream().max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
+            break;
+        }
+        if (submission.getManualAdjustment() == null) {
+          submission.setFinalScore(policyScore);
+        } else {
+          submission.setFinalScore(policyScore.add(submission.getManualAdjustment()));
+        }
+      }
+
       submissionRepository.save(submission);
     }
   }

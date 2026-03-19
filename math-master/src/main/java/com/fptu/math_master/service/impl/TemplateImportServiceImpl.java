@@ -3,13 +3,28 @@ package com.fptu.math_master.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.response.TemplateImportResponse;
+import com.fptu.math_master.entity.QuestionBank;
+import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
-import com.fptu.math_master.service.OllamaService;
+import com.fptu.math_master.enums.TemplateStatus;
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.QuestionBankRepository;
+import com.fptu.math_master.repository.QuestionTemplateRepository;
+import com.fptu.math_master.repository.UserRepository;
+import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.TemplateImportService;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.AccessLevel;
@@ -21,6 +36,8 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,7 +47,10 @@ import org.springframework.web.multipart.MultipartFile;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class TemplateImportServiceImpl implements TemplateImportService {
 
-  OllamaService ollamaService;
+  GeminiService geminiService;
+  QuestionTemplateRepository questionTemplateRepository;
+  QuestionBankRepository questionBankRepository;
+  UserRepository userRepository;
   ObjectMapper objectMapper = new ObjectMapper();
 
   static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -43,7 +63,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
 
   @Override
   public TemplateImportResponse importTemplateFromFile(
-      MultipartFile file, String subjectHint, String contextHint) {
+      MultipartFile file, String subjectHint, String contextHint, UUID questionBankId) {
 
     log.info("Importing template from file: {}", file.getOriginalFilename());
 
@@ -56,6 +76,11 @@ public class TemplateImportServiceImpl implements TemplateImportService {
       // Step 1: Extract text from file
       String extractedText = extractTextFromFile(file);
 
+      UUID currentUserId = getCurrentUserId();
+      if (questionBankId != null) {
+        validateCanUseQuestionBank(questionBankId, currentUserId);
+      }
+
       if (extractedText == null || extractedText.trim().isEmpty()) {
         return createErrorResponse("No text content found in file");
       }
@@ -65,6 +90,25 @@ public class TemplateImportServiceImpl implements TemplateImportService {
       // Step 2: Analyze with AI
       TemplateImportResponse response = analyzeWithAI(extractedText, subjectHint, contextHint);
       response.setExtractedText(extractedText);
+
+      // Step 3: Save as DRAFT if analysis was successful
+      if (response.getAnalysisSuccessful() && response.getSuggestedTemplate() != null) {
+        try {
+          QuestionTemplate savedTemplate =
+              saveDraftTemplate(response, currentUserId, questionBankId);
+          log.info("Saved template as DRAFT with ID: {}", savedTemplate.getId());
+        } catch (Exception e) {
+          log.error("Failed to save template as DRAFT: {}", e.getMessage(), e);
+          // Add warning but continue - template can still be reviewed and saved manually
+          if (response.getWarnings() == null) {
+            response.setWarnings(new ArrayList<>());
+          }
+          response
+              .getWarnings()
+              .add(
+                  "Warning: Failed to auto-save template as DRAFT. You can save it manually after review.");
+        }
+      }
 
       return response;
 
@@ -91,22 +135,17 @@ public class TemplateImportServiceImpl implements TemplateImportService {
       log.info("Extracting text from file type: {}", contentType);
 
       // PDF
-      if (contentType.equals("application/pdf")) {
-        return extractFromPDF(file.getInputStream());
-      }
+      return switch (contentType) {
+        case "application/pdf" -> extractFromPDF(file.getInputStream());
 
-      // Word (DOCX)
-      if (contentType.equals(
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
-        return extractFromDOCX(file.getInputStream());
-      }
+          // Word (DOCX)
+        case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ->
+            extractFromDOCX(file.getInputStream());
 
-      // Plain text
-      if (contentType.equals("text/plain")) {
-        return new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
-      }
-
-      throw new IllegalArgumentException("Unsupported file type: " + contentType);
+          // Plain text
+        case "text/plain" -> new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        default -> throw new IllegalArgumentException("Unsupported file type: " + contentType);
+      };
 
     } catch (IOException e) {
       log.error("Failed to extract text from file: {}", e.getMessage(), e);
@@ -189,11 +228,11 @@ public class TemplateImportServiceImpl implements TemplateImportService {
       String prompt = buildAnalysisPrompt(text, subjectHint, contextHint);
       log.info("Built analysis prompt with {} characters", prompt.length());
 
-      // Call Ollama
-      log.info("Sending analysis request to Ollama AI...");
+      // Call Gemini
+      log.info("Sending analysis request to Gemini AI...");
       long startTime = System.currentTimeMillis();
 
-      String aiResponse = ollamaService.sendMessage(prompt).getMessage().getContent();
+      String aiResponse = geminiService.sendMessage(prompt);
 
       long duration = System.currentTimeMillis() - startTime;
       log.info("Received AI response in {} ms ({} seconds)", duration, duration / 1000.0);
@@ -516,8 +555,8 @@ public class TemplateImportServiceImpl implements TemplateImportService {
           if (templateText2 != null) {
             String templateStr = templateText2.values().stream().findFirst().orElse("");
             if (templateStr.contains("{{a}}")
-                && !additionalWarnings.stream()
-                    .anyMatch(w -> w.contains("a=0") || w.contains("a != 0"))) {
+                && additionalWarnings.stream()
+                    .noneMatch(w -> w.contains("a=0") || w.contains("a != 0"))) {
               additionalWarnings.add(
                   "CRITICAL: Add constraint 'a != 0' to prevent division by zero");
             }
@@ -816,5 +855,102 @@ public class TemplateImportServiceImpl implements TemplateImportService {
         .warnings(List.of(errorMessage))
         .analysisSuccessful(false)
         .build();
+  }
+
+  /**
+   * Save the analyzed template as DRAFT status
+   *
+   * @param response The analyzed template import response
+   * @return Saved QuestionTemplate entity
+   */
+  private QuestionTemplate saveDraftTemplate(
+      TemplateImportResponse response, UUID currentUserId, UUID questionBankId) {
+    TemplateImportResponse.TemplateDraft draft = response.getSuggestedTemplate();
+
+    // Convert templateText Map<String, String> to Map<String, Object> for JSONB
+    Map<String, Object> templateTextObj = new HashMap<>();
+    if (draft.getTemplateText() != null) {
+      templateTextObj.putAll(draft.getTemplateText());
+    }
+
+    // Build QuestionTemplate entity
+    QuestionTemplate template =
+        QuestionTemplate.builder()
+            .questionBankId(questionBankId)
+            .name(draft.getName() != null ? draft.getName() : "Imported Template")
+            .description(
+                draft.getDescription() != null
+                    ? draft.getDescription()
+                    : "Template imported from file - please review and edit")
+            .templateType(
+                draft.getTemplateType() != null
+                    ? draft.getTemplateType()
+                    : QuestionType.SHORT_ANSWER)
+            .templateText(templateTextObj)
+            .parameters(draft.getParameters() != null ? draft.getParameters() : new HashMap<>())
+            .answerFormula(draft.getAnswerFormula() != null ? draft.getAnswerFormula() : "")
+            .optionsGenerator(draft.getOptionsGenerator())
+            .difficultyRules(convertDifficultyRules(draft.getDifficultyRules()))
+            .constraints(new String[0])
+            .cognitiveLevel(
+                draft.getCognitiveLevel() != null
+                    ? draft.getCognitiveLevel()
+                    : CognitiveLevel.APPLY)
+            .tags(draft.getTags() != null ? draft.getTags() : new String[] {"imported"})
+            .status(TemplateStatus.DRAFT)
+            .isPublic(false)
+            .usageCount(0)
+            .build();
+    template.setCreatedBy(currentUserId);
+
+    // Save to database
+    QuestionTemplate savedTemplate = questionTemplateRepository.save(template);
+    log.info(
+        "Template saved successfully with ID: {} and status: {}",
+        savedTemplate.getId(),
+        savedTemplate.getStatus());
+
+    return savedTemplate;
+  }
+
+  private void validateCanUseQuestionBank(UUID bankId, UUID currentUserId) {
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    if (!bank.getTeacherId().equals(currentUserId)
+        && !Boolean.TRUE.equals(bank.getIsPublic())
+        && !hasRoleAdmin()) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
+    }
+  }
+
+  private boolean hasRoleAdmin() {
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth instanceof JwtAuthenticationToken jwtAuth) {
+      Object scopeClaim = jwtAuth.getToken().getClaims().get("scope");
+      if (scopeClaim instanceof String scopes) {
+        return Arrays.asList(scopes.split(" ")).contains("ROLE_ADMIN");
+      }
+    }
+    return false;
+  }
+
+  private UUID getCurrentUserId() {
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth instanceof JwtAuthenticationToken jwtAuth) {
+      return UUID.fromString(jwtAuth.getToken().getSubject());
+    }
+    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
+  }
+
+  /** Convert difficulty rules Map<String, String> to Map<String, Object> for JSONB */
+  private Map<String, Object> convertDifficultyRules(Map<String, String> rules) {
+    if (rules == null) {
+      return new HashMap<>();
+    }
+    Map<String, Object> result = new HashMap<>(rules);
+    return result;
   }
 }

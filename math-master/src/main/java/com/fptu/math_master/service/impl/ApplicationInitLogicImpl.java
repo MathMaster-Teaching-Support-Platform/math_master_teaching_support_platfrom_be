@@ -13,6 +13,7 @@ import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.ApplicationInitLogic;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,7 +49,9 @@ public class ApplicationInitLogicImpl implements ApplicationInitLogic {
   private static final String LOG_ROLE_CREATED = "Creating role: {} with {} permissions";
   private static final String LOG_USER_CREATED =
       "Default user created - Username: {} - PLEASE CHANGE THE PASSWORD!";
-  private static final String LOG_USER_EXISTS = "User already exists: {}";
+  private static final String LOG_USER_UPDATED = "Default user credentials synchronized: {}";
+  private static final String LOG_USER_CONFLICT_RESOLVED =
+      "Resolved seed-user conflict for username={} email={} by deactivating duplicate user {}";
 
   private final PermissionRepository permissionRepository;
   private final RoleRepository roleRepository;
@@ -293,15 +296,56 @@ public class ApplicationInitLogicImpl implements ApplicationInitLogic {
    */
   private void createUserIfNotExists(InitProperties.UserConfig userConfig, Role role) {
     String username = userConfig.getUsername();
+    Optional<User> existingByUsername = userRepository.findByUserName(username);
+    Optional<User> existingByEmail = userRepository.findByEmail(userConfig.getEmail());
 
-    if (userRepository.findByUserName(username).isEmpty()) {
-      User user = buildUser(userConfig, role);
-      userRepository.save(user);
+    User user = resolveSeedUser(existingByUsername, existingByEmail, userConfig);
+    boolean isNewUser = user.getId() == null;
 
+    // Keep startup deterministic: configured credentials always win for seeded accounts.
+    user.setUserName(userConfig.getUsername());
+    user.setEmail(userConfig.getEmail());
+    user.setFullName(userConfig.getFullname());
+    user.setPassword(passwordEncoder.encode(userConfig.getPassword()));
+    user.setStatus(Status.ACTIVE);
+    Set<Role> roles = new HashSet<>();
+    roles.add(role);
+    user.setRoles(roles);
+
+    userRepository.save(user);
+
+    if (isNewUser) {
       log.warn(LOG_USER_CREATED, username);
     } else {
-      log.debug(LOG_USER_EXISTS, username);
+      log.info(LOG_USER_UPDATED, username);
     }
+  }
+
+  private User resolveSeedUser(
+      Optional<User> existingByUsername,
+      Optional<User> existingByEmail,
+      InitProperties.UserConfig userConfig) {
+    if (existingByUsername.isPresent()
+        && existingByEmail.isPresent()
+        && !existingByUsername.get().getId().equals(existingByEmail.get().getId())) {
+      User primary = existingByUsername.get();
+      User duplicate = existingByEmail.get();
+
+      // Release unique keys on duplicate row first, then update primary account.
+      duplicate.setUserName("deprecated_" + duplicate.getId());
+      duplicate.setEmail("deprecated+" + duplicate.getId() + "@local.invalid");
+      duplicate.setStatus(Status.INACTIVE);
+      userRepository.saveAndFlush(duplicate);
+
+      log.warn(
+          LOG_USER_CONFLICT_RESOLVED,
+          userConfig.getUsername(),
+          userConfig.getEmail(),
+          duplicate.getId());
+      return primary;
+    }
+
+    return existingByUsername.or(() -> existingByEmail).orElseGet(User::new);
   }
 
   /**
@@ -312,13 +356,16 @@ public class ApplicationInitLogicImpl implements ApplicationInitLogic {
    * @return constructed User entity
    */
   private User buildUser(InitProperties.UserConfig userConfig, Role role) {
+    Set<Role> roles = new HashSet<>();
+    roles.add(role);
+
     return User.builder()
         .userName(userConfig.getUsername())
         .password(passwordEncoder.encode(userConfig.getPassword()))
         .fullName(userConfig.getFullname())
         .email(userConfig.getEmail())
         .status(Status.ACTIVE)
-        .roles(Set.of(role))
+        .roles(roles)
         .build();
   }
 

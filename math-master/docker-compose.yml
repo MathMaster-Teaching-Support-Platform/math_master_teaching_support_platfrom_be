@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   redis:
     image: redis:7-alpine
@@ -7,13 +5,14 @@ services:
     ports:
       - "6379:6379"
     command: >
-      redis-server --requirepass ${REDIS_PASSWORD:-redis_password_prod_change_me}
+      redis-server --requirepass ${REDIS_PASSWORD:-redis_password}
     volumes:
       - redis_data:/data
     networks:
       - math-master-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password_prod_change_me}", "ping"]
+      test:
+        ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -30,10 +29,33 @@ services:
       - math-master-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:8000/health || exit 1"]
+      test:
+        ["CMD-SHELL", "wget --spider -q http://localhost:8000/health || exit 1"]
       interval: 10s
-      timeout: 3s
-      retries: 5
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  minio:
+    image: minio/minio:latest
+    container_name: math-master-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - math-master-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
 
   app:
     build:
@@ -43,7 +65,7 @@ services:
     environment:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password_prod_change_me}
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password}
 
       SERVER_PORT: 8080
 
@@ -73,56 +95,22 @@ services:
       TEACHER_FULLNAME: ${TEACHER_FULLNAME:-Teacher User}
 
       CENTRIFUGO_API_URL: http://centrifugo:8000/api
-      # local-friendly default
       CENTRIFUGO_WS_URL: ${CENTRIFUGO_WS_URL:-ws://localhost:8000/connection/websocket}
+
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_TEMPLATE_BUCKET: ${MINIO_TEMPLATE_BUCKET:-slide-templates}
 
     depends_on:
       redis:
         condition: service_healthy
       centrifugo:
         condition: service_healthy
-    networks:
-      - math-master-network
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: math-master-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - math-master-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  ollama-pull:
-    image: ollama/ollama:latest
-    container_name: math-master-ollama-pull
-    depends_on:
-      ollama:
+      minio:
         condition: service_healthy
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
-    volumes:
-      - ollama_data:/root/.ollama
     networks:
       - math-master-network
-    entrypoint: /bin/sh
-    command:
-      - -c
-      - |
-        echo "Waiting for Ollama service to be ready..."
-        sleep 10
-        MODEL=$${OLLAMA_MODEL:-llama3}
-        echo "Pulling $$MODEL model..."
-        OLLAMA_HOST=http://ollama:11434 ollama pull $$MODEL
-        echo "Model $$MODEL pulled successfully!"
-    restart: "no"
 
 networks:
   math-master-network:
@@ -131,5 +119,5 @@ networks:
 volumes:
   redis_data:
     driver: local
-  ollama_data:
+  minio_data:
     driver: local

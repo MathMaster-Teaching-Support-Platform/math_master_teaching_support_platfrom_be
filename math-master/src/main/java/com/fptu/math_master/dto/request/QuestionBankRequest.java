@@ -19,11 +19,5 @@ public class QuestionBankRequest {
 
   private String description;
 
-  @Size(max = 100, message = "Subject must not exceed 100 characters")
-  private String subject;
-
-  @Size(max = 50, message = "Grade level must not exceed 50 characters")
-  private String gradeLevel;
-
   private Boolean isPublic;
 }

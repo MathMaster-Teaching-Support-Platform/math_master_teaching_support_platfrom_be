@@ -1,68 +1,104 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.enums.ProfileStatus;
-import com.fptu.math_master.util.UuidV7Generator;
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
-import lombok.*;
-import lombok.experimental.FieldDefaults;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
+import com.fptu.math_master.enums.ProfileStatus;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
 @Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE)
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "teacher_profiles")
-public class TeacherProfile {
+/**
+ * The entity of 'TeacherProfile'.
+ */
+public class TeacherProfile extends BaseEntity {
 
-  @Id
-  @UuidV7Generator.UuidV7
-  @Column(name = "id", updatable = false, nullable = false)
-  UUID id;
-
+  /**
+   * Relationships
+   * - One-to-One with User
+   * - Many-to-One with School
+   */
   @OneToOne
   @JoinColumn(name = "user_id", nullable = false, unique = true)
-  User user;
+  private User user;
 
-  @ManyToOne
-  @JoinColumn(name = "school_id", nullable = false)
-  School school;
+  /**
+   * school_name
+   */
+  @Column(name = "school_name", nullable = false)
+  private String schoolName;
 
+  /**
+   * school_address
+   */
+  @Column(name = "school_address")
+  private String schoolAddress;
+
+  /**
+   * school_website
+   */
+  @Column(name = "school_website")
+  private String schoolWebsite;
+
+  /**
+   * position
+   */
   @Column(name = "position", nullable = false)
-  String position;
+  private String position;
 
-  @Column(name = "certificate_url")
-  String certificateUrl; // URL của file minh chứng (upload lên cloud storage)
+  /**
+   * verification_document_key
+   */
+  @Column(name = "verification_document_key")
+  private String verificationDocumentKey;
 
-  @Column(name = "identification_document_url")
-  String identificationDocumentUrl; // URL của CMND/CCCD
-
+  /**
+   * description
+   */
   @Column(name = "description", columnDefinition = "TEXT")
-  String description;
+  private String description;
 
+  /**
+   * status
+   */
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false)
-  ProfileStatus status;
+  private ProfileStatus status;
 
+  /**
+   * admin_comment
+   */
   @Column(name = "admin_comment", columnDefinition = "TEXT")
-  String adminComment; // Lý do từ chối hoặc ghi chú của admin
+  private String adminComment;
 
+  /**
+   * reviewed_by
+   */
   @Column(name = "reviewed_by")
-  UUID reviewedBy; // ID của admin đã duyệt
+  private UUID reviewedBy;
 
+  /**
+   * reviewed_at
+   */
   @Column(name = "reviewed_at")
-  LocalDateTime reviewedAt;
-
-  @CreationTimestamp
-  @Column(name = "created_at", updatable = false)
-  LocalDateTime createdAt;
-
-  @UpdateTimestamp
-  @Column(name = "updated_at")
-  LocalDateTime updatedAt;
+  private LocalDateTime reviewedAt;
 }

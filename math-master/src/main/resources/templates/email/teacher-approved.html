@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; }
+        .content { padding: 30px; background: #ffffff; }
+        .footer { background: #f9f9f9; padding: 20px; text-align: center; font-size: 12px; color: #777; }
+        .btn { display: inline-block; padding: 12px 24px; background-color: #667eea; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 20px; }
+        .logo { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+        h1 { margin: 0; font-size: 22px; }
+        .highlight { color: #667eea; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">MathMaster 📚</div>
+            <h1>Chúc mừng bạn!</h1>
+        </div>
+        <div class="content">
+            <p>Xin chào <span class="highlight" th:text="${name}">Giảng viên</span>,</p>
+            <p>Chúng tôi rất vui mừng thông báo rằng hồ sơ đăng ký giảng viên của bạn trên <strong>MathMaster</strong> đã được chính thức phê duyệt!</p>
+            <p>Bây giờ bạn đã có quyền truy cập đầy đủ vào các công cụ dành cho giảng viên:</p>
+            <ul>
+                <li>Tạo và quản lý giáo trình khóa học</li>
+                <li>Sử dụng AI hỗ trợ soạn thảo tài liệu</li>
+                <li>Giao bài tập và chấm điểm tự động</li>
+                <li>Theo dõi lộ trình học tập của học sinh</li>
+            </ul>
+            <p>Hãy bắt đầu hành trình giảng dạy của bạn ngay hôm nay bằng cách truy cập vào trang Dashboard.</p>
+            <div style="text-align: center;">
+                <a th:href="${dashboardUrl}" class="btn">Đi đến Dashboard →</a>
+            </div>
+            <p>Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ với đội ngũ hỗ trợ của chúng tôi tại <a href="mailto:support@mathmaster.vn">support@mathmaster.vn</a>.</p>
+            <p>Trân trọng,<br>Đội ngũ MathMaster</p>
+        </div>
+        <div class="footer">
+            &copy; 2026 MathMaster App. Tất cả các quyền được bảo lưu.<br>
+            Bạn nhận được email này vì bạn đã đăng ký làm giảng viên trên hệ thống của chúng tôi.
+        </div>
+    </div>
+</body>
+</html>

@@ -4,9 +4,12 @@ import com.fptu.math_master.dto.request.ProfileReviewRequest;
 import com.fptu.math_master.dto.request.TeacherProfileRequest;
 import com.fptu.math_master.dto.response.TeacherProfileResponse;
 import com.fptu.math_master.enums.ProfileStatus;
+
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface TeacherProfileService {
 
@@ -14,10 +17,12 @@ public interface TeacherProfileService {
    * Submit teacher profile for approval
    *
    * @param request Profile information
+   * @param file Verification document file
    * @param userId Current user ID
    * @return Created profile response
    */
-  TeacherProfileResponse submitProfile(TeacherProfileRequest request, UUID userId);
+  TeacherProfileResponse submitProfile(
+    TeacherProfileRequest request, List<MultipartFile> file, UUID userId);
 
   /**
    * Update pending teacher profile
@@ -69,6 +74,14 @@ public interface TeacherProfileService {
    * @return Number of pending profiles
    */
   long countPendingProfiles();
+
+  /**
+   * Get a pre-signed download URL for the teacher's verification document
+   *
+   * @param profileId Profile ID
+   * @return Pre-signed URL string
+   */
+  String getDownloadUrl(UUID profileId);
 
   /**
    * Delete profile (only if PENDING or REJECTED)

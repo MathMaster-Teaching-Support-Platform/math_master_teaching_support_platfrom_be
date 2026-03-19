@@ -18,13 +18,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
-@RequestMapping("/api/teacher-profiles")
+@RequestMapping("/teacher-profiles")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
@@ -37,13 +38,14 @@ public class TeacherProfileController {
   @Operation(
       summary = "Submit teacher profile",
       description = "Student submits profile to become a teacher")
-  @PostMapping("/submit")
+  @PostMapping(value = "/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @PreAuthorize("hasRole('STUDENT')")
   public ApiResponse<TeacherProfileResponse> submitProfile(
-      @Valid @RequestBody TeacherProfileRequest request) {
+      @Valid @RequestPart("request") TeacherProfileRequest request,
+      @RequestPart("files") java.util.List<MultipartFile> files) {
     UUID userId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
-        .result(teacherProfileService.submitProfile(request, userId))
+        .result(teacherProfileService.submitProfile(request, files, userId))
         .build();
   }
 
@@ -123,8 +125,24 @@ public class TeacherProfileController {
     return ApiResponse.<Long>builder().result(teacherProfileService.countPendingProfiles()).build();
   }
 
+  @Operation(
+      summary = "Get download URL for verification document",
+      description = "Admin gets a pre-signed URL to download the ZIP file")
+  @GetMapping("/{profileId}/download")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<String> getDownloadUrl(@PathVariable UUID profileId) {
+    return ApiResponse.<String>builder().result(teacherProfileService.getDownloadUrl(profileId)).build();
+  }
+
   private UUID getCurrentUserId() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    return UUID.fromString(authentication.getName());
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth
+        instanceof
+        org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+                jwtAuth) {
+      String sub = jwtAuth.getToken().getSubject();
+      return UUID.fromString(sub);
+    }
+    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 }

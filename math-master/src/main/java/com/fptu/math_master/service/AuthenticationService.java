@@ -1,14 +1,18 @@
 package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.AuthenticationRequest;
+import com.fptu.math_master.dto.request.GoogleAuthRequest;
 import com.fptu.math_master.dto.request.IntrospectRequest;
 import com.fptu.math_master.dto.request.LogoutRequest;
 import com.fptu.math_master.dto.request.RefreshRequest;
+import com.fptu.math_master.dto.request.RoleSelectionRequest;
 import com.fptu.math_master.dto.request.UserRegistrationRequest;
 import com.fptu.math_master.dto.response.AuthenticationResponse;
 import com.fptu.math_master.dto.response.IntrospectResponse;
 import com.fptu.math_master.dto.response.UserResponse;
 import com.nimbusds.jose.JOSEException;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.text.ParseException;
 
 public interface AuthenticationService {
@@ -16,9 +20,14 @@ public interface AuthenticationService {
 
   AuthenticationResponse login(AuthenticationRequest request);
 
+  AuthenticationResponse googleLogin(GoogleAuthRequest request)
+      throws GeneralSecurityException, IOException;
+
   void logout(LogoutRequest request) throws ParseException, JOSEException;
 
   AuthenticationResponse refreshToken(RefreshRequest request) throws ParseException, JOSEException;
 
   UserResponse register(UserRegistrationRequest request);
+
+  AuthenticationResponse selectRole(RoleSelectionRequest request);
 }

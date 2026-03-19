@@ -1,10 +1,6 @@
 package com.fptu.math_master.controller;
 
-import com.fptu.math_master.dto.request.AuthenticationRequest;
-import com.fptu.math_master.dto.request.IntrospectRequest;
-import com.fptu.math_master.dto.request.LogoutRequest;
-import com.fptu.math_master.dto.request.RefreshRequest;
-import com.fptu.math_master.dto.request.UserRegistrationRequest;
+import com.fptu.math_master.dto.request.*;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.AuthenticationResponse;
 import com.fptu.math_master.dto.response.IntrospectResponse;
@@ -13,6 +9,8 @@ import com.fptu.math_master.service.AuthenticationService;
 import com.nimbusds.jose.JOSEException;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.text.ParseException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +48,17 @@ public class AuthenticationController {
     return ApiResponse.<AuthenticationResponse>builder().result(result).build();
   }
 
+  @PostMapping("/google")
+  @Operation(
+      summary = "Google Login",
+      description = "Authenticate user with Google ID token and return access token (JWT).")
+  ApiResponse<AuthenticationResponse> googleLogin(@Valid @RequestBody GoogleAuthRequest request)
+      throws GeneralSecurityException, IOException, JOSEException, ParseException {
+
+    var result = authenticationService.googleLogin(request);
+    return ApiResponse.<AuthenticationResponse>builder().result(result).build();
+  }
+
   @PostMapping("/introspect")
   @Operation(
       summary = "Token introspection",
@@ -83,5 +92,14 @@ public class AuthenticationController {
 
     authenticationService.logout(request);
     return ApiResponse.<Void>builder().build();
+  }
+
+  @PostMapping("/select-role")
+  @Operation(
+      summary = "Select user role",
+      description = "After Google login, new user selects their role (Teacher or Student).")
+  ApiResponse<AuthenticationResponse> selectRole(@Valid @RequestBody RoleSelectionRequest request) {
+    var result = authenticationService.selectRole(request);
+    return ApiResponse.<AuthenticationResponse>builder().result(result).build();
   }
 }

@@ -1,7 +1,11 @@
 package com.fptu.math_master.service;
 
+import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
+import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
+import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.enums.AssessmentStatus;
@@ -11,40 +15,57 @@ import org.springframework.data.domain.Pageable;
 
 public interface AssessmentService {
 
-  // FR-A-001: Create Assessment
   AssessmentResponse createAssessment(AssessmentRequest request);
 
-  // Update Assessment (only DRAFT)
   AssessmentResponse updateAssessment(UUID id, AssessmentRequest request);
 
-  // FR-A-002: Set Points Override
   AssessmentResponse setPointsOverride(UUID assessmentId, PointsOverrideRequest request);
 
-  // FR-A-003: Preview Assessment as Student
   AssessmentResponse getAssessmentPreview(UUID id);
 
-  // FR-A-004: Publish Assessment
   AssessmentSummary getPublishSummary(UUID id);
 
   AssessmentResponse publishAssessment(UUID id);
 
-  // FR-A-005: Unpublish Assessment
   AssessmentResponse unpublishAssessment(UUID id);
 
-  // FR-A-006: Delete Assessment
   void deleteAssessment(UUID id);
 
-  // Get Assessment
   AssessmentResponse getAssessmentById(UUID id);
 
-  // List Assessments
-  Page<AssessmentResponse> getMyAssessments(
-      AssessmentStatus status, UUID lessonId, Pageable pageable);
+  Page<AssessmentResponse> getMyAssessments(AssessmentStatus status, Pageable pageable);
 
-  // Validation methods
   boolean canEditAssessment(UUID id);
 
   boolean canDeleteAssessment(UUID id);
 
   boolean canPublishAssessment(UUID id);
+
+  AssessmentResponse closeAssessment(UUID id);
+
+  AssessmentResponse cloneAssessment(UUID id, CloneAssessmentRequest request);
+
+  AssessmentResponse addQuestion(UUID assessmentId, AddQuestionToAssessmentRequest request);
+
+  AssessmentResponse removeQuestion(UUID assessmentId, UUID questionId);
+
+  /**
+   * Generate assessment questions from exam matrix templates using AI.
+   * Iterates through all template mappings in the matrix and generates questions.
+   *
+   * @param assessmentId Assessment ID
+   * @param request Generation request with exam matrix ID and options
+   * @return Response with count of generated questions
+   */
+  AssessmentGenerationResponse generateQuestionsFromMatrix(
+      UUID assessmentId, GenerateAssessmentQuestionsRequest request);
+
+  /**
+   * Auto-generate assessment from exam matrix (simplified one-step flow).
+   * Creates new assessment with name from matrix and generates all questions.
+   *
+   * @param request Generation request with exam matrix ID and options
+   * @return Created assessment with generated questions
+   */
+  AssessmentResponse generateAssessmentFromMatrix(GenerateAssessmentQuestionsRequest request);
 }
