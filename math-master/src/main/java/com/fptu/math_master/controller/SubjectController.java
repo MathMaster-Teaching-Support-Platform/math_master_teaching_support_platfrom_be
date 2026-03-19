@@ -44,9 +44,9 @@ public class SubjectController {
   public ApiResponse<SubjectResponse> createSubject(
       @Valid @RequestBody CreateSubjectRequest request) {
     log.info(
-      "REST request to create subject: name={}, schoolGradeId={}",
-      request.getName(),
-      request.getSchoolGradeId());
+        "REST request to create subject: name={}, schoolGradeId={}",
+        request.getName(),
+        request.getSchoolGradeId());
     return ApiResponse.<SubjectResponse>builder()
         .message("Subject created successfully.")
         .result(subjectService.createSubject(request))

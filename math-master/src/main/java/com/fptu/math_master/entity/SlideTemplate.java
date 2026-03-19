@@ -1,19 +1,21 @@
 package com.fptu.math_master.entity;
 
+import java.util.UUID;
+
+import org.hibernate.annotations.Nationalized;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
-import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
@@ -36,7 +38,9 @@ public class SlideTemplate extends BaseEntity {
   @Column(name = "name", length = 255, nullable = false)
   private String name;
 
-  @Nationalized
+  /**
+   * description
+   */
   @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 

@@ -26,8 +26,7 @@ public class TeacherProfileResponse {
   String schoolAddress;
   String schoolWebsite;
   String position;
-  String documentUrl;
-  String documentType;
+  String verificationDocumentKey;
   String description;
   ProfileStatus status;
   String adminComment;

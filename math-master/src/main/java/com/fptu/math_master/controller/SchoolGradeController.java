@@ -43,7 +43,8 @@ public class SchoolGradeController {
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasRole('ADMIN')")
   @Operation(summary = "Create school grade")
-  public ApiResponse<SchoolGradeResponse> create(@Valid @RequestBody CreateSchoolGradeRequest request) {
+  public ApiResponse<SchoolGradeResponse> create(
+      @Valid @RequestBody CreateSchoolGradeRequest request) {
     return ApiResponse.<SchoolGradeResponse>builder()
         .message("School grade created successfully")
         .result(schoolGradeService.create(request))
@@ -64,7 +65,9 @@ public class SchoolGradeController {
   @GetMapping("/{id}")
   @Operation(summary = "Get school grade by id")
   public ApiResponse<SchoolGradeResponse> getById(@PathVariable UUID id) {
-    return ApiResponse.<SchoolGradeResponse>builder().result(schoolGradeService.getById(id)).build();
+    return ApiResponse.<SchoolGradeResponse>builder()
+        .result(schoolGradeService.getById(id))
+        .build();
   }
 
   @GetMapping

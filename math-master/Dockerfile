@@ -12,6 +12,9 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+# Install FreeFont (supports Vietnamese characters) for PDF generation
+RUN apk add --no-cache ttf-freefont
+
 RUN addgroup -S spring && adduser -S spring -G spring
 
 COPY --from=build /app/target/*.jar app.jar

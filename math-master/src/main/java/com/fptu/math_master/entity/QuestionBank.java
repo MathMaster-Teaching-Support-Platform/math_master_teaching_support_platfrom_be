@@ -1,21 +1,27 @@
 package com.fptu.math_master.entity;
 
+import java.util.Set;
+import java.util.UUID;
+
+import org.hibernate.annotations.Nationalized;
+
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
-import java.util.Set;
-import java.util.UUID;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
@@ -59,9 +65,7 @@ public class QuestionBank extends BaseEntity {
   /**
    * description
    */
-  @Lob
-  @Nationalized
-  @Column(name = "description")
+  @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
   /**

@@ -88,7 +88,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     SchoolGrade requestedGrade = resolveRequestedGrade(request);
 
     Subject subject =
-        subjectRepository.findById(request.getSubjectId()).orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
+        subjectRepository
+            .findById(request.getSubjectId())
+            .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
     if (Boolean.FALSE.equals(subject.getIsActive()) || subject.getDeletedAt() != null) {
       throw new AppException(ErrorCode.SUBJECT_NOT_FOUND);
     }
@@ -147,7 +149,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   @Override
   @Transactional
-  public LessonResponse confirmLessonContent(UUID lessonId, LessonSlideConfirmContentRequest request) {
+  public LessonResponse confirmLessonContent(
+      UUID lessonId, LessonSlideConfirmContentRequest request) {
     validateTeacherRole();
 
     Lesson lesson =
@@ -586,7 +589,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       slides.add(buildPreviewSlide(4 + i, type, heading, middleChunks.get(i)));
     }
 
-    slides.add(buildPreviewSlide(normalizedCount - 1, "SUMMARY", "Tong ket", deck.closingSummary()));
+    slides.add(
+        buildPreviewSlide(normalizedCount - 1, "SUMMARY", "Tong ket", deck.closingSummary()));
     slides.add(buildPreviewSlide(normalizedCount, "CLOSING", "Cam on / Q&A", deck.lessonTitle()));
     return slides;
   }
@@ -1086,10 +1090,14 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     String normalized =
         originalFileName == null
             ? "template.pptx"
-            : Normalizer.normalize(originalFileName, Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "");
+            : Normalizer.normalize(originalFileName, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
     String sanitized = NON_ALNUM.matcher(normalized).replaceAll("_");
-    return "slide-templates/" + UUID.randomUUID() + "/" + System.currentTimeMillis() + "-" + sanitized;
+    return "slide-templates/"
+        + UUID.randomUUID()
+        + "/"
+        + System.currentTimeMillis()
+        + "-"
+        + sanitized;
   }
 
   private String buildPreviewImageObjectKey(String originalFileName) {

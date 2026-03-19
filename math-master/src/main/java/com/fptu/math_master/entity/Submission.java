@@ -1,6 +1,12 @@
 package com.fptu.math_master.entity;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Set;
+import java.util.UUID;
+
 import com.fptu.math_master.enums.SubmissionStatus;
+
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -9,17 +15,17 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Set;
-import java.util.UUID;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
@@ -110,7 +116,6 @@ public class Submission extends BaseEntity {
   /**
    * manual_adjustment_reason
    */
-  @Lob
   @Column(name = "manual_adjustment_reason")
   private String manualAdjustmentReason;
 

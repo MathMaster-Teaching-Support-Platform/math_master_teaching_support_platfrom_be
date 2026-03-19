@@ -1,17 +1,23 @@
 package com.fptu.math_master.entity;
 
+import java.math.BigDecimal;
+import java.util.UUID;
+
+import org.hibernate.annotations.Nationalized;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
-import java.util.UUID;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
@@ -65,7 +71,6 @@ public class GradeAuditLog extends BaseEntity {
   /**
    * reason
    */
-  @Lob
   @Nationalized
   @Column(name = "reason")
   private String reason;

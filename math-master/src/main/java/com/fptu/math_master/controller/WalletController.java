@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.*;
  * @version 1.0
  */
 @RestController
-@RequestMapping("/api/wallet")
+@RequestMapping("/wallet")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j

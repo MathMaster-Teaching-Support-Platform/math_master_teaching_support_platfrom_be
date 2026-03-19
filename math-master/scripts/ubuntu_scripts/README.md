@@ -227,7 +227,7 @@ Create file `.env` trong project root (copy từ template nếu có):
 
 ```bash
 # Redis Configuration
-REDIS_PASSWORD=redis_password_prod_change_me
+REDIS_PASSWORD=redis_password
 
 # JWT Configuration
 JWT_SIGNERKEY=your_jwt_signer_key_here
@@ -486,7 +486,7 @@ Part of Math Master Teaching Support Platform
 
 ---
 
-**Last Updated**: 2025-01-16  
+**Last Updated**: 2025-01-16
 **Maintainer**: Math Master DevOps Team
 
 ## 📁 Cấu Trúc Thư Mục
@@ -824,5 +824,5 @@ Nếu gặp vấn đề:
 
 ---
 
-**Version:** 2.0  
+**Version:** 2.0
 **Last Updated:** 2025-01-16

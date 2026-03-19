@@ -14,15 +14,12 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreatePlacementTestRequest {
+public class CreateRoadmapEntryTestRequest {
 
-  @NotNull(message = "Roadmap ID is required")
-  private UUID roadmapId;
+  @NotNull(message = "Assessment ID is required")
+  private UUID assessmentId;
 
-  @NotNull(message = "Placement assessment ID is required")
-  private UUID placementAssessmentId;
-
+  @NotEmpty(message = "Entry test mappings are required")
   @Valid
-  @NotEmpty(message = "At least one question mapping is required")
-  private List<PlacementQuestionMappingRequest> mappings;
+  private List<RoadmapEntryQuestionMappingRequest> mappings;
 }

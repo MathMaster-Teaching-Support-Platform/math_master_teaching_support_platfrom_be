@@ -25,11 +25,17 @@ public class RoadmapDetailResponse {
   @Schema(description = "Roadmap ID")
   private UUID id;
 
+  @Schema(description = "Roadmap display name (e.g., 'Toán học lớp 6 cho người mới bắt đầu')")
+  private String name;
+
   @Schema(description = "Student ID")
   private UUID studentId;
 
   @Schema(description = "Teacher ID (if assigned by teacher)")
   private UUID teacherId;
+
+  @Schema(description = "Subject ID")
+  private UUID subjectId;
 
   @Schema(description = "Subject name")
   private String subject;

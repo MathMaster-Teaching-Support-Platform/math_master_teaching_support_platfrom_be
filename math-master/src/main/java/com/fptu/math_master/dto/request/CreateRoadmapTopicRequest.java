@@ -4,6 +4,7 @@ import com.fptu.math_master.enums.QuestionDifficulty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,7 +29,7 @@ public class CreateRoadmapTopicRequest {
 
   private Integer estimatedHours;
 
-  private UUID lessonId;
+  private List<UUID> lessonIds;
 
   private UUID topicAssessmentId;
 

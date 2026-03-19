@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PlacementQuestionMappingRequest {
+public class RoadmapEntryQuestionMappingRequest {
 
   @NotNull(message = "Question ID is required")
   private UUID questionId;
@@ -20,7 +20,9 @@ public class PlacementQuestionMappingRequest {
   @NotNull(message = "Roadmap topic ID is required")
   private UUID roadmapTopicId;
 
-  private Integer orderIndex;
+  @Builder.Default
+  private Integer orderIndex = 1;
 
-  private BigDecimal weight;
+  @Builder.Default
+  private BigDecimal weight = BigDecimal.ONE;
 }

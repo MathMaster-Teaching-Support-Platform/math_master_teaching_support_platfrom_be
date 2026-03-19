@@ -1,9 +1,10 @@
 package com.fptu.math_master.entity;
 
+import org.hibernate.annotations.Nationalized;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Index;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Max;
@@ -15,7 +16,6 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.Nationalized;
 
 @Builder
 @AllArgsConstructor
@@ -27,7 +27,9 @@ import org.hibernate.annotations.Nationalized;
 @Table(
     name = "school_grades",
     uniqueConstraints = {
-      @UniqueConstraint(name = "uq_school_grades_level", columnNames = {"grade_level"})
+      @UniqueConstraint(
+          name = "uq_school_grades_level",
+          columnNames = {"grade_level"})
     },
     indexes = {
       @Index(name = "idx_school_grades_level", columnList = "grade_level"),
@@ -45,18 +47,13 @@ public class SchoolGrade extends BaseEntity {
   @Column(name = "name", length = 100, nullable = false)
   private String name;
 
-  @Nationalized
+  /**
+   * description
+   */
   @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
   @Builder.Default
   @Column(name = "is_active", nullable = false)
   private Boolean isActive = true;
-
-  @PrePersist
-  public void prePersistSchoolGrade() {
-    if (isActive == null) {
-      isActive = true;
-    }
-  }
 }

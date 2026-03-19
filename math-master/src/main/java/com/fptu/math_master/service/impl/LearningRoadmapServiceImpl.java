@@ -44,12 +44,9 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   // Repositories
   LearningRoadmapRepository roadmapRepository;
   RoadmapTopicRepository topicRepository;
-  GradeRepository gradeRepository;
-  AssessmentRepository assessmentRepository;
   QuestionTemplateRepository questionTemplateRepository;
   MindmapRepository mindmapRepository;
   TopicLearningMaterialRepository materialRepository;
-  LessonRepository lessonRepository;
   UserRepository userRepository;
 
   // ============================================================================
@@ -92,14 +89,6 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   @Transactional(readOnly = true)
   public List<RoadmapSummaryResponse> getStudentRoadmapsList(UUID studentId) {
     return roadmapRepository.findByStudentIdAndDeletedAtIsNull(studentId).stream()
-        .map(this::mapToSummaryResponse)
-        .collect(Collectors.toList());
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public List<RoadmapSummaryResponse> getTeacherAssignedRoadmaps(UUID teacherId) {
-    return roadmapRepository.findByTeacherIdAndDeletedAtIsNull(teacherId).stream()
         .map(this::mapToSummaryResponse)
         .collect(Collectors.toList());
   }
@@ -228,33 +217,6 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     List<TopicLearningMaterial> materials =
         materialRepository.findByTopicIdAndResourceType(topicId, resourceType);
     return materials.stream().map(this::mapToMaterialResponse).collect(Collectors.toList());
-  }
-
-  @Override
-  @Transactional
-  public TopicMaterialResponse linkMaterialToTopic(
-      UUID topicId, UUID lessonId, UUID questionId, String resourceType, Boolean isRequired) {
-    log.info("Linking material to topic: topicId={}, type={}", topicId, resourceType);
-
-    RoadmapTopic topic =
-        topicRepository
-            .findById(topicId)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
-    TopicLearningMaterial material =
-        TopicLearningMaterial.builder()
-            .topicId(topicId)
-            .lessonId(lessonId)
-            .questionId(questionId)
-            .resourceType(resourceType)
-            .isRequired(isRequired != null ? isRequired : true)
-            .sequenceOrder(
-                (int) materialRepository.findByTopicIdOrderBySequenceOrder(topicId).size() + 1)
-            .build();
-
-    material = materialRepository.save(material);
-    log.info("Material linked successfully: materialId={}", material.getId());
-    return mapToMaterialResponse(material);
   }
 
   @Override
@@ -409,8 +371,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
 
     return RoadmapDetailResponse.builder()
         .id(roadmap.getId())
+        .name(roadmap.getName())
         .studentId(roadmap.getStudentId())
         .teacherId(roadmap.getTeacherId())
+      .subjectId(roadmap.getSubjectId())
         .subject(roadmap.getSubject())
         .gradeLevel(roadmap.getGradeLevel())
         .generationType(roadmap.getGenerationType())
@@ -432,6 +396,9 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   private RoadmapSummaryResponse mapToSummaryResponse(LearningRoadmap roadmap) {
     return RoadmapSummaryResponse.builder()
         .id(roadmap.getId())
+        .name(roadmap.getName())
+        .studentId(roadmap.getStudentId())
+      .subjectId(roadmap.getSubjectId())
         .subject(roadmap.getSubject())
         .gradeLevel(roadmap.getGradeLevel())
         .status(roadmap.getStatus())
@@ -476,8 +443,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .priority(topic.getPriority())
         .progressPercentage(topic.getProgressPercentage())
         .estimatedHours(topic.getEstimatedHours())
-      .topicAssessmentId(topic.getTopicAssessmentId())
-      .passThresholdPercentage(topic.getPassThresholdPercentage())
+        .topicAssessmentId(topic.getTopicAssessmentId())
+        .passThresholdPercentage(topic.getPassThresholdPercentage())
         .startedAt(topic.getStartedAt())
         .completedAt(topic.getCompletedAt())
         .questionTemplates(questionTemplateResponses)
@@ -534,8 +501,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .isRequired(material.getIsRequired())
         .lessonId(material.getLessonId())
         .questionId(material.getQuestionId())
-      .assessmentId(material.getAssessmentId())
-      .mindmapId(material.getMindmapId())
+        .assessmentId(material.getAssessmentId())
+        .mindmapId(material.getMindmapId())
         .chapterId(material.getChapterId())
         .build();
   }

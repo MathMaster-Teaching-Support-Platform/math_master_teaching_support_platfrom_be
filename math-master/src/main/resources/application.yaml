@@ -8,6 +8,23 @@ spring:
   devtools:
     restart:
       enabled: false
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:nsn15102004@gmail.com}
+    password: ${MAIL_PASSWORD:avpq ilzm egtk uhdh}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false
 
   datasource:
     url: jdbc:postgresql://ep-green-mouse-ahwgiq0a-pooler.c-3.us-east-1.aws.neon.tech:5432/neondb?sslmode=require
@@ -33,7 +50,7 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -159,3 +176,6 @@ minio:
   access-key: ${MINIO_ACCESS_KEY:minioadmin}
   secret-key: ${MINIO_SECRET_KEY:minioadmin}
   template-bucket: ${MINIO_TEMPLATE_BUCKET:slide-templates}
+  verification-bucket: ${MINIO_VERIFICATION_BUCKET:teacher-verifications}
+
+# = [REMOVED DUPLICATE SPRING BLOCK]

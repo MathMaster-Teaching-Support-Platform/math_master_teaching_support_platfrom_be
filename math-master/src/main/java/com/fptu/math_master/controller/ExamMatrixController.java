@@ -17,6 +17,11 @@ import com.fptu.math_master.dto.response.MatrixValidationReport;
 import com.fptu.math_master.dto.response.PreviewCandidatesResponse;
 import com.fptu.math_master.dto.response.TemplateMappingResponse;
 import com.fptu.math_master.service.ExamMatrixService;
+import com.fptu.math_master.service.impl.ExamMatrixPdfExportService;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
@@ -46,6 +51,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ExamMatrixController {
 
   ExamMatrixService examMatrixService;
+  ExamMatrixPdfExportService examMatrixPdfExportService;
 
   // ── Matrix CRUD ─────────────────────────────────────────────────────────
 
@@ -446,5 +452,27 @@ public class ExamMatrixController {
         .message("Matrix row removed successfully.")
         .result(examMatrixService.removeMatrixRow(matrixId, rowId))
         .build();
+  }
+
+  // ── PDF Export ────────────────────────────────────────────────────────────
+
+  @GetMapping(value = "/{matrixId}/export-pdf", produces = "application/pdf")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Export exam matrix as PDF",
+      description =
+          "Generates a printable A4-landscape PDF of the exam matrix table, "
+              + "matching the standard Vietnamese THPT exam-matrix layout "
+              + "(Lớp / Chương / Dạng bài / NB / TH / VD / VDC / Tổng).")
+  public ResponseEntity<byte[]> exportMatrixPdf(@PathVariable UUID matrixId) {
+    log.info("REST request to export matrix as PDF: {}", matrixId);
+    byte[] pdf = examMatrixPdfExportService.exportToPdf(matrixId);
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_PDF);
+    headers.setContentDisposition(
+        ContentDisposition.attachment()
+            .filename("exam-matrix-" + matrixId + ".pdf")
+            .build());
+    return ResponseEntity.ok().headers(headers).body(pdf);
   }
 }

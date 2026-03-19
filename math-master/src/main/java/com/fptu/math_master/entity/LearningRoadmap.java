@@ -1,7 +1,13 @@
 package com.fptu.math_master.entity;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Set;
+import java.util.UUID;
+
 import com.fptu.math_master.enums.RoadmapGenerationType;
 import com.fptu.math_master.enums.RoadmapStatus;
+
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,18 +16,17 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Set;
-import java.util.UUID;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Represents a personalized learning roadmap for a student
@@ -48,17 +53,29 @@ import org.hibernate.annotations.Nationalized;
     indexes = {
       @Index(name = "idx_roadmaps_student", columnList = "student_id"),
       @Index(name = "idx_roadmaps_student_subject", columnList = "student_id, subject"),
+      @Index(name = "idx_roadmaps_subject_id", columnList = "subject_id"),
       @Index(name = "idx_roadmaps_status", columnList = "status"),
       @Index(name = "idx_roadmaps_grade_level", columnList = "grade_level"),
       @Index(name = "idx_roadmaps_created_at", columnList = "created_at")
     })
 public class LearningRoadmap extends BaseEntity {
 
-  @Column(name = "student_id", nullable = false)
+  @Column(name = "student_id", nullable = true)
   private UUID studentId;
 
   @Column(name = "teacher_id")
   private UUID teacherId;
+
+  @Column(name = "subject_id")
+  private UUID subjectId;
+
+  /**
+   * name - Display name for the roadmap (used for admin templates or custom naming).
+   * Example: "Toán học lớp 6 cho người mới bắt đầu"
+   */
+  @Size(max = 255)
+  @Column(name = "name", length = 255)
+  private String name;
 
   /**
    * subject
@@ -111,9 +128,7 @@ public class LearningRoadmap extends BaseEntity {
   /**
    * description
    */
-  @Lob
-  @Nationalized
-  @Column(name = "description")
+  @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
   /**
@@ -149,6 +164,10 @@ public class LearningRoadmap extends BaseEntity {
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
   private User teacher;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "subject_id", insertable = false, updatable = false)
+  private Subject subjectRef;
+
   @OneToMany(
       mappedBy = "roadmap",
       cascade = CascadeType.ALL,
@@ -159,6 +178,7 @@ public class LearningRoadmap extends BaseEntity {
   @PrePersist
   @Override
   public void prePersist() {
+    super.prePersist();
     if (status == null) status = RoadmapStatus.GENERATED;
     if (progressPercentage == null) progressPercentage = java.math.BigDecimal.ZERO;
     if (completedTopicsCount == null) completedTopicsCount = 0;

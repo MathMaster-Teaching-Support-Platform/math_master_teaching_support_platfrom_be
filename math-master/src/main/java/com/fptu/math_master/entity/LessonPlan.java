@@ -1,11 +1,24 @@
 package com.fptu.math_master.entity;
 
-import io.hypersistence.utils.hibernate.type.array.StringArrayType;
-import jakarta.persistence.*;
 import java.util.UUID;
-import lombok.*;
+
 import org.hibernate.annotations.Nationalized;
 import org.hibernate.annotations.Type;
+
+import io.hypersistence.utils.hibernate.type.array.StringArrayType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
@@ -54,7 +67,6 @@ public class LessonPlan extends BaseEntity {
   /**
    * teaching_strategy
    */
-  @Lob
   @Nationalized
   @Column(name = "teaching_strategy")
   private String teachingStrategy;
@@ -62,7 +74,6 @@ public class LessonPlan extends BaseEntity {
   /**
    * assessment_methods
    */
-  @Lob
   @Nationalized
   @Column(name = "assessment_methods")
   private String assessmentMethods;
@@ -70,7 +81,6 @@ public class LessonPlan extends BaseEntity {
   /**
    * notes
    */
-  @Lob
   @Nationalized
   @Column(name = "notes")
   private String notes;

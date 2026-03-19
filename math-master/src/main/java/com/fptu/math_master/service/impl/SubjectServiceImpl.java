@@ -14,8 +14,8 @@ import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -39,7 +39,9 @@ public class SubjectServiceImpl implements SubjectService {
   @Transactional
   public SubjectResponse createSubject(CreateSubjectRequest request) {
     log.info(
-        "Creating subject: name={}, schoolGradeId={}", request.getName(), request.getSchoolGradeId());
+        "Creating subject: name={}, schoolGradeId={}",
+        request.getName(),
+        request.getSchoolGradeId());
 
     SchoolGrade schoolGrade =
         schoolGradeRepository
@@ -118,7 +120,8 @@ public class SubjectServiceImpl implements SubjectService {
   @Transactional
   public void unlinkFromGrade(UUID subjectId, Integer gradeLevel) {
     Subject subject = loadOrThrow(subjectId);
-    if (subject.getSchoolGrade() == null || !subject.getSchoolGrade().getGradeLevel().equals(gradeLevel)) {
+    if (subject.getSchoolGrade() == null
+        || !subject.getSchoolGrade().getGradeLevel().equals(gradeLevel)) {
       throw new AppException(ErrorCode.GRADE_SUBJECT_NOT_FOUND);
     }
     subject.setSchoolGradeId(null);
@@ -145,9 +148,8 @@ public class SubjectServiceImpl implements SubjectService {
 
   private SubjectResponse buildResponse(Subject subject) {
     Integer primaryGradeLevel =
-      subject.getSchoolGrade() != null ? subject.getSchoolGrade().getGradeLevel() : null;
-    List<Integer> gradeLevels =
-      primaryGradeLevel == null ? List.of() : List.of(primaryGradeLevel);
+        subject.getSchoolGrade() != null ? subject.getSchoolGrade().getGradeLevel() : null;
+    List<Integer> gradeLevels = primaryGradeLevel == null ? List.of() : List.of(primaryGradeLevel);
 
     return SubjectResponse.builder()
         .id(subject.getId())
@@ -156,10 +158,10 @@ public class SubjectServiceImpl implements SubjectService {
         .description(subject.getDescription())
         .gradeMin(subject.getGradeMin())
         .gradeMax(subject.getGradeMax())
-      .primaryGradeLevel(primaryGradeLevel)
-      .schoolGradeId(subject.getSchoolGradeId())
+        .primaryGradeLevel(primaryGradeLevel)
+        .schoolGradeId(subject.getSchoolGradeId())
         .isActive(subject.getIsActive())
-      .gradeLevels(gradeLevels)
+        .gradeLevels(gradeLevels)
         .createdAt(subject.getCreatedAt())
         .updatedAt(subject.getUpdatedAt())
         .build();
@@ -187,5 +189,4 @@ public class SubjectServiceImpl implements SubjectService {
     }
     return candidate;
   }
-
 }

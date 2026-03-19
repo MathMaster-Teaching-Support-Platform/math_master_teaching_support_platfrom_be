@@ -2,6 +2,7 @@ package com.fptu.math_master.dto.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -12,7 +13,8 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class AuthenticationRequest {
   @NotBlank(message = "Email is required")
-  @Email(message = "Invalid email format")
+  @Email(message = "Email must be valid")
+  @Size(max = 50, message = "Email must not exceed 50 characters")
   String email;
 
   @NotBlank(message = "Password is required")

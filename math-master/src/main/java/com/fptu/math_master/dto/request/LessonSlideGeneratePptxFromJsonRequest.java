@@ -20,7 +20,5 @@ public class LessonSlideGeneratePptxFromJsonRequest {
 
   @NotNull private UUID templateId;
 
-  @Valid
-  @NotEmpty
-  private List<LessonSlideJsonItemRequest> slides;
+  @Valid @NotEmpty private List<LessonSlideJsonItemRequest> slides;
 }

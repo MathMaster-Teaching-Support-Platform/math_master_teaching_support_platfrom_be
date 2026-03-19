@@ -1,6 +1,12 @@
 package com.fptu.math_master.entity;
 
+import java.util.Set;
+import java.util.UUID;
+
+import org.hibernate.annotations.Nationalized;
+
 import com.fptu.math_master.enums.CurriculumCategory;
+
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -9,7 +15,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
@@ -17,10 +22,11 @@ import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
-import java.util.Set;
-import java.util.UUID;
-import lombok.*;
-import org.hibernate.annotations.Nationalized;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
@@ -72,9 +78,10 @@ public class Curriculum extends BaseEntity {
   @JoinColumn(name = "subject_id", insertable = false, updatable = false)
   private Subject subject;
 
-  @Lob
-  @Nationalized
-  @Column(name = "description")
+  /**
+   * description
+   */
+  @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
   @OneToMany(mappedBy = "curriculum", cascade = CascadeType.ALL, orphanRemoval = true)

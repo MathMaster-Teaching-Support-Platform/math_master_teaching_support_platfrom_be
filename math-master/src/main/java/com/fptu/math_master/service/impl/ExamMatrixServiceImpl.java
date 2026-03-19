@@ -1,5 +1,26 @@
 package com.fptu.math_master.service.impl;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
 import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
@@ -50,29 +71,11 @@ import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AIEnhancementService;
 import com.fptu.math_master.service.ExamMatrixService;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -1291,26 +1294,6 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
    */
   private ExamMatrixTableResponse buildTableResponse(ExamMatrix matrix) {
     UUID matrixId = matrix.getId();
-
-    // Curriculum + subject info
-    String curriculumName = null;
-    UUID subjectId = null;
-    String subjectName = null;
-
-    if (matrix.getCurriculumId() != null) {
-      curriculumRepository
-          .findByIdAndNotDeleted(matrix.getCurriculumId())
-          .ifPresent(
-              c -> {
-                // intentionally captured via final ref
-              });
-
-      var currOpt = curriculumRepository.findByIdAndNotDeleted(matrix.getCurriculumId());
-      if (currOpt.isPresent()) {
-        Curriculum curr = currOpt.get();
-        // set into response fields later via builder
-      }
-    }
 
     // Load rows ordered by orderIndex
     List<ExamMatrixRow> rows =

@@ -33,19 +33,19 @@ public class ChapterServiceImpl implements ChapterService {
   @Transactional
   public ChapterResponse createChapter(CreateChapterRequest request) {
     subjectRepository
-      .findById(request.getSubjectId())
-      .filter(s -> s.getDeletedAt() == null && Boolean.TRUE.equals(s.getIsActive()))
-      .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
+        .findById(request.getSubjectId())
+        .filter(s -> s.getDeletedAt() == null && Boolean.TRUE.equals(s.getIsActive()))
+        .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
 
     int orderIndex =
         request.getOrderIndex() != null
             ? request.getOrderIndex()
-        : chapterRepository.countBySubjectIdAndNotDeleted(request.getSubjectId()).intValue()
+            : chapterRepository.countBySubjectIdAndNotDeleted(request.getSubjectId()).intValue()
                 + 1;
 
     Chapter chapter =
         Chapter.builder()
-        .subjectId(request.getSubjectId())
+            .subjectId(request.getSubjectId())
             .title(request.getTitle())
             .description(request.getDescription())
             .orderIndex(orderIndex)

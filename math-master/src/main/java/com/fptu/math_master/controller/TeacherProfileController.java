@@ -18,14 +18,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
-@RequestMapping("/api/teacher-profiles")
+@RequestMapping("/teacher-profiles")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
@@ -42,10 +42,10 @@ public class TeacherProfileController {
   @PreAuthorize("hasRole('STUDENT')")
   public ApiResponse<TeacherProfileResponse> submitProfile(
       @Valid @RequestPart("request") TeacherProfileRequest request,
-      @RequestPart("file") MultipartFile file) {
+      @RequestPart("files") java.util.List<MultipartFile> files) {
     UUID userId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
-        .result(teacherProfileService.submitProfile(request, file, userId))
+        .result(teacherProfileService.submitProfile(request, files, userId))
         .build();
   }
 
@@ -123,6 +123,15 @@ public class TeacherProfileController {
   @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<Long> countPendingProfiles() {
     return ApiResponse.<Long>builder().result(teacherProfileService.countPendingProfiles()).build();
+  }
+
+  @Operation(
+      summary = "Get download URL for verification document",
+      description = "Admin gets a pre-signed URL to download the ZIP file")
+  @GetMapping("/{profileId}/download")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<String> getDownloadUrl(@PathVariable UUID profileId) {
+    return ApiResponse.<String>builder().result(teacherProfileService.getDownloadUrl(profileId)).build();
   }
 
   private UUID getCurrentUserId() {
