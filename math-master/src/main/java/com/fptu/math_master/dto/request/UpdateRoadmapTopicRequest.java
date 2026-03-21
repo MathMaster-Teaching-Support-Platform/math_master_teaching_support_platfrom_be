@@ -28,6 +28,14 @@ public class UpdateRoadmapTopicRequest {
 
   private List<UUID> lessonIds;
 
+  private List<UUID> slideLessonIds;
+
+  private List<UUID> assessmentIds;
+
+  private List<UUID> lessonPlanIds;
+
+  private List<UUID> mindmapIds;
+
   private UUID topicAssessmentId;
 
   private BigDecimal passThresholdPercentage;

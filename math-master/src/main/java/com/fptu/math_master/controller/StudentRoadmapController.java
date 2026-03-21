@@ -41,14 +41,14 @@ public class StudentRoadmapController {
   @PreAuthorize("hasRole('STUDENT')")
   @Operation(
       summary = "Browse available roadmaps",
-      description = "Get all admin-created general roadmap templates for students to choose")
+      description = "Get all published roadmap templates for students")
   public ApiResponse<Page<RoadmapSummaryResponse>> getAvailableRoadmaps(
       @RequestParam(required = false) String name,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
     Pageable pageable = PageRequest.of(page, size);
     return ApiResponse.<Page<RoadmapSummaryResponse>>builder()
-        .result(roadmapAdminService.getAllRoadmaps(name, pageable))
+        .result(roadmapAdminService.getPublishedRoadmaps(name, pageable))
         .build();
   }
 
@@ -57,7 +57,7 @@ public class StudentRoadmapController {
   @Operation(summary = "Get roadmap", description = "Get full roadmap template with topics and content")
   public ApiResponse<RoadmapDetailResponse> getRoadmap(@PathVariable UUID id) {
     return ApiResponse.<RoadmapDetailResponse>builder()
-      .result(roadmapAdminService.getRoadmap(id))
+      .result(roadmapAdminService.getPublishedRoadmap(id))
         .build();
   }
 

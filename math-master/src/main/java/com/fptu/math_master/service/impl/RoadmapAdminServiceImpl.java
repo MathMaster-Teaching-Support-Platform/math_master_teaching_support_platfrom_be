@@ -12,8 +12,11 @@ import com.fptu.math_master.dto.response.RoadmapEntryTestResultResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
 import com.fptu.math_master.dto.response.RoadmapTopicResponse;
 import com.fptu.math_master.dto.response.TopicMaterialResponse;
+import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.Answer;
 import com.fptu.math_master.entity.LearningRoadmap;
+import com.fptu.math_master.entity.LessonPlan;
+import com.fptu.math_master.entity.Mindmap;
 import com.fptu.math_master.entity.RoadmapEntryQuestionMapping;
 import com.fptu.math_master.entity.RoadmapTopic;
 import com.fptu.math_master.entity.Subject;
@@ -28,7 +31,9 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.AnswerRepository;
 import com.fptu.math_master.repository.AssessmentRepository;
 import com.fptu.math_master.repository.LearningRoadmapRepository;
+import com.fptu.math_master.repository.LessonPlanRepository;
 import com.fptu.math_master.repository.LessonRepository;
+import com.fptu.math_master.repository.MindmapRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.RoadmapEntryQuestionMappingRepository;
 import com.fptu.math_master.repository.RoadmapTopicRepository;
@@ -38,12 +43,14 @@ import com.fptu.math_master.repository.TopicLearningMaterialRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.LearningRoadmapService;
 import com.fptu.math_master.service.RoadmapAdminService;
+import com.fptu.math_master.util.SecurityUtils;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -66,8 +73,10 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   LearningRoadmapRepository roadmapRepository;
   AssessmentRepository assessmentRepository;
   RoadmapTopicRepository topicRepository;
+  MindmapRepository mindmapRepository;
   QuestionRepository questionRepository;
   LessonRepository lessonRepository;
+  LessonPlanRepository lessonPlanRepository;
   TopicLearningMaterialRepository materialRepository;
   RoadmapEntryQuestionMappingRepository roadmapEntryQuestionMappingRepository;
   SubmissionRepository submissionRepository;
@@ -79,6 +88,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Override
   public RoadmapDetailResponse createRoadmap(CreateAdminRoadmapRequest request) {
     Subject subject = resolveSubject(request.getSubjectId());
+    UUID teacherId = SecurityUtils.getCurrentUserId();
 
     LearningRoadmap roadmap =
         LearningRoadmap.builder()
@@ -88,6 +98,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
             .gradeLevel(resolveGradeLevel(subject))
             .description(request.getDescription())
             .estimatedCompletionDays(request.getEstimatedDays())
+            .teacherId(teacherId)
             .generationType(RoadmapGenerationType.ADMIN_TEMPLATE)
             .status(RoadmapStatus.GENERATED)
             .progressPercentage(BigDecimal.ZERO)
@@ -103,35 +114,42 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Transactional(readOnly = true)
   public Page<RoadmapSummaryResponse> getAllRoadmaps(String name, Pageable pageable) {
     String normalizedName = name == null ? null : name.trim();
+    UUID teacherId = SecurityUtils.getCurrentUserId();
 
-    return roadmapRepository.findAdminTemplates(normalizedName, pageable).map(this::mapToSummaryResponse);
+    return roadmapRepository
+        .findAdminTemplates(teacherId, normalizedName, pageable)
+        .map(this::mapToSummaryResponse);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<RoadmapSummaryResponse> getPublishedRoadmaps(String name, Pageable pageable) {
+    String normalizedName = name == null ? null : name.trim();
+
+    return roadmapRepository.findPublishedTemplates(normalizedName, pageable).map(this::mapToSummaryResponse);
   }
 
   @Override
   @Transactional(readOnly = true)
   public RoadmapDetailResponse getRoadmap(UUID roadmapId) {
-    LearningRoadmap roadmap =
-        roadmapRepository
-            .findById(roadmapId)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+    validateTeacherOwnership(roadmap);
 
-    if (roadmap.getDeletedAt() != null) {
-      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-    }
+    return learningRoadmapService.getRoadmapById(roadmapId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public RoadmapDetailResponse getPublishedRoadmap(UUID roadmapId) {
+    getPublishedRoadmapOrThrow(roadmapId);
 
     return learningRoadmapService.getRoadmapById(roadmapId);
   }
 
   @Override
   public RoadmapDetailResponse updateRoadmap(UUID roadmapId, UpdateAdminRoadmapRequest request) {
-    LearningRoadmap roadmap =
-        roadmapRepository
-            .findById(roadmapId)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
-    if (roadmap.getDeletedAt() != null) {
-      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-    }
+    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+    validateTeacherOwnership(roadmap);
 
     if (request.getSubjectId() != null) {
       Subject subject = resolveSubject(request.getSubjectId());
@@ -154,15 +172,22 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   }
 
   @Override
-  public void softDeleteRoadmap(UUID roadmapId) {
-    LearningRoadmap roadmap =
-        roadmapRepository
-            .findById(roadmapId)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+  public RoadmapDetailResponse publishRoadmap(UUID roadmapId) {
+    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+    validateTeacherOwnership(roadmap);
 
-    if (roadmap.getDeletedAt() != null) {
-      return;
+    if (roadmap.getStatus() != RoadmapStatus.PUBLISHED) {
+      roadmap.setStatus(RoadmapStatus.PUBLISHED);
+      roadmapRepository.save(roadmap);
     }
+
+    return learningRoadmapService.getRoadmapById(roadmapId);
+  }
+
+  @Override
+  public void softDeleteRoadmap(UUID roadmapId) {
+    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+    validateTeacherOwnership(roadmap);
 
     roadmap.setDeletedAt(Instant.now());
     roadmap.setStatus(RoadmapStatus.ARCHIVED);
@@ -171,14 +196,8 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
   @Override
   public RoadmapTopicResponse addTopic(UUID roadmapId, CreateRoadmapTopicRequest request) {
-    LearningRoadmap roadmap =
-        roadmapRepository
-            .findById(roadmapId)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
-    if (roadmap.getDeletedAt() != null) {
-      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-    }
+    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+    validateTeacherOwnership(roadmap);
 
     RoadmapTopic topic =
         RoadmapTopic.builder()
@@ -201,7 +220,12 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
     topic = topicRepository.save(topic);
 
+    UUID teacherId = SecurityUtils.getCurrentUserId();
     upsertTopicLessonMaterials(topic.getId(), request.getLessonIds());
+    upsertTopicSlideMaterials(topic.getId(), request.getSlideLessonIds(), teacherId);
+    upsertTopicAssessmentMaterials(topic.getId(), request.getAssessmentIds(), teacherId);
+    upsertTopicLessonPlanMaterials(topic.getId(), request.getLessonPlanIds(), teacherId);
+    upsertTopicMindmapMaterials(topic.getId(), request.getMindmapIds(), teacherId);
 
     long totalTopics = countActiveTopics(roadmapId);
     roadmap.setTotalTopicsCount((int) totalTopics);
@@ -212,14 +236,8 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
   @Override
   public RoadmapTopicResponse updateTopic(UUID roadmapId, UUID topicId, UpdateRoadmapTopicRequest request) {
-    LearningRoadmap roadmap =
-        roadmapRepository
-            .findById(roadmapId)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
-    if (roadmap.getDeletedAt() != null) {
-      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-    }
+    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+    validateTeacherOwnership(roadmap);
 
     RoadmapTopic topic =
         topicRepository.findById(topicId).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
@@ -258,8 +276,21 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
     topicRepository.save(topic);
 
+    UUID teacherId = SecurityUtils.getCurrentUserId();
     if (request.getLessonIds() != null) {
       upsertTopicLessonMaterials(topicId, request.getLessonIds());
+    }
+    if (request.getSlideLessonIds() != null) {
+      upsertTopicSlideMaterials(topicId, request.getSlideLessonIds(), teacherId);
+    }
+    if (request.getAssessmentIds() != null) {
+      upsertTopicAssessmentMaterials(topicId, request.getAssessmentIds(), teacherId);
+    }
+    if (request.getLessonPlanIds() != null) {
+      upsertTopicLessonPlanMaterials(topicId, request.getLessonPlanIds(), teacherId);
+    }
+    if (request.getMindmapIds() != null) {
+      upsertTopicMindmapMaterials(topicId, request.getMindmapIds(), teacherId);
     }
 
     return learningRoadmapService.getTopicDetails(topicId);
@@ -267,14 +298,8 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
   @Override
   public void softDeleteTopic(UUID roadmapId, UUID topicId) {
-    LearningRoadmap roadmap =
-        roadmapRepository
-            .findById(roadmapId)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
-    if (roadmap.getDeletedAt() != null) {
-      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-    }
+    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+    validateTeacherOwnership(roadmap);
 
     RoadmapTopic topic =
         topicRepository.findById(topicId).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
@@ -300,23 +325,23 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Override
   @Transactional(readOnly = true)
   public List<TopicMaterialResponse> getTopicMaterials(UUID topicId) {
+    getActiveTopicInPublishedRoadmapOrThrow(topicId);
     return learningRoadmapService.getTopicMaterials(topicId);
   }
 
   @Override
   @Transactional(readOnly = true)
   public List<TopicMaterialResponse> getMaterialsByType(UUID topicId, String resourceType) {
+    getActiveTopicInPublishedRoadmapOrThrow(topicId);
     return learningRoadmapService.getMaterialsByType(topicId, resourceType);
   }
 
   @Override
   public void configureEntryTest(UUID roadmapId, CreateRoadmapEntryTestRequest request) {
-    LearningRoadmap roadmap =
-        roadmapRepository
-            .findById(roadmapId)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+    validateTeacherOwnership(roadmap);
 
-    if (roadmap.getDeletedAt() != null || roadmap.getGenerationType() != RoadmapGenerationType.ADMIN_TEMPLATE) {
+    if (roadmap.getGenerationType() != RoadmapGenerationType.ADMIN_TEMPLATE) {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
@@ -356,14 +381,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Transactional(readOnly = true)
   public RoadmapEntryTestResultResponse submitEntryTest(
       UUID studentId, UUID roadmapId, SubmitRoadmapEntryTestRequest request) {
-    LearningRoadmap roadmap =
-        roadmapRepository
-            .findById(roadmapId)
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
-    if (roadmap.getDeletedAt() != null) {
-      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-    }
+    getPublishedRoadmapOrThrow(roadmapId);
 
     Submission submission =
         submissionRepository
@@ -396,11 +414,18 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
     for (RoadmapEntryQuestionMapping mapping : mappings) {
       UUID topicId = mapping.getRoadmapTopicId();
-      totalByTopic.merge(topicId, 1, Integer::sum);
+      totalByTopic.merge(
+          topicId,
+          1,
+          (left, right) -> Integer.valueOf((left == null ? 0 : left) + (right == null ? 0 : right)));
 
       Answer answer = answerByQuestionId.get(mapping.getQuestionId());
       if (answer != null && Boolean.TRUE.equals(answer.getIsCorrect())) {
-        correctByTopic.merge(topicId, 1, Integer::sum);
+        correctByTopic.merge(
+            topicId,
+            1,
+            (left, right) ->
+                Integer.valueOf((left == null ? 0 : left) + (right == null ? 0 : right)));
       }
     }
 
@@ -454,19 +479,44 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .build();
   }
 
-  private TopicMaterialResponse mapToMaterialResponse(TopicLearningMaterial material) {
-    return TopicMaterialResponse.builder()
-        .id(material.getId())
-        .resourceTitle(material.getResourceTitle())
-        .resourceType(material.getResourceType())
-        .sequenceOrder(material.getSequenceOrder())
-        .isRequired(material.getIsRequired())
-        .lessonId(material.getLessonId())
-        .questionId(material.getQuestionId())
-        .assessmentId(material.getAssessmentId())
-        .mindmapId(material.getMindmapId())
-        .chapterId(material.getChapterId())
-        .build();
+  private LearningRoadmap getActiveRoadmapOrThrow(UUID roadmapId) {
+    LearningRoadmap roadmap =
+        roadmapRepository
+            .findById(roadmapId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+    if (roadmap.getDeletedAt() != null) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    }
+
+    return roadmap;
+  }
+
+  private LearningRoadmap getPublishedRoadmapOrThrow(UUID roadmapId) {
+    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+    if (roadmap.getStatus() != RoadmapStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    }
+    return roadmap;
+  }
+
+  private RoadmapTopic getActiveTopicInPublishedRoadmapOrThrow(UUID topicId) {
+    RoadmapTopic topic =
+        topicRepository.findById(topicId).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+    if (topic.getDeletedAt() != null) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    }
+
+    getPublishedRoadmapOrThrow(topic.getRoadmapId());
+    return topic;
+  }
+
+  private void validateTeacherOwnership(LearningRoadmap roadmap) {
+    UUID teacherId = SecurityUtils.getCurrentUserId();
+    if (roadmap.getTeacherId() == null || !roadmap.getTeacherId().equals(teacherId)) {
+      throw new AppException(ErrorCode.UNAUTHORIZED);
+    }
   }
 
   private long countActiveTopics(UUID roadmapId) {
@@ -482,7 +532,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       return;
     }
 
-    Set<UUID> uniqueLessonIds = lessonIds.stream().filter(id -> id != null).collect(Collectors.toSet());
+    Set<UUID> uniqueLessonIds = lessonIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
 
     long existingLessonCount =
         lessonRepository.findAllById(uniqueLessonIds).stream()
@@ -492,7 +542,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       throw new AppException(ErrorCode.LESSON_NOT_FOUND);
     }
 
-    int sequenceOrder = 1;
+    int sequenceOrder = nextSequenceOrder(topicId);
     List<TopicLearningMaterial> materials = new ArrayList<>();
     for (UUID lessonId : lessonIds) {
       if (lessonId == null) {
@@ -502,7 +552,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       UUID chapterId =
           lessonRepository
               .findByIdAndNotDeleted(lessonId)
-              .map(lesson -> lesson.getChapterId())
+              .map(com.fptu.math_master.entity.Lesson::getChapterId)
               .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
 
       materials.add(
@@ -520,6 +570,181 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     if (!materials.isEmpty()) {
       materialRepository.saveAll(materials);
     }
+  }
+
+  private void upsertTopicSlideMaterials(UUID topicId, List<UUID> slideLessonIds, UUID teacherId) {
+    materialRepository.deleteByTopicIdAndResourceType(topicId, "SLIDE");
+
+    if (slideLessonIds == null || slideLessonIds.isEmpty()) {
+      return;
+    }
+
+    int sequenceOrder = nextSequenceOrder(topicId);
+    List<TopicLearningMaterial> materials = new ArrayList<>();
+    for (UUID lessonId : slideLessonIds) {
+      if (lessonId == null) {
+        continue;
+      }
+
+      UUID chapterId =
+          lessonRepository
+              .findByIdAndNotDeleted(lessonId)
+              .map(com.fptu.math_master.entity.Lesson::getChapterId)
+              .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+      boolean hasTeacherPlan =
+          lessonPlanRepository.existsByLessonIdAndTeacherIdAndNotDeleted(lessonId, teacherId);
+      if (!hasTeacherPlan) {
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+      }
+
+      materials.add(
+          TopicLearningMaterial.builder()
+              .topicId(topicId)
+              .lessonId(lessonId)
+              .chapterId(chapterId)
+              .resourceType("SLIDE")
+              .resourceTitle("Slide")
+              .sequenceOrder(sequenceOrder++)
+              .isRequired(true)
+              .build());
+    }
+
+    if (!materials.isEmpty()) {
+      materialRepository.saveAll(materials);
+    }
+  }
+
+  private void upsertTopicAssessmentMaterials(
+      UUID topicId, List<UUID> assessmentIds, UUID teacherId) {
+    materialRepository.deleteByTopicIdAndResourceType(topicId, "ASSESSMENT");
+
+    if (assessmentIds == null || assessmentIds.isEmpty()) {
+      return;
+    }
+
+    int sequenceOrder = nextSequenceOrder(topicId);
+    List<TopicLearningMaterial> materials = new ArrayList<>();
+    for (UUID assessmentId : assessmentIds) {
+      if (assessmentId == null) {
+        continue;
+      }
+
+      Assessment assessment =
+          assessmentRepository
+              .findByIdAndNotDeleted(assessmentId)
+              .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+      if (!teacherId.equals(assessment.getTeacherId())) {
+        throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
+      }
+
+      materials.add(
+          TopicLearningMaterial.builder()
+              .topicId(topicId)
+              .assessmentId(assessmentId)
+              .resourceType("ASSESSMENT")
+              .resourceTitle("Assessment")
+              .sequenceOrder(sequenceOrder++)
+              .isRequired(true)
+              .build());
+    }
+
+    if (!materials.isEmpty()) {
+      materialRepository.saveAll(materials);
+    }
+  }
+
+  private void upsertTopicLessonPlanMaterials(
+      UUID topicId, List<UUID> lessonPlanIds, UUID teacherId) {
+    materialRepository.deleteByTopicIdAndResourceType(topicId, "LESSON_PLAN");
+
+    if (lessonPlanIds == null || lessonPlanIds.isEmpty()) {
+      return;
+    }
+
+    int sequenceOrder = nextSequenceOrder(topicId);
+    List<TopicLearningMaterial> materials = new ArrayList<>();
+    for (UUID lessonPlanId : lessonPlanIds) {
+      if (lessonPlanId == null) {
+        continue;
+      }
+
+      LessonPlan lessonPlan =
+          lessonPlanRepository
+              .findByIdAndNotDeleted(lessonPlanId)
+              .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+      if (!teacherId.equals(lessonPlan.getTeacherId())) {
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+      }
+
+      UUID chapterId =
+          lessonRepository
+              .findByIdAndNotDeleted(lessonPlan.getLessonId())
+              .map(com.fptu.math_master.entity.Lesson::getChapterId)
+              .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+      materials.add(
+          TopicLearningMaterial.builder()
+              .topicId(topicId)
+              .lessonId(lessonPlan.getLessonId())
+              .chapterId(chapterId)
+              .resourceType("LESSON_PLAN")
+              .resourceTitle("Lesson Plan")
+              .sequenceOrder(sequenceOrder++)
+              .isRequired(true)
+              .build());
+    }
+
+    if (!materials.isEmpty()) {
+      materialRepository.saveAll(materials);
+    }
+  }
+
+  private void upsertTopicMindmapMaterials(UUID topicId, List<UUID> mindmapIds, UUID teacherId) {
+    materialRepository.deleteByTopicIdAndResourceType(topicId, "MINDMAP");
+
+    if (mindmapIds == null || mindmapIds.isEmpty()) {
+      return;
+    }
+
+    int sequenceOrder = nextSequenceOrder(topicId);
+    List<TopicLearningMaterial> materials = new ArrayList<>();
+    for (UUID mindmapId : mindmapIds) {
+      if (mindmapId == null) {
+        continue;
+      }
+
+      Mindmap mindmap =
+          mindmapRepository
+              .findByIdAndNotDeleted(mindmapId)
+              .orElseThrow(() -> new AppException(ErrorCode.MINDMAP_NOT_FOUND));
+
+      if (!teacherId.equals(mindmap.getTeacherId())) {
+        throw new AppException(ErrorCode.MINDMAP_ACCESS_DENIED);
+      }
+
+      materials.add(
+          TopicLearningMaterial.builder()
+              .topicId(topicId)
+              .mindmapId(mindmapId)
+              .lessonId(mindmap.getLessonId())
+              .resourceType("MINDMAP")
+              .resourceTitle("Mindmap")
+              .sequenceOrder(sequenceOrder++)
+              .isRequired(true)
+              .build());
+    }
+
+    if (!materials.isEmpty()) {
+      materialRepository.saveAll(materials);
+    }
+  }
+
+  private int nextSequenceOrder(UUID topicId) {
+    Integer maxSequence = materialRepository.findMaxSequenceOrderByTopicId(topicId);
+    return (maxSequence == null ? 0 : maxSequence) + 1;
   }
 
   private Subject resolveSubject(UUID subjectId) {
