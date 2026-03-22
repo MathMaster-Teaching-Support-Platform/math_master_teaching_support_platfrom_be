@@ -56,6 +56,42 @@ public class CentrifugoServiceImpl implements CentrifugoService {
   }
 
   @Override
+  public String generateConnectionToken(String userId, int ttlHours) {
+    try {
+      long exp = Instant.now().plusSeconds(ttlHours * 3600L).getEpochSecond();
+
+      // Build proper JWT: header.payload.signature
+      // header
+      Map<String, Object> headerMap = new HashMap<>();
+      headerMap.put("typ", "JWT");
+      headerMap.put("alg", "HS256");
+      String headerJson = objectMapper.writeValueAsString(headerMap);
+      String headerEncoded = Base64.getUrlEncoder()
+          .withoutPadding()
+          .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+
+      // payload
+      Map<String, Object> claims = new HashMap<>();
+      claims.put("sub", userId);
+      claims.put("exp", exp);
+      String payloadJson = objectMapper.writeValueAsString(claims);
+      String payloadEncoded = Base64.getUrlEncoder()
+          .withoutPadding()
+          .encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
+
+      // signature signs header.payload (standard JWT signing input)
+      String signingInput = headerEncoded + "." + payloadEncoded;
+      String signature = hmacSha256(signingInput, centrifugoProperties.getTokenHmacSecret());
+
+      return signingInput + "." + signature;
+
+    } catch (Exception e) {
+      log.error("Error generating connection token for user {}", userId, e);
+      throw new RuntimeException("Failed to generate connection token", e);
+    }
+  }
+
+  @Override
   public void publishToChannel(String channel, Map<String, Object> data) {
     try {
       Map<String, Object> payload = new HashMap<>();

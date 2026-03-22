@@ -178,6 +178,16 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             .setAudience(Collections.singletonList(clientId))
             .build();
 
+    GoogleIdToken parsedToken = GoogleIdToken.parse(new GsonFactory(), request.getToken());
+    if (parsedToken != null) {
+      log.info("Google Token Parsed. Audience: {}, Issuer: {}, ExpirationTimeSeconds: {}, IssuedAtTimeSeconds: {}, Now: {}", 
+          parsedToken.getPayload().getAudience(), parsedToken.getPayload().getIssuer(), 
+          parsedToken.getPayload().getExpirationTimeSeconds(), parsedToken.getPayload().getIssuedAtTimeSeconds(),
+          System.currentTimeMillis() / 1000);
+    } else {
+      log.info("Google Token failed to parse entirely!");
+    }
+
     GoogleIdToken idToken = verifier.verify(request.getToken());
     if (idToken != null) {
       GoogleIdToken.Payload payload = idToken.getPayload();
@@ -233,6 +243,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
           .newRegistration(isNewUser)
           .build();
     } else {
+      log.error("Google verify() returned null for token request.");
       throw new AppException(ErrorCode.UNAUTHENTICATED);
     }
   }

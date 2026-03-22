@@ -7,6 +7,8 @@ public interface CentrifugoService {
 
   String generateConnectionToken(UUID userId, UUID attemptId);
 
+  String generateConnectionToken(String userId, int ttlHours);
+
   void publishToChannel(String channel, Map<String, Object> data);
 
   void publishAnswerAck(UUID attemptId, UUID questionId, Long sequenceNumber);

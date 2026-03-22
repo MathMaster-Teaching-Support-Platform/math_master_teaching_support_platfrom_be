@@ -16,4 +16,6 @@ public class CentrifugoProperties {
   private String tokenHmacSecret;
 
   private String wsUrl;
+
+  private Integer tokenTtlHours;
 }
