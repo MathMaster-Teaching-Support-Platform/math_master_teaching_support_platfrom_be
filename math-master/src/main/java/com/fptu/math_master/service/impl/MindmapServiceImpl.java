@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.request.GenerateMindmapRequest;
 import com.fptu.math_master.dto.request.MindmapNodeRequest;
 import com.fptu.math_master.dto.request.MindmapRequest;
+import com.fptu.math_master.dto.request.UpdateMindmapNodeRequest;
 import com.fptu.math_master.dto.response.MindmapDetailResponse;
 import com.fptu.math_master.dto.response.MindmapNodeResponse;
 import com.fptu.math_master.dto.response.MindmapResponse;
@@ -26,6 +27,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -393,7 +395,7 @@ public class MindmapServiceImpl implements MindmapService {
 
   @Override
   @Transactional
-  public MindmapNodeResponse updateNode(UUID nodeId, MindmapNodeRequest request) {
+  public MindmapNodeResponse updateNode(UUID nodeId, UpdateMindmapNodeRequest request) {
     log.info("Updating mindmap node: {}", nodeId);
 
     MindmapNode node =
@@ -408,7 +410,30 @@ public class MindmapServiceImpl implements MindmapService {
 
     validateOwner(mindmap.getTeacherId(), getCurrentUserId());
 
+    if (request.getMindmapId() != null && !request.getMindmapId().equals(node.getMindmapId())) {
+      throw new AppException(ErrorCode.INVALID_KEY);
+    }
+
+    if (request.getParentId() != null) {
+      if (request.getParentId().equals(nodeId)) {
+        throw new AppException(ErrorCode.INVALID_MINDMAP_STRUCTURE);
+      }
+
+      mindmapNodeRepository
+          .findByIdAndMindmapId(request.getParentId(), node.getMindmapId())
+          .orElseThrow(() -> new AppException(ErrorCode.MINDMAP_NODE_NOT_FOUND));
+
+      if (wouldCreateCycle(nodeId, request.getParentId(), node.getMindmapId())) {
+        throw new AppException(ErrorCode.INVALID_MINDMAP_STRUCTURE);
+      }
+
+      node.setParentId(request.getParentId());
+    }
+
     if (request.getContent() != null) {
+      if (!StringUtils.hasText(request.getContent())) {
+        throw new AppException(ErrorCode.INVALID_KEY);
+      }
       node.setContent(request.getContent());
     }
     if (request.getColor() != null) {
@@ -425,6 +450,25 @@ public class MindmapServiceImpl implements MindmapService {
 
     log.info("Mindmap node updated successfully: {}", nodeId);
     return mapNodeToResponse(node);
+  }
+
+  private boolean wouldCreateCycle(UUID nodeId, UUID newParentId, UUID mindmapId) {
+    UUID currentId = newParentId;
+
+    while (currentId != null) {
+      if (currentId.equals(nodeId)) {
+        return true;
+      }
+
+      Optional<MindmapNode> currentNode = mindmapNodeRepository.findByIdAndMindmapId(currentId, mindmapId);
+      if (currentNode.isEmpty()) {
+        return false;
+      }
+
+      currentId = currentNode.get().getParentId();
+    }
+
+    return false;
   }
 
   @Override

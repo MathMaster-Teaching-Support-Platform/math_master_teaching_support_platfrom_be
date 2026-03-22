@@ -3,6 +3,7 @@ package com.fptu.math_master.controller;
 import com.fptu.math_master.dto.request.GenerateMindmapRequest;
 import com.fptu.math_master.dto.request.MindmapNodeRequest;
 import com.fptu.math_master.dto.request.MindmapRequest;
+import com.fptu.math_master.dto.request.UpdateMindmapNodeRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.MindmapDetailResponse;
 import com.fptu.math_master.dto.response.MindmapNodeResponse;
@@ -221,7 +222,7 @@ public class MindmapController {
       summary = "Update a node",
       description = "Update node content, color, icon, or display order.")
   public ApiResponse<MindmapNodeResponse> updateNode(
-      @PathVariable UUID nodeId, @Valid @RequestBody MindmapNodeRequest request) {
+      @PathVariable UUID nodeId, @Valid @RequestBody UpdateMindmapNodeRequest request) {
     log.info("REST request to update node: {}", nodeId);
     return ApiResponse.<MindmapNodeResponse>builder()
         .message("Node updated successfully")

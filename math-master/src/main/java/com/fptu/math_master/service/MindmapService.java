@@ -3,6 +3,7 @@ package com.fptu.math_master.service;
 import com.fptu.math_master.dto.request.GenerateMindmapRequest;
 import com.fptu.math_master.dto.request.MindmapNodeRequest;
 import com.fptu.math_master.dto.request.MindmapRequest;
+import com.fptu.math_master.dto.request.UpdateMindmapNodeRequest;
 import com.fptu.math_master.dto.response.MindmapDetailResponse;
 import com.fptu.math_master.dto.response.MindmapNodeResponse;
 import com.fptu.math_master.dto.response.MindmapResponse;
@@ -102,7 +103,7 @@ public interface MindmapService {
    * @param request update request
    * @return updated node
    */
-  MindmapNodeResponse updateNode(UUID nodeId, MindmapNodeRequest request);
+  MindmapNodeResponse updateNode(UUID nodeId, UpdateMindmapNodeRequest request);
 
   /**
    * Delete a node and its children
