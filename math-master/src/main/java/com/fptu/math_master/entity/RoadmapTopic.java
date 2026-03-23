@@ -16,6 +16,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -26,6 +28,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import java.util.Set;
 
 /**
  * Represents a topic/module within a learning roadmap
@@ -156,6 +159,13 @@ public class RoadmapTopic extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "topic_assessment_id", insertable = false, updatable = false)
   private Assessment topicAssessment;
+
+  @ManyToMany(fetch = FetchType.LAZY)
+  @JoinTable(
+      name = "roadmap_topic_teaching_resources",
+      joinColumns = @JoinColumn(name = "roadmap_topic_id"),
+      inverseJoinColumns = @JoinColumn(name = "teaching_resource_id"))
+  private Set<TeachingResource> teachingResources;
 
   @PrePersist
   @Override

@@ -222,7 +222,12 @@ public enum ErrorCode {
       1127, "questionTypeName is required when templateId is not provided", HttpStatus.BAD_REQUEST),
   SCHOOL_GRADE_NOT_FOUND(1128, "School grade not found", HttpStatus.NOT_FOUND),
   DOCUMENT_NOT_FOUND(1129, "Document not found", HttpStatus.NOT_FOUND),
-  SCHOOL_GRADE_ALREADY_EXISTS(1129, "School grade already exists", HttpStatus.BAD_REQUEST);
+  SCHOOL_GRADE_ALREADY_EXISTS(1129, "School grade already exists", HttpStatus.BAD_REQUEST),
+  ROADMAP_TOPIC_NOT_FOUND(1130, "Roadmap topic not found", HttpStatus.NOT_FOUND),
+  TEACHING_RESOURCE_NOT_FOUND(1131, "Teaching resource not found", HttpStatus.NOT_FOUND),
+  TEACHING_RESOURCE_ACCESS_DENIED(
+      1132, "You do not have permission to access this teaching resource", HttpStatus.FORBIDDEN),
+  RESOURCE_FILE_TOO_LARGE(1133, "Resource file exceeds the allowed size", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

@@ -147,7 +147,7 @@ public class LessonContentController {
       description = "Manually creates a lesson inside a chapter (chapterId required in body).")
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<LessonResponse> createLesson(@Valid @RequestBody CreateLessonRequest request) {
     log.info("POST /lessons – chapterId={}", request.getChapterId());
     return ApiResponse.<LessonResponse>builder()
@@ -157,7 +157,7 @@ public class LessonContentController {
 
   @Operation(summary = "Update a lesson")
   @PutMapping("/{lessonId}")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<LessonResponse> updateLesson(
       @PathVariable UUID lessonId, @Valid @RequestBody UpdateLessonRequest request) {
     log.info("PUT /lessons/{}", lessonId);
