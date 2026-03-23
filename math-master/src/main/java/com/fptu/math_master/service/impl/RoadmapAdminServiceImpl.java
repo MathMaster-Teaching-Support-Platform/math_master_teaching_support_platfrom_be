@@ -43,7 +43,6 @@ import com.fptu.math_master.repository.TopicLearningMaterialRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.LearningRoadmapService;
 import com.fptu.math_master.service.RoadmapAdminService;
-import com.fptu.math_master.util.SecurityUtils;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -88,7 +87,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Override
   public RoadmapDetailResponse createRoadmap(CreateAdminRoadmapRequest request) {
     Subject subject = resolveSubject(request.getSubjectId());
-    UUID teacherId = SecurityUtils.getCurrentUserId();
 
     LearningRoadmap roadmap =
         LearningRoadmap.builder()
@@ -98,7 +96,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
             .gradeLevel(resolveGradeLevel(subject))
             .description(request.getDescription())
             .estimatedCompletionDays(request.getEstimatedDays())
-            .teacherId(teacherId)
             .generationType(RoadmapGenerationType.ADMIN_TEMPLATE)
             .status(RoadmapStatus.GENERATED)
             .progressPercentage(BigDecimal.ZERO)
@@ -114,34 +111,21 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Transactional(readOnly = true)
   public Page<RoadmapSummaryResponse> getAllRoadmaps(String name, Pageable pageable) {
     String normalizedName = name == null ? null : name.trim();
-    UUID teacherId = SecurityUtils.getCurrentUserId();
 
-    return roadmapRepository
-        .findAdminTemplates(teacherId, normalizedName, pageable)
-        .map(this::mapToSummaryResponse);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public Page<RoadmapSummaryResponse> getPublishedRoadmaps(String name, Pageable pageable) {
-    String normalizedName = name == null ? null : name.trim();
-
-    return roadmapRepository.findPublishedTemplates(normalizedName, pageable).map(this::mapToSummaryResponse);
+    return roadmapRepository.findAdminTemplates(normalizedName, pageable).map(this::mapToSummaryResponse);
   }
 
   @Override
   @Transactional(readOnly = true)
   public RoadmapDetailResponse getRoadmap(UUID roadmapId) {
-    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
-    validateTeacherOwnership(roadmap);
+    LearningRoadmap roadmap =
+        roadmapRepository
+            .findById(roadmapId)
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
-    return learningRoadmapService.getRoadmapById(roadmapId);
-  }
-
-  @Override
-  @Transactional(readOnly = true)
-  public RoadmapDetailResponse getPublishedRoadmap(UUID roadmapId) {
-    getPublishedRoadmapOrThrow(roadmapId);
+    if (roadmap.getDeletedAt() != null) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    }
 
     return learningRoadmapService.getRoadmapById(roadmapId);
   }
@@ -149,7 +133,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Override
   public RoadmapDetailResponse updateRoadmap(UUID roadmapId, UpdateAdminRoadmapRequest request) {
     LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
-    validateTeacherOwnership(roadmap);
 
     if (request.getSubjectId() != null) {
       Subject subject = resolveSubject(request.getSubjectId());
@@ -172,22 +155,8 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   }
 
   @Override
-  public RoadmapDetailResponse publishRoadmap(UUID roadmapId) {
-    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
-    validateTeacherOwnership(roadmap);
-
-    if (roadmap.getStatus() != RoadmapStatus.PUBLISHED) {
-      roadmap.setStatus(RoadmapStatus.PUBLISHED);
-      roadmapRepository.save(roadmap);
-    }
-
-    return learningRoadmapService.getRoadmapById(roadmapId);
-  }
-
-  @Override
   public void softDeleteRoadmap(UUID roadmapId) {
     LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
-    validateTeacherOwnership(roadmap);
 
     roadmap.setDeletedAt(Instant.now());
     roadmap.setStatus(RoadmapStatus.ARCHIVED);
@@ -197,7 +166,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Override
   public RoadmapTopicResponse addTopic(UUID roadmapId, CreateRoadmapTopicRequest request) {
     LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
-    validateTeacherOwnership(roadmap);
 
     RoadmapTopic topic =
         RoadmapTopic.builder()
@@ -220,12 +188,11 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
     topic = topicRepository.save(topic);
 
-    UUID teacherId = SecurityUtils.getCurrentUserId();
     upsertTopicLessonMaterials(topic.getId(), request.getLessonIds());
-    upsertTopicSlideMaterials(topic.getId(), request.getSlideLessonIds(), teacherId);
-    upsertTopicAssessmentMaterials(topic.getId(), request.getAssessmentIds(), teacherId);
-    upsertTopicLessonPlanMaterials(topic.getId(), request.getLessonPlanIds(), teacherId);
-    upsertTopicMindmapMaterials(topic.getId(), request.getMindmapIds(), teacherId);
+  upsertTopicSlideMaterials(topic.getId(), request.getSlideLessonIds());
+  upsertTopicAssessmentMaterials(topic.getId(), request.getAssessmentIds());
+  upsertTopicLessonPlanMaterials(topic.getId(), request.getLessonPlanIds());
+  upsertTopicMindmapMaterials(topic.getId(), request.getMindmapIds());
 
     long totalTopics = countActiveTopics(roadmapId);
     roadmap.setTotalTopicsCount((int) totalTopics);
@@ -237,7 +204,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Override
   public RoadmapTopicResponse updateTopic(UUID roadmapId, UUID topicId, UpdateRoadmapTopicRequest request) {
     LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
-    validateTeacherOwnership(roadmap);
 
     RoadmapTopic topic =
         topicRepository.findById(topicId).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
@@ -276,21 +242,20 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
     topicRepository.save(topic);
 
-    UUID teacherId = SecurityUtils.getCurrentUserId();
     if (request.getLessonIds() != null) {
       upsertTopicLessonMaterials(topicId, request.getLessonIds());
     }
     if (request.getSlideLessonIds() != null) {
-      upsertTopicSlideMaterials(topicId, request.getSlideLessonIds(), teacherId);
+      upsertTopicSlideMaterials(topicId, request.getSlideLessonIds());
     }
     if (request.getAssessmentIds() != null) {
-      upsertTopicAssessmentMaterials(topicId, request.getAssessmentIds(), teacherId);
+      upsertTopicAssessmentMaterials(topicId, request.getAssessmentIds());
     }
     if (request.getLessonPlanIds() != null) {
-      upsertTopicLessonPlanMaterials(topicId, request.getLessonPlanIds(), teacherId);
+      upsertTopicLessonPlanMaterials(topicId, request.getLessonPlanIds());
     }
     if (request.getMindmapIds() != null) {
-      upsertTopicMindmapMaterials(topicId, request.getMindmapIds(), teacherId);
+      upsertTopicMindmapMaterials(topicId, request.getMindmapIds());
     }
 
     return learningRoadmapService.getTopicDetails(topicId);
@@ -299,7 +264,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Override
   public void softDeleteTopic(UUID roadmapId, UUID topicId) {
     LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
-    validateTeacherOwnership(roadmap);
 
     RoadmapTopic topic =
         topicRepository.findById(topicId).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
@@ -325,21 +289,18 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Override
   @Transactional(readOnly = true)
   public List<TopicMaterialResponse> getTopicMaterials(UUID topicId) {
-    getActiveTopicInPublishedRoadmapOrThrow(topicId);
     return learningRoadmapService.getTopicMaterials(topicId);
   }
 
   @Override
   @Transactional(readOnly = true)
   public List<TopicMaterialResponse> getMaterialsByType(UUID topicId, String resourceType) {
-    getActiveTopicInPublishedRoadmapOrThrow(topicId);
     return learningRoadmapService.getMaterialsByType(topicId, resourceType);
   }
 
   @Override
   public void configureEntryTest(UUID roadmapId, CreateRoadmapEntryTestRequest request) {
     LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
-    validateTeacherOwnership(roadmap);
 
     if (roadmap.getGenerationType() != RoadmapGenerationType.ADMIN_TEMPLATE) {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
@@ -381,7 +342,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Transactional(readOnly = true)
   public RoadmapEntryTestResultResponse submitEntryTest(
       UUID studentId, UUID roadmapId, SubmitRoadmapEntryTestRequest request) {
-    getPublishedRoadmapOrThrow(roadmapId);
+    getActiveRoadmapOrThrow(roadmapId);
 
     Submission submission =
         submissionRepository
@@ -492,33 +453,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     return roadmap;
   }
 
-  private LearningRoadmap getPublishedRoadmapOrThrow(UUID roadmapId) {
-    LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
-    if (roadmap.getStatus() != RoadmapStatus.PUBLISHED) {
-      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-    }
-    return roadmap;
-  }
-
-  private RoadmapTopic getActiveTopicInPublishedRoadmapOrThrow(UUID topicId) {
-    RoadmapTopic topic =
-        topicRepository.findById(topicId).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
-    if (topic.getDeletedAt() != null) {
-      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-    }
-
-    getPublishedRoadmapOrThrow(topic.getRoadmapId());
-    return topic;
-  }
-
-  private void validateTeacherOwnership(LearningRoadmap roadmap) {
-    UUID teacherId = SecurityUtils.getCurrentUserId();
-    if (roadmap.getTeacherId() == null || !roadmap.getTeacherId().equals(teacherId)) {
-      throw new AppException(ErrorCode.UNAUTHORIZED);
-    }
-  }
-
   private long countActiveTopics(UUID roadmapId) {
     return topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmapId).stream()
         .filter(topic -> topic.getDeletedAt() == null)
@@ -572,7 +506,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     }
   }
 
-  private void upsertTopicSlideMaterials(UUID topicId, List<UUID> slideLessonIds, UUID teacherId) {
+  private void upsertTopicSlideMaterials(UUID topicId, List<UUID> slideLessonIds) {
     materialRepository.deleteByTopicIdAndResourceType(topicId, "SLIDE");
 
     if (slideLessonIds == null || slideLessonIds.isEmpty()) {
@@ -592,12 +526,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
               .map(com.fptu.math_master.entity.Lesson::getChapterId)
               .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
 
-      boolean hasTeacherPlan =
-          lessonPlanRepository.existsByLessonIdAndTeacherIdAndNotDeleted(lessonId, teacherId);
-      if (!hasTeacherPlan) {
-        throw new AppException(ErrorCode.UNAUTHORIZED);
-      }
-
       materials.add(
           TopicLearningMaterial.builder()
               .topicId(topicId)
@@ -615,8 +543,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     }
   }
 
-  private void upsertTopicAssessmentMaterials(
-      UUID topicId, List<UUID> assessmentIds, UUID teacherId) {
+  private void upsertTopicAssessmentMaterials(UUID topicId, List<UUID> assessmentIds) {
     materialRepository.deleteByTopicIdAndResourceType(topicId, "ASSESSMENT");
 
     if (assessmentIds == null || assessmentIds.isEmpty()) {
@@ -635,10 +562,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
               .findByIdAndNotDeleted(assessmentId)
               .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
-      if (!teacherId.equals(assessment.getTeacherId())) {
-        throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
-      }
-
       materials.add(
           TopicLearningMaterial.builder()
               .topicId(topicId)
@@ -655,8 +578,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     }
   }
 
-  private void upsertTopicLessonPlanMaterials(
-      UUID topicId, List<UUID> lessonPlanIds, UUID teacherId) {
+  private void upsertTopicLessonPlanMaterials(UUID topicId, List<UUID> lessonPlanIds) {
     materialRepository.deleteByTopicIdAndResourceType(topicId, "LESSON_PLAN");
 
     if (lessonPlanIds == null || lessonPlanIds.isEmpty()) {
@@ -674,10 +596,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
           lessonPlanRepository
               .findByIdAndNotDeleted(lessonPlanId)
               .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
-
-      if (!teacherId.equals(lessonPlan.getTeacherId())) {
-        throw new AppException(ErrorCode.UNAUTHORIZED);
-      }
 
       UUID chapterId =
           lessonRepository
@@ -702,7 +620,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     }
   }
 
-  private void upsertTopicMindmapMaterials(UUID topicId, List<UUID> mindmapIds, UUID teacherId) {
+  private void upsertTopicMindmapMaterials(UUID topicId, List<UUID> mindmapIds) {
     materialRepository.deleteByTopicIdAndResourceType(topicId, "MINDMAP");
 
     if (mindmapIds == null || mindmapIds.isEmpty()) {
@@ -720,10 +638,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
           mindmapRepository
               .findByIdAndNotDeleted(mindmapId)
               .orElseThrow(() -> new AppException(ErrorCode.MINDMAP_NOT_FOUND));
-
-      if (!teacherId.equals(mindmap.getTeacherId())) {
-        throw new AppException(ErrorCode.MINDMAP_ACCESS_DENIED);
-      }
 
       materials.add(
           TopicLearningMaterial.builder()

@@ -5,7 +5,6 @@ package com.fptu.math_master.enums;
  */
 public enum RoadmapStatus {
   GENERATED,
-  PUBLISHED,
   IN_PROGRESS,
   COMPLETED,
   ARCHIVED

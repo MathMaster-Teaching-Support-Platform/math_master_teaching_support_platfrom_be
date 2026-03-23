@@ -24,7 +24,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -34,7 +33,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/teacher/roadmaps")
+@RequestMapping("/admin/roadmaps")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
@@ -44,10 +43,10 @@ public class AdminRoadmapController {
   RoadmapAdminService roadmapAdminService;
 
   @GetMapping
-    @PreAuthorize("hasRole('TEACHER')")
+  @PreAuthorize("hasRole('ADMIN')")
   @Operation(
       summary = "Get all roadmaps",
-      description = "Get all roadmaps created by the current teacher")
+      description = "Get all roadmaps with pagination and optional student name search")
   public ApiResponse<Page<RoadmapSummaryResponse>> getAllRoadmaps(
       @RequestParam(required = false) String name,
       @RequestParam(defaultValue = "0") int page,
@@ -59,7 +58,7 @@ public class AdminRoadmapController {
   }
 
   @GetMapping("/{id}")
-  @PreAuthorize("hasRole('TEACHER')")
+  @PreAuthorize("hasRole('ADMIN')")
   @Operation(summary = "Get roadmap", description = "Get roadmap detail by ID")
   public ApiResponse<RoadmapDetailResponse> getRoadmap(@PathVariable UUID id) {
     return ApiResponse.<RoadmapDetailResponse>builder()
@@ -68,10 +67,10 @@ public class AdminRoadmapController {
   }
 
   @PostMapping
-  @PreAuthorize("hasRole('TEACHER')")
+  @PreAuthorize("hasRole('ADMIN')")
   @Operation(
       summary = "Create roadmap",
-    description = "Create teacher-managed roadmap template for students")
+      description = "Create admin-managed general roadmap template for all students")
   public ApiResponse<RoadmapDetailResponse> createRoadmap(
       @Valid @RequestBody CreateAdminRoadmapRequest request) {
     return ApiResponse.<RoadmapDetailResponse>builder()
@@ -81,7 +80,7 @@ public class AdminRoadmapController {
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasRole('TEACHER')")
+  @PreAuthorize("hasRole('ADMIN')")
   @Operation(summary = "Update roadmap", description = "Update roadmap basic metadata")
   public ApiResponse<RoadmapDetailResponse> updateRoadmap(
       @PathVariable UUID id, @Valid @RequestBody UpdateAdminRoadmapRequest request) {
@@ -91,20 +90,8 @@ public class AdminRoadmapController {
         .build();
   }
 
-  @PatchMapping("/{id}/publish")
-  @PreAuthorize("hasRole('TEACHER')")
-  @Operation(
-      summary = "Publish roadmap",
-      description = "Publish roadmap so students can browse and view its details")
-  public ApiResponse<RoadmapDetailResponse> publishRoadmap(@PathVariable UUID id) {
-    return ApiResponse.<RoadmapDetailResponse>builder()
-        .message("Roadmap published successfully")
-        .result(roadmapAdminService.publishRoadmap(id))
-        .build();
-  }
-
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasRole('TEACHER')")
+  @PreAuthorize("hasRole('ADMIN')")
   @Operation(summary = "Soft delete roadmap", description = "Archive roadmap via soft delete")
   public ApiResponse<String> softDeleteRoadmap(@PathVariable UUID id) {
     roadmapAdminService.softDeleteRoadmap(id);
@@ -115,7 +102,7 @@ public class AdminRoadmapController {
   }
 
   @PostMapping("/{id}/topics")
-  @PreAuthorize("hasRole('TEACHER')")
+  @PreAuthorize("hasRole('ADMIN')")
   @Operation(summary = "Add roadmap topic", description = "Add ordered topic to roadmap")
   public ApiResponse<RoadmapTopicResponse> addTopic(
       @PathVariable UUID id, @Valid @RequestBody CreateRoadmapTopicRequest request) {
@@ -126,7 +113,7 @@ public class AdminRoadmapController {
   }
 
   @PutMapping("/{roadmapId}/topics/{topicId}")
-  @PreAuthorize("hasRole('TEACHER')")
+  @PreAuthorize("hasRole('ADMIN')")
   @Operation(summary = "Update roadmap topic", description = "Update roadmap topic metadata")
   public ApiResponse<RoadmapTopicResponse> updateTopic(
       @PathVariable UUID roadmapId,
@@ -139,7 +126,7 @@ public class AdminRoadmapController {
   }
 
   @DeleteMapping("/{roadmapId}/topics/{topicId}")
-  @PreAuthorize("hasRole('TEACHER')")
+  @PreAuthorize("hasRole('ADMIN')")
   @Operation(summary = "Soft delete roadmap topic", description = "Archive roadmap topic via soft delete")
   public ApiResponse<String> softDeleteTopic(@PathVariable UUID roadmapId, @PathVariable UUID topicId) {
     roadmapAdminService.softDeleteTopic(roadmapId, topicId);
@@ -149,19 +136,19 @@ public class AdminRoadmapController {
         .build();
   }
 
-    @PostMapping("/{roadmapId}/entry-test")
-  @PreAuthorize("hasRole('TEACHER')")
-    @Operation(
-            summary = "Configure roadmap entry test",
-            description =
-                    "Configure one entry test assessment and question-to-topic mapping to detect student start topic")
-    public ApiResponse<String> configureRoadmapEntryTest(
-            @PathVariable UUID roadmapId, @Valid @RequestBody CreateRoadmapEntryTestRequest request) {
-        roadmapAdminService.configureEntryTest(roadmapId, request);
-        return ApiResponse.<String>builder()
-                .message("Roadmap entry test configured successfully")
-                .result("OK")
-                .build();
-    }
+  @PostMapping("/{roadmapId}/entry-test")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(
+      summary = "Configure roadmap entry test",
+      description =
+          "Configure one entry test assessment and question-to-topic mapping to detect student start topic")
+  public ApiResponse<String> configureRoadmapEntryTest(
+      @PathVariable UUID roadmapId, @Valid @RequestBody CreateRoadmapEntryTestRequest request) {
+    roadmapAdminService.configureEntryTest(roadmapId, request);
+    return ApiResponse.<String>builder()
+        .message("Roadmap entry test configured successfully")
+        .result("OK")
+        .build();
+  }
 
 }

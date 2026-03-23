@@ -22,15 +22,9 @@ public interface RoadmapAdminService {
 
   Page<RoadmapSummaryResponse> getAllRoadmaps(String name, Pageable pageable);
 
-  Page<RoadmapSummaryResponse> getPublishedRoadmaps(String name, Pageable pageable);
-
   RoadmapDetailResponse getRoadmap(UUID roadmapId);
 
-  RoadmapDetailResponse getPublishedRoadmap(UUID roadmapId);
-
   RoadmapDetailResponse updateRoadmap(UUID roadmapId, UpdateAdminRoadmapRequest request);
-
-  RoadmapDetailResponse publishRoadmap(UUID roadmapId);
 
   void softDeleteRoadmap(UUID roadmapId);
 
