@@ -38,27 +38,28 @@ khoipd_terminal_ps
   [1]  Format Code (Spotless)
   [2]  Sort Annotations
   [3]  Maven Clean Build
+  [4]  Clean Build + Start Project
   -----------------------------------
-  [4]  Start Redis
-  [5]  Stop Redis
-  [6]  Restart Redis
+  [5]  Start Redis
+  [6]  Stop Redis
+  [7]  Restart Redis
   -----------------------------------
-  [7]  Start All Services
-  [8]  Stop All Services
-  [9]  Restart All Services
+  [8]  Start All Services
+  [9]  Stop All Services
+  [10] Restart All Services
   -----------------------------------
-  [10] Deploy Local (build + up)
-  [11] Deploy Full  (down+build+up)
-  [12] Recreate Docker Containers
+  [11] Deploy Local (build + up)
+  [12] Deploy Full  (down+build+up)
+  [13] Recreate Docker Containers
   -----------------------------------
-  [13] Tail All Logs
-  [14] Tail Redis Logs
-  [15] Tail App Logs
+  [14] Tail All Logs
+  [15] Tail Redis Logs
+  [16] Tail App Logs
   -----------------------------------
-  [16] Project Status
-  [17] Delete Log Files
-  [18] Help
-  [19] Clear Screen
+  [17] Project Status
+  [18] Delete Log Files
+  [19] Help
+  [20] Clear Screen
   [0]  Exit
 ```
 
@@ -103,6 +104,22 @@ khoipd_terminal_ps -Task CleanBuild
 ```
 
 **Công dụng**: Chạy `mvnw clean compile` locally (không cần Docker)
+
+---
+
+### Clean Build + Start Project
+
+```powershell
+khoipd_terminal_ps -Task CleanBuildStart
+```
+
+**Công dụng**: Combo đầy đủ để khởi động project:
+
+1. Khởi động tất cả Docker services (`docker compose up -d`)
+2. Chạy `mvnw clean compile` để build sạch
+3. Khởi động Spring Boot app (`mvnw spring-boot:run`)
+
+> **Lưu ý**: App sẽ chạy ngay trong terminal (Ctrl+C để dừng)
 
 ---
 

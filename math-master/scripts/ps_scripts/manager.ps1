@@ -2,11 +2,12 @@
 
 param(
     [ValidateSet(
-        'ApplyFormat', 'SortAnnotations', 'DeployLocal', 'DeployFull', 'RecreateDocker',
+        'ApplyFormat', 'SortAnnotations', 'CleanBuild', 'CleanBuildStart',
         'StartRedis', 'StopRedis', 'RestartRedis',
         'StartAll', 'StopAll', 'RestartAll',
+        'DeployLocal', 'DeployFull', 'RecreateDocker',
         'Logs', 'LogsRedis', 'LogsApp',
-        'Status', 'DeleteLogs', 'CleanBuild', 'Help'
+        'Status', 'DeleteLogs', 'Help'
     )]
     [string]$Task,
     [switch]$Help,
@@ -86,6 +87,36 @@ function Invoke-CleanBuild {
     Write-Step "Running: mvnw clean compile..."
     &.\mvnw.cmd clean compile -q 2>&1 | Where-Object { $_ -notmatch "Downloading|Downloaded" }
     if ($LASTEXITCODE -eq 0) { Write-OK "Build successful." } else { Write-Err "Build failed." }
+    Pop-Location
+}
+
+function Invoke-CleanBuildStart {
+    Write-Header "Clean Build + Start Project"
+    $root = Get-ProjectRoot
+    if (-Not (Test-Path (Join-Path $root "mvnw.cmd"))) { Write-Err "mvnw.cmd not found."; return }
+
+    # Step 1: Start Docker services
+    if (Assert-Docker) {
+        Assert-EnvFile $root
+        Push-Location $root
+        Write-Step "Starting Docker services..."
+        docker compose up -d
+        if ($LASTEXITCODE -ne 0) { Write-Err "Failed to start Docker services."; Pop-Location; return }
+        Write-OK "Docker services started."
+        Pop-Location
+    }
+
+    # Step 2: Clean build
+    Push-Location $root
+    Write-Step "Running Maven clean compile..."
+    &.\mvnw.cmd clean compile -q 2>&1 | Where-Object { $_ -notmatch "Downloading|Downloaded" }
+    if ($LASTEXITCODE -ne 0) { Write-Err "Build failed. Fix errors before starting."; Pop-Location; return }
+    Write-OK "Build successful."
+
+    # Step 3: Start Spring Boot
+    Write-Step "Starting Spring Boot application... (Ctrl+C to stop)"
+    Write-Host ""
+    &.\mvnw.cmd spring-boot:run
     Pop-Location
 }
 
@@ -273,6 +304,7 @@ function Show-Help {
         @{ Name = "ApplyFormat";      Desc = "Run Spotless code formatter" },
         @{ Name = "SortAnnotations";  Desc = "Standardize Lombok annotation order in entity files" },
         @{ Name = "CleanBuild";       Desc = "Maven clean compile (local)" },
+        @{ Name = "CleanBuildStart";  Desc = "Start Docker services + clean build + spring-boot:run" },
         @{ Name = "StartRedis";     Desc = "Start only the Redis container" },
         @{ Name = "StopRedis";      Desc = "Stop the Redis container" },
         @{ Name = "RestartRedis";   Desc = "Restart the Redis container" },
@@ -307,31 +339,32 @@ function Show-MainMenu {
     Write-Host ""
     Write-Host "  Math Master Manager" -ForegroundColor Cyan
     Write-Host ("  " + "-" * 35) -ForegroundColor DarkCyan
-    Write-Host "  [1]  Format Code (Spotless)"       -ForegroundColor White
-    Write-Host "  [2]  Sort Annotations"              -ForegroundColor White
-    Write-Host "  [3]  Maven Clean Build"             -ForegroundColor White
+    Write-Host "  [1]  Format Code (Spotless)"           -ForegroundColor White
+    Write-Host "  [2]  Sort Annotations"                  -ForegroundColor White
+    Write-Host "  [3]  Maven Clean Build"                 -ForegroundColor White
+    Write-Host "  [4]  Clean Build + Start Project"       -ForegroundColor Green
     Write-Host ("  " + "-" * 35) -ForegroundColor DarkGray
-    Write-Host "  [4]  Start Redis"                   -ForegroundColor White
-    Write-Host "  [5]  Stop Redis"                    -ForegroundColor White
-    Write-Host "  [6]  Restart Redis"                 -ForegroundColor White
+    Write-Host "  [5]  Start Redis"                       -ForegroundColor White
+    Write-Host "  [6]  Stop Redis"                        -ForegroundColor White
+    Write-Host "  [7]  Restart Redis"                     -ForegroundColor White
     Write-Host ("  " + "-" * 35) -ForegroundColor DarkGray
-    Write-Host "  [7]  Start All Services"            -ForegroundColor White
-    Write-Host "  [8]  Stop All Services"             -ForegroundColor White
-    Write-Host "  [9]  Restart All Services"          -ForegroundColor White
+    Write-Host "  [8]  Start All Services"                -ForegroundColor White
+    Write-Host "  [9]  Stop All Services"                 -ForegroundColor White
+    Write-Host "  [10] Restart All Services"              -ForegroundColor White
     Write-Host ("  " + "-" * 35) -ForegroundColor DarkGray
-    Write-Host "  [10] Deploy Local (build + up)"     -ForegroundColor White
-    Write-Host "  [11] Deploy Full  (down+build+up)"  -ForegroundColor White
-    Write-Host "  [12] Recreate Docker Containers"    -ForegroundColor White
+    Write-Host "  [11] Deploy Local (build + up)"         -ForegroundColor White
+    Write-Host "  [12] Deploy Full  (down+build+up)"      -ForegroundColor White
+    Write-Host "  [13] Recreate Docker Containers"        -ForegroundColor White
     Write-Host ("  " + "-" * 35) -ForegroundColor DarkGray
-    Write-Host "  [13] Tail All Logs"                 -ForegroundColor White
-    Write-Host "  [14] Tail Redis Logs"               -ForegroundColor White
-    Write-Host "  [15] Tail App Logs"                 -ForegroundColor White
+    Write-Host "  [14] Tail All Logs"                     -ForegroundColor White
+    Write-Host "  [15] Tail Redis Logs"                   -ForegroundColor White
+    Write-Host "  [16] Tail App Logs"                     -ForegroundColor White
     Write-Host ("  " + "-" * 35) -ForegroundColor DarkGray
-    Write-Host "  [16] Project Status"                -ForegroundColor White
-    Write-Host "  [17] Delete Log Files"              -ForegroundColor White
-    Write-Host "  [18] Help"                          -ForegroundColor White
-    Write-Host "  [19] Clear Screen"                  -ForegroundColor White
-    Write-Host "  [0]  Exit"                          -ForegroundColor DarkGray
+    Write-Host "  [17] Project Status"                    -ForegroundColor White
+    Write-Host "  [18] Delete Log Files"                  -ForegroundColor White
+    Write-Host "  [19] Help"                              -ForegroundColor White
+    Write-Host "  [20] Clear Screen"                      -ForegroundColor White
+    Write-Host "  [0]  Exit"                              -ForegroundColor DarkGray
     Write-Host ""
 }
 
@@ -344,6 +377,7 @@ if ($Task) {
         'ApplyFormat'      { Invoke-ApplyFormat }
         'SortAnnotations'  { Invoke-SortAnnotations }
         'CleanBuild'       { Invoke-CleanBuild }
+        'CleanBuildStart'  { Invoke-CleanBuildStart }
         'StartRedis'     { Invoke-StartRedis }
         'StopRedis'      { Invoke-StopRedis }
         'RestartRedis'   { Invoke-RestartRedis }
@@ -369,26 +403,27 @@ while ($true) {
         '1'  { Invoke-ApplyFormat }
         '2'  { Invoke-SortAnnotations }
         '3'  { Invoke-CleanBuild }
-        '4'  { Invoke-StartRedis }
-        '5'  { Invoke-StopRedis }
-        '6'  { Invoke-RestartRedis }
-        '7'  { Invoke-StartAll }
-        '8'  { Invoke-StopAll }
-        '9'  { Invoke-RestartAll }
-        '10' { Invoke-DeployLocal }
-        '11' { Invoke-DeployFull }
-        '12' {
+        '4'  { Invoke-CleanBuildStart }
+        '5'  { Invoke-StartRedis }
+        '6'  { Invoke-StopRedis }
+        '7'  { Invoke-RestartRedis }
+        '8'  { Invoke-StartAll }
+        '9'  { Invoke-StopAll }
+        '10' { Invoke-RestartAll }
+        '11' { Invoke-DeployLocal }
+        '12' { Invoke-DeployFull }
+        '13' {
             $svc = Read-Host "  Service name (leave blank for all)"
             $Service = $svc.Trim()
             Invoke-RecreateDocker
         }
-        '13' { Invoke-Logs "" "All Logs" }
-        '14' { Invoke-Logs "redis" "Redis Logs" }
-        '15' { Invoke-Logs "math-master" "App Logs" }
-        '16' { Invoke-Status }
-        '17' { Invoke-DeleteLogs }
-        '18' { Show-Help }
-        '19' { Clear-Host }
+        '14' { Invoke-Logs "" "All Logs" }
+        '15' { Invoke-Logs "redis" "Redis Logs" }
+        '16' { Invoke-Logs "math-master" "App Logs" }
+        '17' { Invoke-Status }
+        '18' { Invoke-DeleteLogs }
+        '19' { Show-Help }
+        '20' { Clear-Host }
         '0'  { Write-Host ""; Write-Host "  Goodbye!" -ForegroundColor Cyan; exit 0 }
     }
 }
