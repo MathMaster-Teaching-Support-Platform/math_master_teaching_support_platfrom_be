@@ -367,7 +367,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     List<RoadmapTopic> topics =
         topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmap.getId());
     List<RoadmapTopicResponse> topicResponses =
-        topics.stream().map(this::mapToTopicResponse).collect(Collectors.toList());
+        topics.stream()
+            .filter(topic -> topic.getDeletedAt() == null && topic.getStatus() != TopicStatus.COMPLETED)
+            .map(this::mapToTopicResponse)
+            .collect(Collectors.toList());
 
     return RoadmapDetailResponse.builder()
         .id(roadmap.getId())

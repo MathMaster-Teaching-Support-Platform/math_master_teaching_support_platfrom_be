@@ -14,6 +14,7 @@ import com.fptu.math_master.dto.response.RoadmapTopicResponse;
 import com.fptu.math_master.dto.response.TopicMaterialResponse;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.Answer;
+import com.fptu.math_master.entity.AssessmentQuestion;
 import com.fptu.math_master.entity.LearningRoadmap;
 import com.fptu.math_master.entity.LessonPlan;
 import com.fptu.math_master.entity.Mindmap;
@@ -30,6 +31,7 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.AnswerRepository;
 import com.fptu.math_master.repository.AssessmentRepository;
+import com.fptu.math_master.repository.AssessmentQuestionRepository;
 import com.fptu.math_master.repository.LearningRoadmapRepository;
 import com.fptu.math_master.repository.LessonPlanRepository;
 import com.fptu.math_master.repository.LessonRepository;
@@ -71,6 +73,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
   LearningRoadmapRepository roadmapRepository;
   AssessmentRepository assessmentRepository;
+  AssessmentQuestionRepository assessmentQuestionRepository;
   RoadmapTopicRepository topicRepository;
   MindmapRepository mindmapRepository;
   QuestionRepository questionRepository;
@@ -310,35 +313,48 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
-    if (assessmentRepository.findById(request.getAssessmentId()).isEmpty()) {
+    Assessment assessment =
+        assessmentRepository
+            .findById(request.getAssessmentId())
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+    // Clear existing mappings for this roadmap
+    roadmapEntryQuestionMappingRepository.deleteByRoadmapId(roadmapId);
+
+    // Get all questions from the assessment, ordered by index
+    List<AssessmentQuestion> assessmentQuestions =
+        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(request.getAssessmentId());
+
+    if (assessmentQuestions.isEmpty()) {
+      throw new AppException(ErrorCode.QUESTION_NOT_FOUND);
+    }
+
+    // Get all topics for this roadmap
+    List<RoadmapTopic> topics =
+        topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmapId).stream()
+            .filter(topic -> topic.getDeletedAt() == null)
+            .toList();
+
+    if (topics.isEmpty()) {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
-    roadmapEntryQuestionMappingRepository.deleteByRoadmapId(roadmapId);
-
-    for (RoadmapEntryQuestionMappingRequest mappingRequest : request.getMappings()) {
-      if (questionRepository.findByIdAndNotDeleted(mappingRequest.getQuestionId()).isEmpty()) {
-        throw new AppException(ErrorCode.QUESTION_NOT_FOUND);
+    // Create mappings: each assessment question maps to each roadmap topic
+    // This allows the entry test to assess readiness for all topics
+    int orderIndex = 0;
+    for (AssessmentQuestion assessmentQuestion : assessmentQuestions) {
+      for (RoadmapTopic topic : topics) {
+        roadmapEntryQuestionMappingRepository.save(
+            RoadmapEntryQuestionMapping.builder()
+                .roadmapId(roadmapId)
+                .assessmentId(request.getAssessmentId())
+                .questionId(assessmentQuestion.getQuestionId())
+                .roadmapTopicId(topic.getId())
+                .orderIndex(orderIndex)
+                .weight(BigDecimal.ONE)
+                .build());
       }
-
-      RoadmapTopic topic =
-          topicRepository
-              .findById(mappingRequest.getRoadmapTopicId())
-              .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-
-      if (!topic.getRoadmapId().equals(roadmapId)) {
-        throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
-      }
-
-      roadmapEntryQuestionMappingRepository.save(
-          RoadmapEntryQuestionMapping.builder()
-              .roadmapId(roadmapId)
-              .assessmentId(request.getAssessmentId())
-              .questionId(mappingRequest.getQuestionId())
-              .roadmapTopicId(mappingRequest.getRoadmapTopicId())
-              .orderIndex(mappingRequest.getOrderIndex())
-              .weight(mappingRequest.getWeight())
-              .build());
+      orderIndex++;
     }
   }
 
