@@ -29,6 +29,8 @@ public class CreateRoadmapTopicRequest {
 
   private Integer estimatedHours;
 
+  private Double mark;
+
   private List<UUID> lessonIds;
 
   private List<UUID> slideLessonIds;

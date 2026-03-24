@@ -131,6 +131,14 @@ public class RoadmapTopic extends BaseEntity {
   private Integer estimatedHours = 1;
 
   /**
+   * mark
+   *
+   * <p>Expected checkpoint score on a 10-point scale used to determine student level placement.
+   */
+  @Column(name = "mark")
+  private Double mark;
+
+  /**
    * started_at
    */
   @Column(name = "started_at")

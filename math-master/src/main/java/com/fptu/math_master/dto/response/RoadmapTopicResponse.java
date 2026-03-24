@@ -49,6 +49,9 @@ public class RoadmapTopicResponse {
   @Schema(description = "Estimated hours to complete")
   private Integer estimatedHours;
 
+  @Schema(description = "Expected mark checkpoint on a 10-point scale")
+  private Double mark;
+
   @Schema(description = "Assessment linked to this topic")
   private UUID topicAssessmentId;
 

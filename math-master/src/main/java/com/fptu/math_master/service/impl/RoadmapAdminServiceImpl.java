@@ -179,6 +179,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
             .sequenceOrder(request.getSequenceOrder())
             .priority(request.getPriority())
             .estimatedHours(request.getEstimatedHours())
+        .mark(request.getMark())
             .progressPercentage(BigDecimal.ZERO)
             .passThresholdPercentage(
                 request.getPassThresholdPercentage() != null
@@ -226,6 +227,9 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     }
     if (request.getEstimatedHours() != null) {
       topic.setEstimatedHours(request.getEstimatedHours());
+    }
+    if (request.getMark() != null) {
+      topic.setMark(request.getMark());
     }
     if (request.getTopicAssessmentId() != null) {
       topic.setTopicAssessmentId(request.getTopicAssessmentId());
@@ -390,20 +394,36 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       }
     }
 
-    List<RoadmapTopic> topics = topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmapId);
+    List<RoadmapTopic> topics =
+        topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmapId).stream()
+            .filter(topic -> topic.getDeletedAt() == null)
+            .toList();
     if (topics.isEmpty()) {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
-    RoadmapTopic suggestedTopic = topics.get(topics.size() - 1);
-    for (RoadmapTopic topic : topics) {
-      int total = totalByTopic.getOrDefault(topic.getId(), 0);
-      int correct = correctByTopic.getOrDefault(topic.getId(), 0);
-      double mastery = total == 0 ? 0 : (correct * 100.0 / total);
+    double scoreOnTen = computeScoreOnTen(submission, mappings, answerByQuestionId);
 
-      if (mastery < 70.0) {
-        suggestedTopic = topic;
-        break;
+    RoadmapTopic suggestedTopic = topics.get(topics.size() - 1);
+    boolean hasMarkConfig = topics.stream().anyMatch(topic -> topic.getMark() != null);
+
+    if (hasMarkConfig) {
+      for (RoadmapTopic topic : topics) {
+        if (topic.getMark() != null && scoreOnTen <= topic.getMark()) {
+          suggestedTopic = topic;
+          break;
+        }
+      }
+    } else {
+      for (RoadmapTopic topic : topics) {
+        int total = totalByTopic.getOrDefault(topic.getId(), 0);
+        int correct = correctByTopic.getOrDefault(topic.getId(), 0);
+        double mastery = total == 0 ? 0 : (correct * 100.0 / total);
+
+        if (mastery < 70.0) {
+          suggestedTopic = topic;
+          break;
+        }
       }
     }
 
@@ -411,10 +431,49 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .roadmapId(roadmapId)
         .submissionId(submission.getId())
         .suggestedTopicId(suggestedTopic.getId())
+        .scoreOnTen(scoreOnTen)
         .evaluatedQuestions(mappings.size())
         .thresholdPercentage(70)
         .evaluatedAt(Instant.now())
         .build();
+  }
+
+  private double computeScoreOnTen(
+      Submission submission,
+      List<RoadmapEntryQuestionMapping> mappings,
+      Map<UUID, Answer> answerByQuestionId) {
+    double scoreOnTen;
+
+    if (submission.getFinalScore() != null
+        && submission.getMaxScore() != null
+        && submission.getMaxScore().compareTo(BigDecimal.ZERO) > 0) {
+      scoreOnTen =
+          submission.getFinalScore().doubleValue() / submission.getMaxScore().doubleValue() * 10.0;
+    } else if (submission.getScore() != null
+        && submission.getMaxScore() != null
+        && submission.getMaxScore().compareTo(BigDecimal.ZERO) > 0) {
+      scoreOnTen = submission.getScore().doubleValue() / submission.getMaxScore().doubleValue() * 10.0;
+    } else if (submission.getPercentage() != null) {
+      scoreOnTen = submission.getPercentage().doubleValue() / 10.0;
+    } else {
+      int correct = 0;
+      for (RoadmapEntryQuestionMapping mapping : mappings) {
+        Answer answer = answerByQuestionId.get(mapping.getQuestionId());
+        if (answer != null && Boolean.TRUE.equals(answer.getIsCorrect())) {
+          correct++;
+        }
+      }
+      scoreOnTen = mappings.isEmpty() ? 0.0 : (correct * 10.0 / mappings.size());
+    }
+
+    if (scoreOnTen < 0.0) {
+      scoreOnTen = 0.0;
+    }
+    if (scoreOnTen > 10.0) {
+      scoreOnTen = 10.0;
+    }
+
+    return BigDecimal.valueOf(scoreOnTen).setScale(2, java.math.RoundingMode.HALF_UP).doubleValue();
   }
 
   private RoadmapSummaryResponse mapToSummaryResponse(LearningRoadmap roadmap) {

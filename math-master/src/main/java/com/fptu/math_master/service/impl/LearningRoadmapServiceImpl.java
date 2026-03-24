@@ -443,6 +443,7 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .priority(topic.getPriority())
         .progressPercentage(topic.getProgressPercentage())
         .estimatedHours(topic.getEstimatedHours())
+        .mark(topic.getMark())
         .topicAssessmentId(topic.getTopicAssessmentId())
         .passThresholdPercentage(topic.getPassThresholdPercentage())
         .startedAt(topic.getStartedAt())

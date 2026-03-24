@@ -16,6 +16,7 @@ public class RoadmapEntryTestResultResponse {
   private UUID roadmapId;
   private UUID submissionId;
   private UUID suggestedTopicId;
+  private Double scoreOnTen;
   private Integer evaluatedQuestions;
   private Integer thresholdPercentage;
   private Instant evaluatedAt;
