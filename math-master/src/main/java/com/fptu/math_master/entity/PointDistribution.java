@@ -96,6 +96,7 @@ public class PointDistribution extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (numQuestions == null) numQuestions = 0;
     if (totalPoints == null) totalPoints = BigDecimal.ZERO;
   }

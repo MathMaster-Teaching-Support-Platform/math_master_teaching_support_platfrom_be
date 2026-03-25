@@ -183,6 +183,7 @@ public class Submission extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (status == null) status = SubmissionStatus.IN_PROGRESS;
     if (startedAt == null) startedAt = Instant.now();
     if (gradesReleased == null) gradesReleased = false;

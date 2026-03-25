@@ -127,6 +127,7 @@ public class Grade extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (gradedAt == null) gradedAt = Instant.now();
   }
 }

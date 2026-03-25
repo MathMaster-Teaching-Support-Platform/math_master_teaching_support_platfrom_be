@@ -132,6 +132,7 @@ public class Question extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (points == null) points = BigDecimal.valueOf(1.0);
     if (difficulty == null) difficulty = QuestionDifficulty.MEDIUM;
     if (questionStatus == null) questionStatus = QuestionStatus.AI_DRAFT;

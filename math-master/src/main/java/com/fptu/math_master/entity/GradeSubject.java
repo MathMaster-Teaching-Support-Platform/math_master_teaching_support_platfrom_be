@@ -70,6 +70,7 @@ public class GradeSubject extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (isActive == null) isActive = true;
   }
 }

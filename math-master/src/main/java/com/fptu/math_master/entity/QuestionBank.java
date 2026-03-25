@@ -93,6 +93,7 @@ public class QuestionBank extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (isPublic == null) isPublic = false;
   }
 }
