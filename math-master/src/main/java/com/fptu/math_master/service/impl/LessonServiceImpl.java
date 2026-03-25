@@ -76,12 +76,24 @@ public class LessonServiceImpl implements LessonService {
 
   @Override
   public List<LessonResponse> getLessonsByChapterId(UUID chapterId) {
+    return searchLessonsByChapterId(chapterId, null);
+  }
+
+  @Override
+  public List<LessonResponse> searchLessonsByChapterId(UUID chapterId, String name) {
     chapterRepository
         .findById(chapterId)
         .filter(c -> c.getDeletedAt() == null)
         .orElseThrow(() -> new AppException(ErrorCode.CHAPTER_NOT_FOUND));
 
-    return lessonRepository.findByChapterIdAndNotDeleted(chapterId).stream()
+    List<Lesson> lessons;
+    if (name == null || name.isBlank()) {
+      lessons = lessonRepository.findByChapterIdAndNotDeleted(chapterId);
+    } else {
+      lessons = lessonRepository.findByChapterIdAndTitleContainingAndNotDeleted(chapterId, name.trim());
+    }
+
+    return lessons.stream()
         .map(this::toResponse)
         .collect(Collectors.toList());
   }

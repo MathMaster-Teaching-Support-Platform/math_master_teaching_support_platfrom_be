@@ -3,12 +3,12 @@ package com.fptu.math_master.service.impl;
 import com.fptu.math_master.dto.request.CreateAdminRoadmapRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapTopicRequest;
-import com.fptu.math_master.dto.request.RoadmapEntryQuestionMappingRequest;
 import com.fptu.math_master.dto.request.SubmitRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.UpdateAdminRoadmapRequest;
 import com.fptu.math_master.dto.request.UpdateRoadmapTopicRequest;
 import com.fptu.math_master.dto.response.RoadmapDetailResponse;
 import com.fptu.math_master.dto.response.RoadmapEntryTestResultResponse;
+import com.fptu.math_master.dto.response.RoadmapResourceOptionResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
 import com.fptu.math_master.dto.response.RoadmapTopicResponse;
 import com.fptu.math_master.dto.response.TopicMaterialResponse;
@@ -54,6 +54,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -180,14 +181,8 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
             .status(request.getSequenceOrder() == 1 ? TopicStatus.NOT_STARTED : TopicStatus.LOCKED)
             .difficulty(request.getDifficulty())
             .sequenceOrder(request.getSequenceOrder())
-            .priority(request.getPriority())
-            .estimatedHours(request.getEstimatedHours())
         .mark(request.getMark())
             .progressPercentage(BigDecimal.ZERO)
-            .passThresholdPercentage(
-                request.getPassThresholdPercentage() != null
-                    ? request.getPassThresholdPercentage()
-                    : BigDecimal.valueOf(70))
             .build();
 
     topic = topicRepository.save(topic);
@@ -225,20 +220,11 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     if (request.getSequenceOrder() != null) {
       topic.setSequenceOrder(request.getSequenceOrder());
     }
-    if (request.getPriority() != null) {
-      topic.setPriority(request.getPriority());
-    }
-    if (request.getEstimatedHours() != null) {
-      topic.setEstimatedHours(request.getEstimatedHours());
-    }
     if (request.getMark() != null) {
       topic.setMark(request.getMark());
     }
     if (request.getTopicAssessmentId() != null) {
       topic.setTopicAssessmentId(request.getTopicAssessmentId());
-    }
-    if (request.getPassThresholdPercentage() != null) {
-      topic.setPassThresholdPercentage(request.getPassThresholdPercentage());
     }
     if (request.getDifficulty() != null) {
       topic.setDifficulty(request.getDifficulty());
@@ -303,6 +289,28 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Transactional(readOnly = true)
   public List<TopicMaterialResponse> getMaterialsByType(UUID topicId, String resourceType) {
     return learningRoadmapService.getMaterialsByType(topicId, resourceType);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<RoadmapResourceOptionResponse> searchResourceOptions(
+      String type, UUID chapterId, UUID lessonId, String name) {
+    String normalizedType = type == null ? "" : type.trim().toUpperCase(Locale.ROOT);
+    String normalizedName = name == null ? null : name.trim();
+
+    switch (normalizedType) {
+      case "LESSON":
+      case "TEMPLATE_SLIDE":
+        return searchLessonBasedOptions(normalizedType, chapterId, lessonId, normalizedName);
+      case "MINDMAP":
+        return searchMindmapOptions(lessonId, normalizedName);
+      case "LESSON_PLAN":
+        return searchLessonPlanOptions(lessonId, normalizedName);
+      case "ASSESSMENT":
+        return searchAssessmentOptions(normalizedName);
+      default:
+        throw new AppException(ErrorCode.INVALID_KEY);
+    }
   }
 
   @Override
@@ -533,6 +541,103 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .filter(topic -> topic.getDeletedAt() == null)
         .count();
   }
+
+    private List<RoadmapResourceOptionResponse> searchLessonBasedOptions(
+      String type, UUID chapterId, UUID lessonId, String name) {
+    List<com.fptu.math_master.entity.Lesson> lessons;
+
+    if (lessonId != null) {
+      lessons =
+        lessonRepository.findByIdAndNotDeleted(lessonId).stream()
+          .filter(lesson -> chapterId == null || chapterId.equals(lesson.getChapterId()))
+          .filter(
+            lesson ->
+              name == null
+                || lesson.getTitle() == null
+                || lesson.getTitle().toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT)))
+          .toList();
+    } else if (chapterId != null) {
+      lessons =
+        (name == null || name.isBlank())
+          ? lessonRepository.findByChapterIdAndNotDeleted(chapterId)
+          : lessonRepository.findByChapterIdAndTitleContainingAndNotDeleted(chapterId, name);
+    } else {
+      return List.of();
+    }
+
+    return lessons.stream()
+      .map(
+        lesson ->
+          RoadmapResourceOptionResponse.builder()
+            .id(lesson.getId())
+            .name(lesson.getTitle())
+            .type(type)
+            .lessonId(lesson.getId())
+            .chapterId(lesson.getChapterId())
+            .build())
+      .collect(Collectors.toList());
+    }
+
+    private List<RoadmapResourceOptionResponse> searchMindmapOptions(UUID lessonId, String name) {
+    if (lessonId == null) {
+      return List.of();
+    }
+
+    List<Mindmap> mindmaps =
+      (name == null || name.isBlank())
+        ? mindmapRepository.findByLessonIdAndNotDeleted(lessonId, Pageable.unpaged()).getContent()
+        : mindmapRepository.findByLessonIdAndTitleContainingAndNotDeleted(lessonId, name);
+
+    return mindmaps.stream()
+      .map(
+        mindmap ->
+          RoadmapResourceOptionResponse.builder()
+            .id(mindmap.getId())
+            .name(mindmap.getTitle())
+            .type("MINDMAP")
+            .lessonId(mindmap.getLessonId())
+            .build())
+      .collect(Collectors.toList());
+    }
+
+    private List<RoadmapResourceOptionResponse> searchLessonPlanOptions(UUID lessonId, String name) {
+    if (lessonId == null) {
+      return List.of();
+    }
+
+    List<LessonPlan> lessonPlans =
+      (name == null || name.isBlank())
+        ? lessonPlanRepository.findByLessonIdAndNotDeleted(lessonId)
+        : lessonPlanRepository.findByLessonIdAndLessonTitleContainingAndNotDeleted(lessonId, name);
+
+    String lessonTitle =
+      lessonRepository.findByIdAndNotDeleted(lessonId).map(com.fptu.math_master.entity.Lesson::getTitle).orElse("Lesson");
+
+    return lessonPlans.stream()
+      .map(
+        lessonPlan ->
+          RoadmapResourceOptionResponse.builder()
+            .id(lessonPlan.getId())
+            .name("Lesson plan - " + lessonTitle)
+            .type("LESSON_PLAN")
+            .lessonId(lessonPlan.getLessonId())
+            .build())
+      .collect(Collectors.toList());
+    }
+
+    private List<RoadmapResourceOptionResponse> searchAssessmentOptions(String name) {
+    String keyword = (name == null || name.isBlank()) ? "" : name;
+
+    return assessmentRepository.findByTitleContainingAndNotDeleted(keyword).stream()
+      .map(
+        assessment ->
+          RoadmapResourceOptionResponse.builder()
+            .id(assessment.getId())
+            .name(assessment.getTitle())
+            .type("ASSESSMENT")
+            .build())
+      .collect(Collectors.toList());
+    }
 
   private void upsertTopicLessonMaterials(UUID topicId, List<UUID> lessonIds) {
     materialRepository.deleteByTopicIdAndResourceType(topicId, "LESSON");

@@ -20,6 +20,13 @@ public interface LessonRepository
           + " ORDER BY l.orderIndex, l.createdAt")
   List<Lesson> findByChapterIdAndNotDeleted(@Param("chapterId") UUID chapterId);
 
+  @Query(
+      "SELECT l FROM Lesson l WHERE l.chapterId = :chapterId AND l.deletedAt IS NULL "
+          + "AND LOWER(l.title) LIKE LOWER(CONCAT('%', :title, '%')) "
+          + "ORDER BY l.orderIndex, l.createdAt")
+  List<Lesson> findByChapterIdAndTitleContainingAndNotDeleted(
+      @Param("chapterId") UUID chapterId, @Param("title") String title);
+
   @Query("SELECT COUNT(l) FROM Lesson l WHERE l.chapterId = :chapterId AND l.deletedAt IS NULL")
   Long countByChapterIdAndNotDeleted(@Param("chapterId") UUID chapterId);
 

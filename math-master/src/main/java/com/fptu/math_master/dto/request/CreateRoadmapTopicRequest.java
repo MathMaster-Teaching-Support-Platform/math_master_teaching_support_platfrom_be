@@ -3,7 +3,6 @@ package com.fptu.math_master.dto.request;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -25,10 +24,6 @@ public class CreateRoadmapTopicRequest {
   @NotNull(message = "Sequence order is required")
   private Integer sequenceOrder;
 
-  private Integer priority;
-
-  private Integer estimatedHours;
-
   private Double mark;
 
   private List<UUID> lessonIds;
@@ -42,8 +37,6 @@ public class CreateRoadmapTopicRequest {
   private List<UUID> mindmapIds;
 
   private UUID topicAssessmentId;
-
-  private BigDecimal passThresholdPercentage;
 
   @NotNull(message = "Difficulty is required")
   private QuestionDifficulty difficulty;

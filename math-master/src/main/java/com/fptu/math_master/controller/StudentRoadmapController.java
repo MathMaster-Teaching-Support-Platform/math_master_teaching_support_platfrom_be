@@ -1,12 +1,15 @@
 package com.fptu.math_master.controller;
 
+import com.fptu.math_master.dto.request.CreateRoadmapFeedbackRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.RoadmapDetailResponse;
 import com.fptu.math_master.dto.response.RoadmapEntryTestResultResponse;
+import com.fptu.math_master.dto.response.RoadmapFeedbackResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
 import com.fptu.math_master.dto.response.TopicMaterialResponse;
 import com.fptu.math_master.dto.request.SubmitRoadmapEntryTestRequest;
 import com.fptu.math_master.service.RoadmapAdminService;
+import com.fptu.math_master.service.RoadmapFeedbackService;
 import com.fptu.math_master.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -36,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class StudentRoadmapController {
 
   RoadmapAdminService roadmapAdminService;
+  RoadmapFeedbackService roadmapFeedbackService;
 
   @GetMapping("/roadmaps")
   @PreAuthorize("hasRole('STUDENT')")
@@ -95,6 +99,28 @@ public class StudentRoadmapController {
     return ApiResponse.<RoadmapEntryTestResultResponse>builder()
         .message("Roadmap entry test submitted successfully")
         .result(roadmapAdminService.submitEntryTest(studentId, roadmapId, request))
+        .build();
+  }
+
+  @PostMapping("/roadmaps/{roadmapId}/feedback")
+  @PreAuthorize("hasRole('STUDENT')")
+  @Operation(summary = "Submit roadmap feedback", description = "Student submits or updates roadmap feedback")
+  public ApiResponse<RoadmapFeedbackResponse> submitRoadmapFeedback(
+      @PathVariable UUID roadmapId, @Valid @RequestBody CreateRoadmapFeedbackRequest request) {
+    UUID studentId = SecurityUtils.getCurrentUserId();
+    return ApiResponse.<RoadmapFeedbackResponse>builder()
+        .message("Roadmap feedback submitted successfully")
+        .result(roadmapFeedbackService.submitFeedback(roadmapId, studentId, request))
+        .build();
+  }
+
+  @GetMapping("/roadmaps/{roadmapId}/feedback/me")
+  @PreAuthorize("hasRole('STUDENT')")
+  @Operation(summary = "Get my roadmap feedback", description = "Student gets own feedback for a roadmap")
+  public ApiResponse<RoadmapFeedbackResponse> getMyRoadmapFeedback(@PathVariable UUID roadmapId) {
+    UUID studentId = SecurityUtils.getCurrentUserId();
+    return ApiResponse.<RoadmapFeedbackResponse>builder()
+        .result(roadmapFeedbackService.getMyFeedback(roadmapId, studentId))
         .build();
   }
 }

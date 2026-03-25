@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.TopicStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -40,29 +39,14 @@ public class RoadmapTopicResponse {
   @Schema(description = "Order in learning sequence")
   private Integer sequenceOrder;
 
-  @Schema(description = "Priority (lower = more important)")
-  private Integer priority;
-
-  @Schema(description = "Progress percentage for this topic")
-  private BigDecimal progressPercentage;
-
-  @Schema(description = "Estimated hours to complete")
-  private Integer estimatedHours;
-
   @Schema(description = "Expected mark checkpoint on a 10-point scale")
   private Double mark;
 
   @Schema(description = "Assessment linked to this topic")
   private UUID topicAssessmentId;
 
-  @Schema(description = "Minimum percentage to pass and unlock the next topic")
-  private BigDecimal passThresholdPercentage;
-
   @Schema(description = "When topic was started")
   private Instant startedAt;
-
-  @Schema(description = "When topic was completed")
-  private Instant completedAt;
 
   @Schema(description = "Question templates for this topic (from linked lesson)")
   private List<QuestionTemplateResponse> questionTemplates;

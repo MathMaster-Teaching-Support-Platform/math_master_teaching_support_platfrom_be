@@ -21,4 +21,10 @@ public interface SlideTemplateRepository extends JpaRepository<SlideTemplate, UU
   @Query(
       "SELECT st FROM SlideTemplate st WHERE st.deletedAt IS NULL AND st.isActive = true ORDER BY st.createdAt DESC")
   List<SlideTemplate> findAllActiveNotDeleted();
+
+  @Query(
+      "SELECT st FROM SlideTemplate st WHERE st.deletedAt IS NULL "
+          + "AND LOWER(st.name) LIKE LOWER(CONCAT('%', :name, '%')) "
+          + "ORDER BY st.createdAt DESC")
+  List<SlideTemplate> findByNameContainingAndNotDeleted(@Param("name") String name);
 }

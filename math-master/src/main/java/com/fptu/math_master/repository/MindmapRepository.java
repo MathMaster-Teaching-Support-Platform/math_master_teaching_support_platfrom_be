@@ -2,6 +2,7 @@ package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.Mindmap;
 import com.fptu.math_master.enums.MindmapStatus;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -41,6 +42,12 @@ public interface MindmapRepository
   @Query(
       "SELECT m FROM Mindmap m WHERE m.lessonId = :lessonId AND m.deletedAt IS NULL ORDER BY m.createdAt DESC")
   Page<Mindmap> findByLessonIdAndNotDeleted(@Param("lessonId") UUID lessonId, Pageable pageable);
+
+  @Query(
+      "SELECT m FROM Mindmap m WHERE m.lessonId = :lessonId AND m.deletedAt IS NULL "
+          + "AND LOWER(m.title) LIKE LOWER(CONCAT('%', :name, '%')) ORDER BY m.createdAt DESC")
+  List<Mindmap> findByLessonIdAndTitleContainingAndNotDeleted(
+      @Param("lessonId") UUID lessonId, @Param("name") String name);
 
   @Query(
       "SELECT m FROM Mindmap m "

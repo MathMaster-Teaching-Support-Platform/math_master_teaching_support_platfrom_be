@@ -14,6 +14,8 @@ public interface LessonService {
 
   List<LessonResponse> getLessonsByChapterId(UUID chapterId);
 
+  List<LessonResponse> searchLessonsByChapterId(UUID chapterId, String name);
+
   LessonResponse updateLesson(UUID id, UpdateLessonRequest request);
 
   void deleteLesson(UUID id);

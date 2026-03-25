@@ -29,6 +29,12 @@ public interface AssessmentRepository
   @Query("SELECT a FROM Assessment a WHERE a.deletedAt IS NULL")
   Page<Assessment> findByNotDeleted(Pageable pageable);
 
+    @Query(
+            "SELECT a FROM Assessment a WHERE a.deletedAt IS NULL "
+                    + "AND LOWER(a.title) LIKE LOWER(CONCAT('%', :name, '%')) "
+                    + "ORDER BY a.createdAt DESC")
+    List<Assessment> findByTitleContainingAndNotDeleted(@Param("name") String name);
+
   @Query("SELECT a FROM Assessment a WHERE a.examMatrixId = :examMatrixId AND a.deletedAt IS NULL")
   List<Assessment> findByExamMatrixIdAndNotDeleted(@Param("examMatrixId") UUID examMatrixId);
 

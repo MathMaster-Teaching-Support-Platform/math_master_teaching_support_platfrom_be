@@ -107,10 +107,12 @@ public class LessonContentController {
 
   @GetMapping("/chapters/{chapterId}/lessons")
   @Operation(summary = "List lessons of a chapter")
-  public ApiResponse<List<LessonResponse>> getLessonsByChapter(@PathVariable UUID chapterId) {
+  public ApiResponse<List<LessonResponse>> getLessonsByChapter(
+      @PathVariable UUID chapterId,
+      @RequestParam(required = false) String name) {
     log.info("GET /lessons/chapters/{}/lessons", chapterId);
     return ApiResponse.<List<LessonResponse>>builder()
-        .result(lessonService.getLessonsByChapterId(chapterId))
+        .result(lessonService.searchLessonsByChapterId(chapterId, name))
         .build();
   }
 
