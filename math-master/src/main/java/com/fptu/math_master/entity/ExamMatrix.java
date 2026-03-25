@@ -104,6 +104,7 @@ public class ExamMatrix extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (isReusable == null) isReusable = false;
     if (status == null) status = MatrixStatus.DRAFT;
   }

@@ -189,6 +189,7 @@ public class QuestionTemplate extends BaseEntity {
   @PrePersist
   @Override
   public void prePersist() {
+    super.prePersist();
     if (isPublic == null) isPublic = false;
     if (usageCount == null) usageCount = 0;
     if (status == null) status = TemplateStatus.DRAFT;

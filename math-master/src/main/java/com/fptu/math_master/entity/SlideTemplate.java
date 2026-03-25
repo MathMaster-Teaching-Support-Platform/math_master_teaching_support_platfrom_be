@@ -76,7 +76,8 @@ public class SlideTemplate extends BaseEntity {
   private Boolean isActive = true;
 
   @PrePersist
-  public void prePersistSlideTemplate() {
+  public void prePersist() {
+    super.prePersist();
     if (isActive == null) {
       isActive = true;
     }

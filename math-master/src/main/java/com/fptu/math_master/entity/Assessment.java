@@ -191,6 +191,7 @@ public class Assessment extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (randomizeQuestions == null) randomizeQuestions = false;
     if (showCorrectAnswers == null) showCorrectAnswers = false;
     if (allowMultipleAttempts == null) allowMultipleAttempts = false;
