@@ -688,31 +688,36 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     }
 
     log.debug(
-        "Extracting JSON from content: {}",
+        "Extracting JSON from content (first 200 chars): {}",
         content.substring(0, Math.min(200, content.length())) + "...");
 
-    // Try to extract from markdown code block
-    Pattern pattern = Pattern.compile("```(?:json)?\\s*\\n?(.+?)```", Pattern.DOTALL);
-    Matcher matcher = pattern.matcher(content);
-
-    if (matcher.find()) {
-      String extracted = matcher.group(1).trim();
-      log.info("Extracted JSON from markdown code block, length: {}", extracted.length());
-      return extracted;
-    }
-
-    // Try to find JSON by braces
+    // Find first { or [ and last } or ]
     int startIdx = content.indexOf('{');
-    int endIdx = content.lastIndexOf('}');
+    int startArrayIdx = content.indexOf('[');
 
-    if (startIdx >= 0 && endIdx > startIdx) {
-      String extracted = content.substring(startIdx, endIdx + 1);
-      log.info("Extracted JSON by braces, length: {}", extracted.length());
+    // Pick the earliest valid start bracket
+    int finalStart = -1;
+    if (startIdx >= 0 && startArrayIdx >= 0) finalStart = Math.min(startIdx, startArrayIdx);
+    else if (startIdx >= 0) finalStart = startIdx;
+    else if (startArrayIdx >= 0) finalStart = startArrayIdx;
+
+    int endIdx = content.lastIndexOf('}');
+    int endArrayIdx = content.lastIndexOf(']');
+
+    // Pick the latest valid end bracket
+    int finalEnd = -1;
+    if (endIdx >= 0 && endArrayIdx >= 0) finalEnd = Math.max(endIdx, endArrayIdx);
+    else if (endIdx >= 0) finalEnd = endIdx;
+    else if (endArrayIdx >= 0) finalEnd = endArrayIdx;
+
+    if (finalStart >= 0 && finalEnd > finalStart) {
+      String extracted = content.substring(finalStart, finalEnd + 1);
+      log.info("Extracted JSON by bracket detection, length: {}", extracted.length());
       return extracted;
     }
 
-    log.warn("Could not extract JSON structure, returning original content");
-    return content;
+    log.warn("Could not extract JSON structure, returning trimmed original content as fallback.");
+    return content.trim();
   }
 
   private QuestionType parseQuestionType(String type) {
