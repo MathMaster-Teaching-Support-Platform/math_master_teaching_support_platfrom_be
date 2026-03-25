@@ -1,15 +1,36 @@
 package com.fptu.math_master.service.impl;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.text.ParseException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.StringJoiner;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+
 import com.fptu.math_master.configuration.properties.InitProperties;
 import com.fptu.math_master.constant.PredefinedRole;
-import com.fptu.math_master.dto.request.*;
 import com.fptu.math_master.dto.request.AuthenticationRequest;
 import com.fptu.math_master.dto.request.IntrospectRequest;
 import com.fptu.math_master.dto.request.LogoutRequest;
 import com.fptu.math_master.dto.request.RefreshRequest;
+import com.fptu.math_master.dto.request.RoleSelectionRequest;
 import com.fptu.math_master.dto.request.UserRegistrationRequest;
 import com.fptu.math_master.dto.response.AuthenticationResponse;
 import com.fptu.math_master.dto.response.IntrospectResponse;
+import com.fptu.math_master.dto.response.UserRegisterResponse;
 import com.fptu.math_master.dto.response.UserResponse;
 import com.fptu.math_master.entity.InvalidatedToken;
 import com.fptu.math_master.entity.Role;
@@ -21,6 +42,7 @@ import com.fptu.math_master.repository.InvalidatedTokenRepository;
 import com.fptu.math_master.repository.RoleRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AuthenticationService;
+import com.fptu.math_master.service.EmailService;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
@@ -35,29 +57,12 @@ import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import java.io.IOException;
-import java.security.GeneralSecurityException;
-import java.text.ParseException;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.StringJoiner;
-import java.util.UUID;
-import java.util.stream.Collectors;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.CollectionUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -68,6 +73,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
   InvalidatedTokenRepository invalidatedTokenRepository;
   RoleRepository roleRepository;
   InitProperties initProperties;
+  EmailService emailService;
 
   @NonFinal
   @Value("${jwt.signerKey}")
@@ -80,6 +86,14 @@ public class AuthenticationServiceImpl implements AuthenticationService {
   @NonFinal
   @Value("${jwt.refreshable-duration}")
   protected long REFRESHABLE_DURATION;
+
+  @NonFinal
+  @Value("${app.frontend-url:http://localhost:3000}")
+  protected String FRONTEND_URL;
+
+  @NonFinal
+  @Value("${app.backend-url:http://localhost:8080}")
+  protected String BACKEND_URL;
 
   @Override
   public IntrospectResponse introspect(IntrospectRequest request) {
@@ -114,6 +128,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     if (!authenticated) throw new AppException(ErrorCode.UNAUTHENTICATED);
+
+    if (user.getStatus() != Status.ACTIVE) {
+      throw new AppException(ErrorCode.ACCOUNT_NOT_ACTIVE);
+    }
 
     var token = generateToken(user);
 
@@ -179,14 +197,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             .build();
 
     GoogleIdToken parsedToken = GoogleIdToken.parse(new GsonFactory(), request.getToken());
-    if (parsedToken != null) {
-      log.info("Google Token Parsed. Audience: {}, Issuer: {}, ExpirationTimeSeconds: {}, IssuedAtTimeSeconds: {}, Now: {}", 
-          parsedToken.getPayload().getAudience(), parsedToken.getPayload().getIssuer(), 
-          parsedToken.getPayload().getExpirationTimeSeconds(), parsedToken.getPayload().getIssuedAtTimeSeconds(),
-          System.currentTimeMillis() / 1000);
-    } else {
-      log.info("Google Token failed to parse entirely!");
-    }
+    log.info("Google Token Parsed. Audience: {}, Issuer: {}, ExpirationTimeSeconds: {}, IssuedAtTimeSeconds: {}, Now: {}",
+      parsedToken.getPayload().getAudience(), parsedToken.getPayload().getIssuer(),
+      parsedToken.getPayload().getExpirationTimeSeconds(), parsedToken.getPayload().getIssuedAtTimeSeconds(),
+      System.currentTimeMillis() / 1000);
 
     GoogleIdToken idToken = verifier.verify(request.getToken());
     if (idToken != null) {
@@ -279,7 +293,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
   @Override
   @Transactional
-  public UserResponse register(UserRegistrationRequest request) {
+  public UserRegisterResponse register(UserRegistrationRequest request) {
     log.info("Registering new user with username: {}", request.getUserName());
 
     // Check if username already exists
@@ -294,46 +308,94 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
 
-    // Build user entity
+    // Build user entity — status = INACTIVE until email is confirmed
     User user =
         User.builder()
             .userName(request.getUserName())
             .password(passwordEncoder.encode(request.getPassword()))
-            .fullName(request.getFullName())
             .email(request.getEmail())
-            .phoneNumber(request.getPhoneNumber())
-            .gender(request.getGender())
-            .dob(request.getDob())
-            .status(Status.ACTIVE)
+            .status(Status.INACTIVE)
             .build();
 
-    // Assign role
-    String roleName = (request.getRole() != null && !request.getRole().isEmpty()) 
-                        ? request.getRole().toUpperCase() 
-                        : PredefinedRole.STUDENT_ROLE;
-    
-    // Normalize role name to ensure it starts with ROLE_ if it's just 'TEACHER' or 'STUDENT'
-    // in the frontend it's 'teacher' or 'student'
-    if (roleName.equalsIgnoreCase("TEACHER")) roleName = PredefinedRole.STUDENT_ROLE; // Wait, actually teachers are still students initially? 
-    // No, if they select TEACHER in register, they should probably go straight to teacher profile submission if possible.
-    // However, the current logic for /select-role also assigns STUDENT_ROLE initially.
-    
-    // Let's stick to the existing pattern: everyone is a STUDENT initially 
-    // UNLESS they are specifically intended to be something else.
-    // Actually, if I want to support TEACAHER registration:
-    
-    Role userRole = roleRepository.findByName(PredefinedRole.STUDENT_ROLE)
+    // Default role is always STUDENT
+    Role userRole =
+        roleRepository
+            .findByName(PredefinedRole.STUDENT_ROLE)
             .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
     Set<Role> roles = new HashSet<>();
     roles.add(userRole);
     user.setRoles(roles);
 
-    // Save user
     user = userRepository.save(user);
 
-    log.info("User registered successfully with id: {}", user.getId());
-    return mapToUserResponse(user);
+    // Send confirmation email
+    String confirmationToken = generateConfirmationToken(user);
+    String confirmationUrl = FRONTEND_URL + "/confirm-email?token=" + confirmationToken;
+    emailService.sendEmailConfirmation(user.getEmail(), user.getUserName(), confirmationUrl);
+
+    log.info("User registered with id: {}. Confirmation email sent.", user.getId());
+    return mapToUserRegisterResponse(user);
+  }
+
+  @Override
+  @Transactional
+  public void confirmEmail(String token) {
+    try {
+      JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes());
+      SignedJWT signedJWT = SignedJWT.parse(token);
+
+      boolean verified = signedJWT.verify(verifier);
+      Date expiryTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+
+      if (!verified || !expiryTime.after(new Date())) {
+        throw new AppException(ErrorCode.UNAUTHENTICATED);
+      }
+
+      String purpose = signedJWT.getJWTClaimsSet().getStringClaim("purpose");
+      if (!"email-confirmation".equals(purpose)) {
+        throw new AppException(ErrorCode.UNAUTHENTICATED);
+      }
+
+      String userId = signedJWT.getJWTClaimsSet().getSubject();
+      User user =
+          userRepository
+              .findById(UUID.fromString(userId))
+              .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+      if (user.getStatus() == Status.INACTIVE) {
+        user.setStatus(Status.ACTIVE);
+        userRepository.save(user);
+        log.info("Email confirmed and account activated for user id: {}", userId);
+      }
+    } catch (JOSEException | ParseException e) {
+      throw new AppException(ErrorCode.UNAUTHENTICATED);
+    }
+  }
+
+  private String generateConfirmationToken(User user) {
+    JWSHeader header = new JWSHeader(JWSAlgorithm.HS256);
+
+    JWTClaimsSet jwtClaimsSet =
+        new JWTClaimsSet.Builder()
+            .subject(user.getId().toString())
+            .issuer("school.edu")
+            .issueTime(new Date())
+            .expirationTime(new Date(Instant.now().plus(24, ChronoUnit.HOURS).toEpochMilli()))
+            .jwtID(UUID.randomUUID().toString())
+            .claim("purpose", "email-confirmation")
+            .build();
+
+    Payload payload = new Payload(jwtClaimsSet.toJSONObject());
+    JWSObject jwsObject = new JWSObject(header, payload);
+
+    try {
+      jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
+      return jwsObject.serialize();
+    } catch (JOSEException e) {
+      log.error("Cannot create confirmation token", e);
+      throw new RuntimeException(e);
+    }
   }
 
   private String generateToken(User user) {
@@ -444,16 +506,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
       user.setFullName(request.getFullName());
     }
 
-    // Assign role
-    String targetRoleName =
-        request.getRole().equalsIgnoreCase("TEACHER")
-            ? PredefinedRole
-                .STUDENT_ROLE // Both get STUDENT role initially, Teacher needs it to submit profile
-            : PredefinedRole.STUDENT_ROLE;
-
-    // Actually, if it's Teacher, we might want to track that they intend to be a teacher.
-    // For now, let's just assign STUDENT as per the base user role.
-
+    // Assign role — always STUDENT
     Role userRole =
         roleRepository
             .findByName(PredefinedRole.STUDENT_ROLE)
@@ -470,6 +523,19 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     return AuthenticationResponse.builder()
         .token(token)
         .expiryTime(new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
+        .build();
+  }
+
+  private UserRegisterResponse mapToUserRegisterResponse(User user) {
+    return UserRegisterResponse.builder()
+        .id(user.getId())
+        .userName(user.getUserName())
+        .email(user.getEmail())
+        .status(user.getStatus())
+        .createdDate(user.getCreatedAt())
+        .createdBy(user.getCreatedByName())
+        .updatedDate(user.getUpdatedAt())
+        .updatedBy(user.getUpdatedByName())
         .build();
   }
 

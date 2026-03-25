@@ -1,6 +1,7 @@
 package com.fptu.math_master.configuration;
 
 import java.util.Arrays;
+import java.util.List;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -50,6 +51,7 @@ public class SecurityConfig {
     "/actuator/mappings",
     "/api/ai/test",
     "/api/lessons/**",
+    "/api/auth/confirm-email",
   };
 
   private static final String[] SWAGGER_WHITELIST = {
@@ -105,7 +107,7 @@ public class SecurityConfig {
 
     configuration.setAllowedMethods(
         Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-    configuration.setAllowedHeaders(Arrays.asList("*"));
+    configuration.setAllowedHeaders(List.of("*"));
     configuration.setAllowCredentials(true);
     configuration.setMaxAge(3600L);
 

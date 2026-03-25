@@ -1,12 +1,9 @@
 package com.fptu.math_master.dto.request;
 
-import com.fptu.math_master.enums.Gender;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.time.LocalDate;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -34,25 +31,8 @@ public class UserRegistrationRequest {
           "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character")
   String password;
 
-  @NotBlank(message = "Full name is required")
-  @Size(min = 2, max = 50, message = "Full name must be between 2 and 50 characters")
-  String fullName;
-
   @NotBlank(message = "Email is required")
   @Email(message = "Email must be valid")
   @Size(max = 50, message = "Email must not exceed 50 characters")
   String email;
-
-  @Pattern(
-      regexp = "^(\\+84|0)(3[2-9]|5[25689]|7[06-9]|8[0-689]|9[0-9])[0-9]{7}$",
-      message =
-          "Phone number must be a valid Vietnamese phone number (e.g. 0912345678 or +84912345678)")
-  String phoneNumber;
-
-  Gender gender;
-
-  @Past(message = "Date of birth must be in the past")
-  LocalDate dob;
-
-  String role;
 }

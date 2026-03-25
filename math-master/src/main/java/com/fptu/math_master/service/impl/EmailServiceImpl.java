@@ -60,7 +60,16 @@ public class EmailServiceImpl implements EmailService {
     variables.put("name", teacherName);
     variables.put("reason", reason != null ? reason : "Hồ sơ chưa đạt yêu cầu xác minh.");
     variables.put("retryUrl", "http://localhost:3000/profile");
-    
+
     sendEmail(to, "Thông báo về hồ sơ giảng viên của bạn - MathMaster", "teacher-rejected", variables);
+  }
+
+  @Override
+  public void sendEmailConfirmation(String to, String userName, String confirmationUrl) {
+    Map<String, Object> variables = new HashMap<>();
+    variables.put("userName", userName);
+    variables.put("confirmationUrl", confirmationUrl);
+
+    sendEmail(to, "Xác nhận tài khoản MathMaster của bạn", "email-confirmation", variables);
   }
 }

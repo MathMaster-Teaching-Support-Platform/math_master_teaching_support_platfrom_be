@@ -1,21 +1,35 @@
 package com.fptu.math_master.controller;
 
-import com.fptu.math_master.dto.request.*;
-import com.fptu.math_master.dto.response.ApiResponse;
-import com.fptu.math_master.dto.response.AuthenticationResponse;
-import com.fptu.math_master.dto.response.IntrospectResponse;
-import com.fptu.math_master.dto.response.UserResponse;
-import com.fptu.math_master.service.AuthenticationService;
-import com.nimbusds.jose.JOSEException;
-import io.swagger.v3.oas.annotations.Operation;
-import jakarta.validation.Valid;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.text.ParseException;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.fptu.math_master.dto.request.AuthenticationRequest;
+import com.fptu.math_master.dto.request.GoogleAuthRequest;
+import com.fptu.math_master.dto.request.IntrospectRequest;
+import com.fptu.math_master.dto.request.LogoutRequest;
+import com.fptu.math_master.dto.request.RefreshRequest;
+import com.fptu.math_master.dto.request.RoleSelectionRequest;
+import com.fptu.math_master.dto.request.UserRegistrationRequest;
+import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.AuthenticationResponse;
+import com.fptu.math_master.dto.response.IntrospectResponse;
+import com.fptu.math_master.dto.response.UserRegisterResponse;
+import com.fptu.math_master.service.AuthenticationService;
+import com.nimbusds.jose.JOSEException;
+
+import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/auth")
@@ -30,10 +44,10 @@ public class AuthenticationController {
       summary = "User registration",
       description =
           "Register a new user account with basic information. The user will be assigned the default USER role.")
-  ApiResponse<UserResponse> register(@Valid @RequestBody UserRegistrationRequest request) {
+  ApiResponse<UserRegisterResponse> register(@Valid @RequestBody UserRegistrationRequest request) {
 
     var result = authenticationService.register(request);
-    return ApiResponse.<UserResponse>builder().result(result).build();
+    return ApiResponse.<UserRegisterResponse>builder().result(result).build();
   }
 
   @PostMapping("/login")
@@ -53,7 +67,7 @@ public class AuthenticationController {
       summary = "Google Login",
       description = "Authenticate user with Google ID token and return access token (JWT).")
   ApiResponse<AuthenticationResponse> googleLogin(@Valid @RequestBody GoogleAuthRequest request)
-      throws GeneralSecurityException, IOException, JOSEException, ParseException {
+      throws GeneralSecurityException, IOException {
 
     var result = authenticationService.googleLogin(request);
     return ApiResponse.<AuthenticationResponse>builder().result(result).build();
@@ -101,5 +115,14 @@ public class AuthenticationController {
   ApiResponse<AuthenticationResponse> selectRole(@Valid @RequestBody RoleSelectionRequest request) {
     var result = authenticationService.selectRole(request);
     return ApiResponse.<AuthenticationResponse>builder().result(result).build();
+  }
+
+  @GetMapping("/confirm-email")
+  @Operation(
+      summary = "Confirm email address",
+      description = "Activate a registered account by verifying the confirmation token sent via email.")
+  ApiResponse<Void> confirmEmail(@RequestParam String token) {
+    authenticationService.confirmEmail(token);
+    return ApiResponse.<Void>builder().build();
   }
 }

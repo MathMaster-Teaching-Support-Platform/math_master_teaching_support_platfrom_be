@@ -1,8 +1,9 @@
 package com.fptu.math_master.exception;
 
-import lombok.Getter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+
+import lombok.Getter;
 
 @Getter
 /**
@@ -234,7 +235,8 @@ public enum ErrorCode {
   CHAT_SESSION_ARCHIVED(1136, "Chat session is archived", HttpStatus.BAD_REQUEST),
   CHAT_PROMPT_EMPTY(1137, "Prompt must not be empty", HttpStatus.BAD_REQUEST),
   CHAT_MESSAGE_NOT_FOUND(1138, "Chat message not found", HttpStatus.NOT_FOUND),
-  CHAT_AI_CALL_FAILED(1139, "Failed to process chat with AI", HttpStatus.INTERNAL_SERVER_ERROR);
+  CHAT_AI_CALL_FAILED(1139, "Failed to process chat with AI", HttpStatus.INTERNAL_SERVER_ERROR),
+  ACCOUNT_NOT_ACTIVE(1140, "Account is not activated. Please check your email for a confirmation link.", HttpStatus.UNAUTHORIZED);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

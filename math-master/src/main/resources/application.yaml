@@ -114,6 +114,8 @@ springdoc:
 # Username and Password
 # ================================
 app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  backend-url: ${BACKEND_URL:http://localhost:8080}
   init:
     enabled: true
 
