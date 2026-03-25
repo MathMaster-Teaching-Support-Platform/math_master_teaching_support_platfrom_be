@@ -227,7 +227,14 @@ public enum ErrorCode {
   TEACHING_RESOURCE_NOT_FOUND(1131, "Teaching resource not found", HttpStatus.NOT_FOUND),
   TEACHING_RESOURCE_ACCESS_DENIED(
       1132, "You do not have permission to access this teaching resource", HttpStatus.FORBIDDEN),
-  RESOURCE_FILE_TOO_LARGE(1133, "Resource file exceeds the allowed size", HttpStatus.BAD_REQUEST);
+  RESOURCE_FILE_TOO_LARGE(1133, "Resource file exceeds the allowed size", HttpStatus.BAD_REQUEST),
+  CHAT_SESSION_NOT_FOUND(1134, "Chat session not found", HttpStatus.NOT_FOUND),
+  CHAT_SESSION_ACCESS_DENIED(
+      1135, "You do not have permission to access this chat session", HttpStatus.FORBIDDEN),
+  CHAT_SESSION_ARCHIVED(1136, "Chat session is archived", HttpStatus.BAD_REQUEST),
+  CHAT_PROMPT_EMPTY(1137, "Prompt must not be empty", HttpStatus.BAD_REQUEST),
+  CHAT_MESSAGE_NOT_FOUND(1138, "Chat message not found", HttpStatus.NOT_FOUND),
+  CHAT_AI_CALL_FAILED(1139, "Failed to process chat with AI", HttpStatus.INTERNAL_SERVER_ERROR);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
