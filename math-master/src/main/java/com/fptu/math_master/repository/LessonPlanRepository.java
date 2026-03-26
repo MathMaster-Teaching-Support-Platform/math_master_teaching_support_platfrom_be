@@ -33,4 +33,11 @@ public interface LessonPlanRepository extends JpaRepository<LessonPlan, UUID> {
           + "AND LOWER(l.title) LIKE LOWER(CONCAT('%', :name, '%'))")
   List<LessonPlan> findByLessonIdAndLessonTitleContainingAndNotDeleted(
       @Param("lessonId") UUID lessonId, @Param("name") String name);
+
+  @Query("SELECT lp FROM LessonPlan lp WHERE lp.teacherId = :teacherId AND lp.deletedAt IS NULL ORDER BY lp.createdAt DESC")
+  List<LessonPlan> findByTeacherIdAndNotDeleted(@Param("teacherId") UUID teacherId);
+
+  @Query("SELECT lp FROM LessonPlan lp WHERE lp.teacherId = :teacherId AND lp.lessonId = :lessonId AND lp.deletedAt IS NULL")
+  Optional<LessonPlan> findByTeacherIdAndLessonIdAndNotDeleted(
+      @Param("teacherId") UUID teacherId, @Param("lessonId") UUID lessonId);
 }

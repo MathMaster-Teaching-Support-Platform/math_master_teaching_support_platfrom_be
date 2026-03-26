@@ -236,7 +236,10 @@ public enum ErrorCode {
   CHAT_PROMPT_EMPTY(1137, "Prompt must not be empty", HttpStatus.BAD_REQUEST),
   CHAT_MESSAGE_NOT_FOUND(1138, "Chat message not found", HttpStatus.NOT_FOUND),
   CHAT_AI_CALL_FAILED(1139, "Failed to process chat with AI", HttpStatus.INTERNAL_SERVER_ERROR),
-  ACCOUNT_NOT_ACTIVE(1140, "Account is not activated. Please check your email for a confirmation link.", HttpStatus.UNAUTHORIZED);
+  ACCOUNT_NOT_ACTIVE(1140, "Account is not activated. Please check your email for a confirmation link.", HttpStatus.UNAUTHORIZED),
+  LESSON_PLAN_NOT_FOUND(1141, "Lesson plan not found", HttpStatus.NOT_FOUND),
+  LESSON_PLAN_ALREADY_EXISTS(1142, "You already have a lesson plan for this lesson", HttpStatus.BAD_REQUEST),
+  LESSON_PLAN_ACCESS_DENIED(1143, "You do not have permission to access this lesson plan", HttpStatus.FORBIDDEN);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
