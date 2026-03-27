@@ -1,10 +1,12 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
+import com.fptu.math_master.dto.request.GenerateTemplateQuestionsRequest;
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.dto.response.AIGeneratedTemplatesResponse;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.GeneratedQuestionsBatchResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateImportResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
@@ -255,6 +257,21 @@ public class QuestionTemplateController {
         .result(response)
         .build();
   }
+
+    @PostMapping("/{id}/generate-questions")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Generate multiple AI questions from template",
+            description =
+                    "Generate a batch of AI questions by difficulty distribution and save them as AI_DRAFT for review.")
+    public ApiResponse<GeneratedQuestionsBatchResponse> generateQuestions(
+            @PathVariable UUID id, @Valid @RequestBody GenerateTemplateQuestionsRequest request) {
+        log.info("REST request to generate {} questions from template: {}", request.getCount(), id);
+        return ApiResponse.<GeneratedQuestionsBatchResponse>builder()
+                .message("Questions generated and saved as AI_DRAFT.")
+                .result(questionTemplateService.generateQuestionsFromTemplate(id, request))
+                .build();
+    }
 
   @PostMapping(value = "/import-from-file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @Operation(

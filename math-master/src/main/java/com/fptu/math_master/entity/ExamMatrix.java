@@ -100,6 +100,9 @@ public class ExamMatrix extends BaseEntity {
   private Set<ExamMatrixTemplateMapping> templateMappings;
 
   @OneToMany(mappedBy = "examMatrix", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<ExamMatrixBankMapping> bankMappings;
+
+  @OneToMany(mappedBy = "examMatrix", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<ExamMatrixRow> matrixRows;
 
   @PrePersist

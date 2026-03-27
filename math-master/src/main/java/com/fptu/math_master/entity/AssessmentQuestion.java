@@ -34,6 +34,7 @@ import lombok.*;
       @Index(
           name = "idx_assessment_questions_matrix_mapping",
           columnList = "matrix_template_mapping_id"),
+      @Index(name = "idx_assessment_questions_bank_mapping", columnList = "matrix_bank_mapping_id"),
       @Index(name = "idx_assessment_questions_order", columnList = "order_index")
     })
 /**
@@ -71,6 +72,9 @@ public class AssessmentQuestion extends BaseEntity {
   @Column(name = "matrix_template_mapping_id")
   private UUID matrixTemplateMappingId;
 
+  @Column(name = "matrix_bank_mapping_id")
+  private UUID matrixBankMappingId;
+
   /**
    * Relationships
    * - Many-to-One with Assessment
@@ -88,4 +92,8 @@ public class AssessmentQuestion extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "matrix_template_mapping_id", insertable = false, updatable = false)
   private ExamMatrixTemplateMapping examMatrixTemplateMapping;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "matrix_bank_mapping_id", insertable = false, updatable = false)
+  private ExamMatrixBankMapping examMatrixBankMapping;
 }

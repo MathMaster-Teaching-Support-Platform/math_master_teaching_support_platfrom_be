@@ -97,4 +97,14 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
    */
   @Query("SELECT t FROM QuestionTemplate t WHERE t.lessonId = :lessonId AND t.deletedAt IS NULL")
   List<QuestionTemplate> findByLessonIdAndNotDeleted(@Param("lessonId") UUID lessonId);
+
+    @Query(
+            "SELECT t FROM QuestionTemplate t "
+                    + "WHERE t.questionBankId = :bankId "
+                    + "AND t.cognitiveLevel = :cognitiveLevel "
+                    + "AND t.status = 'PUBLISHED' "
+                    + "AND t.deletedAt IS NULL "
+                    + "ORDER BY t.createdAt")
+    List<QuestionTemplate> findPublishedByBankAndCognitive(
+            @Param("bankId") UUID bankId, @Param("cognitiveLevel") CognitiveLevel cognitiveLevel);
 }

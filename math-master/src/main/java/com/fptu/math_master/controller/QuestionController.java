@@ -1,6 +1,7 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.CreateQuestionRequest;
+import com.fptu.math_master.dto.request.BulkApproveQuestionsRequest;
 import com.fptu.math_master.dto.request.ImportQuestionsRequest;
 import com.fptu.math_master.dto.request.UpdateQuestionRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -132,6 +133,34 @@ public class QuestionController {
     return ApiResponse.<QuestionResponse>builder()
         .message("Question updated successfully")
         .result(questionService.updateQuestion(id, request))
+        .build();
+  }
+
+  @PostMapping("/{id}/approve")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Approve AI draft question",
+      description = "Approve a question currently in AI_DRAFT status so it can be used downstream.")
+  public ApiResponse<QuestionResponse> approveQuestion(@PathVariable UUID id) {
+    log.info("REST request to approve question: {}", id);
+    return ApiResponse.<QuestionResponse>builder()
+        .message("Question approved successfully")
+        .result(questionService.approveQuestion(id))
+        .build();
+  }
+
+  @PostMapping("/bulk-approve")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Bulk approve AI draft questions",
+      description = "Approve multiple AI_DRAFT questions in one call.")
+  public ApiResponse<Integer> bulkApproveQuestions(
+      @Valid @RequestBody BulkApproveQuestionsRequest request) {
+    log.info("REST request to bulk approve {} questions", request.getQuestionIds().size());
+    Integer approved = questionService.bulkApproveQuestions(request.getQuestionIds());
+    return ApiResponse.<Integer>builder()
+        .message("Bulk approve completed")
+        .result(approved)
         .build();
   }
 

@@ -27,6 +27,8 @@ public class ExamMatrixResponse {
   private MatrixStatus status;
   private Integer templateMappingCount;
   private List<TemplateMappingResponse> templateMappings;
+  private Integer bankMappingCount;
+  private List<BankMappingResponse> bankMappings;
   private Instant createdAt;
   private Instant updatedAt;
 }

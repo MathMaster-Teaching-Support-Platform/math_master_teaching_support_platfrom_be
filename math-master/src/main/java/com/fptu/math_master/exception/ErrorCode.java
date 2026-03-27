@@ -239,7 +239,11 @@ public enum ErrorCode {
   ACCOUNT_NOT_ACTIVE(1140, "Account is not activated. Please check your email for a confirmation link.", HttpStatus.UNAUTHORIZED),
   LESSON_PLAN_NOT_FOUND(1141, "Lesson plan not found", HttpStatus.NOT_FOUND),
   LESSON_PLAN_ALREADY_EXISTS(1142, "You already have a lesson plan for this lesson", HttpStatus.BAD_REQUEST),
-  LESSON_PLAN_ACCESS_DENIED(1143, "You do not have permission to access this lesson plan", HttpStatus.FORBIDDEN);
+    LESSON_PLAN_ACCESS_DENIED(1143, "You do not have permission to access this lesson plan", HttpStatus.FORBIDDEN),
+    QUESTION_REVIEW_STATUS_INVALID(
+            1144,
+            "Only AI_DRAFT questions can be approved",
+            HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

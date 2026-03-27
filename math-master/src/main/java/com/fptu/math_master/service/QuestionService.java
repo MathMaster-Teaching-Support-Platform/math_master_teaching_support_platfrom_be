@@ -42,6 +42,10 @@ public interface QuestionService {
    */
   QuestionResponse updateQuestion(UUID id, UpdateQuestionRequest request);
 
+  QuestionResponse approveQuestion(UUID id);
+
+  Integer bulkApproveQuestions(java.util.List<UUID> questionIds);
+
   /**
    * Delete question (soft delete)
    */

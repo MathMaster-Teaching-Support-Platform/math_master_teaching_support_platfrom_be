@@ -1,6 +1,7 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
+import com.fptu.math_master.dto.request.AddBankMappingRequest;
 import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
 import com.fptu.math_master.dto.request.ExamMatrixRequest;
@@ -9,6 +10,7 @@ import com.fptu.math_master.dto.request.GeneratePreviewRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.BatchTemplateMappingsResponse;
+import com.fptu.math_master.dto.response.BankMappingResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
 import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
 import com.fptu.math_master.dto.response.FinalizePreviewResponse;
@@ -198,6 +200,31 @@ public class ExamMatrixController {
         .result(examMatrixService.getTemplateMappings(matrixId))
         .build();
   }
+
+    @PostMapping("/{matrixId}/bank-mappings")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Add question-bank mapping",
+            description =
+                    "Add a bank-based mapping to an exam matrix with difficulty distribution and cognitive level.")
+    public ApiResponse<BankMappingResponse> addBankMapping(
+            @PathVariable UUID matrixId, @Valid @RequestBody AddBankMappingRequest request) {
+        log.info("REST request to add bank mapping to matrix: {}", matrixId);
+        return ApiResponse.<BankMappingResponse>builder()
+                .message("Bank mapping added successfully.")
+                .result(examMatrixService.addBankMapping(matrixId, request))
+                .build();
+    }
+
+    @GetMapping("/{matrixId}/bank-mappings")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(summary = "Get all bank mappings", description = "Get all bank mappings for a matrix.")
+    public ApiResponse<List<BankMappingResponse>> getBankMappings(@PathVariable UUID matrixId) {
+        log.info("REST request to get bank mappings for matrix: {}", matrixId);
+        return ApiResponse.<List<BankMappingResponse>>builder()
+                .result(examMatrixService.getBankMappings(matrixId))
+                .build();
+    }
 
   // ── Validation & Lifecycle ──────────────────────────────────────────────
 

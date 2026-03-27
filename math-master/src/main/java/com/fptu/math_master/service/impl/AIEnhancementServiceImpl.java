@@ -740,6 +740,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   private String evaluateFormula(String formula, Map<String, Object> params) {
     if (formula == null || formula.isBlank()) return "?";
 
+    String normalizedFormula = normalizeFormulaForEvaluation(formula);
+    Map<String, Object> paramsForFormula = buildFormulaParameterAliases(params);
+
     javax.script.ScriptEngine engine = null;
     try {
       javax.script.ScriptEngineManager mgr = new javax.script.ScriptEngineManager();
@@ -755,19 +758,21 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     // If no ScriptEngine available, use simple arithmetic evaluator as fallback
     if (engine == null) {
       try {
-        return evaluateFormulaSimple(formula, params);
+        return evaluateFormulaSimple(normalizedFormula, paramsForFormula);
       } catch (Exception fallbackError) {
         log.warn(
             "Simple formula evaluation also failed for '{}': {}",
-            formula,
+            normalizedFormula,
             fallbackError.getMessage());
         return "?";
       }
     }
 
     try {
-      for (Map.Entry<String, Object> e : params.entrySet()) engine.put(e.getKey(), e.getValue());
-      Object result = engine.eval(formula);
+      for (Map.Entry<String, Object> e : paramsForFormula.entrySet()) {
+        engine.put(e.getKey(), e.getValue());
+      }
+      Object result = engine.eval(normalizedFormula);
       double val = ((Number) result).doubleValue();
       // Format: integer if whole, else strip trailing zeros (e.g. 9.50 → 9.5, 3.25 → 3.25)
       if (val == Math.floor(val) && !Double.isInfinite(val)) {
@@ -779,16 +784,96 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     } catch (Exception e) {
       log.warn(
           "ScriptEngine evaluation failed for '{}': {}, trying simple evaluator",
-          formula,
+          normalizedFormula,
           e.getMessage());
       // Try simple fallback
       try {
-        return evaluateFormulaSimple(formula, params);
+        return evaluateFormulaSimple(normalizedFormula, paramsForFormula);
       } catch (Exception fallbackError) {
         log.warn("Simple fallback also failed: {}", fallbackError.getMessage());
         return "?";
       }
     }
+  }
+
+  /**
+   * Normalize common LaTeX constructs to arithmetic expressions before evaluation.
+   * Examples:
+   * - \frac{-b}{2*a} -> ((-b)/(2*a))
+   * - \times, \cdot -> *
+   * - \left( ... \right) -> ( ... )
+   */
+  private String normalizeFormulaForEvaluation(String formula) {
+    String normalized = formula.trim();
+
+    // Remove math mode delimiters if present
+    normalized = normalized.replace("$", "").trim();
+
+    if (normalized.startsWith("\\(") && normalized.endsWith("\\)")) {
+      normalized = normalized.substring(2, normalized.length() - 2).trim();
+    }
+    if (normalized.startsWith("\\[") && normalized.endsWith("\\]")) {
+      normalized = normalized.substring(2, normalized.length() - 2).trim();
+    }
+
+    // Convert placeholders in formulas: {{a}} -> a
+    normalized = normalized.replaceAll("\\{\\{\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\}\\}", "$1");
+
+    // Normalize common unicode operators to ASCII
+    normalized = normalized.replace('−', '-').replace('–', '-').replace('—', '-');
+    normalized = normalized.replace('×', '*').replace('·', '*').replace('∙', '*');
+    normalized = normalized.replace('÷', '/').replace('∕', '/');
+
+    // Decimal comma in numeric literals (e.g. 3,14 -> 3.14)
+    normalized = normalized.replaceAll("(?<=\\d),(?=\\d)", ".");
+
+    // Normalize common LaTeX operators
+    normalized = normalized.replace("\\times", "*");
+    normalized = normalized.replace("\\cdot", "*");
+    normalized = normalized.replace("\\left", "");
+    normalized = normalized.replace("\\right", "");
+    normalized = normalized.replace("\\\\times", "*");
+    normalized = normalized.replace("\\\\cdot", "*");
+    normalized = normalized.replace("\\\\left", "");
+    normalized = normalized.replace("\\\\right", "");
+
+    // Repeatedly convert \frac{A}{B} -> ((A)/(B))
+    Pattern fracPattern = Pattern.compile("\\\\+frac\\{([^{}]+)\\}\\{([^{}]+)\\}");
+    String previous;
+    do {
+      previous = normalized;
+      Matcher m = fracPattern.matcher(normalized);
+      normalized = m.replaceAll("(($1)/($2))");
+    } while (!normalized.equals(previous));
+
+    return normalized;
+  }
+
+  private Map<String, Object> buildFormulaParameterAliases(Map<String, Object> params) {
+    Map<String, Object> aliases = new LinkedHashMap<>();
+    if (params == null) {
+      return aliases;
+    }
+
+    for (Map.Entry<String, Object> entry : params.entrySet()) {
+      String key = entry.getKey();
+      Object value = entry.getValue();
+      if (key == null) {
+        continue;
+      }
+
+      aliases.put(key, value);
+
+      String trimmed = key.trim();
+      if (trimmed.startsWith("{{") && trimmed.endsWith("}}") && trimmed.length() > 4) {
+        String plain = trimmed.substring(2, trimmed.length() - 2).trim();
+        if (!plain.isEmpty()) {
+          aliases.put(plain, value);
+        }
+      }
+    }
+
+    return aliases;
   }
 
   /**
@@ -812,7 +897,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         Object paramValue = entry.getValue();
         String valueStr = paramValue != null ? paramValue.toString() : "0";
         // Replace parameter name (as whole word) with its value
-        expression = expression.replaceAll("\\b" + paramName + "\\b", "(" + valueStr + ")");
+        expression = expression.replaceAll("\\b" + Pattern.quote(paramName) + "\\b", valueStr);
       }
 
       log.debug("Evaluating formula: '{}' with substituted expression: '{}'", formula, expression);
@@ -869,6 +954,13 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   private double evaluatePrimary(String expr, int[] pos) {
     if (pos[0] >= expr.length()) throw new RuntimeException("Unexpected end");
 
+    // Support unary plus/minus before any primary, e.g. -(3), -x, +4
+    if (expr.charAt(pos[0]) == '+' || expr.charAt(pos[0]) == '-') {
+      char sign = expr.charAt(pos[0]++);
+      double value = evaluatePrimary(expr, pos);
+      return sign == '-' ? -value : value;
+    }
+
     if (expr.charAt(pos[0]) == '(') {
       pos[0]++;
       double result = evaluateAddSub(expr, pos);
@@ -880,9 +972,6 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     }
 
     StringBuilder num = new StringBuilder();
-    if (pos[0] < expr.length() && (expr.charAt(pos[0]) == '-' || expr.charAt(pos[0]) == '+')) {
-      num.append(expr.charAt(pos[0]++));
-    }
 
     while (pos[0] < expr.length()
         && (Character.isDigit(expr.charAt(pos[0])) || expr.charAt(pos[0]) == '.')) {

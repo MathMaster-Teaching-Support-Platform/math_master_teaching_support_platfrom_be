@@ -20,6 +20,7 @@ public class MatrixValidationReport {
 
   // Summary
   private Integer totalTemplateMappings;
+  private Integer totalBankMappings;
   private Integer totalQuestions;
   private BigDecimal totalPoints;
   private Integer totalQuestionsTarget;
@@ -27,8 +28,10 @@ public class MatrixValidationReport {
 
   // Distribution
   private Map<String, Integer> cognitiveLevelCoverage;
+  private Map<String, Integer> bankCoverageByDifficulty;
 
   private boolean questionsMatchTarget;
   private boolean pointsMatchTarget;
   private boolean allCognitiveLevelsCovered;
+  private boolean aiFallbackLikely;
 }

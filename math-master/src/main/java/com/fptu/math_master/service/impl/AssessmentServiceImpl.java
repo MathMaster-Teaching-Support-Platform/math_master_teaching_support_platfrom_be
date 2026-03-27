@@ -15,14 +15,19 @@ import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.AssessmentQuestion;
 import com.fptu.math_master.entity.ExamMatrix;
+import com.fptu.math_master.entity.ExamMatrixBankMapping;
 import com.fptu.math_master.entity.ExamMatrixTemplateMapping;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
+import com.fptu.math_master.enums.AssessmentSelectionStrategy;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
 import com.fptu.math_master.enums.MatrixStatus;
+import com.fptu.math_master.enums.QuestionDifficulty;
+import com.fptu.math_master.enums.QuestionSourceType;
+import com.fptu.math_master.enums.QuestionStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
@@ -59,6 +64,7 @@ public class AssessmentServiceImpl implements AssessmentService {
   AssessmentQuestionRepository assessmentQuestionRepository;
   UserRepository userRepository;
   ExamMatrixRepository examMatrixRepository;
+  ExamMatrixBankMappingRepository examMatrixBankMappingRepository;
   ExamMatrixTemplateMappingRepository examMatrixTemplateMappingRepository;
   LessonRepository lessonRepository;
   QuestionTemplateRepository questionTemplateRepository;
@@ -672,20 +678,29 @@ public class AssessmentServiceImpl implements AssessmentService {
       throw new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND);
     }
 
-    // Load template mappings
-    List<com.fptu.math_master.entity.ExamMatrixTemplateMapping> mappings =
-        examMatrixTemplateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
+    List<ExamMatrixTemplateMapping> templateMappings =
+      examMatrixTemplateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
+    List<ExamMatrixBankMapping> bankMappings =
+      examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
 
-    if (mappings.isEmpty()) {
+    if (templateMappings.isEmpty() && bankMappings.isEmpty()) {
       throw new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND);
     }
 
+    AssessmentSelectionStrategy strategy =
+      request.getSelectionStrategy() != null
+        ? request.getSelectionStrategy()
+        : AssessmentSelectionStrategy.BANK_FIRST;
+
     int totalQuestionsGenerated = 0;
     int totalPoints = 0;
-    int orderIndex = 0;
+    int questionsFromBank = 0;
+    int questionsFromAi = 0;
+    int orderIndex = Optional.ofNullable(assessmentQuestionRepository.findMaxOrderIndex(assessmentId)).orElse(-1) + 1;
+    List<String> warnings = new ArrayList<>();
 
-    // For each template mapping, generate required number of questions
-    for (com.fptu.math_master.entity.ExamMatrixTemplateMapping mapping : mappings) {
+    // Keep backward-compatible template mapping generation.
+    for (ExamMatrixTemplateMapping mapping : templateMappings) {
       log.info(
           "Processing mapping: {}, template: {}, count: {}",
           mapping.getId(),
@@ -720,6 +735,39 @@ public class AssessmentServiceImpl implements AssessmentService {
         assessmentQuestionRepository.save(assessmentQuestion);
         totalQuestionsGenerated++;
         totalPoints += mapping.getPointsPerQuestion().intValue();
+        questionsFromAi++;
+      }
+    }
+
+    // New bank-driven flow with fallback strategy.
+    for (ExamMatrixBankMapping bankMapping : bankMappings) {
+      Map<QuestionDifficulty, Integer> distribution =
+          normalizeDifficultyDistribution(bankMapping.getDifficultyDistribution());
+
+      for (Map.Entry<QuestionDifficulty, Integer> entry : distribution.entrySet()) {
+        QuestionDifficulty difficulty = entry.getKey();
+        int required = entry.getValue() != null ? entry.getValue() : 0;
+        if (required <= 0) {
+          continue;
+        }
+
+        SelectionResult selection =
+            selectQuestionsByStrategy(bankMapping, difficulty, required, strategy, warnings);
+
+        for (Question question : selection.questions()) {
+          AssessmentQuestion assessmentQuestion =
+              AssessmentQuestion.builder()
+                  .assessmentId(assessmentId)
+                  .questionId(question.getId())
+                  .matrixBankMappingId(bankMapping.getId())
+                  .orderIndex(orderIndex++)
+                  .build();
+          assessmentQuestionRepository.save(assessmentQuestion);
+          totalQuestionsGenerated++;
+          totalPoints += question.getPoints() != null ? question.getPoints().intValue() : 1;
+        }
+        questionsFromAi += selection.aiCount();
+        questionsFromBank += selection.bankCount();
       }
     }
 
@@ -731,7 +779,10 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     return AssessmentGenerationResponse.builder()
         .totalQuestionsGenerated(totalQuestionsGenerated)
+        .questionsFromBank(questionsFromBank)
+        .questionsFromAi(questionsFromAi)
         .totalPoints(totalPoints)
+        .warnings(warnings.isEmpty() ? null : warnings)
         .message(
             String.format(
                 "%d questions generated successfully from exam matrix. Total points: %d",
@@ -774,7 +825,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                 .collect(Collectors.toList());
       } else {
         existingList =
-            questionRepository.findByTemplateIdAndNotDeleted(templateId).stream()
+          questionRepository.findApprovedByTemplateIdAndNotDeleted(templateId).stream()
                 .limit(count)
                 .collect(Collectors.toList());
       }
@@ -962,6 +1013,169 @@ public class AssessmentServiceImpl implements AssessmentService {
         result.size());
     return result;
   }
+
+  private SelectionResult selectQuestionsByStrategy(
+      ExamMatrixBankMapping bankMapping,
+      QuestionDifficulty difficulty,
+      int required,
+      AssessmentSelectionStrategy strategy,
+      List<String> warnings) {
+    List<Question> selected = new ArrayList<>();
+    Set<UUID> selectedIds = new HashSet<>();
+    int fromBank = 0;
+    int fromAi = 0;
+
+    switch (strategy) {
+      case AI_FIRST -> {
+        List<Question> ai = generateAiFallbackQuestions(bankMapping, difficulty, required, warnings);
+        fromAi += addUnique(selected, selectedIds, ai);
+        int remaining = required - selected.size();
+        if (remaining > 0) {
+          List<Question> bank = fetchRandomApprovedFromBank(bankMapping, difficulty, remaining);
+          fromBank += addUnique(selected, selectedIds, bank);
+        }
+      }
+      case MIXED -> {
+        int bankTarget = required / 2;
+        int aiTarget = required - bankTarget;
+
+        List<Question> bank = fetchRandomApprovedFromBank(bankMapping, difficulty, bankTarget);
+        fromBank += addUnique(selected, selectedIds, bank);
+
+        List<Question> ai = generateAiFallbackQuestions(bankMapping, difficulty, aiTarget, warnings);
+        fromAi += addUnique(selected, selectedIds, ai);
+
+        int remaining = required - selected.size();
+        if (remaining > 0) {
+          List<Question> bankFill = fetchRandomApprovedFromBank(bankMapping, difficulty, remaining);
+          fromBank += addUnique(selected, selectedIds, bankFill);
+          remaining = required - selected.size();
+        }
+        if (remaining > 0) {
+          List<Question> aiFill = generateAiFallbackQuestions(bankMapping, difficulty, remaining, warnings);
+          fromAi += addUnique(selected, selectedIds, aiFill);
+        }
+      }
+      default -> {
+        List<Question> bank = fetchRandomApprovedFromBank(bankMapping, difficulty, required);
+        fromBank += addUnique(selected, selectedIds, bank);
+        int remaining = required - selected.size();
+        if (remaining > 0) {
+          warnings.add(
+              String.format(
+                  "Bank %s has insufficient approved questions for %s/%s. AI fallback generated %d question(s).",
+                  bankMapping.getQuestionBankId(),
+                  difficulty,
+                  bankMapping.getCognitiveLevel(),
+                  remaining));
+          List<Question> ai = generateAiFallbackQuestions(bankMapping, difficulty, remaining, warnings);
+          fromAi += addUnique(selected, selectedIds, ai);
+        }
+      }
+    }
+
+    return new SelectionResult(selected, fromBank, fromAi);
+  }
+
+  private List<Question> fetchRandomApprovedFromBank(
+      ExamMatrixBankMapping bankMapping, QuestionDifficulty difficulty, int limit) {
+    if (limit <= 0) {
+      return List.of();
+    }
+    return questionRepository.findRandomApprovedByBankAndDifficultyAndCognitive(
+        bankMapping.getQuestionBankId(),
+        difficulty != null ? difficulty.name() : null,
+        bankMapping.getCognitiveLevel() != null ? bankMapping.getCognitiveLevel().name() : null,
+        limit);
+  }
+
+  private int addUnique(List<Question> target, Set<UUID> selectedIds, List<Question> incoming) {
+    int added = 0;
+    for (Question q : incoming) {
+      if (q == null || q.getId() == null || selectedIds.contains(q.getId())) {
+        continue;
+      }
+      target.add(q);
+      selectedIds.add(q.getId());
+      added++;
+    }
+    return added;
+  }
+
+  private List<Question> generateAiFallbackQuestions(
+      ExamMatrixBankMapping bankMapping,
+      QuestionDifficulty difficulty,
+      int count,
+      List<String> warnings) {
+    if (count <= 0) {
+      return List.of();
+    }
+
+    List<QuestionTemplate> templates =
+        questionTemplateRepository.findPublishedByBankAndCognitive(
+            bankMapping.getQuestionBankId(), bankMapping.getCognitiveLevel());
+
+    if (templates.isEmpty()) {
+      warnings.add(
+          String.format(
+              "No published template found for bank %s and cognitive level %s. Could not generate %d fallback question(s).",
+              bankMapping.getQuestionBankId(), bankMapping.getCognitiveLevel(), count));
+      return List.of();
+    }
+
+    QuestionTemplate template = templates.getFirst();
+    List<Question> generated = new ArrayList<>();
+
+    for (int i = 0; i < count; i++) {
+      try {
+        GeneratedQuestionSample sample = aiEnhancementService.generateQuestion(template, i);
+        if (sample == null || sample.getQuestionText() == null || sample.getQuestionText().isBlank()) {
+          continue;
+        }
+
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("fallback", true);
+        metadata.put("bankMappingId", bankMapping.getId().toString());
+
+        Question question =
+            Question.builder()
+                .questionBankId(bankMapping.getQuestionBankId())
+                .templateId(template.getId())
+                .questionType(template.getTemplateType())
+                .questionText(sample.getQuestionText())
+                .options(
+                    sample.getOptions() != null
+                        ? new HashMap<String, Object>(sample.getOptions())
+                        : null)
+                .correctAnswer(sample.getCorrectAnswer())
+                .explanation(sample.getExplanation())
+                .difficulty(difficulty)
+                .cognitiveLevel(bankMapping.getCognitiveLevel())
+                .questionStatus(QuestionStatus.APPROVED)
+                .questionSourceType(QuestionSourceType.AI_GENERATED)
+                .generationMetadata(metadata)
+                .build();
+        question.setCreatedBy(getCurrentUserId());
+
+        generated.add(questionRepository.save(question));
+      } catch (Exception ex) {
+        warnings.add("AI fallback generation failed: " + ex.getMessage());
+      }
+    }
+
+    return generated;
+  }
+
+  private Map<QuestionDifficulty, Integer> normalizeDifficultyDistribution(
+      Map<QuestionDifficulty, Integer> source) {
+    Map<QuestionDifficulty, Integer> normalized = new LinkedHashMap<>();
+    normalized.put(QuestionDifficulty.EASY, source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.EASY, 0)) : 0);
+    normalized.put(QuestionDifficulty.MEDIUM, source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.MEDIUM, 0)) : 0);
+    normalized.put(QuestionDifficulty.HARD, source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.HARD, 0)) : 0);
+    return normalized;
+  }
+
+  private record SelectionResult(List<Question> questions, int bankCount, int aiCount) {}
 
   private Map<String, Object> convertOptionsToObjectMap(Map<String, String> stringOptions) {
     if (stringOptions == null) {

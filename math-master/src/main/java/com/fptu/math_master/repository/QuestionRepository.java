@@ -1,7 +1,9 @@
 package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.Question;
+import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionDifficulty;
+import com.fptu.math_master.enums.QuestionStatus;
 import com.fptu.math_master.enums.QuestionType;
 import java.util.List;
 import java.util.UUID;
@@ -51,6 +53,14 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
   List<Question> findByTemplateIdAndNotDeleted(@Param("templateId") UUID templateId);
 
   @Query(
+      "SELECT q FROM Question q "
+          + "WHERE q.templateId = :templateId "
+          + "AND q.questionStatus = 'APPROVED' "
+          + "AND q.deletedAt IS NULL "
+          + "ORDER BY q.createdAt DESC")
+  List<Question> findApprovedByTemplateIdAndNotDeleted(@Param("templateId") UUID templateId);
+
+  @Query(
       nativeQuery = true,
       value =
           "SELECT q.* FROM questions q "
@@ -92,8 +102,45 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       "SELECT q FROM Question q "
           + "WHERE q.templateId = :templateId "
           + "AND q.questionBankId = :bankId "
+          + "AND q.questionStatus = 'APPROVED' "
           + "AND q.deletedAt IS NULL "
           + "ORDER BY q.createdAt DESC")
   List<Question> findApprovedByTemplateIdAndQuestionBankIdAndNotDeleted(
       @Param("templateId") UUID templateId, @Param("bankId") UUID bankId);
+
+  @Query(
+      "SELECT q FROM Question q "
+          + "WHERE q.id = :id "
+          + "AND q.deletedAt IS NULL "
+          + "AND q.questionStatus = :status")
+  java.util.Optional<Question> findByIdAndStatusAndNotDeleted(
+      @Param("id") UUID id, @Param("status") QuestionStatus status);
+
+  @Query(
+      "SELECT COUNT(q) FROM Question q "
+          + "WHERE q.questionBankId = :bankId "
+          + "AND q.questionStatus = 'APPROVED' "
+          + "AND q.deletedAt IS NULL "
+          + "AND (:difficulty IS NULL OR q.difficulty = :difficulty) "
+          + "AND (:cognitiveLevel IS NULL OR q.cognitiveLevel = :cognitiveLevel)")
+  long countApprovedByBankAndDifficultyAndCognitive(
+      @Param("bankId") UUID bankId,
+      @Param("difficulty") QuestionDifficulty difficulty,
+      @Param("cognitiveLevel") CognitiveLevel cognitiveLevel);
+
+  @Query(
+      value =
+          "SELECT * FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND (:difficulty IS NULL OR q.difficulty = CAST(:difficulty AS text)) "
+              + "AND (:cognitiveLevel IS NULL OR q.cognitive_level = CAST(:cognitiveLevel AS text)) "
+              + "ORDER BY random() LIMIT :limit",
+      nativeQuery = true)
+  List<Question> findRandomApprovedByBankAndDifficultyAndCognitive(
+      @Param("bankId") UUID bankId,
+      @Param("difficulty") String difficulty,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("limit") int limit);
 }

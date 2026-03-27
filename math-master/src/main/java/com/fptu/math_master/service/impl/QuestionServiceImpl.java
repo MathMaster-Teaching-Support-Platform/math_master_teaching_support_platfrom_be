@@ -16,6 +16,7 @@ import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.QuestionService;
+import com.fptu.math_master.util.SecurityUtils;
 import com.fptu.math_master.util.CSVParser;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -221,6 +222,10 @@ public class QuestionServiceImpl implements QuestionService {
       question.setTags(request.getTags());
     }
     if (request.getStatus() != null) {
+      if (request.getStatus() == QuestionStatus.APPROVED
+          && question.getQuestionStatus() != QuestionStatus.AI_DRAFT) {
+        throw new AppException(ErrorCode.QUESTION_REVIEW_STATUS_INVALID);
+      }
       question.setQuestionStatus(request.getStatus());
     }
 
@@ -229,6 +234,58 @@ public class QuestionServiceImpl implements QuestionService {
 
     log.info("Question updated: {}", id);
     return mapToResponse(question);
+  }
+
+  @Override
+  public QuestionResponse approveQuestion(UUID id) {
+    Question question =
+        questionRepository
+            .findByIdAndNotDeleted(id)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+    UUID currentUserId = getCurrentUserId();
+    if (!question.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.UNAUTHORIZED);
+    }
+    if (question.getQuestionStatus() != QuestionStatus.AI_DRAFT) {
+      throw new AppException(ErrorCode.QUESTION_REVIEW_STATUS_INVALID);
+    }
+
+    question.setQuestionStatus(QuestionStatus.APPROVED);
+    question.setUpdatedAt(Instant.now());
+    question = questionRepository.save(question);
+    return mapToResponse(question);
+  }
+
+  @Override
+  public Integer bulkApproveQuestions(List<UUID> questionIds) {
+    if (questionIds == null || questionIds.isEmpty()) {
+      return 0;
+    }
+
+    UUID currentUserId = getCurrentUserId();
+    int approvedCount = 0;
+
+    for (UUID id : questionIds) {
+      Question question =
+          questionRepository
+              .findByIdAndNotDeleted(id)
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+      if (!question.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+      }
+      if (question.getQuestionStatus() != QuestionStatus.AI_DRAFT) {
+        throw new AppException(ErrorCode.QUESTION_REVIEW_STATUS_INVALID);
+      }
+
+      question.setQuestionStatus(QuestionStatus.APPROVED);
+      question.setUpdatedAt(Instant.now());
+      questionRepository.save(question);
+      approvedCount++;
+    }
+
+    return approvedCount;
   }
 
   @Override

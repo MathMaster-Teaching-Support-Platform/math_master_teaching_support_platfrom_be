@@ -12,6 +12,9 @@ import lombok.NoArgsConstructor;
 public class AssessmentGenerationResponse {
 
   private Integer totalQuestionsGenerated;
+  private Integer questionsFromBank;
+  private Integer questionsFromAi;
   private Integer totalPoints;
+  private java.util.List<String> warnings;
   private String message;
 }

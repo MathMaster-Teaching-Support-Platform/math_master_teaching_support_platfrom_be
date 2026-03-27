@@ -1,9 +1,11 @@
 package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
+import com.fptu.math_master.dto.request.GenerateTemplateQuestionsRequest;
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.dto.response.AIGeneratedTemplatesResponse;
+import com.fptu.math_master.dto.response.GeneratedQuestionsBatchResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
 import com.fptu.math_master.enums.CognitiveLevel;
@@ -37,6 +39,9 @@ public interface QuestionTemplateService {
    * @return AI-enhanced question
    */
   AIEnhancedQuestionResponse generateAIEnhancedQuestion(UUID id);
+
+  GeneratedQuestionsBatchResponse generateQuestionsFromTemplate(
+      UUID id, GenerateTemplateQuestionsRequest request);
 
   /**
    * AI generates one or more question templates based on lesson content

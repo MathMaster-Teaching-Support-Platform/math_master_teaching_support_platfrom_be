@@ -2,10 +2,12 @@ package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.dto.request.AIEnhancementRequest;
 import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
+import com.fptu.math_master.dto.request.GenerateTemplateQuestionsRequest;
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.dto.response.AIGeneratedTemplatesResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionSample;
+import com.fptu.math_master.dto.response.GeneratedQuestionsBatchResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
 import com.fptu.math_master.entity.Lesson;
@@ -13,7 +15,10 @@ import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.entity.QuestionBank;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.CognitiveLevel;
+import com.fptu.math_master.enums.QuestionDifficulty;
+import com.fptu.math_master.enums.QuestionSourceType;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.enums.QuestionStatus;
 import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
@@ -420,6 +425,87 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       log.error("Failed to generate AI-enhanced question: {}", e.getMessage(), e);
       throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
     }
+  }
+
+  @Override
+  @Transactional
+  public GeneratedQuestionsBatchResponse generateQuestionsFromTemplate(
+      UUID id, GenerateTemplateQuestionsRequest request) {
+    QuestionTemplate template = fetchTemplateForTesting(id);
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    int requested = request.getCount() != null ? request.getCount() : 0;
+    int distributionSum =
+        request.getDifficultyDistribution().values().stream().mapToInt(Integer::intValue).sum();
+
+    if (requested <= 0 || distributionSum != requested) {
+      throw new AppException(ErrorCode.INVALID_KEY);
+    }
+
+    List<UUID> generatedIds = new ArrayList<>();
+    List<String> warnings = new ArrayList<>();
+    int sampleIndex = 0;
+
+    for (Map.Entry<QuestionDifficulty, Integer> entry : request.getDifficultyDistribution().entrySet()) {
+      QuestionDifficulty targetDifficulty = entry.getKey();
+      int targetCount = entry.getValue() == null ? 0 : entry.getValue();
+      for (int i = 0; i < targetCount; i++) {
+        try {
+          GeneratedQuestionSample sample = aiEnhancementService.generateQuestion(template, sampleIndex++);
+          if (sample == null || sample.getQuestionText() == null || sample.getQuestionText().isBlank()) {
+            warnings.add("Generated sample was empty for difficulty " + targetDifficulty);
+            continue;
+          }
+
+          Map<String, Object> metadata = new HashMap<>();
+          metadata.put("status", "AI_DRAFT");
+          metadata.put("requestedDifficulty", targetDifficulty.name());
+          metadata.put("usedParameters", sample.getUsedParameters());
+
+          Question question =
+              Question.builder()
+                  .questionBankId(template.getQuestionBankId())
+                  .templateId(template.getId())
+                  .questionType(template.getTemplateType())
+                  .questionText(sample.getQuestionText())
+                    .options(
+                      sample.getOptions() != null
+                        ? new HashMap<String, Object>(sample.getOptions())
+                        : null)
+                  .correctAnswer(sample.getCorrectAnswer())
+                  .explanation(sample.getExplanation())
+                  .difficulty(targetDifficulty)
+                  .cognitiveLevel(template.getCognitiveLevel())
+                  .questionStatus(QuestionStatus.AI_DRAFT)
+                  .questionSourceType(QuestionSourceType.AI_GENERATED)
+                  .generationMetadata(metadata)
+                  .build();
+          question.setCreatedBy(currentUserId);
+
+          Question saved = questionRepository.save(question);
+          generatedIds.add(saved.getId());
+        } catch (Exception ex) {
+          log.warn(
+              "Failed to generate/save question {}/{} for template {}: {}",
+              i + 1,
+              targetCount,
+              id,
+              ex.getMessage());
+          warnings.add(
+              "Failed to generate question for difficulty "
+                  + targetDifficulty
+                  + ": "
+                  + ex.getMessage());
+        }
+      }
+    }
+
+    return GeneratedQuestionsBatchResponse.builder()
+        .totalRequested(requested)
+        .totalGenerated(generatedIds.size())
+        .generatedQuestionIds(generatedIds)
+        .warnings(warnings.isEmpty() ? null : warnings)
+        .build();
   }
 
   @Override
