@@ -15,6 +15,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -37,8 +38,8 @@ import org.hibernate.annotations.Type;
     name = "exam_matrix_bank_mappings",
     uniqueConstraints = {
       @UniqueConstraint(
-          name = "uq_exam_matrix_bank_cognitive",
-          columnNames = {"exam_matrix_id", "question_bank_id", "cognitive_level"})
+          name = "uq_exam_matrix_row_bank_cognitive",
+          columnNames = {"exam_matrix_id", "matrix_row_id", "question_bank_id", "cognitive_level"})
     },
     indexes = {
       @Index(name = "idx_exam_matrix_bank_mapping_matrix", columnList = "exam_matrix_id"),
@@ -53,9 +54,15 @@ public class ExamMatrixBankMapping extends BaseEntity {
   @Column(name = "question_bank_id", nullable = false)
   private UUID questionBankId;
 
+  @Column(name = "matrix_row_id")
+  private UUID matrixRowId;
+
   @Type(JsonBinaryType.class)
   @Column(name = "difficulty_distribution", nullable = false, columnDefinition = "jsonb")
   private Map<QuestionDifficulty, Integer> difficultyDistribution;
+
+  @Column(name = "points_per_question", precision = 7, scale = 2)
+  private BigDecimal pointsPerQuestion;
 
   @Column(name = "cognitive_level", nullable = false)
   @Enumerated(EnumType.STRING)
@@ -68,6 +75,10 @@ public class ExamMatrixBankMapping extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
   private QuestionBank questionBank;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "matrix_row_id", insertable = false, updatable = false)
+  private ExamMatrixRow matrixRow;
 
   @OneToMany(mappedBy = "examMatrixBankMapping", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<AssessmentQuestion> assessmentQuestions;

@@ -64,12 +64,13 @@ public class ExamMatrixController {
       description =
           "Teacher creates a reusable exam matrix. "
               + "The matrix is owned by the teacher and can later be linked to assessments. "
+              + "Request can include bankMappings so matrix and question-bank mappings are created in one call. "
               + "Status = DRAFT by default.")
   public ApiResponse<ExamMatrixResponse> createExamMatrix(
       @Valid @RequestBody ExamMatrixRequest request) {
     log.info("REST request to create exam matrix: {}", request.getName());
     return ApiResponse.<ExamMatrixResponse>builder()
-        .message("Exam matrix created successfully. Add template mappings next.")
+        .message("Exam matrix created successfully.")
         .result(examMatrixService.createExamMatrix(request))
         .build();
   }

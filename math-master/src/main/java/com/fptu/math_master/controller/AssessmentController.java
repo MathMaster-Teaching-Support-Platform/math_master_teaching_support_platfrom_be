@@ -45,13 +45,14 @@ public class AssessmentController {
               + "Title is required (max 255 chars), description is optional. "
               + "Must select an examMatrixId and one or more lessonIds. "
               + "Selected lessonIds are validated to ensure they belong to the chosen matrix. "
+              + "If matrix is APPROVED and already has mappings, questions are auto-generated and mapped to the assessment. "
               + "Can set type, time limit, passing score, schedule, and options. "
               + "Status is DRAFT by default. Redirects to Assessment Builder after creation.")
   public ApiResponse<AssessmentResponse> createAssessment(
       @Valid @RequestBody AssessmentRequest request) {
     log.info("REST request to create assessment: {}", request.getTitle());
     return ApiResponse.<AssessmentResponse>builder()
-        .message("Assessment created successfully. You can now add questions to your assessment.")
+        .message("Assessment created successfully. Questions are auto-mapped when matrix mappings are available.")
         .result(assessmentService.createAssessment(request))
         .build();
   }

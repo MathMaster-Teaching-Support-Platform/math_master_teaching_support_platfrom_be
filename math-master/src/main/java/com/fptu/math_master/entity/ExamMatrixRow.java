@@ -1,8 +1,11 @@
 package com.fptu.math_master.entity;
 
+import com.fptu.math_master.enums.QuestionDifficulty;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
@@ -43,6 +46,8 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_emr_matrix", columnList = "exam_matrix_id"),
       @Index(name = "idx_emr_chapter", columnList = "chapter_id"),
       @Index(name = "idx_emr_lesson", columnList = "lesson_id"),
+      @Index(name = "idx_emr_bank", columnList = "question_bank_id"),
+      @Index(name = "idx_emr_difficulty", columnList = "question_difficulty"),
       @Index(name = "idx_emr_tpl", columnList = "template_id"),
       @Index(name = "idx_emr_order", columnList = "order_index")
     })
@@ -58,6 +63,17 @@ public class ExamMatrixRow extends BaseEntity {
   /** Optional: narrow to a specific lesson (bài) within the chapter. */
   @Column(name = "lesson_id")
   private UUID lessonId;
+
+  /**
+   * Bank source for this row in bank-only matrix mode.
+   */
+  @Column(name = "question_bank_id")
+  private UUID questionBankId;
+
+  /** Selected row-level difficulty used by bank mappings for this row. */
+  @Column(name = "question_difficulty")
+  @Enumerated(EnumType.STRING)
+  private QuestionDifficulty questionDifficulty;
 
   /**
    * If this row is backed by an existing {@link QuestionTemplate}, store its id.
@@ -101,6 +117,10 @@ public class ExamMatrixRow extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
   private Lesson lesson;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
+  private QuestionBank questionBank;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "template_id", insertable = false, updatable = false)

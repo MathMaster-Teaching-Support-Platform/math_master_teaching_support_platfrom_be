@@ -119,6 +119,10 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     assessment = assessmentRepository.save(assessment);
     syncAssessmentLessons(assessment.getId(), lessonIds);
+
+    // Auto-map questions right after creating assessment when matrix already has mappings.
+    autoMapQuestionsFromMatrixOnCreate(assessment.getId(), matrix.getId());
+
     log.info("Assessment created successfully with id: {}", assessment.getId());
     return mapToResponse(assessment);
   }
@@ -755,16 +759,22 @@ public class AssessmentServiceImpl implements AssessmentService {
             selectQuestionsByStrategy(bankMapping, difficulty, required, strategy, warnings);
 
         for (Question question : selection.questions()) {
+          BigDecimal bankPoints =
+              bankMapping.getPointsPerQuestion() != null
+                  ? bankMapping.getPointsPerQuestion()
+                  : (question.getPoints() != null ? question.getPoints() : BigDecimal.ONE);
+
           AssessmentQuestion assessmentQuestion =
               AssessmentQuestion.builder()
                   .assessmentId(assessmentId)
                   .questionId(question.getId())
                   .matrixBankMappingId(bankMapping.getId())
+                  .pointsOverride(bankPoints)
                   .orderIndex(orderIndex++)
                   .build();
           assessmentQuestionRepository.save(assessmentQuestion);
           totalQuestionsGenerated++;
-          totalPoints += question.getPoints() != null ? question.getPoints().intValue() : 1;
+          totalPoints += bankPoints.intValue();
         }
         questionsFromAi += selection.aiCount();
         questionsFromBank += selection.bankCount();
@@ -1361,9 +1371,48 @@ public class AssessmentServiceImpl implements AssessmentService {
     Set<UUID> matrixLessonIds =
         new java.util.HashSet<>(
             examMatrixTemplateMappingRepository.findDistinctLessonIdsByExamMatrixId(matrixId));
+
+    // Bank-only matrices do not have template-linked lessons, so lesson constraints are skipped.
+    if (matrixLessonIds.isEmpty()) {
+      return;
+    }
+
     if (!matrixLessonIds.containsAll(lessonIds)) {
       throw new AppException(ErrorCode.ASSESSMENT_LESSON_NOT_IN_MATRIX);
     }
+  }
+
+  private void autoMapQuestionsFromMatrixOnCreate(UUID assessmentId, UUID matrixId) {
+    if (assessmentQuestionRepository.findMaxOrderIndex(assessmentId) != null) {
+      return;
+    }
+
+    ExamMatrix matrix =
+        examMatrixRepository
+            .findByIdAndNotDeleted(matrixId)
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+
+    if (matrix.getStatus() != MatrixStatus.APPROVED) {
+      return;
+    }
+
+    List<ExamMatrixTemplateMapping> templateMappings =
+        examMatrixTemplateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
+    List<ExamMatrixBankMapping> bankMappings =
+        examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
+
+    if (templateMappings.isEmpty() && bankMappings.isEmpty()) {
+      return;
+    }
+
+    GenerateAssessmentQuestionsRequest generateRequest =
+        GenerateAssessmentQuestionsRequest.builder()
+            .examMatrixId(matrixId)
+            .reuseApprovedQuestions(true)
+            .selectionStrategy(AssessmentSelectionStrategy.BANK_FIRST)
+            .build();
+
+    generateQuestionsFromMatrix(assessmentId, generateRequest);
   }
 
   private void syncAssessmentLessons(UUID assessmentId, List<UUID> lessonIds) {

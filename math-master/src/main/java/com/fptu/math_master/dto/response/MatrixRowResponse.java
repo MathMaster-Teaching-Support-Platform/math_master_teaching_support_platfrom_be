@@ -1,5 +1,6 @@
 package com.fptu.math_master.dto.response;
 
+import com.fptu.math_master.enums.QuestionDifficulty;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,8 @@ public class MatrixRowResponse {
   private UUID rowId;
   private UUID chapterId;
   private UUID lessonId;
+  private UUID questionBankId;
+  private QuestionDifficulty questionDifficulty;
   private UUID templateId;
 
   /** Display name for the dạng bài column. */

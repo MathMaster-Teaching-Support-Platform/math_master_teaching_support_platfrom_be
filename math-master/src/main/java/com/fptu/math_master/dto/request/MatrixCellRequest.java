@@ -27,7 +27,6 @@ public class MatrixCellRequest {
   @Min(value = 1, message = "questionCount must be at least 1")
   private Integer questionCount;
 
-  @NotNull(message = "pointsPerQuestion is required")
   @DecimalMin(value = "0.01", message = "pointsPerQuestion must be > 0")
   private BigDecimal pointsPerQuestion;
 }
