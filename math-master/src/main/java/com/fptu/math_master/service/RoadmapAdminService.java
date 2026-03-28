@@ -6,10 +6,12 @@ import com.fptu.math_master.dto.request.CreateRoadmapTopicRequest;
 import com.fptu.math_master.dto.request.SubmitRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.UpdateAdminRoadmapRequest;
 import com.fptu.math_master.dto.request.UpdateRoadmapTopicRequest;
+import com.fptu.math_master.dto.response.AttemptStartResponse;
 import com.fptu.math_master.dto.response.RoadmapDetailResponse;
 import com.fptu.math_master.dto.response.RoadmapEntryTestResultResponse;
 import com.fptu.math_master.dto.response.RoadmapResourceOptionResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
+import com.fptu.math_master.dto.response.StudentAssessmentResponse;
 import com.fptu.math_master.dto.response.TopicMaterialResponse;
 import com.fptu.math_master.dto.response.RoadmapTopicResponse;
 import java.util.List;
@@ -43,6 +45,12 @@ public interface RoadmapAdminService {
       String type, UUID chapterId, UUID lessonId, String name);
 
   void configureEntryTest(UUID roadmapId, CreateRoadmapEntryTestRequest request);
+
+    StudentAssessmentResponse getEntryTestForStudent(UUID studentId, UUID roadmapId);
+
+    AttemptStartResponse startEntryTest(UUID studentId, UUID roadmapId, String ipAddress);
+
+    RoadmapEntryTestResultResponse finishEntryTest(UUID studentId, UUID roadmapId, UUID attemptId);
 
   RoadmapEntryTestResultResponse submitEntryTest(
       UUID studentId, UUID roadmapId, SubmitRoadmapEntryTestRequest request);
