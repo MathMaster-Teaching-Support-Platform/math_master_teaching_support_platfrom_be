@@ -7,6 +7,7 @@ import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
+import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.enums.AssessmentStatus;
@@ -14,6 +15,7 @@ import com.fptu.math_master.service.AssessmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -219,6 +221,38 @@ public class AssessmentController {
         .build();
   }
 
+    @GetMapping("/search")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Search assessments by name",
+            description =
+                    "Search assessments by name. Supports both query and name params for FE compatibility. "
+                            + "Status filter supports PUBLIC (mapped to PUBLISHED).")
+    public ApiResponse<List<AssessmentResponse>> searchAssessments(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String status) {
+
+        String keyword = name != null ? name : query;
+        AssessmentStatus statusFilter = parseSearchStatus(status);
+
+        return ApiResponse.<List<AssessmentResponse>>builder()
+                .result(assessmentService.searchAssessmentsByName(keyword, statusFilter))
+                .build();
+    }
+
+    private AssessmentStatus parseSearchStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+
+        if ("PUBLIC".equalsIgnoreCase(status)) {
+            return AssessmentStatus.PUBLISHED;
+        }
+
+        return AssessmentStatus.valueOf(status.trim().toUpperCase());
+    }
+
   @GetMapping("/{id}/can-edit")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
@@ -295,6 +329,18 @@ public class AssessmentController {
         .result(assessmentService.addQuestion(assessmentId, request))
         .build();
   }
+
+    @GetMapping("/{id}/questions")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Get assessment questions",
+            description = "Get all questions in an assessment ordered by orderIndex.")
+    public ApiResponse<List<AssessmentQuestionResponse>> getAssessmentQuestions(@PathVariable UUID id) {
+        log.info("REST request to get questions for assessment: {}", id);
+        return ApiResponse.<List<AssessmentQuestionResponse>>builder()
+                .result(assessmentService.getAssessmentQuestions(id))
+                .build();
+    }
 
   @DeleteMapping("/{assessmentId}/questions/{questionId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")

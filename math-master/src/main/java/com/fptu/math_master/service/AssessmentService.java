@@ -6,9 +6,11 @@ import com.fptu.math_master.dto.request.CloneAssessmentRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
+import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.enums.AssessmentStatus;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,6 +37,8 @@ public interface AssessmentService {
 
   Page<AssessmentResponse> getMyAssessments(AssessmentStatus status, Pageable pageable);
 
+  List<AssessmentResponse> searchAssessmentsByName(String name, AssessmentStatus status);
+
   boolean canEditAssessment(UUID id);
 
   boolean canDeleteAssessment(UUID id);
@@ -46,6 +50,8 @@ public interface AssessmentService {
   AssessmentResponse cloneAssessment(UUID id, CloneAssessmentRequest request);
 
   AssessmentResponse addQuestion(UUID assessmentId, AddQuestionToAssessmentRequest request);
+
+  List<AssessmentQuestionResponse> getAssessmentQuestions(UUID assessmentId);
 
   AssessmentResponse removeQuestion(UUID assessmentId, UUID questionId);
 

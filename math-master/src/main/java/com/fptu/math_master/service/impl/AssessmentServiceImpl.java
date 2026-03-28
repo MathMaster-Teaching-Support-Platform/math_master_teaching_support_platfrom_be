@@ -8,6 +8,7 @@ import com.fptu.math_master.dto.request.CreateQuestionRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
+import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.dto.response.GeneratedQuestionSample;
@@ -467,6 +468,20 @@ public class AssessmentServiceImpl implements AssessmentService {
 
   @Override
   @Transactional(readOnly = true)
+  public List<AssessmentResponse> searchAssessmentsByName(String name, AssessmentStatus status) {
+    if (name == null || name.trim().isEmpty()) {
+      return List.of();
+    }
+
+    return assessmentRepository
+        .findByTitleContainingAndStatusAndNotDeleted(name.trim(), status)
+        .stream()
+        .map(this::mapToResponse)
+        .toList();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public boolean canEditAssessment(UUID id) {
     Assessment assessment = loadAssessmentOrThrow(id);
     UUID currentUserId = getCurrentUserId();
@@ -627,6 +642,44 @@ public class AssessmentServiceImpl implements AssessmentService {
         assessmentId,
         nextOrder);
     return mapToResponse(assessment);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<AssessmentQuestionResponse> getAssessmentQuestions(UUID assessmentId) {
+    log.info("Getting questions for assessment {}", assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    List<AssessmentQuestion> assessmentQuestions =
+        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessmentId);
+
+    return assessmentQuestions.stream()
+        .map(
+            aq -> {
+              Question question =
+                  questionRepository
+                      .findByIdAndNotDeleted(aq.getQuestionId())
+                      .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+              BigDecimal effectivePoints =
+                  aq.getPointsOverride() != null ? aq.getPointsOverride() : question.getPoints();
+
+              return AssessmentQuestionResponse.builder()
+                  .questionId(question.getId())
+                  .orderIndex(aq.getOrderIndex())
+                  .points(effectivePoints)
+                  .pointsOverride(aq.getPointsOverride())
+                  .questionType(question.getQuestionType())
+                  .questionText(question.getQuestionText())
+                  .options(question.getOptions())
+                  .correctAnswer(question.getCorrectAnswer())
+                  .explanation(question.getExplanation())
+                  .createdAt(question.getCreatedAt())
+                  .build();
+            })
+        .toList();
   }
 
   @Override

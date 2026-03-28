@@ -628,7 +628,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     private List<RoadmapResourceOptionResponse> searchAssessmentOptions(String name) {
     String keyword = (name == null || name.isBlank()) ? "" : name;
 
-    return assessmentRepository.findByTitleContainingAndNotDeleted(keyword).stream()
+    return assessmentRepository.findByTitleContainingAndStatusAndNotDeleted(keyword, null).stream()
       .map(
         assessment ->
           RoadmapResourceOptionResponse.builder()

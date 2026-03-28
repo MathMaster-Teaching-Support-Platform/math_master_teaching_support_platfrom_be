@@ -32,8 +32,10 @@ public interface AssessmentRepository
     @Query(
             "SELECT a FROM Assessment a WHERE a.deletedAt IS NULL "
                     + "AND LOWER(a.title) LIKE LOWER(CONCAT('%', :name, '%')) "
+                    + "AND (:status IS NULL OR a.status = :status) "
                     + "ORDER BY a.createdAt DESC")
-    List<Assessment> findByTitleContainingAndNotDeleted(@Param("name") String name);
+    List<Assessment> findByTitleContainingAndStatusAndNotDeleted(
+            @Param("name") String name, @Param("status") AssessmentStatus status);
 
   @Query("SELECT a FROM Assessment a WHERE a.examMatrixId = :examMatrixId AND a.deletedAt IS NULL")
   List<Assessment> findByExamMatrixIdAndNotDeleted(@Param("examMatrixId") UUID examMatrixId);
