@@ -1,0 +1,30 @@
+package com.fptu.math_master.service;
+
+import com.fptu.math_master.dto.request.CreateCourseRequest;
+import com.fptu.math_master.dto.request.UpdateCourseRequest;
+import com.fptu.math_master.dto.response.CourseResponse;
+import com.fptu.math_master.dto.response.StudentInCourseResponse;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+public interface CourseService {
+
+  CourseResponse createCourse(CreateCourseRequest request);
+
+  CourseResponse updateCourse(UUID courseId, UpdateCourseRequest request);
+
+  void deleteCourse(UUID courseId);
+
+  CourseResponse publishCourse(UUID courseId, boolean publish);
+
+  List<CourseResponse> getMyCourses();
+
+  CourseResponse getCourseById(UUID courseId);
+
+  /** Filter theo schoolGradeId, subjectId, keyword */
+  Page<CourseResponse> getPublicCourses(UUID schoolGradeId, UUID subjectId, String keyword, Pageable pageable);
+
+  Page<StudentInCourseResponse> getStudentsInCourse(UUID courseId, Pageable pageable);
+}

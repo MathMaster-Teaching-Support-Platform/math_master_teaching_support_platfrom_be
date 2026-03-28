@@ -183,5 +183,6 @@ minio:
   secret-key: ${MINIO_SECRET_KEY:minioadmin}
   template-bucket: ${MINIO_TEMPLATE_BUCKET:slide-templates}
   verification-bucket: ${MINIO_VERIFICATION_BUCKET:teacher-verifications}
+  course-videos-bucket: ${MINIO_COURSE_VIDEOS_BUCKET:course-videos}
 
 # = [REMOVED DUPLICATE SPRING BLOCK]

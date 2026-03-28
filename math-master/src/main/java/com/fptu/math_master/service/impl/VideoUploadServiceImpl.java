@@ -1,0 +1,319 @@
+package com.fptu.math_master.service.impl;
+
+import software.amazon.awssdk.services.s3.S3Configuration;
+import com.fptu.math_master.configuration.properties.MinioProperties;
+import com.fptu.math_master.dto.request.CompleteUploadRequest;
+import com.fptu.math_master.dto.request.InitiateUploadRequest;
+import com.fptu.math_master.dto.response.CourseLessonResponse;
+import com.fptu.math_master.dto.response.InitiateUploadResponse;
+import com.fptu.math_master.dto.response.PartUploadUrlResponse;
+import com.fptu.math_master.entity.Course;
+import com.fptu.math_master.entity.CourseLesson;
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.CourseLessonRepository;
+import com.fptu.math_master.repository.CourseRepository;
+import com.fptu.math_master.repository.EnrollmentRepository;
+import com.fptu.math_master.repository.LessonRepository;
+import com.fptu.math_master.service.VideoUploadService;
+import com.fptu.math_master.util.SecurityUtils;
+import io.minio.BucketExistsArgs;
+import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
+import io.minio.http.Method;
+import java.net.URI;
+import java.time.Duration;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
+import software.amazon.awssdk.services.s3.model.CompletedPart;
+import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.UploadPartRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedUploadPartRequest;
+import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignRequest;
+
+@Service
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
+@Transactional
+public class VideoUploadServiceImpl implements VideoUploadService {
+
+  MinioClient minioClient;
+  MinioProperties minioProperties;
+  CourseRepository courseRepository;
+  CourseLessonRepository courseLessonRepository;
+  LessonRepository lessonRepository;
+  EnrollmentRepository enrollmentRepository;
+
+  private static final int PRESIGNED_EXPIRY_MINUTES = 60;
+
+  // ─── AWS SDK v2 client builders (MinIO is S3-compatible) ─────────────────
+
+  private S3Client buildS3Client() {
+    return S3Client.builder()
+        .endpointOverride(URI.create(minioProperties.getEndpoint()))
+        .credentialsProvider(
+            StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(
+                    minioProperties.getAccessKey(), minioProperties.getSecretKey())))
+        .region(Region.US_EAST_1) // MinIO ignores region but SDK requires it
+        .forcePathStyle(true)     // required for MinIO path-style URLs
+        .build();
+  }
+
+  private S3Presigner buildPresigner() {
+    return S3Presigner.builder()
+        .endpointOverride(URI.create(minioProperties.getEndpoint()))
+        .credentialsProvider(
+            StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(
+                    minioProperties.getAccessKey(), minioProperties.getSecretKey())))
+        .region(Region.US_EAST_1)
+        .serviceConfiguration(S3Configuration.builder()
+            .pathStyleAccessEnabled(true) 
+            .build())
+        .build();
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  private void ensureBucketExists(String bucket) {
+    try {
+      boolean exists =
+          minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+      if (!exists) {
+        minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+        log.info("Created MinIO bucket: {}", bucket);
+      }
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to ensure bucket exists: " + bucket, e);
+    }
+  }
+
+  private Course findCourseAndVerifyOwner(UUID courseId) {
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    Course course =
+        courseRepository
+            .findByIdAndDeletedAtIsNull(courseId)
+            .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+    if (!course.getTeacherId().equals(currentUserId)) {
+      throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+    }
+    return course;
+  }
+
+  private String buildObjectKey(UUID courseId, String fileName) {
+    String ext = "";
+    int dot = fileName.lastIndexOf('.');
+    if (dot > 0) ext = fileName.substring(dot);
+    return courseId + "/" + UUID.randomUUID() + ext;
+  }
+
+  // ─── Step 1: Initiate multipart upload ───────────────────────────────────
+
+  @Override
+  public InitiateUploadResponse initiateUpload(UUID courseId, InitiateUploadRequest request) {
+    findCourseAndVerifyOwner(courseId);
+
+    String bucket = minioProperties.getCourseVideosBucket();
+    ensureBucketExists(bucket);
+
+    String objectKey = buildObjectKey(courseId, request.getFileName());
+
+    try (S3Client s3 = buildS3Client()) {
+      var response =
+          s3.createMultipartUpload(
+              CreateMultipartUploadRequest.builder()
+                  .bucket(bucket)
+                  .key(objectKey)
+                  .contentType(request.getContentType())
+                  .build());
+
+      log.info("Initiated multipart upload: uploadId={}, key={}", response.uploadId(), objectKey);
+
+      return InitiateUploadResponse.builder()
+          .uploadId(response.uploadId())
+          .objectKey(objectKey)
+          .build();
+    }
+  }
+
+  // ─── Step 2: Get presigned URL for a chunk ────────────────────────────────
+
+  @Override
+  public PartUploadUrlResponse getPartUploadUrl(
+      UUID courseId, String uploadId, String objectKey, int partNumber) {
+    findCourseAndVerifyOwner(courseId);
+
+    String bucket = minioProperties.getCourseVideosBucket();
+
+    try (S3Presigner presigner = buildPresigner()) {
+      PresignedUploadPartRequest presigned =
+          presigner.presignUploadPart(
+              UploadPartPresignRequest.builder()
+                  .signatureDuration(Duration.ofMinutes(PRESIGNED_EXPIRY_MINUTES))
+                  .uploadPartRequest(
+                      UploadPartRequest.builder()
+                          .bucket(bucket)
+                          .key(objectKey)
+                          .uploadId(uploadId)
+                          .partNumber(partNumber)
+                          .build())
+                  .build());
+
+      return PartUploadUrlResponse.builder()
+          .presignedUrl(presigned.url().toString())
+          .partNumber(partNumber)
+          .build();
+    }
+  }
+
+  // ─── Step 3: Complete multipart upload ───────────────────────────────────
+
+  @Override
+  public CourseLessonResponse completeUpload(UUID courseId, CompleteUploadRequest request) {
+    findCourseAndVerifyOwner(courseId);
+
+    var lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(request.getLessonId())
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    String bucket = minioProperties.getCourseVideosBucket();
+
+    List<CompletedPart> completedParts =
+        request.getParts().stream()
+            .map(
+                p ->
+                    CompletedPart.builder()
+                        .partNumber(p.getPartNumber())
+                        .eTag(p.getETag())
+                        .build())
+            .collect(Collectors.toList());
+
+    try (S3Client s3 = buildS3Client()) {
+      s3.completeMultipartUpload(
+          CompleteMultipartUploadRequest.builder()
+              .bucket(bucket)
+              .key(request.getObjectKey())
+              .uploadId(request.getUploadId())
+              .multipartUpload(
+                  CompletedMultipartUpload.builder().parts(completedParts).build())
+              .build());
+
+      log.info(
+          "Completed multipart upload: key={}, parts={}",
+          request.getObjectKey(),
+          completedParts.size());
+    } catch (Exception e) {
+      log.error("Failed to complete multipart upload", e);
+      // Best-effort abort to free MinIO resources
+      try (S3Client s3 = buildS3Client()) {
+        s3.abortMultipartUpload(
+            AbortMultipartUploadRequest.builder()
+                .bucket(bucket)
+                .key(request.getObjectKey())
+                .uploadId(request.getUploadId())
+                .build());
+      } catch (Exception ignored) {
+        // silent
+      }
+      throw new RuntimeException("Failed to complete video upload", e);
+    }
+
+    CourseLesson courseLesson =
+        CourseLesson.builder()
+            .courseId(courseId)
+            .lessonId(request.getLessonId())
+            .videoUrl(request.getObjectKey()) // store object key; serve via presigned GET URL
+            .videoTitle(request.getVideoTitle())
+            .orderIndex(request.getOrderIndex())
+            .isFreePreview(request.isFreePreview())
+            .durationSeconds(request.getDurationSeconds())
+            .materials(request.getMaterials())
+            .build();
+
+    courseLesson = courseLessonRepository.save(courseLesson);
+    log.info("CourseLesson saved: {}", courseLesson.getId());
+
+    return CourseLessonResponse.builder()
+        .id(courseLesson.getId())
+        .courseId(courseLesson.getCourseId())
+        .lessonId(courseLesson.getLessonId())
+        .lessonTitle(lesson.getTitle())
+        .videoUrl(courseLesson.getVideoUrl())
+        .videoTitle(courseLesson.getVideoTitle())
+        .durationSeconds(courseLesson.getDurationSeconds())
+        .orderIndex(courseLesson.getOrderIndex())
+        .isFreePreview(courseLesson.isFreePreview())
+        .materials(courseLesson.getMaterials())
+        .createdAt(courseLesson.getCreatedAt())
+        .updatedAt(courseLesson.getUpdatedAt())
+        .build();
+  }
+
+  // ─── Get presigned GET URL to stream video ────────────────────────────────
+
+  @Override
+  @Transactional(readOnly = true)
+  public String getVideoPresignedUrl(UUID courseId, UUID courseLessonId, UUID requesterId) {
+    CourseLesson cl =
+        courseLessonRepository
+            .findByIdAndDeletedAtIsNull(courseLessonId)
+            .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+
+    if (!cl.getCourseId().equals(courseId)) {
+      throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
+    }
+
+    // Free preview: anyone can watch without enrollment
+    if (!cl.isFreePreview()) {
+      boolean enrolled =
+          enrollmentRepository
+              .findByStudentIdAndCourseIdAndDeletedAtIsNull(requesterId, courseId)
+              .map(e -> "ACTIVE".equals(e.getStatus().name()))
+              .orElse(false);
+
+      Course course =
+          courseRepository
+              .findByIdAndDeletedAtIsNull(courseId)
+              .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+
+      boolean isOwner = course.getTeacherId().equals(requesterId);
+
+      if (!enrolled && !isOwner) {
+        throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+      }
+    }
+
+    try {
+      return minioClient.getPresignedObjectUrl(
+          GetPresignedObjectUrlArgs.builder()
+              .method(Method.GET)
+              .bucket(minioProperties.getCourseVideosBucket())
+              .object(cl.getVideoUrl())
+              .expiry(PRESIGNED_EXPIRY_MINUTES, TimeUnit.MINUTES)
+              .build());
+    } catch (Exception e) {
+      log.error("Failed to generate presigned GET URL for video: {}", cl.getVideoUrl(), e);
+      throw new RuntimeException("Failed to generate video URL", e);
+    }
+  }
+}

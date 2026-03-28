@@ -243,7 +243,17 @@ public enum ErrorCode {
     QUESTION_REVIEW_STATUS_INVALID(
             1144,
             "Only AI_DRAFT questions can be approved",
-            HttpStatus.BAD_REQUEST);
+            HttpStatus.BAD_REQUEST),
+  COURSE_NOT_FOUND(1145, "Course not found", HttpStatus.NOT_FOUND),
+  COURSE_ACCESS_DENIED(
+      1146, "You do not have permission to access this course", HttpStatus.FORBIDDEN),
+  COURSE_ALREADY_PUBLISHED(1147, "Course is already published", HttpStatus.BAD_REQUEST),
+  ALREADY_ENROLLED(1148, "Student is already enrolled in this course", HttpStatus.BAD_REQUEST),
+  ENROLLMENT_NOT_FOUND(1149, "Enrollment not found", HttpStatus.NOT_FOUND),
+  ENROLLMENT_ACCESS_DENIED(
+      1150, "You do not have permission to access this enrollment", HttpStatus.FORBIDDEN),
+  COURSE_LESSON_NOT_FOUND(1151, "Course lesson not found", HttpStatus.NOT_FOUND),
+  COURSE_NOT_PUBLISHED(1152, "Course is not published", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

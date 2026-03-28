@@ -52,6 +52,10 @@ public class SecurityConfig {
     "/api/ai/test",
     "/api/lessons/**",
     "/api/auth/confirm-email",
+    "/api/courses",
+    "/api/courses/{id}",
+    "/api/courses/{courseId}/lessons",
+    "/api/courses/{courseId}/lessons/{lessonId}/video-url",
   };
 
   private static final String[] SWAGGER_WHITELIST = {

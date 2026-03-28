@@ -21,4 +21,6 @@ public class MinioProperties {
   @NotBlank private String templateBucket = "slide-templates";
 
   @NotBlank private String verificationBucket = "teacher-verifications";
+
+  @NotBlank private String courseVideosBucket = "course-videos";
 }
