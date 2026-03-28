@@ -272,8 +272,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     topic.setDeletedAt(Instant.now());
     topicRepository.save(topic);
 
-    roadmapEntryQuestionMappingRepository.deleteByRoadmapTopicId(topicId);
-
     long totalTopics = countActiveTopics(roadmapId);
     roadmap.setTotalTopicsCount((int) totalTopics);
     roadmapRepository.save(roadmap);
@@ -321,15 +319,12 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
-    Assessment assessment =
-        assessmentRepository
-            .findById(request.getAssessmentId())
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    assessmentRepository
+        .findById(request.getAssessmentId())
+        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
-    // Clear existing mappings for this roadmap
     roadmapEntryQuestionMappingRepository.deleteByRoadmapId(roadmapId);
 
-    // Get all questions from the assessment, ordered by index
     List<AssessmentQuestion> assessmentQuestions =
         assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(request.getAssessmentId());
 
@@ -337,33 +332,18 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       throw new AppException(ErrorCode.QUESTION_NOT_FOUND);
     }
 
-    // Get all topics for this roadmap
-    List<RoadmapTopic> topics =
-        topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmapId).stream()
-            .filter(topic -> topic.getDeletedAt() == null)
-            .toList();
-
-    if (topics.isEmpty()) {
-      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    List<RoadmapEntryQuestionMapping> mappings = new ArrayList<>();
+    for (int i = 0; i < assessmentQuestions.size(); i++) {
+      mappings.add(
+          RoadmapEntryQuestionMapping.builder()
+              .roadmapId(roadmapId)
+              .assessmentId(request.getAssessmentId())
+              .questionId(assessmentQuestions.get(i).getQuestionId())
+              .orderIndex(i)
+              .weight(BigDecimal.ONE)
+              .build());
     }
-
-    // Create mappings: each assessment question maps to each roadmap topic
-    // This allows the entry test to assess readiness for all topics
-    int orderIndex = 0;
-    for (AssessmentQuestion assessmentQuestion : assessmentQuestions) {
-      for (RoadmapTopic topic : topics) {
-        roadmapEntryQuestionMappingRepository.save(
-            RoadmapEntryQuestionMapping.builder()
-                .roadmapId(roadmapId)
-                .assessmentId(request.getAssessmentId())
-                .questionId(assessmentQuestion.getQuestionId())
-                .roadmapTopicId(topic.getId())
-                .orderIndex(orderIndex)
-                .weight(BigDecimal.ONE)
-                .build());
-      }
-      orderIndex++;
-    }
+    roadmapEntryQuestionMappingRepository.saveAll(mappings);
   }
 
   @Override
@@ -392,62 +372,24 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
-    List<Answer> answers = answerRepository.findBySubmissionId(submission.getId());
-    Map<UUID, Answer> answerByQuestionId = new HashMap<>();
-    for (Answer answer : answers) {
-      answerByQuestionId.put(answer.getQuestionId(), answer);
-    }
+    // Calculate score from submission
+    double scoreOnTen = computeScoreOnTen(submission);
 
-    Map<UUID, Integer> totalByTopic = new HashMap<>();
-    Map<UUID, Integer> correctByTopic = new HashMap<>();
-
-    for (RoadmapEntryQuestionMapping mapping : mappings) {
-      UUID topicId = mapping.getRoadmapTopicId();
-      totalByTopic.merge(
-          topicId,
-          1,
-          (left, right) -> Integer.valueOf((left == null ? 0 : left) + (right == null ? 0 : right)));
-
-      Answer answer = answerByQuestionId.get(mapping.getQuestionId());
-      if (answer != null && Boolean.TRUE.equals(answer.getIsCorrect())) {
-        correctByTopic.merge(
-            topicId,
-            1,
-            (left, right) ->
-                Integer.valueOf((left == null ? 0 : left) + (right == null ? 0 : right)));
-      }
-    }
-
+    // Find topic where score <= mark threshold
     List<RoadmapTopic> topics =
         topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmapId).stream()
             .filter(topic -> topic.getDeletedAt() == null)
             .toList();
+    
     if (topics.isEmpty()) {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
-    double scoreOnTen = computeScoreOnTen(submission, mappings, answerByQuestionId);
-
     RoadmapTopic suggestedTopic = topics.get(topics.size() - 1);
-    boolean hasMarkConfig = topics.stream().anyMatch(topic -> topic.getMark() != null);
-
-    if (hasMarkConfig) {
-      for (RoadmapTopic topic : topics) {
-        if (topic.getMark() != null && scoreOnTen <= topic.getMark()) {
-          suggestedTopic = topic;
-          break;
-        }
-      }
-    } else {
-      for (RoadmapTopic topic : topics) {
-        int total = totalByTopic.getOrDefault(topic.getId(), 0);
-        int correct = correctByTopic.getOrDefault(topic.getId(), 0);
-        double mastery = total == 0 ? 0 : (correct * 100.0 / total);
-
-        if (mastery < 70.0) {
-          suggestedTopic = topic;
-          break;
-        }
+    for (RoadmapTopic topic : topics) {
+      if (topic.getMark() != null && scoreOnTen <= topic.getMark()) {
+        suggestedTopic = topic;
+        break;
       }
     }
 
@@ -462,40 +404,22 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .build();
   }
 
-  private double computeScoreOnTen(
-      Submission submission,
-      List<RoadmapEntryQuestionMapping> mappings,
-      Map<UUID, Answer> answerByQuestionId) {
-    double scoreOnTen;
+  private double computeScoreOnTen(Submission submission) {
+    double scoreOnTen = 0.0;
 
-    if (submission.getFinalScore() != null
-        && submission.getMaxScore() != null
+    if (submission.getFinalScore() != null && submission.getMaxScore() != null
         && submission.getMaxScore().compareTo(BigDecimal.ZERO) > 0) {
       scoreOnTen =
           submission.getFinalScore().doubleValue() / submission.getMaxScore().doubleValue() * 10.0;
-    } else if (submission.getScore() != null
-        && submission.getMaxScore() != null
+    } else if (submission.getScore() != null && submission.getMaxScore() != null
         && submission.getMaxScore().compareTo(BigDecimal.ZERO) > 0) {
       scoreOnTen = submission.getScore().doubleValue() / submission.getMaxScore().doubleValue() * 10.0;
     } else if (submission.getPercentage() != null) {
       scoreOnTen = submission.getPercentage().doubleValue() / 10.0;
-    } else {
-      int correct = 0;
-      for (RoadmapEntryQuestionMapping mapping : mappings) {
-        Answer answer = answerByQuestionId.get(mapping.getQuestionId());
-        if (answer != null && Boolean.TRUE.equals(answer.getIsCorrect())) {
-          correct++;
-        }
-      }
-      scoreOnTen = mappings.isEmpty() ? 0.0 : (correct * 10.0 / mappings.size());
     }
 
-    if (scoreOnTen < 0.0) {
-      scoreOnTen = 0.0;
-    }
-    if (scoreOnTen > 10.0) {
-      scoreOnTen = 10.0;
-    }
+    if (scoreOnTen < 0.0) scoreOnTen = 0.0;
+    if (scoreOnTen > 10.0) scoreOnTen = 10.0;
 
     return BigDecimal.valueOf(scoreOnTen).setScale(2, java.math.RoundingMode.HALF_UP).doubleValue();
   }

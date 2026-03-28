@@ -13,6 +13,4 @@ public interface RoadmapEntryQuestionMappingRepository
   List<RoadmapEntryQuestionMapping> findByRoadmapIdOrderByOrderIndex(UUID roadmapId);
 
   void deleteByRoadmapId(UUID roadmapId);
-
-  void deleteByRoadmapTopicId(UUID roadmapTopicId);
 }
