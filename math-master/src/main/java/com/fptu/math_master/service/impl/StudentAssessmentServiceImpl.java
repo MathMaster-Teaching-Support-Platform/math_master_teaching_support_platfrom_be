@@ -148,6 +148,7 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
 
     return AttemptStartResponse.builder()
         .attemptId(attempt.getId())
+        .submissionId(attempt.getSubmissionId())
         .assessmentId(assessmentId)
         .attemptNumber(attemptNumber)
         .startedAt(now)
