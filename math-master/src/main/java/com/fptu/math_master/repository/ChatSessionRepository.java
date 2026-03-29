@@ -21,11 +21,11 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
       "SELECT s FROM ChatSession s "
           + "WHERE s.userId = :userId AND s.deletedAt IS NULL "
           + "AND (:status IS NULL OR s.status = :status) "
-          + "AND (:keyword IS NULL OR LOWER(s.title) LIKE LOWER(CONCAT('%', :keyword, '%'))) "
+          + "AND (:keywordPattern IS NULL OR LOWER(s.title) LIKE :keywordPattern) "
           + "ORDER BY s.lastMessageAt DESC, s.createdAt DESC")
   Page<ChatSession> findByUserAndFilters(
       @Param("userId") UUID userId,
       @Param("status") ChatSessionStatus status,
-      @Param("keyword") String keyword,
+      @Param("keywordPattern") String keywordPattern,
       Pageable pageable);
 }

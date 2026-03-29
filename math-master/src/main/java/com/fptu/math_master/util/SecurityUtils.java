@@ -1,5 +1,7 @@
 package com.fptu.math_master.util;
 
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
 import java.util.UUID;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -10,10 +12,20 @@ public final class SecurityUtils {
 
   public static UUID getCurrentUserId() {
     var auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth instanceof JwtAuthenticationToken jwtAuth) {
-      return UUID.fromString(jwtAuth.getToken().getSubject());
+    if (!(auth instanceof JwtAuthenticationToken jwtAuth) || !auth.isAuthenticated()) {
+      throw new AppException(ErrorCode.UNAUTHENTICATED);
     }
-    throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
+
+    String subject = jwtAuth.getToken().getSubject();
+    if (subject == null || subject.isBlank()) {
+      throw new AppException(ErrorCode.UNAUTHENTICATED);
+    }
+
+    try {
+      return UUID.fromString(subject);
+    } catch (IllegalArgumentException ex) {
+      throw new AppException(ErrorCode.UNAUTHENTICATED);
+    }
   }
 
   public static boolean hasRole(String roleName) {

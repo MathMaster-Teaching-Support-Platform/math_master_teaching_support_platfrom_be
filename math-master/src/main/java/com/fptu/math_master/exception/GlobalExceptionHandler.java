@@ -5,6 +5,7 @@ import jakarta.validation.ConstraintViolation;
 import java.util.Map;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -47,7 +48,7 @@ public class GlobalExceptionHandler {
     apiResponse.setCode(ErrorCode.UNCATEGORIZED_EXCEPTION.getCode());
     apiResponse.setMessage(ErrorCode.UNCATEGORIZED_EXCEPTION.getMessage());
 
-    return ResponseEntity.badRequest().body(apiResponse);
+    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(apiResponse);
   }
 
   /**
