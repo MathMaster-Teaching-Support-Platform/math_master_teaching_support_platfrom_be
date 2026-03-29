@@ -12,4 +12,5 @@ import lombok.NoArgsConstructor;
 public class PartUploadUrlResponse {
   private String presignedUrl;
   private int partNumber;
+  private String eTag; // Returned when using backend proxy upload
 }

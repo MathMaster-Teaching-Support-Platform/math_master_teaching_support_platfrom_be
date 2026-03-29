@@ -70,6 +70,22 @@ public class VideoUploadController {
   }
 
   @Operation(
+      summary = "Step 2 (Alternative) — Upload chunk via backend proxy",
+      description = "Upload chunk through backend to avoid CORS issues. Returns ETag.")
+  @PostMapping("/upload-part")
+  @PreAuthorize("hasRole('TEACHER')")
+  public ApiResponse<PartUploadUrlResponse> uploadPart(
+      @PathVariable UUID courseId,
+      @RequestParam String uploadId,
+      @RequestParam String objectKey,
+      @RequestParam int partNumber,
+      @RequestBody byte[] chunkData) {
+    return ApiResponse.<PartUploadUrlResponse>builder()
+        .result(videoUploadService.uploadPartViaBackend(courseId, uploadId, objectKey, partNumber, chunkData))
+        .build();
+  }
+
+  @Operation(
       summary = "Step 3 — Complete multipart upload",
       description = "Assembles all chunks and saves the CourseLesson record")
   @PostMapping("/complete")
@@ -86,7 +102,7 @@ public class VideoUploadController {
 
   @Operation(
       summary = "Get presigned URL to watch a video",
-      description = "Returns a time-limited URL to stream the video. Requires enrollment or teacher ownership.")
+      description = "Returns a time-limited presigned URL directly from MinIO. Requires enrollment or teacher ownership, or lesson must be free preview.")
   @GetMapping("/{courseLessonId}/video-url")
   @PreAuthorize("isAuthenticated()")
   public ApiResponse<String> getVideoUrl(
@@ -97,4 +113,27 @@ public class VideoUploadController {
         .result(videoUploadService.getVideoPresignedUrl(courseId, courseLessonId, requesterId))
         .build();
   }
+
+  // DEPRECATED: Stream endpoint removed - use presigned URL directly from MinIO instead
+  // @Operation(
+  //     summary = "Stream video via backend proxy",
+  //     description = "Proxy video streaming to avoid CORS issues with MinIO. Token can be passed via query string for video players.")
+  // @GetMapping("/{courseLessonId}/stream")
+  // public void streamVideo(
+  //     @PathVariable UUID courseId,
+  //     @PathVariable UUID courseLessonId,
+  //     @RequestParam(required = false) String token,
+  //     jakarta.servlet.http.HttpServletRequest request,
+  //     jakarta.servlet.http.HttpServletResponse response) throws Exception {
+  //   
+  //   // Try to get user from current auth, fallback to token parameter
+  //   UUID requesterId = null;
+  //   try {
+  //     requesterId = SecurityUtils.getCurrentUserId();
+  //   } catch (Exception e) {
+  //     // No auth in context, will use token parameter in service
+  //   }
+  //   
+  //   videoUploadService.streamVideo(courseId, courseLessonId, requesterId, token, response);
+  // }
 }

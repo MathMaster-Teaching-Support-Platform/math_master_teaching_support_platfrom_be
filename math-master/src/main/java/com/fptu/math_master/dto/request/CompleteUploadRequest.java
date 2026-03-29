@@ -40,6 +40,9 @@ public class CompleteUploadRequest {
   @AllArgsConstructor
   public static class PartInfo {
     private int partNumber;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "eTag", access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_WRITE)
+    @com.fasterxml.jackson.annotation.JsonAlias({"eTag", "etag", "ETag"})
     private String eTag;
   }
 }

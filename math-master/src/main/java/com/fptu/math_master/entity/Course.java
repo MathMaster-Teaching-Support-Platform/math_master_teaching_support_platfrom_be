@@ -50,11 +50,9 @@ public class Course extends BaseEntity {
   private UUID schoolGradeId;
 
   @Size(max = 255)
-  @Nationalized
-  @Column(name = "title", length = 255, nullable = false)
+  @Column(name = "title", length = 255, nullable = false, columnDefinition = "VARCHAR(255)")
   private String title;
 
-  @Nationalized
   @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 

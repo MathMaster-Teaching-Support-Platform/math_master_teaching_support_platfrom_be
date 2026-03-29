@@ -20,14 +20,24 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
 
   // Public listing — JOIN subject + schoolGrade để đảm bảo còn active
   @Query(
-      "SELECT c FROM Course c "
-          + "JOIN c.subject s "
-          + "JOIN c.schoolGrade sg "
-          + "WHERE c.isPublished = true AND c.deletedAt IS NULL "
-          + "AND s.isActive = true AND sg.isActive = true "
-          + "AND (:schoolGradeId IS NULL OR c.schoolGradeId = :schoolGradeId) "
-          + "AND (:subjectId IS NULL OR c.subjectId = :subjectId) "
-          + "AND (:keyword IS NULL OR LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+      value = "SELECT c.* FROM courses c "
+          + "JOIN subjects s ON s.id = c.subject_id "
+          + "JOIN school_grades sg ON sg.id = c.school_grade_id "
+          + "WHERE c.is_published = true AND c.deleted_at IS NULL "
+          + "AND s.is_active = true AND sg.is_active = true "
+          + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "
+          + "AND (:subjectId IS NULL OR c.subject_id = :subjectId) "
+          + "AND (:keyword IS NULL OR c.title::text ILIKE CONCAT('%', :keyword, '%')) "
+          + "ORDER BY c.created_at DESC",
+      countQuery = "SELECT COUNT(*) FROM courses c "
+          + "JOIN subjects s ON s.id = c.subject_id "
+          + "JOIN school_grades sg ON sg.id = c.school_grade_id "
+          + "WHERE c.is_published = true AND c.deleted_at IS NULL "
+          + "AND s.is_active = true AND sg.is_active = true "
+          + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "
+          + "AND (:subjectId IS NULL OR c.subject_id = :subjectId) "
+          + "AND (:keyword IS NULL OR c.title::text ILIKE CONCAT('%', :keyword, '%'))",
+      nativeQuery = true)
   Page<Course> findPublishedCoursesWithFilter(
       @Param("schoolGradeId") UUID schoolGradeId,
       @Param("subjectId") UUID subjectId,

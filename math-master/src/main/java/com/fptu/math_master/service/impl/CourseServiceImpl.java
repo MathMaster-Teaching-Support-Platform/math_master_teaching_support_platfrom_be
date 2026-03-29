@@ -141,8 +141,13 @@ public class CourseServiceImpl implements CourseService {
   @Transactional(readOnly = true)
   public Page<CourseResponse> getPublicCourses(
       UUID schoolGradeId, UUID subjectId, String keyword, Pageable pageable) {
+    // Native query already has ORDER BY, ignore Pageable sort to avoid camelCase field names
+    Pageable unsortedPageable = org.springframework.data.domain.PageRequest.of(
+        pageable.getPageNumber(), 
+        pageable.getPageSize()
+    );
     return courseRepository
-        .findPublishedCoursesWithFilter(schoolGradeId, subjectId, keyword, pageable)
+        .findPublishedCoursesWithFilter(schoolGradeId, subjectId, keyword, unsortedPageable)
         .map(this::mapToResponse);
   }
 

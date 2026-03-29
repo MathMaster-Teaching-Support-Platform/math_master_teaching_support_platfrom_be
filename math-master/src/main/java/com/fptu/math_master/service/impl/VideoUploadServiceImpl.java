@@ -56,6 +56,10 @@ import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignReque
 public class VideoUploadServiceImpl implements VideoUploadService {
 
   MinioClient minioClient;
+  
+  @org.springframework.beans.factory.annotation.Qualifier("publicMinioClient")
+  MinioClient publicMinioClient;
+  
   MinioProperties minioProperties;
   CourseRepository courseRepository;
   CourseLessonRepository courseLessonRepository;
@@ -78,16 +82,25 @@ public class VideoUploadServiceImpl implements VideoUploadService {
         .build();
   }
 
+  /**
+   * Presigner uses the PUBLIC endpoint so the generated URL is browser-accessible.
+   * MinIO validates the signature against the host in the URL, so signing and
+   * serving must use the same host.
+   */
   private S3Presigner buildPresigner() {
+    String signingEndpoint = minioProperties.getPublicEndpoint();
+    if (signingEndpoint == null || signingEndpoint.isBlank()) {
+      signingEndpoint = minioProperties.getEndpoint();
+    }
     return S3Presigner.builder()
-        .endpointOverride(URI.create(minioProperties.getEndpoint()))
+        .endpointOverride(URI.create(signingEndpoint))
         .credentialsProvider(
             StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(
                     minioProperties.getAccessKey(), minioProperties.getSecretKey())))
         .region(Region.US_EAST_1)
         .serviceConfiguration(S3Configuration.builder()
-            .pathStyleAccessEnabled(true) 
+            .pathStyleAccessEnabled(true)
             .build())
         .build();
   }
@@ -178,9 +191,47 @@ public class VideoUploadServiceImpl implements VideoUploadService {
                           .build())
                   .build());
 
+      String presignedUrl = presigned.url().toString();
+
       return PartUploadUrlResponse.builder()
-          .presignedUrl(presigned.url().toString())
+          .presignedUrl(presignedUrl)
           .partNumber(partNumber)
+          .build();
+    }
+  }
+
+  // ─── Step 2 (Alternative): Upload via backend proxy ──────────────────────
+
+  @Override
+  public PartUploadUrlResponse uploadPartViaBackend(
+      UUID courseId, String uploadId, String objectKey, int partNumber, byte[] chunkData) {
+    findCourseAndVerifyOwner(courseId);
+
+    String bucket = minioProperties.getCourseVideosBucket();
+
+    try (S3Client s3 = buildS3Client()) {
+      var uploadResponse = s3.uploadPart(
+          UploadPartRequest.builder()
+              .bucket(bucket)
+              .key(objectKey)
+              .uploadId(uploadId)
+              .partNumber(partNumber)
+              .contentLength((long) chunkData.length)
+              .build(),
+          software.amazon.awssdk.core.sync.RequestBody.fromBytes(chunkData));
+
+      // S3 returns ETag with quotes, strip them for consistency
+      String eTag = uploadResponse.eTag();
+      if (eTag != null) {
+        eTag = eTag.replaceAll("^\"|\"$", "");
+      }
+      
+      log.info("Uploaded part {} for {}, ETag: {}", partNumber, objectKey, eTag);
+
+      return PartUploadUrlResponse.builder()
+          .presignedUrl(null) // Not needed for backend upload
+          .partNumber(partNumber)
+          .eTag(eTag)
           .build();
     }
   }
@@ -207,6 +258,15 @@ public class VideoUploadServiceImpl implements VideoUploadService {
                         .eTag(p.getETag())
                         .build())
             .collect(Collectors.toList());
+
+    log.info(
+        "Completing multipart upload: bucket={}, key={}, uploadId={}, parts={}",
+        bucket,
+        request.getObjectKey(),
+        request.getUploadId(),
+        completedParts.stream()
+            .map(p -> String.format("part=%d,etag=%s", p.partNumber(), p.eTag()))
+            .collect(Collectors.joining("; ")));
 
     try (S3Client s3 = buildS3Client()) {
       s3.completeMultipartUpload(
@@ -303,17 +363,87 @@ public class VideoUploadServiceImpl implements VideoUploadService {
       }
     }
 
+    // Generate presigned URL with publicMinioClient
+    // publicMinioClient uses MINIO_PUBLIC_ENDPOINT (http://localhost:9000)
+    // This creates signature with correct hostname for browser access
+    String bucket = minioProperties.getCourseVideosBucket();
+    String objectKey = cl.getVideoUrl();
+    
     try {
-      return minioClient.getPresignedObjectUrl(
+      String presignedUrl = publicMinioClient.getPresignedObjectUrl(
           GetPresignedObjectUrlArgs.builder()
               .method(Method.GET)
-              .bucket(minioProperties.getCourseVideosBucket())
-              .object(cl.getVideoUrl())
-              .expiry(PRESIGNED_EXPIRY_MINUTES, TimeUnit.MINUTES)
+              .bucket(bucket)
+              .object(objectKey)
+              .expiry(7, java.util.concurrent.TimeUnit.DAYS)
               .build());
+      
+      log.info("Generated presigned URL: {}", presignedUrl);
+      return presignedUrl;
     } catch (Exception e) {
-      log.error("Failed to generate presigned GET URL for video: {}", cl.getVideoUrl(), e);
-      throw new RuntimeException("Failed to generate video URL", e);
+      log.error("Failed to generate presigned URL for video: {}", objectKey, e);
+      // Fallback: try with internal client
+      try {
+        return minioClient.getPresignedObjectUrl(
+            GetPresignedObjectUrlArgs.builder()
+                .method(Method.GET)
+                .bucket(bucket)
+                .object(objectKey)
+                .expiry(7, java.util.concurrent.TimeUnit.DAYS)
+                .build());
+      } catch (Exception e2) {
+        throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+      }
     }
   }
+
+  // DEPRECATED: Stream method removed - use presigned URL directly from MinIO instead
+  // @Override
+  // public void streamVideo(UUID courseId, UUID courseLessonId, UUID requesterId, String token,
+  //     jakarta.servlet.http.HttpServletResponse response) throws Exception {
+  //   CourseLesson cl =
+  //       courseLessonRepository
+  //           .findByIdAndDeletedAtIsNull(courseLessonId)
+  //           .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+  //
+  //   if (!cl.getCourseId().equals(courseId)) {
+  //     throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
+  //   }
+  //
+  //   // Check access permission
+  //   if (!cl.isFreePreview()) {
+  //     boolean enrolled =
+  //         enrollmentRepository
+  //             .findByStudentIdAndCourseIdAndDeletedAtIsNull(requesterId, courseId)
+  //             .map(e -> "ACTIVE".equals(e.getStatus().name()))
+  //             .orElse(false);
+  //
+  //     Course course =
+  //         courseRepository
+  //             .findByIdAndDeletedAtIsNull(courseId)
+  //             .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+  //
+  //     boolean isOwner = course.getTeacherId().equals(requesterId);
+  //
+  //     if (!enrolled && !isOwner) {
+  //       throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+  //     }
+  //   }
+  //
+  //   // Stream from MinIO
+  //   String bucket = minioProperties.getCourseVideosBucket();
+  //   try (var stream = minioClient.getObject(
+  //       io.minio.GetObjectArgs.builder()
+  //           .bucket(bucket)
+  //           .object(cl.getVideoUrl())
+  //           .build())) {
+  //     
+  //     response.setContentType("video/mp4");
+  //     response.setHeader("Accept-Ranges", "bytes");
+  //     response.setHeader("Cache-Control", "no-cache");
+  //     
+  //     stream.transferTo(response.getOutputStream());
+  //     response.getOutputStream().flush();
+  //   }
+  // }
 }

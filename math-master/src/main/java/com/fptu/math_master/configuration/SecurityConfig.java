@@ -56,6 +56,7 @@ public class SecurityConfig {
     "/api/courses/{id}",
     "/api/courses/{courseId}/lessons",
     "/api/courses/{courseId}/lessons/{lessonId}/video-url",
+    // Stream endpoint removed - using presigned URL directly from MinIO
   };
 
   private static final String[] SWAGGER_WHITELIST = {

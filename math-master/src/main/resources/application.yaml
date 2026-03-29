@@ -29,7 +29,7 @@ spring:
     cache: false
 
   datasource:
-    url: jdbc:postgresql://ep-green-mouse-ahwgiq0a-pooler.c-3.us-east-1.aws.neon.tech:5432/neondb?sslmode=require
+    url: jdbc:postgresql://ep-green-mouse-ahwgiq0a-pooler.c-3.us-east-1.aws.neon.tech:5432/neondb?sslmode=require&prepareThreshold=0
     username: neondb_owner
     password: npg_ZuSN4IPnBd7o
     driver-class-name: org.postgresql.Driver
@@ -179,6 +179,7 @@ gemini:
 # ================================
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  public-endpoint: ${MINIO_PUBLIC_ENDPOINT:http://localhost:9000}
   access-key: ${MINIO_ACCESS_KEY:minioadmin}
   secret-key: ${MINIO_SECRET_KEY:minioadmin}
   template-bucket: ${MINIO_TEMPLATE_BUCKET:slide-templates}
