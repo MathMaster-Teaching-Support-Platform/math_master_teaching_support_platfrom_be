@@ -50,6 +50,7 @@ public class ChatSessionServiceImpl implements ChatSessionService {
   static int WORD_LIMIT = 1000;
   static Duration MEMORY_TTL = Duration.ofDays(7);
   static int REBUILD_FETCH_LIMIT = 200;
+  static int PROMPT_CONTEXT_MESSAGES_LIMIT = 12;
 
   ChatSessionRepository chatSessionRepository;
   ChatMessageRepository chatMessageRepository;
@@ -84,10 +85,12 @@ public class ChatSessionServiceImpl implements ChatSessionService {
   public Page<ChatSessionResponse> getMySessions(
       ChatSessionStatus status, String keyword, Pageable pageable) {
     UUID userId = SecurityUtils.getCurrentUserId();
-    String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
+    String normalizedKeyword =
+      keyword == null || keyword.isBlank() ? null : keyword.trim().toLowerCase(Locale.ROOT);
+    String keywordPattern = normalizedKeyword == null ? null : "%" + normalizedKeyword + "%";
 
     return chatSessionRepository
-        .findByUserAndFilters(userId, status, normalizedKeyword, pageable)
+      .findByUserAndFilters(userId, status, keywordPattern, pageable)
         .map(this::toSessionResponse);
   }
 
@@ -381,15 +384,18 @@ public class ChatSessionServiceImpl implements ChatSessionService {
 
   private String buildPromptFromContext(ChatMemoryContext context, String currentPrompt) {
     StringBuilder sb = new StringBuilder();
-    sb.append("You are a helpful education assistant. Use prior conversation context when relevant.\n\n");
-    sb.append("Conversation so far:\n");
+    sb.append("You are a helpful education assistant. Use context only when needed.\n\n");
+    sb.append("History:\n");
 
-    for (MemoryMessage message : context.getMessages()) {
+    List<MemoryMessage> messages = context.getMessages();
+    int startIndex = Math.max(0, messages.size() - PROMPT_CONTEXT_MESSAGES_LIMIT);
+    for (int i = startIndex; i < messages.size(); i++) {
+      MemoryMessage message = messages.get(i);
       String role = message.getRole() == null ? "USER" : message.getRole().toUpperCase(Locale.ROOT);
       sb.append(role).append(": ").append(message.getContent()).append("\n");
     }
 
-    sb.append("\nCurrent USER message:\n");
+    sb.append("\nUSER:\n");
     sb.append(currentPrompt);
     return sb.toString();
   }

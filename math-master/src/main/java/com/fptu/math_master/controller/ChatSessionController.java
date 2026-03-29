@@ -14,6 +14,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,16 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Chat Sessions", description = "Chat session and message history endpoints")
 public class ChatSessionController {
 
+  private static final int DEFAULT_SESSION_PAGE = 0;
+  private static final int DEFAULT_SESSION_SIZE = 20;
+  private static final int DEFAULT_MESSAGE_PAGE = 0;
+  private static final int DEFAULT_MESSAGE_SIZE = 50;
+  private static final int MAX_PAGE_SIZE = 100;
+    private static final Set<String> ALLOWED_SESSION_SORT_FIELDS =
+      Set.of("lastMessageAt", "createdAt", "updatedAt", "title", "status", "totalMessages", "totalWords");
+    private static final Set<String> ALLOWED_MESSAGE_SORT_FIELDS =
+      Set.of("createdAt", "sequenceNo", "role", "wordCount");
+
   ChatSessionService chatSessionService;
 
   @PostMapping
@@ -60,19 +72,23 @@ public class ChatSessionController {
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @Operation(summary = "Get my sessions", description = "Get current user chat sessions")
   public ApiResponse<Page<ChatSessionResponse>> getMySessions(
-      @RequestParam(required = false) ChatSessionStatus status,
+      @RequestParam(required = false) String status,
       @RequestParam(required = false) String keyword,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(defaultValue = "0") Integer page,
+      @RequestParam(defaultValue = "20") Integer size,
       @RequestParam(defaultValue = "lastMessageAt") String sortBy,
       @RequestParam(defaultValue = "DESC") String direction) {
 
-    Sort.Direction sortDirection =
-        direction.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
-    Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
+    ChatSessionStatus parsedStatus = parseStatusOrNull(status);
+    Sort.Direction sortDirection = parseDirection(direction, Sort.Direction.DESC);
+    Pageable pageable =
+      PageRequest.of(
+        normalizePage(page, DEFAULT_SESSION_PAGE),
+        normalizeSize(size, DEFAULT_SESSION_SIZE),
+        Sort.by(sortDirection, normalizeSessionSortBy(sortBy)));
 
     return ApiResponse.<Page<ChatSessionResponse>>builder()
-        .result(chatSessionService.getMySessions(status, keyword, pageable))
+      .result(chatSessionService.getMySessions(parsedStatus, keyword, pageable))
         .build();
   }
 
@@ -90,14 +106,17 @@ public class ChatSessionController {
   @Operation(summary = "Get session messages", description = "Get paged message history by session")
   public ApiResponse<Page<ChatMessageResponse>> getSessionMessages(
       @PathVariable UUID sessionId,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "50") int size,
+      @RequestParam(defaultValue = "0") Integer page,
+      @RequestParam(defaultValue = "50") Integer size,
       @RequestParam(defaultValue = "createdAt") String sortBy,
       @RequestParam(defaultValue = "ASC") String direction) {
 
-    Sort.Direction sortDirection =
-        direction.equalsIgnoreCase("DESC") ? Sort.Direction.DESC : Sort.Direction.ASC;
-    Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
+    Sort.Direction sortDirection = parseDirection(direction, Sort.Direction.ASC);
+    Pageable pageable =
+      PageRequest.of(
+        normalizePage(page, DEFAULT_MESSAGE_PAGE),
+        normalizeSize(size, DEFAULT_MESSAGE_SIZE),
+        Sort.by(sortDirection, normalizeMessageSortBy(sortBy)));
 
     return ApiResponse.<Page<ChatMessageResponse>>builder()
         .result(chatSessionService.getSessionMessages(sessionId, pageable))
@@ -154,5 +173,69 @@ public class ChatSessionController {
     return ApiResponse.<ChatMemoryInfoResponse>builder()
         .result(chatSessionService.getMemoryInfo(sessionId))
         .build();
+  }
+
+  private ChatSessionStatus parseStatusOrNull(String status) {
+    if (status == null || status.isBlank()) {
+      return null;
+    }
+    try {
+      return ChatSessionStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      log.warn("Invalid chat session status '{}' received. Ignoring filter.", status);
+      return null;
+    }
+  }
+
+  private Sort.Direction parseDirection(String direction, Sort.Direction defaultDirection) {
+    if (direction == null || direction.isBlank()) {
+      return defaultDirection;
+    }
+    if ("ASC".equalsIgnoreCase(direction)) {
+      return Sort.Direction.ASC;
+    }
+    if ("DESC".equalsIgnoreCase(direction)) {
+      return Sort.Direction.DESC;
+    }
+    return defaultDirection;
+  }
+
+  private int normalizePage(Integer page, int defaultPage) {
+    if (page == null || page < 0) {
+      return defaultPage;
+    }
+    return page;
+  }
+
+  private int normalizeSize(Integer size, int defaultSize) {
+    if (size == null || size <= 0) {
+      return defaultSize;
+    }
+    return Math.min(size, MAX_PAGE_SIZE);
+  }
+
+  private String normalizeSortBy(String sortBy, String defaultSortBy) {
+    if (sortBy == null || sortBy.isBlank()) {
+      return defaultSortBy;
+    }
+    return sortBy.trim();
+  }
+
+  private String normalizeSessionSortBy(String sortBy) {
+    String normalizedSortBy = normalizeSortBy(sortBy, "lastMessageAt");
+    if (!ALLOWED_SESSION_SORT_FIELDS.contains(normalizedSortBy)) {
+      log.warn("Invalid session sort field '{}' received. Falling back to lastMessageAt.", sortBy);
+      return "lastMessageAt";
+    }
+    return normalizedSortBy;
+  }
+
+  private String normalizeMessageSortBy(String sortBy) {
+    String normalizedSortBy = normalizeSortBy(sortBy, "createdAt");
+    if (!ALLOWED_MESSAGE_SORT_FIELDS.contains(normalizedSortBy)) {
+      log.warn("Invalid message sort field '{}' received. Falling back to createdAt.", sortBy);
+      return "createdAt";
+    }
+    return normalizedSortBy;
   }
 }
