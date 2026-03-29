@@ -48,7 +48,7 @@ public interface RoadmapAdminService {
 
     StudentAssessmentResponse getEntryTestForStudent(UUID studentId, UUID roadmapId);
 
-    AttemptStartResponse startEntryTest(UUID studentId, UUID roadmapId, String ipAddress);
+    AttemptStartResponse startEntryTest(UUID studentId, UUID roadmapId);
 
     RoadmapEntryTestResultResponse finishEntryTest(UUID studentId, UUID roadmapId, UUID attemptId);
 

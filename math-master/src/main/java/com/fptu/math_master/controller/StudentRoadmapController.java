@@ -122,10 +122,10 @@ public class StudentRoadmapController {
         summary = "Start roadmap entry test",
         description = "Start roadmap entry test and return attempt payload with questions")
       public ApiResponse<AttemptStartResponse> startRoadmapEntryTest(
-        @PathVariable UUID roadmapId, @RequestParam(required = false) String ipAddress) {
+        @PathVariable UUID roadmapId) {
       UUID studentId = SecurityUtils.getCurrentUserId();
       return ApiResponse.<AttemptStartResponse>builder()
-        .result(roadmapAdminService.startEntryTest(studentId, roadmapId, ipAddress))
+        .result(roadmapAdminService.startEntryTest(studentId, roadmapId))
         .build();
       }
 

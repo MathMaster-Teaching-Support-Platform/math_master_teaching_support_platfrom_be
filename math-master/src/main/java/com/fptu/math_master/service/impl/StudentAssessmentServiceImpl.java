@@ -121,7 +121,6 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
             .attemptNumber(attemptNumber)
             .status(SubmissionStatus.IN_PROGRESS)
             .startedAt(now)
-            .ipAddress(request.getIpAddress())
             .build();
 
     attempt = quizAttemptRepository.save(attempt);

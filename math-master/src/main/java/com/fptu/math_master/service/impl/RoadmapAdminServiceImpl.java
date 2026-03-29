@@ -373,7 +373,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   }
 
   @Override
-  public AttemptStartResponse startEntryTest(UUID studentId, UUID roadmapId, String ipAddress) {
+  public AttemptStartResponse startEntryTest(UUID studentId, UUID roadmapId) {
     UUID assessmentId = getConfiguredEntryTestAssessmentId(roadmapId);
 
     submissionRepository
@@ -381,7 +381,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .ifPresent(submission -> log.debug("Student {} has previous entry-test submission {}", studentId, submission.getId()));
 
     return studentAssessmentService.startAssessment(
-        StartAssessmentRequest.builder().assessmentId(assessmentId).ipAddress(ipAddress).build());
+      StartAssessmentRequest.builder().assessmentId(assessmentId).build());
   }
 
   @Override

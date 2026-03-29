@@ -15,6 +15,4 @@ public class StartAssessmentRequest {
 
   @NotNull(message = "Assessment ID is required")
   private UUID assessmentId;
-
-  private String ipAddress;
 }

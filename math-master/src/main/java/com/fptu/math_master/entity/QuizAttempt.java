@@ -111,12 +111,6 @@ public class QuizAttempt extends BaseEntity {
   private Integer timeSpentSeconds;
 
   /**
-   * ip_address
-   */
-  @Column(name = "ip_address", columnDefinition = "inet")
-  private String ipAddress;
-
-  /**
    * Relationships
    * - Many-to-One with Submission
    * - Many-to-One with Assessment
