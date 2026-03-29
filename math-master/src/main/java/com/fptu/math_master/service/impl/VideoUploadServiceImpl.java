@@ -364,8 +364,9 @@ public class VideoUploadServiceImpl implements VideoUploadService {
     }
 
     // Generate presigned URL with publicMinioClient
-    // publicMinioClient uses MINIO_PUBLIC_ENDPOINT (http://localhost:9000)
-    // This creates signature with correct hostname for browser access
+    // publicMinioClient is configured with MINIO_PUBLIC_ENDPOINT (http://localhost:9000)
+    // This ensures the signature is generated for the correct hostname that browser will use
+    // Note: publicMinioClient doesn't need to actually connect - it just generates the signature
     String bucket = minioProperties.getCourseVideosBucket();
     String objectKey = cl.getVideoUrl();
     
@@ -382,18 +383,7 @@ public class VideoUploadServiceImpl implements VideoUploadService {
       return presignedUrl;
     } catch (Exception e) {
       log.error("Failed to generate presigned URL for video: {}", objectKey, e);
-      // Fallback: try with internal client
-      try {
-        return minioClient.getPresignedObjectUrl(
-            GetPresignedObjectUrlArgs.builder()
-                .method(Method.GET)
-                .bucket(bucket)
-                .object(objectKey)
-                .expiry(7, java.util.concurrent.TimeUnit.DAYS)
-                .build());
-      } catch (Exception e2) {
-        throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
-      }
+      throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
     }
   }
 
