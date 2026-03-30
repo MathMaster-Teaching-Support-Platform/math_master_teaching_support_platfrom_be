@@ -12,6 +12,7 @@ import com.fptu.math_master.dto.response.LessonResponse;
 import com.fptu.math_master.dto.response.LessonSlideGeneratedContentResponse;
 import com.fptu.math_master.dto.response.LessonSlideJsonItemResponse;
 import com.fptu.math_master.dto.response.SlideTemplateResponse;
+import com.fptu.math_master.enums.LessonSlideOutputFormat;
 import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.SchoolGrade;
@@ -63,6 +64,18 @@ import org.springframework.web.multipart.MultipartFile;
 public class LessonSlideServiceImpl implements LessonSlideService {
 
   private static final Pattern NON_ALNUM = Pattern.compile("[^a-zA-Z0-9._-]");
+  private static final List<String> TAGGED_SECTIONS =
+      List.of(
+          "LESSON_SUMMARY",
+          "LEARNING_OBJECTIVES",
+          "OPENING",
+          "MAIN_PART_1",
+          "MAIN_PART_2",
+          "MAIN_PART_3",
+          "EXAMPLE_PART",
+          "PRACTICE_PART",
+          "CLOSING_SUMMARY",
+          "ADDITIONAL_NOTES");
   private static final String PPTX_MIME =
       "application/vnd.openxmlformats-officedocument.presentationml.presentation";
   private static final String PNG_MIME = "image/png";
@@ -122,7 +135,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
 
     int slideCount = request.getSlideCount() == null ? 10 : request.getSlideCount();
-    DeckSections deckSections = buildDeckSectionsWithAi(lesson, request.getAdditionalPrompt());
+  LessonSlideOutputFormat outputFormat = resolveOutputFormat(request.getOutputFormat());
+  DeckSections deckSections =
+    buildDeckSectionsWithAi(lesson, request.getAdditionalPrompt(), outputFormat);
     List<LessonSlideJsonItemResponse> slides = buildPreviewSlides(deckSections, slideCount);
 
     return LessonSlideGeneratedContentResponse.builder()
@@ -131,6 +146,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         .lessonId(lesson.getId())
         .lessonTitle(lesson.getTitle())
         .slideCount(slideCount)
+    .outputFormat(outputFormat)
         .slides(slides)
         .additionalPrompt(request.getAdditionalPrompt())
         .build();
@@ -674,15 +690,16 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         lessonContent);
   }
 
-  private DeckSections buildDeckSectionsWithAi(Lesson lesson, String additionalPrompt) {
+  private DeckSections buildDeckSectionsWithAi(
+      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
     DeckSections fallback = buildDeckSections(lesson, additionalPrompt);
 
     try {
-      String prompt = buildSlideDeckPrompt(lesson, additionalPrompt);
+      String prompt = buildSlideDeckPrompt(lesson, additionalPrompt, outputFormat);
       String aiResponse = geminiService.sendMessage(prompt);
       AiDeckSections aiDeck = parseAiDeckSections(aiResponse);
       if (aiDeck == null || !hasEnoughAiContent(aiDeck)) {
-        String taggedPrompt = buildSlideDeckTaggedPrompt(lesson, additionalPrompt);
+        String taggedPrompt = buildSlideDeckTaggedPrompt(lesson, additionalPrompt, outputFormat);
         String taggedResponse = geminiService.sendMessage(taggedPrompt);
         AiDeckSections taggedDeck = parseTaggedDeckSections(taggedResponse);
         if (taggedDeck != null && hasEnoughAiContent(taggedDeck)) {
@@ -793,12 +810,14 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
   }
 
-  private String buildSlideDeckPrompt(Lesson lesson, String additionalPrompt) {
+  private String buildSlideDeckPrompt(
+      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
     String lessonTitle = safe(lesson.getTitle());
     String lessonContent = safe(lesson.getLessonContent());
     String lessonSummary = safe(lesson.getSummary());
     String learningObjectives = safe(lesson.getLearningObjectives());
     String opening = safe(additionalPrompt);
+    String formatGuidance = buildFormatGuidance(outputFormat, true);
 
     return """
         Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
@@ -817,6 +836,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         - Nội dung phải cụ thể, không lặp lại cùng một câu giữa các phần.
         - Mỗi mục mainPart1/mainPart2/mainPart3/examplePart/practicePart cần có nhiều ý (dạng gạch đầu dòng ngắn, tách dòng bằng ký tự xuống dòng \n).
         - closingSummary phải tóm tắt được kiến thức trọng tâm và nhấn mạnh cách áp dụng.
+        - outputFormat: %s
+        %s
         - Không thêm markdown, không thêm giải thích ngoài JSON.
 
         Trả về CHI DUY NHAT mot JSON object dung schema sau:
@@ -833,15 +854,24 @@ public class LessonSlideServiceImpl implements LessonSlideService {
           "additionalNotes": "..."
         }
         """
-        .formatted(lessonTitle, lessonSummary, learningObjectives, opening, lessonContent);
+        .formatted(
+            lessonTitle,
+            lessonSummary,
+            learningObjectives,
+            opening,
+            lessonContent,
+            outputFormat,
+            formatGuidance);
   }
 
-  private String buildSlideDeckTaggedPrompt(Lesson lesson, String additionalPrompt) {
+  private String buildSlideDeckTaggedPrompt(
+      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
     String lessonTitle = safe(lesson.getTitle());
     String lessonContent = safe(lesson.getLessonContent());
     String lessonSummary = safe(lesson.getSummary());
     String learningObjectives = safe(lesson.getLearningObjectives());
     String opening = safe(additionalPrompt);
+    String formatGuidance = buildFormatGuidance(outputFormat, false);
 
     return """
         Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
@@ -858,6 +888,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         YÊU CẦU:
         - Viết tiếng Việt có dấu, nội dung cụ thể, không lặp lại giữa các phần.
         - Mỗi phần mainPart1/mainPart2/mainPart3/examplePart/practicePart có nhiều ý và xuống dòng rõ ràng.
+        - outputFormat: %s
+        %s
         - Chỉ trả về đúng định dạng marker dưới đây, không thêm markdown.
 
         [LESSON_SUMMARY]
@@ -881,7 +913,14 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         [ADDITIONAL_NOTES]
         ...
         """
-        .formatted(lessonTitle, lessonSummary, learningObjectives, opening, lessonContent);
+        .formatted(
+          lessonTitle,
+          lessonSummary,
+          learningObjectives,
+          opening,
+          lessonContent,
+          outputFormat,
+          formatGuidance);
   }
 
   private AiDeckSections parseTaggedDeckSections(String raw) {
@@ -912,30 +951,48 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
 
     int contentStart = start + startTag.length();
-    int nextTagStart = raw.length();
-    int cursor = contentStart;
-    while (cursor < raw.length()) {
-      int openBracket = raw.indexOf('[', cursor);
-      if (openBracket < 0) {
-        break;
-      }
-      int closeBracket = raw.indexOf(']', openBracket + 1);
-      if (closeBracket < 0) {
-        break;
-      }
-      String candidateTag = raw.substring(openBracket + 1, closeBracket);
-      if (!candidateTag.isBlank()) {
-        nextTagStart = openBracket;
-        break;
-      }
-      cursor = closeBracket + 1;
-    }
+    int nextTagStart = findNextTaggedSectionStart(raw, contentStart);
 
     String value = raw.substring(contentStart, nextTagStart).trim();
     if (value.startsWith(":")) {
       value = value.substring(1).trim();
     }
     return value;
+  }
+
+  private int findNextTaggedSectionStart(String raw, int fromIndex) {
+    int nextTagStart = raw.length();
+    for (String section : TAGGED_SECTIONS) {
+      int candidateStart = raw.indexOf("[" + section + "]", fromIndex);
+      if (candidateStart >= 0 && candidateStart < nextTagStart) {
+        nextTagStart = candidateStart;
+      }
+    }
+    return nextTagStart;
+  }
+
+  private LessonSlideOutputFormat resolveOutputFormat(LessonSlideOutputFormat outputFormat) {
+    return outputFormat == null ? LessonSlideOutputFormat.PLAIN_TEXT : outputFormat;
+  }
+
+  private String buildFormatGuidance(LessonSlideOutputFormat outputFormat, boolean jsonMode) {
+    return switch (outputFormat) {
+      case LATEX ->
+          jsonMode
+              ? "- Tất cả biểu thức toán học phải viết bằng LaTeX. KHÔNG dùng diễn đạt công thức dạng chữ thuần."
+                  + "\\n- Vì output là JSON string, bắt buộc escape dấu \\\\ trong LaTeX (ví dụ: \\\\frac, \\\\sqrt, \\\\left, \\\\right)."
+              : "- Tất cả biểu thức toán học phải viết bằng LaTeX."
+                  + "\\n- Dùng delimiters chuẩn: inline \\( ... \\), block \\[ ... \\].";
+      case HYBRID ->
+          jsonMode
+              ? "- Ưu tiên nội dung tiếng Việt dễ hiểu, nhưng công thức/ký hiệu toán phải dùng LaTeX."
+                  + "\\n- Vì output là JSON string, bắt buộc escape dấu \\\\ trong LaTeX (ví dụ: \\\\frac, \\\\sqrt)."
+              : "- Nội dung mô tả bằng tiếng Việt, công thức/ký hiệu toán thể hiện bằng LaTeX."
+                  + "\\n- Dùng delimiters chuẩn: inline \\( ... \\), block \\[ ... \\].";
+      case PLAIN_TEXT ->
+          "- Dùng văn bản thuần như hiện tại, không bắt buộc LaTeX."
+              + "\\n- Nếu có công thức thì giữ ở dạng dễ đọc bằng chữ.";
+    };
   }
 
   private String nonBlankOrDefault(String value, String fallback) {
