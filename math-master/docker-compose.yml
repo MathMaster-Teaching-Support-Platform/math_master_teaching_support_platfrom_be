@@ -11,8 +11,7 @@ services:
     networks:
       - math-master-network
     healthcheck:
-      test:
-        ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-12345}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-12345}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -25,6 +24,9 @@ services:
     volumes:
       - ./centrifugo-config.json:/centrifugo/config.json:ro
     command: centrifugo -c /centrifugo/config.json
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - math-master-network
     restart: unless-stopped
