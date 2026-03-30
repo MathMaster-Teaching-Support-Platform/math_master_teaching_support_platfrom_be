@@ -104,12 +104,30 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
             .findById(assessmentId)
             .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
-    validateAssessmentCanStart(assessment, studentId, now);
+    validateAssessmentAvailability(assessment, now);
+
+    Optional<Submission> submissionOpt =
+      submissionRepository.findByAssessmentIdAndStudentId(assessmentId, studentId);
+
+    if (submissionOpt.isPresent()) {
+      List<QuizAttempt> inProgressAttempts =
+        quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
+          assessmentId, studentId, SubmissionStatus.IN_PROGRESS);
+      if (!inProgressAttempts.isEmpty()) {
+      QuizAttempt activeAttempt = inProgressAttempts.get(0);
+      log.info(
+        "Returning existing active attempt {} for student {} and assessment {}",
+        activeAttempt.getId(),
+        studentId,
+        assessmentId);
+      return buildAttemptStartResponse(assessment, activeAttempt, false);
+      }
+
+      validateAttemptLimit(assessment, submissionOpt.get().getId());
+    }
 
     Submission submission =
-        submissionRepository
-            .findByAssessmentIdAndStudentId(assessmentId, studentId)
-            .orElseGet(() -> createSubmission(assessment, studentId));
+      submissionOpt.orElseGet(() -> createSubmission(assessment, studentId));
 
     Integer attemptNumber = quizAttemptRepository.countBySubmissionId(submission.getId()) + 1;
 
@@ -128,13 +146,20 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
 
     draftService.initDraft(attempt.getId(), assessmentId, assessment.getTimeLimitMinutes());
 
+    return buildAttemptStartResponse(assessment, attempt, Boolean.TRUE.equals(assessment.getRandomizeQuestions()));
+  }
+
+  private AttemptStartResponse buildAttemptStartResponse(
+      Assessment assessment, QuizAttempt attempt, boolean randomizeQuestions) {
+    UUID studentId = attempt.getStudentId();
+
     String connectionToken = centrifugoService.generateConnectionToken(studentId, attempt.getId());
     String channelName = centrifugoService.getAttemptChannel(attempt.getId());
 
     List<AssessmentQuestion> assessmentQuestions =
-        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessmentId);
+        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessment.getId());
 
-    if (Boolean.TRUE.equals(assessment.getRandomizeQuestions())) {
+    if (randomizeQuestions) {
       Collections.shuffle(assessmentQuestions);
     }
 
@@ -143,15 +168,15 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
 
     Instant expiresAt =
         assessment.getTimeLimitMinutes() != null
-            ? now.plusSeconds(assessment.getTimeLimitMinutes() * 60L)
+        ? attempt.getStartedAt().plusSeconds(assessment.getTimeLimitMinutes() * 60L)
             : null;
 
     return AttemptStartResponse.builder()
         .attemptId(attempt.getId())
         .submissionId(attempt.getSubmissionId())
-        .assessmentId(assessmentId)
-        .attemptNumber(attemptNumber)
-        .startedAt(now)
+      .assessmentId(assessment.getId())
+      .attemptNumber(attempt.getAttemptNumber())
+      .startedAt(attempt.getStartedAt())
         .expiresAt(expiresAt)
         .timeLimitMinutes(assessment.getTimeLimitMinutes())
         .totalQuestions((long) questions.size())
@@ -328,15 +353,18 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     Integer attemptNumber = 0;
 
     if (submissionOpt.isPresent()) {
+      List<QuizAttempt> inProgressAttempts =
+          quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
+              assessment.getId(), studentId, SubmissionStatus.IN_PROGRESS);
+      if (!inProgressAttempts.isEmpty()) {
+        currentAttemptId = inProgressAttempts.get(0).getId();
+      }
+
       List<QuizAttempt> attempts =
           quizAttemptRepository.findBySubmissionIdOrderByAttemptNumberDesc(
               submissionOpt.get().getId());
 
       if (!attempts.isEmpty()) {
-        QuizAttempt latestAttempt = attempts.get(0);
-        if (latestAttempt.getStatus() == SubmissionStatus.IN_PROGRESS) {
-          currentAttemptId = latestAttempt.getId();
-        }
         attemptNumber = attempts.size();
       }
     }
@@ -392,7 +420,7 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
       return "COMPLETED";
     }
 
-    return "IN_PROGRESS";
+    return "UPCOMING";
   }
 
   private boolean matchesStatusFilter(StudentAssessmentResponse response, String statusFilter) {
@@ -403,6 +431,26 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
   }
 
   private void validateAssessmentCanStart(Assessment assessment, UUID studentId, Instant now) {
+    validateAssessmentAvailability(assessment, now);
+
+    Optional<Submission> submissionOpt =
+        submissionRepository.findByAssessmentIdAndStudentId(assessment.getId(), studentId);
+
+    if (submissionOpt.isEmpty()) {
+      return;
+    }
+
+    List<QuizAttempt> inProgressAttempts =
+        quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
+            assessment.getId(), studentId, SubmissionStatus.IN_PROGRESS);
+    if (!inProgressAttempts.isEmpty()) {
+      return;
+    }
+
+    validateAttemptLimit(assessment, submissionOpt.get().getId());
+  }
+
+  private void validateAssessmentAvailability(Assessment assessment, Instant now) {
     if (assessment.getStatus() != AssessmentStatus.PUBLISHED) {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_PUBLISHED);
     }
@@ -414,29 +462,18 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     if (assessment.getEndDate() != null && now.isAfter(assessment.getEndDate())) {
       throw new AppException(ErrorCode.ASSESSMENT_EXPIRED);
     }
+  }
 
-    Optional<Submission> submissionOpt =
-        submissionRepository.findByAssessmentIdAndStudentId(assessment.getId(), studentId);
+  private void validateAttemptLimit(Assessment assessment, UUID submissionId) {
+    Integer attemptCount = quizAttemptRepository.countBySubmissionId(submissionId);
 
-    if (submissionOpt.isPresent()) {
-      Integer attemptCount = quizAttemptRepository.countBySubmissionId(submissionOpt.get().getId());
-
-      if (Boolean.TRUE.equals(assessment.getAllowMultipleAttempts())) {
-        if (assessment.getMaxAttempts() != null && attemptCount >= assessment.getMaxAttempts()) {
-          throw new AppException(ErrorCode.MAX_ATTEMPTS_REACHED);
-        }
-      } else {
-        if (attemptCount > 0) {
-          throw new AppException(ErrorCode.MAX_ATTEMPTS_REACHED);
-        }
+    if (Boolean.TRUE.equals(assessment.getAllowMultipleAttempts())) {
+      if (assessment.getMaxAttempts() != null && attemptCount >= assessment.getMaxAttempts()) {
+        throw new AppException(ErrorCode.MAX_ATTEMPTS_REACHED);
       }
-
-      List<QuizAttempt> inProgressAttempts =
-          quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
-              assessment.getId(), studentId, SubmissionStatus.IN_PROGRESS);
-
-      if (!inProgressAttempts.isEmpty()) {
-        throw new AppException(ErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+    } else {
+      if (attemptCount > 0) {
+        throw new AppException(ErrorCode.MAX_ATTEMPTS_REACHED);
       }
     }
   }
@@ -463,6 +500,13 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     }
 
     if (submissionOpt.isPresent()) {
+      List<QuizAttempt> inProgressAttempts =
+          quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
+              assessment.getId(), submissionOpt.get().getStudentId(), SubmissionStatus.IN_PROGRESS);
+      if (!inProgressAttempts.isEmpty()) {
+        return null;
+      }
+
       Integer attemptCount = quizAttemptRepository.countBySubmissionId(submissionOpt.get().getId());
 
       if (Boolean.TRUE.equals(assessment.getAllowMultipleAttempts())) {

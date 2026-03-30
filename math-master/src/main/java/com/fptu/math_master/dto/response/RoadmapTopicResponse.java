@@ -45,6 +45,12 @@ public class RoadmapTopicResponse {
   @Schema(description = "Assessment linked to this topic")
   private UUID topicAssessmentId;
 
+  @Schema(description = "Linked course IDs for this topic")
+  private List<UUID> courseIds;
+
+  @Schema(description = "Linked courses for this topic")
+  private List<RoadmapTopicCourseResponse> courses;
+
   @Schema(description = "When topic was started")
   private Instant startedAt;
 

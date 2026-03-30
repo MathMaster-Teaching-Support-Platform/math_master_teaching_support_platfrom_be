@@ -26,7 +26,7 @@ import org.hibernate.annotations.Nationalized;
 @NoArgsConstructor
 @Getter
 @Setter
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Entity
 @Table(
     name = "courses",
@@ -37,6 +37,11 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_courses_is_published", columnList = "is_published")
     })
 public class Course extends BaseEntity {
+
+  @EqualsAndHashCode.Include
+  private UUID entityIdForEquality() {
+    return getId();
+  }
 
   @Column(name = "teacher_id", nullable = false)
   private UUID teacherId;

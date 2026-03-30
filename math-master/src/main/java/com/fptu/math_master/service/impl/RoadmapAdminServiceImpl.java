@@ -3,22 +3,29 @@ package com.fptu.math_master.service.impl;
 import com.fptu.math_master.dto.request.CreateAdminRoadmapRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapTopicRequest;
+import com.fptu.math_master.dto.request.RoadmapEntryTestAnswerRequest;
+import com.fptu.math_master.dto.request.RoadmapEntryTestFlagRequest;
 import com.fptu.math_master.dto.request.StartAssessmentRequest;
 import com.fptu.math_master.dto.request.SubmitAssessmentRequest;
 import com.fptu.math_master.dto.request.SubmitRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.UpdateAdminRoadmapRequest;
 import com.fptu.math_master.dto.request.UpdateRoadmapTopicRequest;
+import com.fptu.math_master.dto.response.AnswerAckResponse;
 import com.fptu.math_master.dto.response.AttemptStartResponse;
 import com.fptu.math_master.dto.response.RoadmapDetailResponse;
+import com.fptu.math_master.dto.response.RoadmapEntryTestActiveAttemptResponse;
+import com.fptu.math_master.dto.response.RoadmapEntryTestInfoResponse;
+import com.fptu.math_master.dto.response.RoadmapEntryTestProgressResponse;
 import com.fptu.math_master.dto.response.RoadmapEntryTestResultResponse;
 import com.fptu.math_master.dto.response.RoadmapResourceOptionResponse;
+import com.fptu.math_master.dto.response.RoadmapEntryTestSnapshotResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
 import com.fptu.math_master.dto.response.RoadmapTopicResponse;
 import com.fptu.math_master.dto.response.StudentAssessmentResponse;
 import com.fptu.math_master.dto.response.TopicMaterialResponse;
 import com.fptu.math_master.entity.Assessment;
-import com.fptu.math_master.entity.Answer;
 import com.fptu.math_master.entity.AssessmentQuestion;
+import com.fptu.math_master.entity.Course;
 import com.fptu.math_master.entity.LearningRoadmap;
 import com.fptu.math_master.entity.LessonPlan;
 import com.fptu.math_master.entity.Mindmap;
@@ -35,14 +42,13 @@ import com.fptu.math_master.enums.SubmissionStatus;
 import com.fptu.math_master.enums.TopicStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
-import com.fptu.math_master.repository.AnswerRepository;
 import com.fptu.math_master.repository.AssessmentRepository;
 import com.fptu.math_master.repository.AssessmentQuestionRepository;
+import com.fptu.math_master.repository.CourseRepository;
 import com.fptu.math_master.repository.LearningRoadmapRepository;
 import com.fptu.math_master.repository.LessonPlanRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.MindmapRepository;
-import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.QuizAttemptRepository;
 import com.fptu.math_master.repository.RoadmapEntryQuestionMappingRepository;
 import com.fptu.math_master.repository.RoadmapTopicRepository;
@@ -55,11 +61,11 @@ import com.fptu.math_master.service.LearningRoadmapService;
 import com.fptu.math_master.service.RoadmapAdminService;
 import com.fptu.math_master.service.StudentAssessmentService;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -86,7 +92,6 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   AssessmentQuestionRepository assessmentQuestionRepository;
   RoadmapTopicRepository topicRepository;
   MindmapRepository mindmapRepository;
-  QuestionRepository questionRepository;
   LessonRepository lessonRepository;
   LessonPlanRepository lessonPlanRepository;
   TopicLearningMaterialRepository materialRepository;
@@ -94,7 +99,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   SubmissionRepository submissionRepository;
   QuizAttemptRepository quizAttemptRepository;
   SubjectRepository subjectRepository;
-  AnswerRepository answerRepository;
+  CourseRepository courseRepository;
   UserRepository userRepository;
   LearningRoadmapService learningRoadmapService;
   StudentAssessmentService studentAssessmentService;
@@ -182,12 +187,14 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Override
   public RoadmapTopicResponse addTopic(UUID roadmapId, CreateRoadmapTopicRequest request) {
     LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+    Set<Course> topicCourses = resolveTopicCourses(request.getCourseIds(), roadmap);
 
     RoadmapTopic topic =
         RoadmapTopic.builder()
             .roadmapId(roadmapId)
         .lessonId(null)
             .topicAssessmentId(request.getTopicAssessmentId())
+        .courses(topicCourses)
             .title(request.getTitle())
             .description(request.getDescription())
             .status(request.getSequenceOrder() == 1 ? TopicStatus.NOT_STARTED : TopicStatus.LOCKED)
@@ -237,6 +244,9 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     }
     if (request.getTopicAssessmentId() != null) {
       topic.setTopicAssessmentId(request.getTopicAssessmentId());
+    }
+    if (request.getCourseIds() != null) {
+      topic.setCourses(resolveTopicCourses(request.getCourseIds(), roadmap));
     }
     if (request.getDifficulty() != null) {
       topic.setDifficulty(request.getDifficulty());
@@ -360,16 +370,116 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
   @Override
   @Transactional(readOnly = true)
-  public StudentAssessmentResponse getEntryTestForStudent(UUID studentId, UUID roadmapId) {
+  public RoadmapEntryTestInfoResponse getEntryTestForStudent(UUID studentId, UUID roadmapId) {
     UUID assessmentId = getConfiguredEntryTestAssessmentId(roadmapId);
 
     StudentAssessmentResponse response = studentAssessmentService.getAssessmentDetails(assessmentId);
+    UUID activeAttemptId = findActiveAttemptId(studentId, assessmentId);
 
-    submissionRepository
-        .findByAssessmentIdAndStudentId(assessmentId, studentId)
-        .ifPresent(submission -> response.setCurrentAttemptId(response.getCurrentAttemptId()));
+    return RoadmapEntryTestInfoResponse.builder()
+        .assessmentId(response.getId())
+        .title(response.getTitle())
+        .description(response.getDescription())
+        .totalQuestions(response.getTotalQuestions())
+        .totalPoints(response.getTotalPoints())
+        .timeLimitMinutes(response.getTimeLimitMinutes())
+        .startDate(response.getStartDate())
+        .endDate(response.getEndDate())
+        .studentStatus(response.getStudentStatus())
+        .activeAttemptId(activeAttemptId)
+        .attemptNumber(response.getAttemptNumber())
+        .maxAttempts(response.getMaxAttempts())
+        .allowMultipleAttempts(response.getAllowMultipleAttempts())
+        .canStart(response.getCanStart())
+        .cannotStartReason(response.getCannotStartReason())
+        .build();
+  }
 
-    return response;
+  @Override
+  public AnswerAckResponse saveEntryTestAnswer(
+      UUID studentId,
+      UUID roadmapId,
+      UUID attemptId,
+      RoadmapEntryTestAnswerRequest request) {
+    validateRoadmapAttempt(studentId, roadmapId, attemptId);
+    return studentAssessmentService.updateAnswer(
+        com.fptu.math_master.dto.request.AnswerUpdateRequest.builder()
+            .attemptId(attemptId)
+            .questionId(request.getQuestionId())
+            .answerValue(request.getAnswerValue())
+            .clientTimestamp(request.getClientTimestamp())
+            .sequenceNumber(request.getSequenceNumber())
+            .build());
+  }
+
+  @Override
+  public AnswerAckResponse updateEntryTestFlag(
+      UUID studentId,
+      UUID roadmapId,
+      UUID attemptId,
+      RoadmapEntryTestFlagRequest request) {
+    validateRoadmapAttempt(studentId, roadmapId, attemptId);
+    return studentAssessmentService.updateFlag(
+        com.fptu.math_master.dto.request.FlagUpdateRequest.builder()
+            .attemptId(attemptId)
+            .questionId(request.getQuestionId())
+            .flagged(request.getFlagged())
+            .build());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public RoadmapEntryTestSnapshotResponse getEntryTestSnapshot(
+      UUID studentId, UUID roadmapId, UUID attemptId) {
+    validateRoadmapAttempt(studentId, roadmapId, attemptId);
+    com.fptu.math_master.dto.response.DraftSnapshotResponse snapshot =
+        studentAssessmentService.getDraftSnapshot(attemptId);
+
+    return RoadmapEntryTestSnapshotResponse.builder()
+        .attemptId(snapshot.getAttemptId())
+        .answers(snapshot.getAnswers())
+        .flags(snapshot.getFlags())
+        .startedAt(snapshot.getStartedAt())
+        .expiresAt(snapshot.getExpiresAt())
+        .timeRemainingSeconds(snapshot.getTimeRemainingSeconds())
+        .progress(buildProgress(snapshot.getAnsweredCount(), snapshot.getTotalQuestions()))
+        .build();
+  }
+
+  @Override
+  public void saveEntryTestAndExit(UUID studentId, UUID roadmapId, UUID attemptId) {
+    validateRoadmapAttempt(studentId, roadmapId, attemptId);
+    studentAssessmentService.saveAndExit(attemptId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public RoadmapEntryTestActiveAttemptResponse getActiveEntryTestAttempt(
+      UUID studentId, UUID roadmapId) {
+    UUID assessmentId = getConfiguredEntryTestAssessmentId(roadmapId);
+    StudentAssessmentResponse info = studentAssessmentService.getAssessmentDetails(assessmentId);
+    UUID activeAttemptId = findActiveAttemptId(studentId, assessmentId);
+
+    if (activeAttemptId == null) {
+      return RoadmapEntryTestActiveAttemptResponse.builder()
+          .assessmentId(assessmentId)
+          .studentStatus(info.getStudentStatus())
+          .attemptId(null)
+          .build();
+    }
+
+    com.fptu.math_master.dto.response.DraftSnapshotResponse snapshot =
+        studentAssessmentService.getDraftSnapshot(activeAttemptId);
+
+    return RoadmapEntryTestActiveAttemptResponse.builder()
+        .assessmentId(assessmentId)
+        .studentStatus(info.getStudentStatus())
+        .attemptId(activeAttemptId)
+        .startedAt(snapshot.getStartedAt())
+        .expiresAt(snapshot.getExpiresAt())
+        .timeRemainingSeconds(snapshot.getTimeRemainingSeconds())
+        .progress(buildProgress(snapshot.getAnsweredCount(), snapshot.getTotalQuestions()))
+        .build();
   }
 
   @Override
@@ -413,21 +523,23 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       gradingService.autoGradeSubmission(submission.getId());
     }
 
-    return submitEntryTest(
-        studentId,
-        roadmapId,
-        SubmitRoadmapEntryTestRequest.builder().submissionId(submission.getId()).build());
+    return evaluateEntryTestResult(studentId, roadmapId, submission.getId());
   }
 
   @Override
   @Transactional(readOnly = true)
   public RoadmapEntryTestResultResponse submitEntryTest(
       UUID studentId, UUID roadmapId, SubmitRoadmapEntryTestRequest request) {
+    return evaluateEntryTestResult(studentId, roadmapId, request.getSubmissionId());
+    }
+
+    private RoadmapEntryTestResultResponse evaluateEntryTestResult(
+      UUID studentId, UUID roadmapId, UUID submissionId) {
     getActiveRoadmapOrThrow(roadmapId);
 
     Submission submission =
         submissionRepository
-            .findById(request.getSubmissionId())
+        .findById(submissionId)
             .orElseThrow(() -> new AppException(ErrorCode.SUBMISSION_NOT_FOUND));
 
     if (!submission.getStudentId().equals(studentId)) {
@@ -746,10 +858,9 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         continue;
       }
 
-      Assessment assessment =
-          assessmentRepository
-              .findByIdAndNotDeleted(assessmentId)
-              .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+        assessmentRepository
+          .findByIdAndNotDeleted(assessmentId)
+          .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
       materials.add(
           TopicLearningMaterial.builder()
@@ -850,6 +961,54 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     return (maxSequence == null ? 0 : maxSequence) + 1;
   }
 
+  private UUID findActiveAttemptId(UUID studentId, UUID assessmentId) {
+    List<QuizAttempt> inProgressAttempts =
+        quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
+            assessmentId, studentId, SubmissionStatus.IN_PROGRESS);
+
+    if (inProgressAttempts.isEmpty()) {
+      return null;
+    }
+
+    return inProgressAttempts.get(0).getId();
+  }
+
+  private void validateRoadmapAttempt(UUID studentId, UUID roadmapId, UUID attemptId) {
+    UUID assessmentId = getConfiguredEntryTestAssessmentId(roadmapId);
+
+    QuizAttempt attempt =
+        quizAttemptRepository
+            .findById(attemptId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUIZ_ATTEMPT_NOT_FOUND));
+
+    if (!studentId.equals(attempt.getStudentId())) {
+      throw new AppException(ErrorCode.ATTEMPT_ACCESS_DENIED);
+    }
+
+    if (!assessmentId.equals(attempt.getAssessmentId())) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
+    }
+  }
+
+  private RoadmapEntryTestProgressResponse buildProgress(
+      Integer answeredCount, Integer totalQuestions) {
+    int safeAnswered = answeredCount == null ? 0 : answeredCount;
+    int safeTotal = totalQuestions == null ? 0 : totalQuestions;
+
+    double completion =
+        safeTotal == 0
+            ? 0.0
+            : BigDecimal.valueOf((safeAnswered * 100.0) / safeTotal)
+                .setScale(2, RoundingMode.HALF_UP)
+                .doubleValue();
+
+    return RoadmapEntryTestProgressResponse.builder()
+        .answeredCount(safeAnswered)
+        .totalQuestions(safeTotal)
+        .completionPercentage(completion)
+        .build();
+  }
+
   private Subject resolveSubject(UUID subjectId) {
     Subject subject =
         subjectRepository
@@ -861,6 +1020,35 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     }
 
     return subject;
+  }
+
+  private Set<Course> resolveTopicCourses(List<UUID> courseIds, LearningRoadmap roadmap) {
+    if (courseIds == null || courseIds.isEmpty()) {
+      return Set.of();
+    }
+
+    Set<UUID> uniqueCourseIds =
+        courseIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+    if (uniqueCourseIds.isEmpty()) {
+      return Set.of();
+    }
+
+    List<Course> courses =
+        uniqueCourseIds.stream()
+            .map(
+                id ->
+                    courseRepository
+                        .findByIdAndDeletedAtIsNull(id)
+                        .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND)))
+            .toList();
+
+    for (Course course : courses) {
+      if (!course.getSubjectId().equals(roadmap.getSubjectId())) {
+        throw new AppException(ErrorCode.INVALID_SUBJECT);
+      }
+    }
+
+    return new HashSet<>(courses);
   }
 
   private String resolveGradeLevel(Subject subject) {

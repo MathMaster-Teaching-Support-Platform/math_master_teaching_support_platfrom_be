@@ -1,5 +1,6 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.dto.response.NotificationResponse;
 import com.fptu.math_master.entity.Notification;
 import com.fptu.math_master.repository.NotificationRepository;
 import com.fptu.math_master.service.NotificationService;
@@ -20,8 +21,8 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository notificationRepository;
 
     @Override
-    public Page<Notification> getNotifications(UUID userId, Pageable pageable) {
-        return notificationRepository.findAllByRecipient_Id(userId, pageable);
+    public Page<NotificationResponse> getNotifications(UUID userId, Pageable pageable) {
+        return notificationRepository.findAllByRecipient_Id(userId, pageable).map(this::mapToResponse);
     }
 
     @Override
@@ -47,5 +48,19 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     public long getUnreadCount(UUID userId) {
         return notificationRepository.countByRecipient_IdAndIsReadFalse(userId);
+    }
+
+    private NotificationResponse mapToResponse(Notification notification) {
+        return NotificationResponse.builder()
+                .id(notification.getId())
+                .recipientId(notification.getRecipient() != null ? notification.getRecipient().getId() : null)
+                .type(notification.getType())
+                .title(notification.getTitle())
+                .content(notification.getContent())
+                .metadata(notification.getMetadata())
+                .isRead(notification.isRead())
+                .createdAt(notification.getCreatedAt())
+                .updatedAt(notification.getUpdatedAt())
+                .build();
     }
 }

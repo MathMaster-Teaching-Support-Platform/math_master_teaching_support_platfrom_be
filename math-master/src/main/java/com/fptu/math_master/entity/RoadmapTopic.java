@@ -46,7 +46,7 @@ import java.util.Set;
 @NoArgsConstructor
 @Getter
 @Setter
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Entity
 @Table(
     name = "roadmap_topics",
@@ -57,6 +57,11 @@ import java.util.Set;
       @Index(name = "idx_roadmap_topics_sequence", columnList = "sequence_order")
     })
 public class RoadmapTopic extends BaseEntity {
+
+  @EqualsAndHashCode.Include
+  private UUID entityIdForEquality() {
+    return getId();
+  }
 
   /**
    * roadmap_id
@@ -167,6 +172,13 @@ public class RoadmapTopic extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "topic_assessment_id", insertable = false, updatable = false)
   private Assessment topicAssessment;
+
+  @ManyToMany(fetch = FetchType.LAZY)
+  @JoinTable(
+      name = "roadmap_topic_courses",
+      joinColumns = @JoinColumn(name = "roadmap_topic_id"),
+      inverseJoinColumns = @JoinColumn(name = "course_id"))
+  private Set<Course> courses;
 
   @ManyToMany(fetch = FetchType.LAZY)
   @JoinTable(

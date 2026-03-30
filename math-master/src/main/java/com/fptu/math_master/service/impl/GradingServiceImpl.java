@@ -469,6 +469,13 @@ public class GradingServiceImpl implements GradingService {
           .totalSubmissions(0L)
           .gradedSubmissions(0L)
           .pendingSubmissions(0L)
+          .averageScore(BigDecimal.ZERO)
+          .medianScore(BigDecimal.ZERO)
+          .highestScore(BigDecimal.ZERO)
+          .lowestScore(BigDecimal.ZERO)
+          .passRate(0.0)
+          .scoreDistribution(Map.of())
+          .averageTimeSpentSeconds(0L)
           .build();
     }
 
@@ -1001,8 +1008,12 @@ public class GradingServiceImpl implements GradingService {
                       // needed
                       .correctAnswer(question != null ? question.getCorrectAnswer() : null)
                       .isCorrect(answer.getIsCorrect())
-                      .pointsEarned(answer.getPointsEarned())
-                      .maxPoints(question != null ? question.getPoints() : null)
+                        .pointsEarned(
+                          answer.getPointsEarned() != null ? answer.getPointsEarned() : BigDecimal.ZERO)
+                        .maxPoints(
+                          question != null && question.getPoints() != null
+                            ? question.getPoints()
+                            : BigDecimal.ZERO)
                       .feedback(answer.getFeedback())
                       .isManuallyAdjusted(manuallyAdjustedAnswerIds.contains(answer.getId()))
                       .gradedAt(answer.getUpdatedAt())
@@ -1021,13 +1032,14 @@ public class GradingServiceImpl implements GradingService {
         .studentEmail(student != null ? student.getEmail() : null)
         .status(submission.getStatus())
         .submittedAt(submission.getSubmittedAt())
-        .score(submission.getScore())
-        .maxScore(submission.getMaxScore())
-        .percentage(submission.getPercentage())
-        .manualAdjustment(submission.getManualAdjustment())
+        .score(submission.getScore() != null ? submission.getScore() : BigDecimal.ZERO)
+        .maxScore(submission.getMaxScore() != null ? submission.getMaxScore() : BigDecimal.ZERO)
+        .percentage(submission.getPercentage() != null ? submission.getPercentage() : BigDecimal.ZERO)
+        .manualAdjustment(
+          submission.getManualAdjustment() != null ? submission.getManualAdjustment() : BigDecimal.ZERO)
         .manualAdjustmentReason(submission.getManualAdjustmentReason())
-        .finalScore(submission.getFinalScore())
-        .timeSpentSeconds(submission.getTimeSpentSeconds())
+        .finalScore(submission.getFinalScore() != null ? submission.getFinalScore() : BigDecimal.ZERO)
+        .timeSpentSeconds(submission.getTimeSpentSeconds() != null ? submission.getTimeSpentSeconds() : 0)
         .attemptNumber(attemptNumber)
         .pendingQuestionsCount(pendingCount)
         .autoGradedQuestionsCount(autoGradedCount)

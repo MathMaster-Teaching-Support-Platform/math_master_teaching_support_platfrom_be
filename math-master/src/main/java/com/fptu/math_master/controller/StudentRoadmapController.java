@@ -1,13 +1,18 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.CreateRoadmapFeedbackRequest;
+import com.fptu.math_master.dto.request.RoadmapEntryTestAnswerRequest;
+import com.fptu.math_master.dto.request.RoadmapEntryTestFlagRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.AnswerAckResponse;
 import com.fptu.math_master.dto.response.AttemptStartResponse;
 import com.fptu.math_master.dto.response.RoadmapDetailResponse;
+import com.fptu.math_master.dto.response.RoadmapEntryTestActiveAttemptResponse;
+import com.fptu.math_master.dto.response.RoadmapEntryTestInfoResponse;
 import com.fptu.math_master.dto.response.RoadmapEntryTestResultResponse;
+import com.fptu.math_master.dto.response.RoadmapEntryTestSnapshotResponse;
 import com.fptu.math_master.dto.response.RoadmapFeedbackResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
-import com.fptu.math_master.dto.response.StudentAssessmentResponse;
 import com.fptu.math_master.dto.response.TopicMaterialResponse;
 import com.fptu.math_master.dto.request.SubmitRoadmapEntryTestRequest;
 import com.fptu.math_master.service.RoadmapAdminService;
@@ -109,10 +114,80 @@ public class StudentRoadmapController {
       @Operation(
         summary = "Get roadmap entry test",
         description = "Get configured entry test assessment details for a roadmap")
-      public ApiResponse<StudentAssessmentResponse> getRoadmapEntryTest(@PathVariable UUID roadmapId) {
+      public ApiResponse<RoadmapEntryTestInfoResponse> getRoadmapEntryTest(@PathVariable UUID roadmapId) {
       UUID studentId = SecurityUtils.getCurrentUserId();
-      return ApiResponse.<StudentAssessmentResponse>builder()
+      return ApiResponse.<RoadmapEntryTestInfoResponse>builder()
         .result(roadmapAdminService.getEntryTestForStudent(studentId, roadmapId))
+        .build();
+      }
+
+      @PostMapping("/roadmaps/{roadmapId}/entry-test/attempts/{attemptId}/answers")
+      @PreAuthorize("hasRole('STUDENT')")
+      @Operation(
+        summary = "Save entry test answer",
+        description = "Save or update answer for a question in roadmap entry test attempt")
+      public ApiResponse<AnswerAckResponse> saveRoadmapEntryTestAnswer(
+        @PathVariable UUID roadmapId,
+        @PathVariable UUID attemptId,
+        @Valid @RequestBody RoadmapEntryTestAnswerRequest request) {
+      UUID studentId = SecurityUtils.getCurrentUserId();
+      return ApiResponse.<AnswerAckResponse>builder()
+        .result(roadmapAdminService.saveEntryTestAnswer(studentId, roadmapId, attemptId, request))
+        .build();
+      }
+
+      @PostMapping("/roadmaps/{roadmapId}/entry-test/attempts/{attemptId}/flags")
+      @PreAuthorize("hasRole('STUDENT')")
+      @Operation(
+        summary = "Update entry test flag",
+        description = "Flag or unflag a question in roadmap entry test attempt")
+      public ApiResponse<AnswerAckResponse> updateRoadmapEntryTestFlag(
+        @PathVariable UUID roadmapId,
+        @PathVariable UUID attemptId,
+        @Valid @RequestBody RoadmapEntryTestFlagRequest request) {
+      UUID studentId = SecurityUtils.getCurrentUserId();
+      return ApiResponse.<AnswerAckResponse>builder()
+        .result(roadmapAdminService.updateEntryTestFlag(studentId, roadmapId, attemptId, request))
+        .build();
+      }
+
+      @GetMapping("/roadmaps/{roadmapId}/entry-test/attempts/{attemptId}/snapshot")
+      @PreAuthorize("hasRole('STUDENT')")
+      @Operation(
+        summary = "Get entry test draft snapshot",
+        description = "Get answers, flags, remaining time and progress for resume")
+      public ApiResponse<RoadmapEntryTestSnapshotResponse> getRoadmapEntryTestSnapshot(
+        @PathVariable UUID roadmapId, @PathVariable UUID attemptId) {
+      UUID studentId = SecurityUtils.getCurrentUserId();
+      return ApiResponse.<RoadmapEntryTestSnapshotResponse>builder()
+        .result(roadmapAdminService.getEntryTestSnapshot(studentId, roadmapId, attemptId))
+        .build();
+      }
+
+      @PostMapping("/roadmaps/{roadmapId}/entry-test/attempts/{attemptId}/save-exit")
+      @PreAuthorize("hasRole('STUDENT')")
+      @Operation(
+        summary = "Save and exit entry test",
+        description = "Persist draft state and keep attempt in progress for later resume")
+      public ApiResponse<Void> saveAndExitRoadmapEntryTest(
+        @PathVariable UUID roadmapId, @PathVariable UUID attemptId) {
+      UUID studentId = SecurityUtils.getCurrentUserId();
+      roadmapAdminService.saveEntryTestAndExit(studentId, roadmapId, attemptId);
+      return ApiResponse.<Void>builder()
+        .message("Progress saved successfully")
+        .build();
+      }
+
+      @GetMapping("/roadmaps/{roadmapId}/entry-test/active-attempt")
+      @PreAuthorize("hasRole('STUDENT')")
+      @Operation(
+        summary = "Get active roadmap entry test attempt",
+        description = "Return active attempt ID and runtime metadata for current student")
+      public ApiResponse<RoadmapEntryTestActiveAttemptResponse> getActiveRoadmapEntryTestAttempt(
+        @PathVariable UUID roadmapId) {
+      UUID studentId = SecurityUtils.getCurrentUserId();
+      return ApiResponse.<RoadmapEntryTestActiveAttemptResponse>builder()
+        .result(roadmapAdminService.getActiveEntryTestAttempt(studentId, roadmapId))
         .build();
       }
 

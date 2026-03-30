@@ -3,7 +3,7 @@ package com.fptu.math_master.controller;
 import com.fptu.math_master.component.StreamPublisher;
 import com.fptu.math_master.configuration.properties.CentrifugoProperties;
 import com.fptu.math_master.dto.request.NotificationRequest;
-import com.fptu.math_master.entity.Notification;
+import com.fptu.math_master.dto.response.NotificationResponse;
 import com.fptu.math_master.service.CentrifugoService;
 import com.fptu.math_master.service.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +41,7 @@ public class NotificationController {
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Page<Notification>> getNotifications(@AuthenticationPrincipal Jwt jwt, Pageable pageable) {
+    public ResponseEntity<Page<NotificationResponse>> getNotifications(@AuthenticationPrincipal Jwt jwt, Pageable pageable) {
         UUID userId = UUID.fromString(jwt.getSubject());
 
         return ResponseEntity.ok(notificationService.getNotifications(userId, pageable));

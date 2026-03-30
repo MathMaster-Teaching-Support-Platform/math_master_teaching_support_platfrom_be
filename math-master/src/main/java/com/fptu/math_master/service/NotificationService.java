@@ -1,6 +1,6 @@
 package com.fptu.math_master.service;
 
-import com.fptu.math_master.entity.Notification;
+import com.fptu.math_master.dto.response.NotificationResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public interface NotificationService {
 
-    Page<Notification> getNotifications(UUID userId, Pageable pageable);
+    Page<NotificationResponse> getNotifications(UUID userId, Pageable pageable);
 
     void markAsRead(UUID notificationId, UUID userId);
 

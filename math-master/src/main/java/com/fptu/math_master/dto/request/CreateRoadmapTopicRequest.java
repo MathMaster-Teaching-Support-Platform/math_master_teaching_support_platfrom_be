@@ -38,6 +38,8 @@ public class CreateRoadmapTopicRequest {
 
   private UUID topicAssessmentId;
 
+  private List<UUID> courseIds;
+
   @NotNull(message = "Difficulty is required")
   private QuestionDifficulty difficulty;
 }

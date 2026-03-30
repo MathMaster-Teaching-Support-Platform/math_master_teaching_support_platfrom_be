@@ -35,6 +35,8 @@ public class UpdateRoadmapTopicRequest {
 
   private UUID topicAssessmentId;
 
+  private List<UUID> courseIds;
+
   private QuestionDifficulty difficulty;
 
   private TopicStatus status;
