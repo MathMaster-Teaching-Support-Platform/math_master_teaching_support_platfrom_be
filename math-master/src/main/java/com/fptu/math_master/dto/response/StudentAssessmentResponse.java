@@ -23,6 +23,7 @@ public class StudentAssessmentResponse {
   private Long totalQuestions;
   private BigDecimal totalPoints;
   private Integer timeLimitMinutes;
+  private BigDecimal passingScore;
   private Instant dueDate;
   private Instant startDate;
   private Instant endDate;

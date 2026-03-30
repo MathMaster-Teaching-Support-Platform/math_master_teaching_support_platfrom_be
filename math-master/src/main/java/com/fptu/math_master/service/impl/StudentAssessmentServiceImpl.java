@@ -110,17 +110,18 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
       submissionRepository.findByAssessmentIdAndStudentId(assessmentId, studentId);
 
     if (submissionOpt.isPresent()) {
+      // Check for existing IN_PROGRESS attempts first
       List<QuizAttempt> inProgressAttempts =
         quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
           assessmentId, studentId, SubmissionStatus.IN_PROGRESS);
       if (!inProgressAttempts.isEmpty()) {
-      QuizAttempt activeAttempt = inProgressAttempts.get(0);
-      log.info(
-        "Returning existing active attempt {} for student {} and assessment {}",
-        activeAttempt.getId(),
-        studentId,
-        assessmentId);
-      return buildAttemptStartResponse(assessment, activeAttempt, false);
+        QuizAttempt activeAttempt = inProgressAttempts.get(0);
+        log.info(
+          "Returning existing active attempt {} for student {} and assessment {}",
+          activeAttempt.getId(),
+          studentId,
+          assessmentId);
+        return buildAttemptStartResponse(assessment, activeAttempt, false);
       }
 
       validateAttemptLimit(assessment, submissionOpt.get().getId());
@@ -129,24 +130,41 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     Submission submission =
       submissionOpt.orElseGet(() -> createSubmission(assessment, studentId));
 
-    Integer attemptNumber = quizAttemptRepository.countBySubmissionId(submission.getId()) + 1;
+    // Use synchronized block on submission ID to prevent race condition
+    synchronized (("attempt_" + submission.getId().toString()).intern()) {
+      // Double-check for IN_PROGRESS attempts inside synchronized block
+      List<QuizAttempt> inProgressAttempts =
+        quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
+          assessmentId, studentId, SubmissionStatus.IN_PROGRESS);
+      if (!inProgressAttempts.isEmpty()) {
+        QuizAttempt activeAttempt = inProgressAttempts.get(0);
+        log.info(
+          "Found existing active attempt {} in synchronized block for student {} and assessment {}",
+          activeAttempt.getId(),
+          studentId,
+          assessmentId);
+        return buildAttemptStartResponse(assessment, activeAttempt, false);
+      }
 
-    QuizAttempt attempt =
-        QuizAttempt.builder()
-            .submissionId(submission.getId())
-            .assessmentId(assessmentId)
-            .studentId(studentId)
-            .attemptNumber(attemptNumber)
-            .status(SubmissionStatus.IN_PROGRESS)
-            .startedAt(now)
-            .build();
+      Integer attemptNumber = quizAttemptRepository.countBySubmissionId(submission.getId()) + 1;
 
-    attempt = quizAttemptRepository.save(attempt);
-    log.info("Created quiz attempt: {}", attempt.getId());
+      QuizAttempt attempt =
+          QuizAttempt.builder()
+              .submissionId(submission.getId())
+              .assessmentId(assessmentId)
+              .studentId(studentId)
+              .attemptNumber(attemptNumber)
+              .status(SubmissionStatus.IN_PROGRESS)
+              .startedAt(now)
+              .build();
 
-    draftService.initDraft(attempt.getId(), assessmentId, assessment.getTimeLimitMinutes());
+      attempt = quizAttemptRepository.save(attempt);
+      log.info("Created quiz attempt: {}", attempt.getId());
 
-    return buildAttemptStartResponse(assessment, attempt, Boolean.TRUE.equals(assessment.getRandomizeQuestions()));
+      draftService.initDraft(attempt.getId(), assessmentId, assessment.getTimeLimitMinutes());
+
+      return buildAttemptStartResponse(assessment, attempt, Boolean.TRUE.equals(assessment.getRandomizeQuestions()));
+    }
   }
 
   private AttemptStartResponse buildAttemptStartResponse(
@@ -266,6 +284,20 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     centrifugoService.publishSubmitted(attemptId);
 
     log.info("Assessment submitted successfully: {}", attemptId);
+
+    // Trigger auto-grading for objective questions
+    try {
+      log.info("Triggering auto-grading for submission: {}", attempt.getSubmissionId());
+      gradingService.autoGradeSubmission(attempt.getSubmissionId());
+      log.info("Auto-grading completed for submission: {}", attempt.getSubmissionId());
+    } catch (Exception e) {
+      log.error(
+          "Auto-grading failed for submission: {}. Teacher can grade manually later.",
+          attempt.getSubmissionId(),
+          e);
+      // Continue - don't fail the submission if auto-grading fails
+      // Teacher can still grade manually
+    }
   }
 
   @Override
@@ -381,6 +413,7 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
         .totalQuestions(totalQuestions)
         .totalPoints(totalPoints)
         .timeLimitMinutes(assessment.getTimeLimitMinutes())
+        .passingScore(assessment.getPassingScore())
         .dueDate(assessment.getEndDate())
         .startDate(assessment.getStartDate())
         .endDate(assessment.getEndDate())

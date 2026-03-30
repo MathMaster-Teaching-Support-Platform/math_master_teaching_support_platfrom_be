@@ -159,23 +159,58 @@ public class GradingServiceImpl implements GradingService {
   }
 
   private boolean gradeMultipleChoice(Answer answer, Question question) {
-    if (answer.getAnswerData() == null || question.getCorrectAnswer() == null) {
+    if (question.getCorrectAnswer() == null) {
       return false;
     }
-    Object selected = answer.getAnswerData().get("selected");
-    boolean isCorrect = selected != null && selected.toString().equals(question.getCorrectAnswer());
+    
+    // Try to get answer from answerData first (structured format)
+    String studentAnswer = null;
+    if (answer.getAnswerData() != null) {
+      Object selected = answer.getAnswerData().get("selected");
+      if (selected != null) {
+        studentAnswer = selected.toString();
+      }
+    }
+    
+    // Fallback to answerText (simple string format)
+    if (studentAnswer == null && answer.getAnswerText() != null) {
+      studentAnswer = answer.getAnswerText().trim();
+    }
+    
+    if (studentAnswer == null) {
+      return false;
+    }
+    
+    boolean isCorrect = studentAnswer.equals(question.getCorrectAnswer());
     answer.setIsCorrect(isCorrect);
     answer.setPointsEarned(isCorrect ? question.getPoints() : BigDecimal.ZERO);
     return true;
   }
 
   private boolean gradeTrueFalse(Answer answer, Question question) {
-    if (answer.getAnswerData() == null || question.getCorrectAnswer() == null) {
+    if (question.getCorrectAnswer() == null) {
       return false;
     }
-    Object selected = answer.getAnswerData().get("value");
-    boolean isCorrect =
-        selected != null && selected.toString().equalsIgnoreCase(question.getCorrectAnswer());
+    
+    // Try to get answer from answerData first (structured format)
+    String studentAnswer = null;
+    if (answer.getAnswerData() != null) {
+      Object value = answer.getAnswerData().get("value");
+      if (value != null) {
+        studentAnswer = value.toString();
+      }
+    }
+    
+    // Fallback to answerText (simple string format)
+    if (studentAnswer == null && answer.getAnswerText() != null) {
+      studentAnswer = answer.getAnswerText().trim();
+    }
+    
+    if (studentAnswer == null) {
+      return false;
+    }
+    
+    boolean isCorrect = studentAnswer.equalsIgnoreCase(question.getCorrectAnswer());
     answer.setIsCorrect(isCorrect);
     answer.setPointsEarned(isCorrect ? question.getPoints() : BigDecimal.ZERO);
     return true;
@@ -526,35 +561,36 @@ public class GradingServiceImpl implements GradingService {
       passRate = (double) passedCount / scores.size() * 100;
     }
 
+    // Score distribution theo thang điểm Việt Nam (0-10)
     Map<String, Long> scoreDistribution = new LinkedHashMap<>();
     scoreDistribution.put(
-        "0-20", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(20)) <= 0).count());
+        "0-2", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(2)) <= 0).count());
     scoreDistribution.put(
-        "21-40",
+        "2-4",
         scores.stream()
             .filter(
                 s ->
-                    s.compareTo(BigDecimal.valueOf(20)) > 0
-                        && s.compareTo(BigDecimal.valueOf(40)) <= 0)
+                    s.compareTo(BigDecimal.valueOf(2)) > 0
+                        && s.compareTo(BigDecimal.valueOf(4)) <= 0)
             .count());
     scoreDistribution.put(
-        "41-60",
+        "4-6",
         scores.stream()
             .filter(
                 s ->
-                    s.compareTo(BigDecimal.valueOf(40)) > 0
-                        && s.compareTo(BigDecimal.valueOf(60)) <= 0)
+                    s.compareTo(BigDecimal.valueOf(4)) > 0
+                        && s.compareTo(BigDecimal.valueOf(6)) <= 0)
             .count());
     scoreDistribution.put(
-        "61-80",
+        "6-8",
         scores.stream()
             .filter(
                 s ->
-                    s.compareTo(BigDecimal.valueOf(60)) > 0
-                        && s.compareTo(BigDecimal.valueOf(80)) <= 0)
+                    s.compareTo(BigDecimal.valueOf(6)) > 0
+                        && s.compareTo(BigDecimal.valueOf(8)) <= 0)
             .count());
     scoreDistribution.put(
-        "81-100", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(80)) > 0).count());
+        "8-10", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(8)) > 0).count());
 
     Long averageTimeSpent =
         (long)
