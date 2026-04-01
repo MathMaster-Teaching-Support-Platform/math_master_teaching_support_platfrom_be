@@ -53,7 +53,28 @@ function Write-Step($msg) { Write-Host ">> $msg" -ForegroundColor Yellow }
 function Write-OK($msg)   { Write-Host "OK  $msg" -ForegroundColor Green  }
 function Write-Err($msg)  { Write-Host "ERR $msg" -ForegroundColor Red    }
 
-# â”€â”€â”€ Tasks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function Stop-AppPort {
+    param([int]$Port = 8080)
+    $procs = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue |
+             Where-Object { $_.State -eq 'Listen' -or $_.State -eq 'Established' }
+    if (-not $procs) { Write-OK "Port $Port is already free."; return }
+    $pids = $procs | Select-Object -ExpandProperty OwningProcess -Unique
+    foreach ($pid in $pids) {
+        $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+        $name = if ($proc) { $proc.Name } else { "PID $pid" }
+        Write-Step "Killing process on port ${Port}: $name (PID $pid)"
+        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    }
+    for ($i = 0; $i -lt 10; $i++) {
+        Start-Sleep -Seconds 1
+        $still = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue |
+                 Where-Object { $_.State -eq 'Listen' -or $_.State -eq 'Established' }
+        if (-not $still) { Write-OK "Port $Port is now free."; return }
+    }
+    Write-Err "Port $Port still in use after 10s. Continuing anyway..."
+}
+
+# Tasks
 
 function Invoke-ApplyFormat {
     Write-Header "Code Formatting (Spotless)"
@@ -95,14 +116,17 @@ function Invoke-CleanBuildStart {
     $root = Get-ProjectRoot
     if (-Not (Test-Path (Join-Path $root "mvnw.cmd"))) { Write-Err "mvnw.cmd not found."; return }
 
-    # Step 1: Start Docker services
+    # Step 1: Remove the app Docker container so it cannot occupy port 8080
     if (Assert-Docker) {
         Assert-EnvFile $root
         Push-Location $root
-        Write-Step "Starting Docker services..."
-        docker compose up -d
-        if ($LASTEXITCODE -ne 0) { Write-Err "Failed to start Docker services."; Pop-Location; return }
-        Write-OK "Docker services started."
+        Write-Step "Removing app container to free port 8080..."
+        # rm -f -s: force-stop then remove the container entirely (prevents auto-restart)
+        docker compose rm -f -s app 2>&1 | Out-Null
+        Write-Step "Starting infrastructure services (redis, centrifugo, minio)..."
+        docker compose up -d redis centrifugo minio nginx-minio minio-init
+        if ($LASTEXITCODE -ne 0) { Write-Err "Failed to start infrastructure services."; Pop-Location; return }
+        Write-OK "Infrastructure services started."
         Pop-Location
     }
 
@@ -113,7 +137,10 @@ function Invoke-CleanBuildStart {
     if ($LASTEXITCODE -ne 0) { Write-Err "Build failed. Fix errors before starting."; Pop-Location; return }
     Write-OK "Build successful."
 
-    # Step 3: Start Spring Boot
+    # Step 3: Kill anything still on port 8080 right before starting
+    Stop-AppPort -Port 8080
+
+    # Step 4: Start Spring Boot
     Write-Step "Starting Spring Boot application... (Ctrl+C to stop)"
     Write-Host ""
     &.\mvnw.cmd spring-boot:run
