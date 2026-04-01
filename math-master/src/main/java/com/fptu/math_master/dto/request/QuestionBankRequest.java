@@ -2,6 +2,7 @@ package com.fptu.math_master.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,4 +21,6 @@ public class QuestionBankRequest {
   private String description;
 
   private Boolean isPublic;
+
+  private UUID chapterId;
 }

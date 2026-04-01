@@ -42,6 +42,12 @@ public class RoadmapTopicResponse {
   @Schema(description = "Expected mark checkpoint on a 10-point scale")
   private Double mark;
 
+  @Schema(description = "Required point to unlock this topic (10-point scale)")
+  private Double requiredPoint;
+
+  @Schema(description = "Whether topic is unlocked for current student")
+  private Boolean unlocked;
+
   @Schema(description = "Assessment linked to this topic")
   private UUID topicAssessmentId;
 

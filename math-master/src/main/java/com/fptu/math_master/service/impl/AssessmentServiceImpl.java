@@ -737,17 +737,10 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     List<ExamMatrixTemplateMapping> templateMappings =
       examMatrixTemplateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
-    List<ExamMatrixBankMapping> bankMappings =
-      examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
 
-    if (templateMappings.isEmpty() && bankMappings.isEmpty()) {
+    if (templateMappings.isEmpty()) {
       throw new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND);
     }
-
-    AssessmentSelectionStrategy strategy =
-      request.getSelectionStrategy() != null
-        ? request.getSelectionStrategy()
-        : AssessmentSelectionStrategy.BANK_FIRST;
 
     int totalQuestionsGenerated = 0;
     int totalPoints = 0;
@@ -796,43 +789,7 @@ public class AssessmentServiceImpl implements AssessmentService {
       }
     }
 
-    // New bank-driven flow with fallback strategy.
-    for (ExamMatrixBankMapping bankMapping : bankMappings) {
-      Map<QuestionDifficulty, Integer> distribution =
-          normalizeDifficultyDistribution(bankMapping.getDifficultyDistribution());
 
-      for (Map.Entry<QuestionDifficulty, Integer> entry : distribution.entrySet()) {
-        QuestionDifficulty difficulty = entry.getKey();
-        int required = entry.getValue() != null ? entry.getValue() : 0;
-        if (required <= 0) {
-          continue;
-        }
-
-        SelectionResult selection =
-            selectQuestionsByStrategy(bankMapping, difficulty, required, strategy, warnings);
-
-        for (Question question : selection.questions()) {
-          BigDecimal bankPoints =
-              bankMapping.getPointsPerQuestion() != null
-                  ? bankMapping.getPointsPerQuestion()
-                  : (question.getPoints() != null ? question.getPoints() : BigDecimal.ONE);
-
-          AssessmentQuestion assessmentQuestion =
-              AssessmentQuestion.builder()
-                  .assessmentId(assessmentId)
-                  .questionId(question.getId())
-                  .matrixBankMappingId(bankMapping.getId())
-                  .pointsOverride(bankPoints)
-                  .orderIndex(orderIndex++)
-                  .build();
-          assessmentQuestionRepository.save(assessmentQuestion);
-          totalQuestionsGenerated++;
-          totalPoints += bankPoints.intValue();
-        }
-        questionsFromAi += selection.aiCount();
-        questionsFromBank += selection.bankCount();
-      }
-    }
 
     log.info(
         "Generated {} questions for assessment {} with {} total points",
@@ -939,7 +896,11 @@ public class AssessmentServiceImpl implements AssessmentService {
         }
 
         String questionText = sample.getQuestionText();
-        String correctAnswerKey = sample.getCorrectAnswer(); // This is the KEY (A/B/C/D)
+        String correctAnswerRaw = sample.getCorrectAnswer();
+        Map<String, String> normalizedOptions = normalizeMcqOptions(sample.getOptions());
+        String correctAnswerForPersist =
+          resolveCorrectAnswerForPersist(
+            template.getTemplateType(), correctAnswerRaw, normalizedOptions);
         String explanation = sample.getExplanation();
 
         // Validate all text fields are actual strings, not null or objects
@@ -947,7 +908,7 @@ public class AssessmentServiceImpl implements AssessmentService {
           log.warn("Question {} has empty questionText, skipping", i + 1);
           continue;
         }
-        if (correctAnswerKey == null || correctAnswerKey.trim().isEmpty()) {
+        if (correctAnswerForPersist == null || correctAnswerForPersist.trim().isEmpty()) {
           log.warn("Question {} has empty correctAnswer key, skipping", i + 1);
           continue;
         }
@@ -969,30 +930,8 @@ public class AssessmentServiceImpl implements AssessmentService {
           }
         }
 
-        // Get the actual answer VALUE from the options using the KEY
-        String correctAnswer = null;
-        if (sample.getOptions() != null && sample.getOptions().containsKey(correctAnswerKey)) {
-          Object answerObj = sample.getOptions().get(correctAnswerKey);
-          if (answerObj != null) {
-            // Ensure it's a proper string, not an object reference
-            correctAnswer = answerObj.toString().trim();
-            log.debug(
-                "Extracted answer value '{}' for key '{}' from options",
-                correctAnswer,
-                correctAnswerKey);
-          }
-        }
-
-        if (correctAnswer == null || correctAnswer.isEmpty()) {
-          log.warn(
-              "Question {} has no valid correctAnswer for key '{}', skipping",
-              i + 1,
-              correctAnswerKey);
-          continue;
-        }
-
         // Check if answer is the error placeholder
-        if ("?".equals(correctAnswer)) {
+        if ("?".equals(correctAnswerForPersist.trim())) {
           log.warn(
               "Question {} has placeholder answer '?', template formula likely failed, skipping",
               i + 1);
@@ -1004,8 +943,8 @@ public class AssessmentServiceImpl implements AssessmentService {
             CreateQuestionRequest.builder()
                 .questionText(questionText.trim())
                 .questionType(template.getTemplateType())
-                .options(convertOptionsToObjectMap(sample.getOptions()))
-                .correctAnswer(correctAnswer.trim())
+                .options(convertOptionsToObjectMap(normalizedOptions))
+                .correctAnswer(correctAnswerForPersist.trim())
                 .explanation(explanation.trim())
                 .difficulty(
                     sample.getCalculatedDifficulty() != null
@@ -1210,7 +1149,11 @@ public class AssessmentServiceImpl implements AssessmentService {
                     sample.getOptions() != null
                         ? new HashMap<String, Object>(sample.getOptions())
                         : null)
-                .correctAnswer(sample.getCorrectAnswer())
+                .correctAnswer(
+                  resolveCorrectAnswerForPersist(
+                    template.getTemplateType(),
+                    sample.getCorrectAnswer(),
+                    normalizeMcqOptions(sample.getOptions())))
                 .explanation(sample.getExplanation())
                 .difficulty(difficulty)
                 .cognitiveLevel(bankMapping.getCognitiveLevel())
@@ -1247,6 +1190,62 @@ public class AssessmentServiceImpl implements AssessmentService {
     Map<String, Object> objectMap = new LinkedHashMap<>();
     stringOptions.forEach((key, value) -> objectMap.put(key, value));
     return objectMap;
+  }
+
+  private Map<String, String> normalizeMcqOptions(Map<String, String> options) {
+    if (options == null || options.isEmpty()) {
+      return options;
+    }
+
+    Map<String, String> normalized = new LinkedHashMap<>();
+    for (Map.Entry<String, String> entry : options.entrySet()) {
+      String rawKey = entry.getKey() == null ? "" : entry.getKey().trim();
+      String key = switch (rawKey.toUpperCase()) {
+        case "1" -> "A";
+        case "2" -> "B";
+        case "3" -> "C";
+        case "4" -> "D";
+        default -> rawKey.toUpperCase();
+      };
+      normalized.put(key, entry.getValue());
+    }
+    return normalized;
+  }
+
+  private String resolveCorrectAnswerForPersist(
+      com.fptu.math_master.enums.QuestionType questionType,
+      String rawCorrectAnswer,
+      Map<String, String> normalizedOptions) {
+    if (rawCorrectAnswer == null) {
+      return null;
+    }
+
+    String trimmed = rawCorrectAnswer.trim();
+    if (trimmed.isEmpty()) {
+      return trimmed;
+    }
+
+    if (questionType != com.fptu.math_master.enums.QuestionType.MULTIPLE_CHOICE) {
+      return trimmed;
+    }
+
+    String upper = trimmed.toUpperCase();
+    if (Set.of("A", "B", "C", "D").contains(upper)) {
+      return upper;
+    }
+
+    if (normalizedOptions != null) {
+      for (Map.Entry<String, String> entry : normalizedOptions.entrySet()) {
+        if (entry.getValue() != null && entry.getValue().trim().equalsIgnoreCase(trimmed)) {
+          String key = entry.getKey() == null ? "" : entry.getKey().trim().toUpperCase();
+          if (Set.of("A", "B", "C", "D").contains(key)) {
+            return key;
+          }
+        }
+      }
+    }
+
+    return "A";
   }
 
   private Assessment loadAssessmentOrThrow(UUID id) {
@@ -1451,10 +1450,8 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     List<ExamMatrixTemplateMapping> templateMappings =
         examMatrixTemplateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
-    List<ExamMatrixBankMapping> bankMappings =
-        examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
 
-    if (templateMappings.isEmpty() && bankMappings.isEmpty()) {
+    if (templateMappings.isEmpty()) {
       return;
     }
 
@@ -1462,7 +1459,6 @@ public class AssessmentServiceImpl implements AssessmentService {
         GenerateAssessmentQuestionsRequest.builder()
             .examMatrixId(matrixId)
             .reuseApprovedQuestions(true)
-            .selectionStrategy(AssessmentSelectionStrategy.BANK_FIRST)
             .build();
 
     generateQuestionsFromMatrix(assessmentId, generateRequest);

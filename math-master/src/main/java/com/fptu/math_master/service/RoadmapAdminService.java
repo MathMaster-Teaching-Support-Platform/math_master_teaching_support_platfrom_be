@@ -32,6 +32,8 @@ public interface RoadmapAdminService {
 
   RoadmapDetailResponse getRoadmap(UUID roadmapId);
 
+  RoadmapDetailResponse getRoadmapForStudent(UUID studentId, UUID roadmapId);
+
   RoadmapDetailResponse updateRoadmap(UUID roadmapId, UpdateAdminRoadmapRequest request);
 
   void softDeleteRoadmap(UUID roadmapId);

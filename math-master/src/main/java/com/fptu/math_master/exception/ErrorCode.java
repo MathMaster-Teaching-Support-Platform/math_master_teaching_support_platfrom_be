@@ -253,7 +253,9 @@ public enum ErrorCode {
   ENROLLMENT_ACCESS_DENIED(
       1150, "You do not have permission to access this enrollment", HttpStatus.FORBIDDEN),
   COURSE_LESSON_NOT_FOUND(1151, "Course lesson not found", HttpStatus.NOT_FOUND),
-  COURSE_NOT_PUBLISHED(1152, "Course is not published", HttpStatus.BAD_REQUEST);
+    COURSE_NOT_PUBLISHED(1152, "Course is not published", HttpStatus.BAD_REQUEST),
+    QUESTION_TEMPLATE_NOT_IN_BANK(
+            1153, "Question template does not belong to this question bank", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

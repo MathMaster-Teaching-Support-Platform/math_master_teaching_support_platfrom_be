@@ -67,8 +67,9 @@ public class StudentRoadmapController {
   @PreAuthorize("hasRole('STUDENT')")
   @Operation(summary = "Get roadmap", description = "Get full roadmap template with topics and content")
   public ApiResponse<RoadmapDetailResponse> getRoadmap(@PathVariable UUID id) {
+    UUID studentId = SecurityUtils.getCurrentUserId();
     return ApiResponse.<RoadmapDetailResponse>builder()
-      .result(roadmapAdminService.getRoadmap(id))
+      .result(roadmapAdminService.getRoadmapForStudent(studentId, id))
         .build();
   }
 

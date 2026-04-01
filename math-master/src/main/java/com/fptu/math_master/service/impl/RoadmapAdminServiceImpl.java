@@ -21,6 +21,7 @@ import com.fptu.math_master.dto.response.RoadmapResourceOptionResponse;
 import com.fptu.math_master.dto.response.RoadmapEntryTestSnapshotResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
 import com.fptu.math_master.dto.response.RoadmapTopicResponse;
+import com.fptu.math_master.dto.response.RoadmapUnlockedTopicResponse;
 import com.fptu.math_master.dto.response.StudentAssessmentResponse;
 import com.fptu.math_master.dto.response.TopicMaterialResponse;
 import com.fptu.math_master.entity.Assessment;
@@ -64,6 +65,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -149,6 +151,16 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     }
 
     return learningRoadmapService.getRoadmapById(roadmapId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public RoadmapDetailResponse getRoadmapForStudent(UUID studentId, UUID roadmapId) {
+    RoadmapDetailResponse response = getRoadmap(roadmapId);
+    double bestScoreOnTen = computeStudentBestScoreOnTen(studentId, null);
+    applyUnlockState(response, bestScoreOnTen);
+    response.setStudentBestScore(toPointScaleInt(bestScoreOnTen));
+    return response;
   }
 
   @Override
@@ -511,6 +523,11 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
+    Submission previousSubmission =
+        submissionRepository.findByAssessmentIdAndStudentId(assessmentId, studentId).orElse(null);
+    UUID previousSubmissionId = previousSubmission == null ? null : previousSubmission.getId();
+    double previousBestScoreOnTen = computeStudentBestScoreOnTen(studentId, previousSubmissionId);
+
     studentAssessmentService.submitAssessment(
         SubmitAssessmentRequest.builder().attemptId(attemptId).confirmed(true).build());
 
@@ -523,18 +540,19 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       gradingService.autoGradeSubmission(submission.getId());
     }
 
-    return evaluateEntryTestResult(studentId, roadmapId, submission.getId());
+    return evaluateEntryTestResult(studentId, roadmapId, submission.getId(), previousBestScoreOnTen);
   }
 
   @Override
   @Transactional(readOnly = true)
   public RoadmapEntryTestResultResponse submitEntryTest(
       UUID studentId, UUID roadmapId, SubmitRoadmapEntryTestRequest request) {
-    return evaluateEntryTestResult(studentId, roadmapId, request.getSubmissionId());
+    double previousBestScoreOnTen = computeStudentBestScoreOnTen(studentId, request.getSubmissionId());
+    return evaluateEntryTestResult(studentId, roadmapId, request.getSubmissionId(), previousBestScoreOnTen);
     }
 
     private RoadmapEntryTestResultResponse evaluateEntryTestResult(
-      UUID studentId, UUID roadmapId, UUID submissionId) {
+      UUID studentId, UUID roadmapId, UUID submissionId, double previousBestScoreOnTen) {
     getActiveRoadmapOrThrow(roadmapId);
 
     Submission submission =
@@ -557,8 +575,9 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
-    // Calculate score from submission
+    // Calculate score from current submission and student's best score across all tests
     double scoreOnTen = computeScoreOnTen(submission);
+    double studentBestScoreOnTen = computeStudentBestScoreOnTen(studentId, null);
 
     // Find topic where score <= mark threshold
     List<RoadmapTopic> topics =
@@ -572,16 +591,25 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
 
     RoadmapTopic suggestedTopic = topics.get(topics.size() - 1);
     for (RoadmapTopic topic : topics) {
-      if (topic.getMark() != null && scoreOnTen <= topic.getMark()) {
+      if (topic.getMark() != null && studentBestScoreOnTen <= topic.getMark()) {
         suggestedTopic = topic;
         break;
       }
     }
 
+    List<RoadmapUnlockedTopicResponse> unlockedTopics =
+        mapUnlockedTopics(topics, studentBestScoreOnTen);
+    List<RoadmapUnlockedTopicResponse> newlyUnlockedTopics =
+        mapNewlyUnlockedTopics(topics, previousBestScoreOnTen, studentBestScoreOnTen);
+
     return RoadmapEntryTestResultResponse.builder()
         .roadmapId(roadmapId)
         .submissionId(submission.getId())
         .suggestedTopicId(suggestedTopic.getId())
+        .score(toPointScaleInt(scoreOnTen))
+        .studentBestScore(toPointScaleInt(studentBestScoreOnTen))
+        .unlockedTopics(unlockedTopics)
+        .newlyUnlockedTopics(newlyUnlockedTopics)
         .scoreOnTen(scoreOnTen)
         .evaluatedQuestions(mappings.size())
         .thresholdPercentage(70)
@@ -607,6 +635,70 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     if (scoreOnTen > 10.0) scoreOnTen = 10.0;
 
     return BigDecimal.valueOf(scoreOnTen).setScale(2, java.math.RoundingMode.HALF_UP).doubleValue();
+  }
+
+  private double computeStudentBestScoreOnTen(UUID studentId, UUID excludeSubmissionId) {
+    List<Submission> submissions =
+        submissionRepository.findByStudentIdAndStatuses(
+            studentId, EnumSet.of(SubmissionStatus.SUBMITTED, SubmissionStatus.GRADED));
+
+    return submissions.stream()
+        .filter(submission -> excludeSubmissionId == null || !excludeSubmissionId.equals(submission.getId()))
+        .mapToDouble(this::computeScoreOnTen)
+        .max()
+        .orElse(0.0);
+  }
+
+  private int toPointScaleInt(double scoreOnTen) {
+    return BigDecimal.valueOf(scoreOnTen).setScale(0, RoundingMode.HALF_UP).intValue();
+  }
+
+  private List<RoadmapUnlockedTopicResponse> mapUnlockedTopics(
+      List<RoadmapTopic> topics, double bestScoreOnTen) {
+    return topics.stream()
+        .filter(topic -> isTopicUnlocked(topic, bestScoreOnTen))
+        .map(this::mapUnlockedTopic)
+        .collect(Collectors.toList());
+  }
+
+  private List<RoadmapUnlockedTopicResponse> mapNewlyUnlockedTopics(
+      List<RoadmapTopic> topics, double previousBestScoreOnTen, double currentBestScoreOnTen) {
+    return topics.stream()
+        .filter(topic -> !isTopicUnlocked(topic, previousBestScoreOnTen))
+        .filter(topic -> isTopicUnlocked(topic, currentBestScoreOnTen))
+        .map(this::mapUnlockedTopic)
+        .collect(Collectors.toList());
+  }
+
+  private boolean isTopicUnlocked(RoadmapTopic topic, double bestScoreOnTen) {
+    double requiredPoint = topic.getMark() == null ? 0.0 : topic.getMark();
+    if (requiredPoint <= 0.0) {
+      return true;
+    }
+    return bestScoreOnTen >= requiredPoint;
+  }
+
+  private RoadmapUnlockedTopicResponse mapUnlockedTopic(RoadmapTopic topic) {
+    return RoadmapUnlockedTopicResponse.builder()
+        .id(topic.getId())
+        .name(topic.getTitle())
+        .requiredPoint(topic.getMark() == null ? 0.0 : topic.getMark())
+        .build();
+  }
+
+  private void applyUnlockState(RoadmapDetailResponse response, double bestScoreOnTen) {
+    if (response.getTopics() == null) {
+      return;
+    }
+
+    response
+        .getTopics()
+        .forEach(
+            topic -> {
+              double requiredPoint = topic.getMark() == null ? 0.0 : topic.getMark();
+              topic.setRequiredPoint(requiredPoint);
+              topic.setUnlocked(requiredPoint <= 0.0 || bestScoreOnTen >= requiredPoint);
+            });
   }
 
   private RoadmapSummaryResponse mapToSummaryResponse(LearningRoadmap roadmap) {

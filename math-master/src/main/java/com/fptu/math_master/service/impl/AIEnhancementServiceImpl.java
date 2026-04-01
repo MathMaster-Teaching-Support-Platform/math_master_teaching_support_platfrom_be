@@ -434,8 +434,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       return value;
     }
 
+    String normalizedValue = normalizeNumericLocale(value);
+
     // Remove anything in parentheses
-    String cleaned = value.replaceAll("\\s*\\([^)]*\\)", "").trim();
+    String cleaned = normalizedValue.replaceAll("\\s*\\([^)]*\\)", "").trim();
 
     // Remove any trailing non-numeric text (but keep decimal points and negative signs)
     cleaned = cleaned.replaceAll("^([+-]?\\d+\\.?\\d*).*", "$1").trim();
@@ -507,7 +509,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       throw new NumberFormatException("Answer is null");
     }
     // Extract just the numeric part
-    String cleaned = answer.trim().replaceAll("[^0-9.-]", "");
+    String cleaned = normalizeNumericLocale(answer).replaceAll("[^0-9.-]", "");
     return Double.parseDouble(cleaned);
   }
 
@@ -521,8 +523,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     // Try to parse as number for numeric comparison
     try {
-      double num = Double.parseDouble(normalized.replaceAll("[^0-9.-]", ""));
-      return String.format("%.2f", num);
+      double num = Double.parseDouble(normalizeNumericLocale(normalized).replaceAll("[^0-9.-]", ""));
+      return formatDecimal(num, 2);
     } catch (NumberFormatException e) {
       return normalized;
     }
@@ -719,7 +721,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       // Never allow 'a' == 0 (would cause division by zero in most formulas)
       if ("a".equals(name)) exclude.add(0);
 
-      if ("integer".equalsIgnoreCase(type)) {
+      if (isIntegerParameterType(type)) {
         int v;
         int tries = 0;
         do {
@@ -743,6 +745,13 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     String normalizedFormula = normalizeFormulaForEvaluation(formula);
     Map<String, Object> paramsForFormula = buildFormulaParameterAliases(params);
 
+    // Prefer internal evaluator first to avoid JS-engine differences for '^' and math functions.
+    try {
+      return evaluateFormulaSimple(normalizedFormula, paramsForFormula);
+    } catch (Exception e) {
+      log.debug("Internal evaluator failed for '{}': {}", normalizedFormula, e.getMessage());
+    }
+
     javax.script.ScriptEngine engine = null;
     try {
       javax.script.ScriptEngineManager mgr = new javax.script.ScriptEngineManager();
@@ -755,30 +764,27 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       engine = null;
     }
 
-    // If no ScriptEngine available, use simple arithmetic evaluator as fallback
+    // If no ScriptEngine available, internal evaluator is already attempted above.
     if (engine == null) {
-      try {
-        return evaluateFormulaSimple(normalizedFormula, paramsForFormula);
-      } catch (Exception fallbackError) {
-        log.warn(
-            "Simple formula evaluation also failed for '{}': {}",
-            normalizedFormula,
-            fallbackError.getMessage());
-        return "?";
-      }
+      return "?";
     }
 
     try {
       for (Map.Entry<String, Object> e : paramsForFormula.entrySet()) {
         engine.put(e.getKey(), e.getValue());
       }
-      Object result = engine.eval(normalizedFormula);
+      String jsFormula =
+          normalizedFormula
+              .replaceAll("\\bsqrt\\s*\\(", "Math.sqrt(")
+              .replaceAll("\\babs\\s*\\(", "Math.abs(")
+              .replace("^", "**");
+      Object result = engine.eval(jsFormula);
       double val = ((Number) result).doubleValue();
       // Format: integer if whole, else strip trailing zeros (e.g. 9.50 → 9.5, 3.25 → 3.25)
       if (val == Math.floor(val) && !Double.isInfinite(val)) {
         return String.valueOf((long) val);
       }
-      String formatted = String.format("%.4f", val); // up to 4 decimals to avoid rounding loss
+      String formatted = formatDecimal(val, 4); // up to 4 decimals to avoid rounding loss
       formatted = formatted.replaceAll("0+$", "").replaceAll("\\.$", "");
       return formatted;
     } catch (Exception e) {
@@ -908,7 +914,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       if (result == Math.floor(result) && !Double.isInfinite(result)) {
         return String.valueOf((long) result);
       }
-      String formatted = String.format("%.4f", result);
+      String formatted = formatDecimal(result, 4);
       formatted = formatted.replaceAll("0+$", "").replaceAll("\\.$", "");
       return formatted;
     } catch (Exception e) {
@@ -920,7 +926,12 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   /** Parse and evaluate arithmetic expression like "(1) - (1) / (1)" */
   private double parseArithmetic(String expr) {
     expr = expr.replaceAll("\\s+", "");
-    return evaluateAddSub(expr, new int[] {0});
+    int[] pos = new int[] {0};
+    double result = evaluateAddSub(expr, pos);
+    if (pos[0] != expr.length()) {
+      throw new RuntimeException("Unexpected token at position " + pos[0]);
+    }
+    return result;
   }
 
   private double evaluateAddSub(String expr, int[] pos) {
@@ -938,15 +949,25 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   }
 
   private double evaluateMulDiv(String expr, int[] pos) {
-    double result = evaluatePrimary(expr, pos);
+    double result = evaluatePower(expr, pos);
     while (pos[0] < expr.length()) {
       if (expr.charAt(pos[0]) == '*' || expr.charAt(pos[0]) == '/') {
         char op = expr.charAt(pos[0]++);
-        double right = evaluatePrimary(expr, pos);
+        double right = evaluatePower(expr, pos);
         result = op == '*' ? result * right : result / right;
       } else {
         break;
       }
+    }
+    return result;
+  }
+
+  private double evaluatePower(String expr, int[] pos) {
+    double result = evaluatePrimary(expr, pos);
+    while (pos[0] < expr.length() && expr.charAt(pos[0]) == '^') {
+      pos[0]++;
+      double exponent = evaluatePower(expr, pos); // right-associative exponent
+      result = Math.pow(result, exponent);
     }
     return result;
   }
@@ -971,6 +992,50 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       return result;
     }
 
+    // Function names and identifiers (e.g. sqrt(...), abs(...), pi)
+    if (Character.isLetter(expr.charAt(pos[0])) || expr.charAt(pos[0]) == '_') {
+      StringBuilder id = new StringBuilder();
+      while (pos[0] < expr.length()) {
+        char c = expr.charAt(pos[0]);
+        if (Character.isLetterOrDigit(c) || c == '_' || c == '.') {
+          id.append(c);
+          pos[0]++;
+        } else {
+          break;
+        }
+      }
+
+      String identifier = id.toString();
+      if (pos[0] < expr.length() && expr.charAt(pos[0]) == '(') {
+        pos[0]++; // skip '('
+        List<Double> args = new ArrayList<>();
+        if (pos[0] < expr.length() && expr.charAt(pos[0]) != ')') {
+          while (true) {
+            args.add(evaluateAddSub(expr, pos));
+            if (pos[0] < expr.length() && expr.charAt(pos[0]) == ',') {
+              pos[0]++;
+              continue;
+            }
+            break;
+          }
+        }
+        if (pos[0] >= expr.length() || expr.charAt(pos[0]) != ')') {
+          throw new RuntimeException("Missing ) after function " + identifier);
+        }
+        pos[0]++; // skip ')'
+        return evaluateKnownFunction(identifier, args);
+      }
+
+      String normalizedId = identifier.toLowerCase(Locale.ROOT);
+      if ("pi".equals(normalizedId) || "math.pi".equals(normalizedId)) {
+        return Math.PI;
+      }
+      if ("e".equals(normalizedId) || "math.e".equals(normalizedId)) {
+        return Math.E;
+      }
+      throw new RuntimeException("Unknown identifier: " + identifier);
+    }
+
     StringBuilder num = new StringBuilder();
 
     while (pos[0] < expr.length()
@@ -982,6 +1047,34 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     return Double.parseDouble(num.toString());
   }
 
+  private double evaluateKnownFunction(String functionName, List<Double> args) {
+    String fn = functionName.toLowerCase(Locale.ROOT);
+    switch (fn) {
+      case "sqrt":
+      case "math.sqrt":
+        if (args.size() != 1) throw new RuntimeException("sqrt expects 1 argument");
+        return Math.sqrt(args.get(0));
+      case "abs":
+      case "math.abs":
+        if (args.size() != 1) throw new RuntimeException("abs expects 1 argument");
+        return Math.abs(args.get(0));
+      case "pow":
+      case "math.pow":
+        if (args.size() != 2) throw new RuntimeException("pow expects 2 arguments");
+        return Math.pow(args.get(0), args.get(1));
+      case "max":
+      case "math.max":
+        if (args.size() != 2) throw new RuntimeException("max expects 2 arguments");
+        return Math.max(args.get(0), args.get(1));
+      case "min":
+      case "math.min":
+        if (args.size() != 2) throw new RuntimeException("min expects 2 arguments");
+        return Math.min(args.get(0), args.get(1));
+      default:
+        throw new RuntimeException("Unknown function: " + functionName);
+    }
+  }
+
   /** Fill template text placeholders with actual parameter values */
   private String fillTemplateText(Map<String, Object> templateText, Map<String, Object> params) {
     if (templateText == null || templateText.isEmpty()) return "";
@@ -991,7 +1084,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
                 "vi", templateText.getOrDefault("en", templateText.values().iterator().next()))
             .toString();
     for (Map.Entry<String, Object> e : params.entrySet()) {
-      text = text.replace("{{" + e.getKey() + "}}", e.getValue().toString());
+      text = text.replace("{{" + e.getKey() + "}}", formatParameterValue(e.getValue()));
     }
     // Normalize sign combinations after substitution:
     // "N + -M"  → "N - M"
@@ -1060,7 +1153,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     p.append("Question (already formed): ").append(baseQuestionText).append("\n");
     p.append("Correct answer (pre-computed, DO NOT change): ").append(correctAnswer).append("\n");
-    p.append("Parameters used: ").append(params).append("\n");
+    p.append("Parameters used: ").append(serializeParamsForPrompt(params)).append("\n");
     if (template.getAnswerFormula() != null && !template.getAnswerFormula().isBlank()) {
       p.append("Formula: ").append(template.getAnswerFormula()).append("\n");
     }
@@ -1087,6 +1180,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("7. answerCalculation = simple expression like \"(c - b) / a = ")
         .append(correctAnswer)
         .append("\".\n\n");
+    p.append("8. questionText and explanation MUST be natural Vietnamese with proper accents (UTF-8), no transliteration.\n");
+    p.append("9. Numeric values must use plain format: no thousands separators, use dot for decimal if needed (e.g. 3.5).\n\n");
 
     p.append("JSON format:\n");
     p.append(
@@ -1099,7 +1194,17 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     params.forEach(
         (k, v) -> {
           if (paramStr.length() > 0) paramStr.append(",");
-          paramStr.append("\"").append(k).append("\":").append(v);
+          Object value = v;
+          if (value instanceof Number) {
+            paramStr.append("\"").append(k).append("\":").append(formatParameterValue(value));
+          } else {
+            paramStr
+                .append("\"")
+                .append(k)
+                .append("\":\"")
+                .append(String.valueOf(value).replace("\"", "\\\\\""))
+                .append("\"");
+          }
         });
     p.append(paramStr);
     p.append("},\"answerCalculation\":\"")
@@ -1305,7 +1410,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
   private String formatNum(double val) {
     if (val == Math.floor(val) && !Double.isInfinite(val)) return String.valueOf((long) val);
-    return String.format("%.2f", val);
+    return formatDecimal(val, 2);
   }
 
   /** Find the map key whose value matches targetValue (numeric-tolerant). */
@@ -1313,13 +1418,80 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     if (options == null || targetValue == null) return null;
     for (Map.Entry<String, String> entry : options.entrySet()) {
       try {
-        double optVal = Double.parseDouble(entry.getValue().replaceAll("[^0-9.\\-]", ""));
-        double target = Double.parseDouble(targetValue.replaceAll("[^0-9.\\-]", ""));
+        double optVal = parseNumericAnswer(entry.getValue());
+        double target = parseNumericAnswer(targetValue);
         if (Math.abs(optVal - target) < 0.01) return entry.getKey();
       } catch (NumberFormatException e) {
         if (entry.getValue().trim().equalsIgnoreCase(targetValue.trim())) return entry.getKey();
       }
     }
     return null;
+  }
+
+  private String normalizeNumericLocale(String value) {
+    if (value == null) {
+      return "";
+    }
+    return value
+        .replace('−', '-')
+        .replace('–', '-')
+        .replace('—', '-')
+        .replaceAll("(?<=\\d),(?=\\d)", ".");
+  }
+
+  private boolean isIntegerParameterType(String type) {
+    if (type == null) {
+      return true;
+    }
+    String normalized = type.trim().toLowerCase(Locale.ROOT);
+    return normalized.equals("integer")
+        || normalized.equals("int")
+        || normalized.equals("long")
+        || normalized.equals("short")
+        || normalized.equals("byte")
+        || normalized.equals("whole");
+  }
+
+  private String formatParameterValue(Object value) {
+    if (!(value instanceof Number)) {
+      return String.valueOf(value);
+    }
+
+    Number n = (Number) value;
+    if (value instanceof Byte
+        || value instanceof Short
+        || value instanceof Integer
+        || value instanceof Long) {
+      return String.valueOf(n.longValue());
+    }
+
+    double d = n.doubleValue();
+    if (d == Math.floor(d) && !Double.isInfinite(d)) {
+      return String.valueOf((long) d);
+    }
+
+    String formatted = formatDecimal(d, 4);
+    return formatted.replaceAll("0+$", "").replaceAll("\\.$", "");
+  }
+
+  private String formatDecimal(double value, int scale) {
+    return String.format(Locale.ROOT, "%." + scale + "f", value);
+  }
+
+  private String serializeParamsForPrompt(Map<String, Object> params) {
+    if (params == null || params.isEmpty()) {
+      return "{}";
+    }
+    StringBuilder sb = new StringBuilder("{");
+    boolean first = true;
+    for (Map.Entry<String, Object> entry : params.entrySet()) {
+      if (!first) {
+        sb.append(", ");
+      }
+      first = false;
+      sb.append(entry.getKey()).append("=").append(formatParameterValue(entry.getValue()));
+    }
+    sb.append("}");
+    return sb.toString();
   }
 }

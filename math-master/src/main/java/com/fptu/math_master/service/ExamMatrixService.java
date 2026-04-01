@@ -1,7 +1,6 @@
 package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
-import com.fptu.math_master.dto.request.AddBankMappingRequest;
 import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
 import com.fptu.math_master.dto.request.ExamMatrixRequest;
@@ -9,7 +8,6 @@ import com.fptu.math_master.dto.request.FinalizePreviewRequest;
 import com.fptu.math_master.dto.request.GeneratePreviewRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
 import com.fptu.math_master.dto.response.BatchTemplateMappingsResponse;
-import com.fptu.math_master.dto.response.BankMappingResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
 import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
 import com.fptu.math_master.dto.response.FinalizePreviewResponse;
@@ -72,10 +70,6 @@ public interface ExamMatrixService {
   void removeTemplateMapping(UUID matrixId, UUID mappingId);
 
   List<TemplateMappingResponse> getTemplateMappings(UUID matrixId);
-
-    BankMappingResponse addBankMapping(UUID matrixId, AddBankMappingRequest request);
-
-    List<BankMappingResponse> getBankMappings(UUID matrixId);
 
   // ── Validation & Lifecycle ──────────────────────────────────────────────
 

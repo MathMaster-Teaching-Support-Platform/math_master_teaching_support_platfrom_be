@@ -3,10 +3,12 @@ package com.fptu.math_master.controller;
 import com.fptu.math_master.dto.request.QuestionBankRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.QuestionBankResponse;
+import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.service.QuestionBankService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -193,4 +195,45 @@ public class QuestionBankController {
         .result(questionBankService.canDeleteQuestionBank(id))
         .build();
   }
+
+    @PostMapping("/{id}/templates/{templateId}")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Map template to question bank",
+            description =
+                    "Assign a question template to a question bank. Only owner or admin can modify mappings.")
+    public ApiResponse<QuestionTemplateResponse> mapTemplateToBank(
+            @PathVariable UUID id, @PathVariable UUID templateId) {
+        log.info("REST request to map template {} to question bank {}", templateId, id);
+        return ApiResponse.<QuestionTemplateResponse>builder()
+                .message("Template mapped to question bank successfully")
+                .result(questionBankService.mapTemplateToBank(id, templateId))
+                .build();
+    }
+
+    @DeleteMapping("/{id}/templates/{templateId}")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Unmap template from question bank",
+            description =
+                    "Remove the question template assignment from a question bank. Only owner or admin can modify mappings.")
+    public ApiResponse<Void> unmapTemplateFromBank(
+            @PathVariable UUID id, @PathVariable UUID templateId) {
+        log.info("REST request to unmap template {} from question bank {}", templateId, id);
+        questionBankService.unmapTemplateFromBank(id, templateId);
+        return ApiResponse.<Void>builder().message("Template unmapped from question bank successfully").build();
+    }
+
+    @GetMapping("/{id}/templates")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN', 'STUDENT')")
+    @Operation(
+            summary = "Get templates mapped to question bank",
+            description =
+                    "List all active question templates currently mapped to this question bank.")
+    public ApiResponse<List<QuestionTemplateResponse>> getMappedTemplates(@PathVariable UUID id) {
+        log.info("REST request to list mapped templates for question bank {}", id);
+        return ApiResponse.<List<QuestionTemplateResponse>>builder()
+                .result(questionBankService.getMappedTemplates(id))
+                .build();
+    }
 }

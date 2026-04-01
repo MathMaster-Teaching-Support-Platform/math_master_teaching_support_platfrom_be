@@ -19,6 +19,8 @@ public class QuestionBankResponse {
   private String name;
   private String description;
   private Boolean isPublic;
+  private UUID chapterId;
+  private String chapterTitle;
   private Long questionCount;
   private Instant createdAt;
   private Instant updatedAt;

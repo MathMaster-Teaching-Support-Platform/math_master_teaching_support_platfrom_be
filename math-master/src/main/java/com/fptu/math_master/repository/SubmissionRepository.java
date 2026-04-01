@@ -2,6 +2,7 @@ package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.Submission;
 import com.fptu.math_master.enums.SubmissionStatus;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -60,4 +61,11 @@ public interface SubmissionRepository extends JpaRepository<Submission, UUID> {
           + "WHERE a.teacherId = :teacherId AND s.status = :status")
   Long countByTeacherIdAndStatus(
       @Param("teacherId") UUID teacherId, @Param("status") SubmissionStatus status);
+
+  @Query(
+      "SELECT s FROM Submission s WHERE s.studentId = :studentId "
+          + "AND s.status IN :statuses")
+  List<Submission> findByStudentIdAndStatuses(
+      @Param("studentId") UUID studentId,
+      @Param("statuses") Collection<SubmissionStatus> statuses);
 }
