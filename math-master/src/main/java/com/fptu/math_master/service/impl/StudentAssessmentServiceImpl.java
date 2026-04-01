@@ -20,6 +20,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -106,32 +107,11 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
 
     validateAssessmentAvailability(assessment, now);
 
-    Optional<Submission> submissionOpt =
-      submissionRepository.findByAssessmentIdAndStudentId(assessmentId, studentId);
+    // Lock on student-assessment pair to make submission creation atomic.
+    String attemptLockKey = ("attempt_" + assessmentId + "_" + studentId).intern();
+    synchronized (attemptLockKey) {
+      Submission submission = findOrCreateSubmission(assessment, studentId);
 
-    if (submissionOpt.isPresent()) {
-      // Check for existing IN_PROGRESS attempts first
-      List<QuizAttempt> inProgressAttempts =
-        quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
-          assessmentId, studentId, SubmissionStatus.IN_PROGRESS);
-      if (!inProgressAttempts.isEmpty()) {
-        QuizAttempt activeAttempt = inProgressAttempts.get(0);
-        log.info(
-          "Returning existing active attempt {} for student {} and assessment {}",
-          activeAttempt.getId(),
-          studentId,
-          assessmentId);
-        return buildAttemptStartResponse(assessment, activeAttempt, false);
-      }
-
-      validateAttemptLimit(assessment, submissionOpt.get().getId());
-    }
-
-    Submission submission =
-      submissionOpt.orElseGet(() -> createSubmission(assessment, studentId));
-
-    // Use synchronized block on submission ID to prevent race condition
-    synchronized (("attempt_" + submission.getId().toString()).intern()) {
       // Double-check for IN_PROGRESS attempts inside synchronized block
       List<QuizAttempt> inProgressAttempts =
         quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
@@ -145,6 +125,9 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
           assessmentId);
         return buildAttemptStartResponse(assessment, activeAttempt, false);
       }
+
+      // Check attempt limits only when starting a new attempt.
+      validateAttemptLimit(assessment, submission.getId());
 
       Integer attemptNumber = quizAttemptRepository.countBySubmissionId(submission.getId()) + 1;
 
@@ -572,6 +555,22 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
             .build();
 
     return submissionRepository.save(submission);
+  }
+
+  private Submission findOrCreateSubmission(Assessment assessment, UUID studentId) {
+    return submissionRepository
+        .findByAssessmentIdAndStudentId(assessment.getId(), studentId)
+        .orElseGet(
+            () -> {
+              try {
+                return createSubmission(assessment, studentId);
+              } catch (DataIntegrityViolationException e) {
+                // Another concurrent request created the same submission first.
+                return submissionRepository
+                    .findByAssessmentIdAndStudentId(assessment.getId(), studentId)
+                    .orElseThrow(() -> e);
+              }
+            });
   }
 
   private QuizAttempt validateAttemptAccess(UUID attemptId, UUID studentId) {

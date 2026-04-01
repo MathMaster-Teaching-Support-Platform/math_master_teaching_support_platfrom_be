@@ -157,7 +157,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Transactional(readOnly = true)
   public RoadmapDetailResponse getRoadmapForStudent(UUID studentId, UUID roadmapId) {
     RoadmapDetailResponse response = getRoadmap(roadmapId);
-    double bestScoreOnTen = computeStudentBestScoreOnTen(studentId, null);
+    double bestScoreOnTen = computeStudentBestScoreOnTenForRoadmap(studentId, roadmapId, null);
     applyUnlockState(response, bestScoreOnTen);
     response.setStudentBestScore(toPointScaleInt(bestScoreOnTen));
     return response;
@@ -526,7 +526,8 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     Submission previousSubmission =
         submissionRepository.findByAssessmentIdAndStudentId(assessmentId, studentId).orElse(null);
     UUID previousSubmissionId = previousSubmission == null ? null : previousSubmission.getId();
-    double previousBestScoreOnTen = computeStudentBestScoreOnTen(studentId, previousSubmissionId);
+    double previousBestScoreOnTen =
+      computeStudentBestScoreOnTenForRoadmap(studentId, roadmapId, previousSubmissionId);
 
     studentAssessmentService.submitAssessment(
         SubmitAssessmentRequest.builder().attemptId(attemptId).confirmed(true).build());
@@ -547,7 +548,8 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Transactional(readOnly = true)
   public RoadmapEntryTestResultResponse submitEntryTest(
       UUID studentId, UUID roadmapId, SubmitRoadmapEntryTestRequest request) {
-    double previousBestScoreOnTen = computeStudentBestScoreOnTen(studentId, request.getSubmissionId());
+    double previousBestScoreOnTen =
+      computeStudentBestScoreOnTenForRoadmap(studentId, roadmapId, request.getSubmissionId());
     return evaluateEntryTestResult(studentId, roadmapId, request.getSubmissionId(), previousBestScoreOnTen);
     }
 
@@ -575,9 +577,9 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_FOUND);
     }
 
-    // Calculate score from current submission and student's best score across all tests
+    // Calculate score from current submission and student's best score inside this roadmap only.
     double scoreOnTen = computeScoreOnTen(submission);
-    double studentBestScoreOnTen = computeStudentBestScoreOnTen(studentId, null);
+    double studentBestScoreOnTen = computeStudentBestScoreOnTenForRoadmap(studentId, roadmapId, null);
 
     // Find topic where score <= mark threshold
     List<RoadmapTopic> topics =
@@ -647,6 +649,45 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .mapToDouble(this::computeScoreOnTen)
         .max()
         .orElse(0.0);
+  }
+
+  private double computeStudentBestScoreOnTenForRoadmap(
+      UUID studentId, UUID roadmapId, UUID excludeSubmissionId) {
+    Set<UUID> roadmapAssessmentIds = getRoadmapAssessmentIds(roadmapId);
+    if (roadmapAssessmentIds.isEmpty()) {
+      return 0.0;
+    }
+
+    List<Submission> submissions =
+        submissionRepository.findByStudentIdAndStatuses(
+            studentId, EnumSet.of(SubmissionStatus.SUBMITTED, SubmissionStatus.GRADED));
+
+    return submissions.stream()
+        .filter(submission -> roadmapAssessmentIds.contains(submission.getAssessmentId()))
+        .filter(submission -> excludeSubmissionId == null || !excludeSubmissionId.equals(submission.getId()))
+        .mapToDouble(this::computeScoreOnTen)
+        .max()
+        .orElse(0.0);
+  }
+
+  private Set<UUID> getRoadmapAssessmentIds(UUID roadmapId) {
+    Set<UUID> assessmentIds = new HashSet<>();
+
+    roadmapEntryQuestionMappingRepository
+        .findByRoadmapIdOrderByOrderIndex(roadmapId)
+        .stream()
+        .map(RoadmapEntryQuestionMapping::getAssessmentId)
+        .filter(Objects::nonNull)
+        .findFirst()
+        .ifPresent(assessmentIds::add);
+
+    topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmapId).stream()
+        .filter(topic -> topic.getDeletedAt() == null)
+        .map(RoadmapTopic::getTopicAssessmentId)
+        .filter(Objects::nonNull)
+        .forEach(assessmentIds::add);
+
+    return assessmentIds;
   }
 
   private int toPointScaleInt(double scoreOnTen) {
