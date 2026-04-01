@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -40,7 +41,7 @@ public class GradingServiceImpl implements GradingService {
   AiReviewRepository aiReviewRepository;
 
   @Override
-  @Transactional
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void autoGradeSubmission(UUID submissionId) {
     log.info("Auto-grading submission: {}", submissionId);
 
@@ -48,6 +49,11 @@ public class GradingServiceImpl implements GradingService {
         submissionRepository
             .findById(submissionId)
             .orElseThrow(() -> new AppException(ErrorCode.SUBMISSION_NOT_FOUND));
+
+    if (submission.getStatus() == SubmissionStatus.GRADED) {
+      log.info("Skipping auto-grade for already graded submission: {}", submissionId);
+      return;
+    }
 
     if (submission.getStatus() != SubmissionStatus.SUBMITTED) {
       throw new AppException(ErrorCode.SUBMISSION_ALREADY_GRADED);
