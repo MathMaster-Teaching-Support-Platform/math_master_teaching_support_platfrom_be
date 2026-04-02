@@ -34,6 +34,11 @@ import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.StatObjectArgs;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.geom.Rectangle2D;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -44,15 +49,24 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.imageio.ImageIO;
+import javax.swing.JLabel;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.sl.usermodel.PictureData;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
+import org.apache.poi.xslf.usermodel.XSLFPictureData;
+import org.apache.poi.xslf.usermodel.XSLFPictureShape;
 import org.apache.poi.xslf.usermodel.XSLFShape;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
+import org.scilab.forge.jlatexmath.TeXConstants;
+import org.scilab.forge.jlatexmath.TeXFormula;
+import org.scilab.forge.jlatexmath.TeXIcon;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -64,6 +78,14 @@ import org.springframework.web.multipart.MultipartFile;
 public class LessonSlideServiceImpl implements LessonSlideService {
 
   private static final Pattern NON_ALNUM = Pattern.compile("[^a-zA-Z0-9._-]");
+  private static final Pattern LATEX_SEGMENT_PATTERN =
+      Pattern.compile(
+          "(?s)\\\\\\((.+?)\\\\\\)|\\\\\\[(.+?)\\\\\\]|\\$\\$(.+?)\\$\\$|(?<!\\\\)\\$(.+?)(?<!\\\\)\\$");
+  private static final float LATEX_FONT_SIZE = 22f;
+  private static final double LATEX_HORIZONTAL_PADDING = 2d;
+  private static final double LATEX_VERTICAL_PADDING = 6d;
+  private static final double LATEX_MAX_IMAGE_HEIGHT = 120d;
+  private static final double LATEX_MIN_IMAGE_HEIGHT = 20d;
   private static final List<String> TAGGED_SECTIONS =
       List.of(
           "LESSON_SUMMARY",
@@ -427,7 +449,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       for (int i = 0; i < slideshow.getSlides().size(); i++) {
         XSLFSlide slide = slideshow.getSlides().get(i);
         Map<String, String> slideValues = buildSlidePlaceholders(i + 1, deckSections);
-        for (XSLFShape shape : slide.getShapes()) {
+        List<XSLFShape> shapesSnapshot = new ArrayList<>(slide.getShapes());
+        for (XSLFShape shape : shapesSnapshot) {
           if (shape instanceof XSLFTextShape textShape) {
             String text = textShape.getText();
             if (text == null || text.isBlank()) {
@@ -435,8 +458,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             }
             String replaced = replacePlaceholders(text, slideValues);
             if (!text.equals(replaced)) {
-              textShape.clearText();
-              textShape.setText(replaced);
+              applyTextAndLatex(slideshow, slide, textShape, replaced);
             }
           }
         }
@@ -455,7 +477,33 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     for (Map.Entry<String, String> entry : values.entrySet()) {
       replaced = replaced.replace(entry.getKey(), entry.getValue());
     }
-    return replaced;
+    return normalizeEscapedLineBreaks(replaced);
+  }
+
+  private String normalizeEscapedLineBreaks(String value) {
+    if (value == null || value.isEmpty()) {
+      return value;
+    }
+    return value.replace("\\r\\n", "\n").replace("\\n", "\n");
+  }
+
+  private String normalizeLatexInput(String value) {
+    if (value == null || value.isEmpty()) {
+      return value;
+    }
+    String normalized = value.replace("\\$", "$");
+    normalized = normalized.replace("\\\\(", "\\(").replace("\\\\)", "\\)");
+    return normalized.replace("\\\\[", "\\[").replace("\\\\]", "\\]");
+  }
+
+  private String sanitizeDisplayText(String value) {
+    if (value == null || value.isEmpty()) {
+      return value;
+    }
+    String withoutTextCommands =
+        value.replaceAll("\\\\(?:textbf|textit|text|mathrm)\\{([^{}]+)}", "$1");
+    String withoutSpacingMacros = withoutTextCommands.replaceAll("\\\\(?:quad|qquad)", " ");
+    return withoutSpacingMacros.replaceAll(" {2,}", " ").trim();
   }
 
   private Map<String, String> buildSlidePlaceholders(int slideIndex, DeckSections deck) {
@@ -514,7 +562,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         XSLFSlide slide = slideshow.getSlides().get(i);
         LessonSlideJsonItemRequest item = slides.get(i);
         Map<String, String> slideValues = buildJsonSlidePlaceholders(item, lesson);
-        for (XSLFShape shape : slide.getShapes()) {
+        List<XSLFShape> shapesSnapshot = new ArrayList<>(slide.getShapes());
+        for (XSLFShape shape : shapesSnapshot) {
           if (shape instanceof XSLFTextShape textShape) {
             String text = textShape.getText();
             if (text == null || text.isBlank()) {
@@ -522,8 +571,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             }
             String replaced = replacePlaceholders(text, slideValues);
             if (!text.equals(replaced)) {
-              textShape.clearText();
-              textShape.setText(replaced);
+              applyTextAndLatex(slideshow, slide, textShape, replaced);
             }
           }
         }
@@ -532,10 +580,129 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       slideshow.write(outputStream);
       return outputStream.toByteArray();
     } catch (Exception ex) {
-      log.error("Failed to generate pptx from confirmed json", ex);
+      log.error(
+          "Failed to generate pptx from confirmed json. lessonId={}, slideCount={}, reason={}",
+          lesson.getId(),
+          slides == null ? 0 : slides.size(),
+          ex.getMessage(),
+          ex);
       throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
     }
   }
+
+  private void applyTextAndLatex(
+      XMLSlideShow slideshow, XSLFSlide slide, XSLFTextShape textShape, String content) {
+    String normalizedContent = normalizeLatexInput(content);
+    List<LatexToken> latexTokens = new ArrayList<>();
+    String displayText = sanitizeDisplayText(replaceLatexWithMarkers(normalizedContent, latexTokens));
+
+    textShape.clearText();
+    textShape.setText(displayText);
+
+    if (latexTokens.isEmpty()) {
+      return;
+    }
+
+    Rectangle2D anchor = textShape.getAnchor();
+    if (anchor == null) {
+      log.debug("Skip LaTeX image insertion because text shape anchor is null");
+      return;
+    }
+
+    double x = anchor.getX() + LATEX_HORIZONTAL_PADDING;
+    double y = anchor.getY() + anchor.getHeight() + LATEX_VERTICAL_PADDING;
+    double maxWidth = Math.max(40d, anchor.getWidth() - LATEX_HORIZONTAL_PADDING * 2);
+
+    for (LatexToken token : latexTokens) {
+      byte[] imageBytes = renderLatexToPng(token.expression());
+      if (imageBytes.length == 0) {
+        continue;
+      }
+
+      try (ByteArrayInputStream imageInput = new ByteArrayInputStream(imageBytes)) {
+        BufferedImage sourceImage = ImageIO.read(imageInput);
+        if (sourceImage == null) {
+          continue;
+        }
+
+        double width = sourceImage.getWidth();
+        double height = sourceImage.getHeight();
+        if (width <= 0 || height <= 0) {
+          continue;
+        }
+
+        double widthScale = maxWidth / width;
+        double heightScale = LATEX_MAX_IMAGE_HEIGHT / height;
+        double scale = Math.min(1d, Math.min(widthScale, heightScale));
+
+        double renderWidth = Math.max(40d, width * scale);
+        double renderHeight = Math.max(LATEX_MIN_IMAGE_HEIGHT, height * scale);
+
+        XSLFPictureData pictureData = slideshow.addPicture(imageBytes, PictureData.PictureType.PNG);
+        XSLFPictureShape pictureShape = slide.createPicture(pictureData);
+        pictureShape.setAnchor(new Rectangle2D.Double(x, y, renderWidth, renderHeight));
+        y += renderHeight + LATEX_VERTICAL_PADDING;
+      } catch (Exception ex) {
+        log.warn("Failed to append LaTeX image for expression: {}", token.expression(), ex);
+      }
+    }
+  }
+
+  private String replaceLatexWithMarkers(String content, List<LatexToken> latexTokens) {
+    Matcher matcher = LATEX_SEGMENT_PATTERN.matcher(content);
+    StringBuffer out = new StringBuffer();
+
+    while (matcher.find()) {
+      String expression =
+          firstNonBlank(matcher.group(1), matcher.group(2), matcher.group(3), matcher.group(4));
+      if (expression == null || expression.isBlank()) {
+        continue;
+      }
+
+      LatexToken token = new LatexToken(expression.trim());
+      latexTokens.add(token);
+      matcher.appendReplacement(out, Matcher.quoteReplacement(" "));
+    }
+    matcher.appendTail(out);
+
+    return out.toString();
+  }
+
+  private String firstNonBlank(String... values) {
+    for (String value : values) {
+      if (value != null && !value.isBlank()) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  private byte[] renderLatexToPng(String expression) {
+    try {
+      TeXFormula formula = new TeXFormula(expression);
+      TeXIcon icon = formula.createTeXIcon(TeXConstants.STYLE_DISPLAY, LATEX_FONT_SIZE);
+      int width = Math.max(1, icon.getIconWidth());
+      int height = Math.max(1, icon.getIconHeight());
+
+      BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+      Graphics2D graphics = image.createGraphics();
+      graphics.setColor(new Color(255, 255, 255, 0));
+      graphics.fillRect(0, 0, width, height);
+      graphics.setColor(Color.BLACK);
+      graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+      icon.paintIcon(new JLabel(), graphics, 0, 0);
+      graphics.dispose();
+
+      ByteArrayOutputStream output = new ByteArrayOutputStream();
+      ImageIO.write(image, "png", output);
+      return output.toByteArray();
+    } catch (Exception ex) {
+      log.warn("Failed to render LaTeX expression: {}", expression, ex);
+      return new byte[0];
+    }
+  }
+
+  private record LatexToken(String expression) {}
 
   private Map<String, String> buildJsonSlidePlaceholders(
       LessonSlideJsonItemRequest item, Lesson lesson) {
