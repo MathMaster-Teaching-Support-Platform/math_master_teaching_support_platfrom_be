@@ -151,6 +151,13 @@
             <version>5.4.0</version>
         </dependency>
 
+        <!-- Render LaTeX formulas to images for PPTX export -->
+        <dependency>
+            <groupId>org.scilab.forge</groupId>
+            <artifactId>jlatexmath</artifactId>
+            <version>1.0.7</version>
+        </dependency>
+
         <!-- PDFBox for PDF processing -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
