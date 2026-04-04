@@ -1,9 +1,11 @@
 package com.fptu.math_master.dto.request;
 
+import com.fptu.math_master.enums.QuestionGenerationMode;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.util.Map;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,4 +23,9 @@ public class GenerateTemplateQuestionsRequest {
 
   @NotNull(message = "difficultyDistribution is required")
   private Map<QuestionDifficulty, Integer> difficultyDistribution;
+
+  @Builder.Default
+  private QuestionGenerationMode generationMode = QuestionGenerationMode.PARAMETRIC;
+
+  private UUID canonicalQuestionId;
 }

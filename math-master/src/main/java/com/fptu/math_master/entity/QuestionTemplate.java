@@ -68,6 +68,9 @@ public class QuestionTemplate extends BaseEntity {
   @Column(name = "question_bank_id")
   private UUID questionBankId;
 
+  @Column(name = "canonical_question_id")
+  private UUID canonicalQuestionId;
+
   @Nationalized
   @Column(name = "name", nullable = false, columnDefinition = "TEXT")
   private String name;
@@ -106,6 +109,17 @@ public class QuestionTemplate extends BaseEntity {
   /** Formula to calculate the correct answer (PARAMETRIC variant) Example: "x + y" or "Math.sqrt(x^2 + y^2)" */
   @Column(name = "answer_formula", columnDefinition = "TEXT")
   private String answerFormula;
+
+  @Column(name = "solution_template", columnDefinition = "TEXT")
+  private String solutionTemplate;
+
+  @Type(JsonBinaryType.class)
+  @Column(name = "diagram_template", columnDefinition = "jsonb")
+  private Map<String, Object> diagramTemplate;
+
+  @Type(JsonBinaryType.class)
+  @Column(name = "variable_definitions", columnDefinition = "jsonb")
+  private Map<String, Object> variableDefinitions;
 
   /**
    * Configuration for generating multiple choice options (PARAMETRIC variant)
@@ -180,6 +194,10 @@ public class QuestionTemplate extends BaseEntity {
   @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
   private QuestionBank questionBank;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "canonical_question_id", insertable = false, updatable = false)
+  private CanonicalQuestion canonicalQuestion;
+
   @OneToMany(mappedBy = "questionTemplate", cascade = CascadeType.ALL)
   private Set<Question> questions;
 
@@ -209,7 +227,7 @@ public class QuestionTemplate extends BaseEntity {
       BigDecimal total =
           this.avgSuccessRate.multiply(BigDecimal.valueOf(this.usageCount)).add(newRate);
       this.avgSuccessRate =
-          total.divide(BigDecimal.valueOf((long) (this.usageCount + 1)), 2, RoundingMode.HALF_UP);
+          total.divide(BigDecimal.valueOf(this.usageCount + 1L), 2, RoundingMode.HALF_UP);
     }
   }
 }

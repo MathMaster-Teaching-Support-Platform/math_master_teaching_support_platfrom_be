@@ -30,6 +30,9 @@ public class QuestionTemplateResponse {
   private Map<String, Object> templateText;
   private Map<String, Object> parameters;
   private String answerFormula;
+  private String solutionTemplate;
+  private Map<String, Object> diagramTemplate;
+  private Map<String, Object> variableDefinitions;
   private Map<String, Object> optionsGenerator;
   private Map<String, Object> difficultyRules;
   private String topic;
@@ -44,4 +47,5 @@ public class QuestionTemplateResponse {
   private Instant createdAt;
   private Instant updatedAt;
   private UUID questionBankId;
+  private UUID canonicalQuestionId;
 }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.request.AIEnhancementRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionSample;
+import com.fptu.math_master.entity.CanonicalQuestion;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
@@ -651,6 +652,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .options(Map.of("A", "Unable to generate"))
           .correctAnswer("A")
           .explanation("Error: Formula evaluation failed")
+          .solutionSteps("Error: Formula evaluation failed")
+          .diagramData(template.getDiagramTemplate())
           .calculatedDifficulty(QuestionDifficulty.MEDIUM)
           .usedParameters(params)
           .answerCalculation("Error: " + template.getAnswerFormula())
@@ -682,12 +685,61 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .correctAnswer(correctKey) // KEY (A/B/C/D)
           .explanation(
               "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr)
+          .solutionSteps(
+            template.getSolutionTemplate() != null
+              ? fillSolutionTemplate(template.getSolutionTemplate(), params)
+              : "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr)
+          .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
           .answerCalculation(template.getAnswerFormula() + " = " + correctAnswerStr)
           .build();
     }
   }
+
+      @Override
+      public GeneratedQuestionSample generateQuestionFromCanonical(
+        CanonicalQuestion canonicalQuestion, QuestionTemplate template, int sampleIndex) {
+      if (canonicalQuestion == null) {
+        return generateQuestion(template, sampleIndex);
+      }
+
+      Map<String, Object> params = pickParameters(template, sampleIndex);
+      QuestionDifficulty difficulty =
+        canonicalQuestion.getDifficulty() != null
+          ? canonicalQuestion.getDifficulty()
+          : determineDifficulty(template.getDifficultyRules(), params);
+
+      String canonicalProblem =
+        canonicalQuestion.getProblemText() != null
+          ? fillText(canonicalQuestion.getProblemText(), params)
+          : null;
+      String canonicalSolution =
+        canonicalQuestion.getSolutionSteps() != null
+          ? fillText(canonicalQuestion.getSolutionSteps(), params)
+          : null;
+
+      GeneratedQuestionSample baseSample = generateQuestion(template, sampleIndex);
+
+      Map<String, Object> diagramData =
+        canonicalQuestion.getDiagramDefinition() != null
+          ? renderDiagramTemplate(canonicalQuestion.getDiagramDefinition(), params)
+          : renderDiagramTemplate(template.getDiagramTemplate(), params);
+
+      // Keep existing option/correct-answer guarantees from current generator,
+      // then override semantic text from canonical source for AI-like similarity mode.
+      return GeneratedQuestionSample.builder()
+        .questionText(canonicalProblem != null && !canonicalProblem.isBlank() ? canonicalProblem : baseSample.getQuestionText())
+        .options(baseSample.getOptions())
+        .correctAnswer(baseSample.getCorrectAnswer())
+        .explanation(baseSample.getExplanation())
+        .solutionSteps(canonicalSolution != null && !canonicalSolution.isBlank() ? canonicalSolution : baseSample.getSolutionSteps())
+        .diagramData(diagramData)
+        .calculatedDifficulty(difficulty)
+        .usedParameters(params)
+        .answerCalculation(baseSample.getAnswerCalculation())
+        .build();
+      }
 
   /** Pick random parameter values within defined ranges, seeded by sampleIndex for variety */
   @SuppressWarnings("unchecked")
@@ -1294,6 +1346,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .options(options)
           .correctAnswer(correctKey) // KEY (A/B/C/D), not numeric value
           .explanation(explanation)
+          .solutionSteps(buildSolutionSteps(template, explanation, params))
+          .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
           .answerCalculation(answerCalc)
@@ -1310,11 +1364,55 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .options(fallbackOptions)
           .correctAnswer(correctKey) // KEY (A/B/C/D)
           .explanation("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
+          .solutionSteps(buildSolutionSteps(template, null, params))
+          .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
           .answerCalculation(template.getAnswerFormula() + " = " + correctAnswer)
           .build();
     }
+  }
+
+  private String buildSolutionSteps(
+      QuestionTemplate template, String aiExplanation, Map<String, Object> params) {
+    if (template.getSolutionTemplate() != null && !template.getSolutionTemplate().isBlank()) {
+      return fillSolutionTemplate(template.getSolutionTemplate(), params);
+    }
+    return aiExplanation;
+  }
+
+  private String fillSolutionTemplate(String solutionTemplate, Map<String, Object> params) {
+    return fillText(solutionTemplate, params);
+  }
+
+  private String fillText(String raw, Map<String, Object> params) {
+    if (raw == null || params == null || params.isEmpty()) {
+      return raw;
+    }
+    String out = raw;
+    for (Map.Entry<String, Object> e : params.entrySet()) {
+      String value = e.getValue() == null ? "" : String.valueOf(e.getValue());
+      out = out.replace("{{" + e.getKey() + "}}", value);
+      out = out.replace("{" + e.getKey() + "}", value);
+    }
+    return out;
+  }
+
+  private Map<String, Object> renderDiagramTemplate(
+      Map<String, Object> diagramTemplate, Map<String, Object> params) {
+    if (diagramTemplate == null) {
+      return null;
+    }
+    Map<String, Object> rendered = new LinkedHashMap<>();
+    for (Map.Entry<String, Object> entry : diagramTemplate.entrySet()) {
+      Object value = entry.getValue();
+      if (value instanceof String textValue) {
+        rendered.put(entry.getKey(), fillText(textValue, params));
+      } else {
+        rendered.put(entry.getKey(), value);
+      }
+    }
+    return rendered;
   }
 
   /** Attempt to repair common truncation: add missing closing braces/brackets */

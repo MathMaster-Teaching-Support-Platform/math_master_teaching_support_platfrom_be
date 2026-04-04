@@ -62,4 +62,13 @@ public class CreateQuestionRequest {
 
   @Schema(description = "Template ID if generated from template")
   private java.util.UUID templateId;
+
+  @Schema(description = "Canonical question ID if generated from canonical source")
+  private java.util.UUID canonicalQuestionId;
+
+  @Schema(description = "Generated step-by-step solution in LaTeX or plain text")
+  private String solutionSteps;
+
+  @Schema(description = "Generated diagram data payload")
+  private Map<String, Object> diagramData;
 }

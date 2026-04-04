@@ -108,6 +108,16 @@ public class Question extends BaseEntity {
   @Column(name = "template_id")
   private UUID templateId;
 
+  @Column(name = "canonical_question_id")
+  private UUID canonicalQuestionId;
+
+  @Column(name = "solution_steps", columnDefinition = "TEXT")
+  private String solutionSteps;
+
+  @Type(JsonBinaryType.class)
+  @Column(name = "diagram_data", columnDefinition = "jsonb")
+  private Map<String, Object> diagramData;
+
   @Type(JsonBinaryType.class)
   @Column(name = "generation_metadata", columnDefinition = "jsonb")
   private Map<String, Object> generationMetadata;
@@ -124,6 +134,10 @@ public class Question extends BaseEntity {
   @JoinColumn(name = "template_id", insertable = false, updatable = false)
   private QuestionTemplate questionTemplate;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "canonical_question_id", insertable = false, updatable = false)
+  private CanonicalQuestion canonicalQuestion;
+
   @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<AssessmentQuestion> assessmentQuestions;
 
@@ -131,6 +145,7 @@ public class Question extends BaseEntity {
   private Set<Answer> answers;
 
   @PrePersist
+  @Override
   public void prePersist() {
     super.prePersist();
     if (points == null) points = BigDecimal.valueOf(1.0);

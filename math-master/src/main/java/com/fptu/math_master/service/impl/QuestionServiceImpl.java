@@ -79,12 +79,15 @@ public class QuestionServiceImpl implements QuestionService {
             .options(request.getOptions())
             .correctAnswer(correctAnswer)
             .explanation(explanation)
+          .solutionSteps(request.getSolutionSteps())
+          .diagramData(request.getDiagramData())
             .points(request.getPoints())
             .difficulty(request.getDifficulty())
             .cognitiveLevel(request.getCognitiveLevel())
             .tags(request.getTags())
             .questionBankId(request.getQuestionBankId())
             .templateId(request.getTemplateId())
+          .canonicalQuestionId(request.getCanonicalQuestionId())
             .questionStatus(QuestionStatus.AI_DRAFT)
             .questionSourceType(QuestionSourceType.MANUAL)
             .build();
@@ -208,6 +211,12 @@ public class QuestionServiceImpl implements QuestionService {
     }
     if (request.getExplanation() != null) {
       question.setExplanation(request.getExplanation());
+    }
+    if (request.getSolutionSteps() != null) {
+      question.setSolutionSteps(request.getSolutionSteps());
+    }
+    if (request.getDiagramData() != null) {
+      question.setDiagramData(request.getDiagramData());
     }
     if (request.getPoints() != null) {
       question.setPoints(request.getPoints());
@@ -352,12 +361,15 @@ public class QuestionServiceImpl implements QuestionService {
                 .options(questionRequest.getOptions())
                 .correctAnswer(questionRequest.getCorrectAnswer())
                 .explanation(questionRequest.getExplanation())
+              .solutionSteps(questionRequest.getSolutionSteps())
+              .diagramData(questionRequest.getDiagramData())
                 .points(questionRequest.getPoints())
                 .difficulty(questionRequest.getDifficulty())
                 .cognitiveLevel(questionRequest.getCognitiveLevel())
                 .tags(questionRequest.getTags())
                 .questionBankId(questionRequest.getQuestionBankId())
                 .templateId(questionRequest.getTemplateId())
+              .canonicalQuestionId(questionRequest.getCanonicalQuestionId())
                 .questionStatus(QuestionStatus.AI_DRAFT)
                 .questionSourceType(QuestionSourceType.BANK_IMPORTED)
                 .build();
@@ -484,6 +496,8 @@ public class QuestionServiceImpl implements QuestionService {
         .options(question.getOptions())
         .correctAnswer(question.getCorrectAnswer())
         .explanation(question.getExplanation())
+        .solutionSteps(question.getSolutionSteps())
+        .diagramData(question.getDiagramData())
         .points(question.getPoints())
         .difficulty(question.getDifficulty())
         .cognitiveLevel(question.getCognitiveLevel())
@@ -491,6 +505,7 @@ public class QuestionServiceImpl implements QuestionService {
         .questionSourceType(question.getQuestionSourceType())
         .tags(question.getTags())
         .templateId(question.getTemplateId())
+        .canonicalQuestionId(question.getCanonicalQuestionId())
         .questionBankId(question.getQuestionBankId())
         .questionBankName(bankName)
         .createdAt(question.getCreatedAt())

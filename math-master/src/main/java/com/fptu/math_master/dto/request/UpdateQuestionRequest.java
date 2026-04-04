@@ -33,6 +33,12 @@ public class UpdateQuestionRequest {
   @Schema(description = "Explanation for the answer")
   private String explanation;
 
+  @Schema(description = "Generated step-by-step solution in LaTeX or plain text")
+  private String solutionSteps;
+
+  @Schema(description = "Generated diagram data payload")
+  private Map<String, Object> diagramData;
+
   @DecimalMin(value = "0.0", message = "Points must be at least 0")
   @DecimalMax(value = "1000.0", message = "Points must not exceed 1000")
   @Schema(description = "Points for this question")

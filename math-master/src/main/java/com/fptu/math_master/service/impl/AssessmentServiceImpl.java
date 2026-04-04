@@ -946,12 +946,15 @@ public class AssessmentServiceImpl implements AssessmentService {
                 .options(convertOptionsToObjectMap(normalizedOptions))
                 .correctAnswer(correctAnswerForPersist.trim())
                 .explanation(explanation.trim())
+            .solutionSteps(sample.getSolutionSteps())
+            .diagramData(sample.getDiagramData())
                 .difficulty(
                     sample.getCalculatedDifficulty() != null
                         ? sample.getCalculatedDifficulty()
                         : com.fptu.math_master.enums.QuestionDifficulty.MEDIUM)
                 .cognitiveLevel(cognitiveLevel)
                 .templateId(templateId)
+            .canonicalQuestionId(template.getCanonicalQuestionId())
                 // Save into the same Question Bank as the template (if template belongs to a bank)
                 .questionBankId(templateQuestionBankId)
                 .build();
@@ -1143,6 +1146,7 @@ public class AssessmentServiceImpl implements AssessmentService {
             Question.builder()
                 .questionBankId(bankMapping.getQuestionBankId())
                 .templateId(template.getId())
+            .canonicalQuestionId(template.getCanonicalQuestionId())
                 .questionType(template.getTemplateType())
                 .questionText(sample.getQuestionText())
                 .options(
@@ -1155,6 +1159,8 @@ public class AssessmentServiceImpl implements AssessmentService {
                     sample.getCorrectAnswer(),
                     normalizeMcqOptions(sample.getOptions())))
                 .explanation(sample.getExplanation())
+            .solutionSteps(sample.getSolutionSteps())
+            .diagramData(sample.getDiagramData())
                 .difficulty(difficulty)
                 .cognitiveLevel(bankMapping.getCognitiveLevel())
                 .questionStatus(QuestionStatus.APPROVED)

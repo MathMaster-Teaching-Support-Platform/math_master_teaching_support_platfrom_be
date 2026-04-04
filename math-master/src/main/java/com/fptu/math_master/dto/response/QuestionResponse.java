@@ -45,6 +45,12 @@ public class QuestionResponse {
   @Schema(description = "Explanation")
   private String explanation;
 
+  @Schema(description = "Generated step-by-step solution")
+  private String solutionSteps;
+
+  @Schema(description = "Generated diagram payload")
+  private Map<String, Object> diagramData;
+
   @Schema(description = "Points value")
   private BigDecimal points;
 
@@ -65,6 +71,9 @@ public class QuestionResponse {
 
   @Schema(description = "Template this was generated from (if applicable)")
   private UUID templateId;
+
+  @Schema(description = "Canonical source question ID (if applicable)")
+  private UUID canonicalQuestionId;
 
   @Schema(description = "Question bank ID")
   private UUID questionBankId;

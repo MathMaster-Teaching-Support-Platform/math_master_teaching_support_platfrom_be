@@ -3,6 +3,7 @@ package com.fptu.math_master.service;
 import com.fptu.math_master.dto.request.AIEnhancementRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionSample;
+import com.fptu.math_master.entity.CanonicalQuestion;
 import com.fptu.math_master.entity.QuestionTemplate;
 
 /** Service for enhancing questions using Gemini AI (Google AI Studio) */
@@ -42,4 +43,11 @@ public interface AIEnhancementService {
    * @return Generated question sample
    */
   GeneratedQuestionSample generateQuestion(QuestionTemplate template, int sampleIndex);
+
+  /**
+   * Generate a question by keeping semantic structure from a canonical teacher-authored question.
+   * The result is still compatible with existing matrix-based flows.
+   */
+  GeneratedQuestionSample generateQuestionFromCanonical(
+      CanonicalQuestion canonicalQuestion, QuestionTemplate template, int sampleIndex);
 }
