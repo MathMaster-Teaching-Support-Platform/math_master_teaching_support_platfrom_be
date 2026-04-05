@@ -130,6 +130,47 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
 
   @Query(
       value =
+          "SELECT COUNT(*) FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND (:difficulty IS NULL OR q.difficulty = CAST(:difficulty AS text)) "
+              + "AND (:cognitiveLevel IS NULL OR q.cognitive_level = CAST(:cognitiveLevel AS text)) "
+              + "AND (:topic IS NULL "
+              + "  OR EXISTS ( "
+              + "      SELECT 1 FROM unnest(COALESCE(q.tags, ARRAY[]::text[])) t "
+              + "      WHERE lower(trim(t)) = lower(trim(CAST(:topic AS text))) "
+              + "  ))",
+      nativeQuery = true)
+  long countApprovedByBankAndDifficultyAndCognitiveAndTopic(
+      @Param("bankId") UUID bankId,
+      @Param("difficulty") String difficulty,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("topic") String topic);
+
+  @Query(
+      value =
+          "SELECT q.id FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND (:difficulty IS NULL OR q.difficulty = CAST(:difficulty AS text)) "
+              + "AND (:cognitiveLevel IS NULL OR q.cognitive_level = CAST(:cognitiveLevel AS text)) "
+              + "AND (:topic IS NULL "
+              + "  OR EXISTS ( "
+              + "      SELECT 1 FROM unnest(COALESCE(q.tags, ARRAY[]::text[])) t "
+              + "      WHERE lower(trim(t)) = lower(trim(CAST(:topic AS text))) "
+              + "  )) "
+              + "ORDER BY q.id",
+      nativeQuery = true)
+  List<UUID> findApprovedIdsByBankAndDifficultyAndCognitiveAndTopic(
+      @Param("bankId") UUID bankId,
+      @Param("difficulty") String difficulty,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("topic") String topic);
+
+  @Query(
+      value =
           "SELECT * FROM questions q "
               + "WHERE q.question_bank_id = :bankId "
               + "AND q.question_status = 'APPROVED' "

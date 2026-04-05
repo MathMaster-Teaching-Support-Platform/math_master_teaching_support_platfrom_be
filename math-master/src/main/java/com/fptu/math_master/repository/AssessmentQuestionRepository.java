@@ -59,4 +59,11 @@ public interface AssessmentQuestionRepository extends JpaRepository<AssessmentQu
           + "AND aq.matrixTemplateMappingId = :mappingId")
   long countByAssessmentIdAndMatrixTemplateMappingId(
       @Param("assessmentId") UUID assessmentId, @Param("mappingId") UUID mappingId);
+
+  @Query(
+      "SELECT COUNT(aq) FROM AssessmentQuestion aq "
+          + "WHERE aq.assessmentId = :assessmentId "
+          + "AND aq.matrixBankMappingId = :mappingId")
+  long countByAssessmentIdAndMatrixBankMappingId(
+      @Param("assessmentId") UUID assessmentId, @Param("mappingId") UUID mappingId);
 }

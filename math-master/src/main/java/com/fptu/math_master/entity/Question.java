@@ -57,6 +57,12 @@ public class Question extends BaseEntity {
   @Column(name = "question_bank_id")
   private UUID questionBankId;
 
+  @Column(name = "chapter_id")
+  private UUID chapterId;
+
+  @Column(name = "lesson_id")
+  private UUID lessonId;
+
   @Column(name = "question_type", nullable = false)
   @Enumerated(EnumType.STRING)
   private QuestionType questionType;
@@ -125,6 +131,14 @@ public class Question extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
   private QuestionBank questionBank;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "chapter_id", insertable = false, updatable = false)
+  private Chapter chapter;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
+  private Lesson lesson;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by", insertable = false, updatable = false)

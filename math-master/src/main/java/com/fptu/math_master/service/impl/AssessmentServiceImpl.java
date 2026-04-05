@@ -4,38 +4,30 @@ import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
-import com.fptu.math_master.dto.request.CreateQuestionRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
-import com.fptu.math_master.dto.response.GeneratedQuestionSample;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.AssessmentQuestion;
 import com.fptu.math_master.entity.ExamMatrix;
 import com.fptu.math_master.entity.ExamMatrixBankMapping;
-import com.fptu.math_master.entity.ExamMatrixTemplateMapping;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.Question;
-import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
-import com.fptu.math_master.enums.AssessmentSelectionStrategy;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
 import com.fptu.math_master.enums.MatrixStatus;
 import com.fptu.math_master.enums.QuestionDifficulty;
-import com.fptu.math_master.enums.QuestionSourceType;
-import com.fptu.math_master.enums.QuestionStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
-import com.fptu.math_master.service.AIEnhancementService;
 import com.fptu.math_master.service.AssessmentService;
 import com.fptu.math_master.service.ExamMatrixService;
-import com.fptu.math_master.service.QuestionService;
+import com.fptu.math_master.service.QuestionSelectionService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -60,18 +52,18 @@ import org.springframework.transaction.annotation.Transactional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AssessmentServiceImpl implements AssessmentService {
 
+  private static final String UNKNOWN_NAME = "Unknown";
+
   AssessmentRepository assessmentRepository;
   AssessmentLessonRepository assessmentLessonRepository;
   AssessmentQuestionRepository assessmentQuestionRepository;
   UserRepository userRepository;
   ExamMatrixRepository examMatrixRepository;
   ExamMatrixBankMappingRepository examMatrixBankMappingRepository;
-  ExamMatrixTemplateMappingRepository examMatrixTemplateMappingRepository;
+  ExamMatrixRowRepository examMatrixRowRepository;
   LessonRepository lessonRepository;
-  QuestionTemplateRepository questionTemplateRepository;
   ExamMatrixService examMatrixService;
-  AIEnhancementService aiEnhancementService;
-  QuestionService questionService;
+  QuestionSelectionService questionSelectionService;
   QuestionRepository questionRepository;
 
   @Override
@@ -96,25 +88,19 @@ public class AssessmentServiceImpl implements AssessmentService {
             .passingScore(request.getPassingScore())
             .startDate(request.getStartDate())
             .endDate(request.getEndDate())
-            .randomizeQuestions(
-                request.getRandomizeQuestions() != null ? request.getRandomizeQuestions() : false)
-            .showCorrectAnswers(
-                request.getShowCorrectAnswers() != null ? request.getShowCorrectAnswers() : false)
+            .randomizeQuestions(Boolean.TRUE.equals(request.getRandomizeQuestions()))
+            .showCorrectAnswers(Boolean.TRUE.equals(request.getShowCorrectAnswers()))
             .assessmentMode(request.getAssessmentMode())
             .examMatrixId(matrix.getId())
             .allowMultipleAttempts(
-                request.getAllowMultipleAttempts() != null
-                    ? request.getAllowMultipleAttempts()
-                    : false)
+              Boolean.TRUE.equals(request.getAllowMultipleAttempts()))
             .maxAttempts(request.getMaxAttempts())
             .attemptScoringPolicy(
                 request.getAttemptScoringPolicy() != null
                     ? request.getAttemptScoringPolicy()
                     : AttemptScoringPolicy.BEST)
             .showScoreImmediately(
-                request.getShowScoreImmediately() != null
-                    ? request.getShowScoreImmediately()
-                    : true)
+              request.getShowScoreImmediately() == null || request.getShowScoreImmediately())
             .status(AssessmentStatus.DRAFT)
             .build();
 
@@ -312,27 +298,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     }
 
     if (assessment.getExamMatrixId() != null) {
-      ExamMatrix matrix =
-          examMatrixRepository
-              .findByIdAndNotDeleted(assessment.getExamMatrixId())
-              .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
-
-      if (matrix.getStatus() != MatrixStatus.APPROVED) {
-        throw new AppException(ErrorCode.MATRIX_NOT_APPROVED);
-      }
-
-      List<ExamMatrixTemplateMapping> mappings =
-          examMatrixTemplateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
-      for (ExamMatrixTemplateMapping mapping : mappings) {
-        long actualCount =
-            assessmentQuestionRepository.countByAssessmentIdAndMatrixTemplateMappingId(
-                assessment.getId(), mapping.getId());
-        if (actualCount != mapping.getQuestionCount()) {
-          throw new AppException(ErrorCode.MATRIX_CELL_FILL_INCOMPLETE);
-        }
-      }
-
-      examMatrixService.lockMatrix(matrix.getId());
+      validatePublishedMatrixCellCoverage(assessment);
     }
 
     assessment.setStatus(AssessmentStatus.PUBLISHED);
@@ -451,14 +417,13 @@ public class AssessmentServiceImpl implements AssessmentService {
         assessmentRepository.findWithFilters(currentUserId, status, pageable);
 
     // FIX: eliminate N+1 — fetch bulk summary for all IDs on this page in one query
-    List<UUID> ids =
-        assessmentsPage.getContent().stream().map(Assessment::getId).collect(Collectors.toList());
+    List<UUID> ids = assessmentsPage.getContent().stream().map(Assessment::getId).toList();
 
     Map<UUID, long[]> summaryMap = buildSummaryMap(ids);
 
     // Pre-fetch teacher name once (all assessments on this page share the same teacher)
     String teacherName =
-        userRepository.findById(currentUserId).map(User::getFullName).orElse("Unknown");
+      userRepository.findById(currentUserId).map(User::getFullName).orElse(UNKNOWN_NAME);
 
     return assessmentsPage.map(
         a ->
@@ -711,6 +676,11 @@ public class AssessmentServiceImpl implements AssessmentService {
   @Transactional
   public AssessmentGenerationResponse generateQuestionsFromMatrix(
       UUID assessmentId, GenerateAssessmentQuestionsRequest request) {
+    return generateQuestionsFromMatrixInternal(assessmentId, request);
+    }
+
+    private AssessmentGenerationResponse generateQuestionsFromMatrixInternal(
+      UUID assessmentId, GenerateAssessmentQuestionsRequest request) {
     log.info(
         "Generating questions from matrix {} for assessment {}",
         request.getExamMatrixId(),
@@ -735,523 +705,56 @@ public class AssessmentServiceImpl implements AssessmentService {
       throw new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND);
     }
 
-    List<ExamMatrixTemplateMapping> templateMappings =
-      examMatrixTemplateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
+    List<ExamMatrixBankMapping> bankMappings =
+      examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
 
-    if (templateMappings.isEmpty()) {
-      throw new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND);
+    if (bankMappings.isEmpty()) {
+      throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
     }
 
-    int totalQuestionsGenerated = 0;
-    int totalPoints = 0;
-    int questionsFromBank = 0;
-    int questionsFromAi = 0;
-    int orderIndex = Optional.ofNullable(assessmentQuestionRepository.findMaxOrderIndex(assessmentId)).orElse(-1) + 1;
-    List<String> warnings = new ArrayList<>();
+    // Regenerate from blueprint to keep assessment deterministic and aligned with matrix.
+    assessmentQuestionRepository.deleteAllByAssessmentId(assessmentId);
 
-    // Keep backward-compatible template mapping generation.
-    for (ExamMatrixTemplateMapping mapping : templateMappings) {
-      log.info(
-          "Processing mapping: {}, template: {}, count: {}",
-          mapping.getId(),
-          mapping.getTemplateId(),
-          mapping.getQuestionCount());
+    QuestionSelectionService.SelectionPlan selectionPlan =
+      questionSelectionService.buildSelectionPlan(assessmentId, matrix.getId(), 1);
 
-      List<com.fptu.math_master.entity.Question> generatedQuestions =
-          generateQuestionsFromTemplate(
-              mapping.getTemplateId(),
-              mapping.getQuestionCount(),
-              mapping.getCognitiveLevel(),
-              request.getReuseApprovedQuestions() != null
-                  ? request.getReuseApprovedQuestions()
-                  : false);
+    assessmentQuestionRepository.saveAll(selectionPlan.assessmentQuestions());
 
-      log.info(
-          "Template {} generated {} questions out of {} requested",
-          mapping.getTemplateId(),
-          generatedQuestions.size(),
-          mapping.getQuestionCount());
-
-      // Create AssessmentQuestion records
-      for (com.fptu.math_master.entity.Question question : generatedQuestions) {
-        AssessmentQuestion assessmentQuestion =
-            AssessmentQuestion.builder()
-                .assessmentId(assessmentId)
-                .questionId(question.getId())
-                .matrixTemplateMappingId(mapping.getId())
-                .pointsOverride(mapping.getPointsPerQuestion())
-                .orderIndex(orderIndex++)
-                .build();
-        assessmentQuestionRepository.save(assessmentQuestion);
-        totalQuestionsGenerated++;
-        totalPoints += mapping.getPointsPerQuestion().intValue();
-        questionsFromAi++;
-      }
-    }
-
-
+    int totalQuestionsGenerated = selectionPlan.assessmentQuestions().size();
+    int totalPoints = selectionPlan.totalPoints();
 
     log.info(
-        "Generated {} questions for assessment {} with {} total points",
-        totalQuestionsGenerated,
-        assessmentId,
-        totalPoints);
+      "Generated {} bank-based questions for assessment {} with {} total points",
+      totalQuestionsGenerated,
+      assessmentId,
+      totalPoints);
 
     return AssessmentGenerationResponse.builder()
-        .totalQuestionsGenerated(totalQuestionsGenerated)
-        .questionsFromBank(questionsFromBank)
-        .questionsFromAi(questionsFromAi)
-        .totalPoints(totalPoints)
-        .warnings(warnings.isEmpty() ? null : warnings)
-        .message(
-            String.format(
-                "%d questions generated successfully from exam matrix. Total points: %d",
-                totalQuestionsGenerated, totalPoints))
-        .build();
-  }
-
-  private List<Question> generateQuestionsFromTemplate(
-      UUID templateId,
-      Integer count,
-      com.fptu.math_master.enums.CognitiveLevel cognitiveLevel,
-      boolean reuseApprovedQuestions) {
-    log.info("Generating {} questions from template {}", count, templateId);
-
-    ArrayList<Question> result = new ArrayList<>();
-
-    // Load the template early so we can consistently scope generation/reuse to its Question Bank
-    QuestionTemplate template =
-        questionTemplateRepository
-            .findById(templateId)
-            .orElseThrow(
-                () -> {
-                  log.error("Template not found: {}", templateId);
-                  return new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND);
-                });
-
-    UUID templateQuestionBankId = template.getQuestionBankId();
-
-    // First, try to reuse existing APPROVED questions from this template (and same bank if known)
-    if (reuseApprovedQuestions) {
-      List<Question> existingList;
-
-      if (templateQuestionBankId != null) {
-        existingList =
-            questionRepository
-                .findApprovedByTemplateIdAndQuestionBankIdAndNotDeleted(
-                    templateId, templateQuestionBankId)
-                .stream()
-                .limit(count)
-                .collect(Collectors.toList());
-      } else {
-        existingList =
-          questionRepository.findApprovedByTemplateIdAndNotDeleted(templateId).stream()
-                .limit(count)
-                .collect(Collectors.toList());
-      }
-
-      result.addAll(existingList);
-
-      if (result.size() >= count) {
-        if (!result.isEmpty()) {
-          log.info(
-              "Reused {} APPROVED questions from template {}{}",
-              result.size(),
-              templateId,
-              templateQuestionBankId != null ? " (bankId=" + templateQuestionBankId + ")" : "");
-        }
-        return result.stream().limit(count).collect(Collectors.toList());
-      }
-
-      log.info(
-          "Only {} reusable APPROVED questions available, need {} more",
-          result.size(),
-          count - result.size());
-    }
-
-    // Log template details for debugging
-    log.info("Processing template '{}' (ID: {})", template.getName(), templateId);
-    log.info("  - Formula: '{}'", template.getAnswerFormula());
-    log.info("  - Type: {}", template.getTemplateType());
-    log.info(
-        "  - Parameters: {}",
-        template.getParameters() != null ? template.getParameters().keySet() : "none");
-
-    // Generate remaining questions using AI
-    int remainingCount = count - result.size();
-    List<UUID> newQuestionIds = new ArrayList<>();
-
-    for (int i = 0; i < remainingCount; i++) {
-      try {
-        log.debug(
-            "Generating question {} of {} from template {}", i + 1, remainingCount, templateId);
-
-        // Call AI to generate a question sample
-        GeneratedQuestionSample sample = aiEnhancementService.generateQuestion(template, i);
-
-        // Validate sample has required fields
-        if (sample == null) {
-          log.error("AI generated null sample for question {} of {}", i + 1, remainingCount);
-          continue;
-        }
-
-        String questionText = sample.getQuestionText();
-        String correctAnswerRaw = sample.getCorrectAnswer();
-        Map<String, String> normalizedOptions = normalizeMcqOptions(sample.getOptions());
-        String correctAnswerForPersist =
-          resolveCorrectAnswerForPersist(
-            template.getTemplateType(), correctAnswerRaw, normalizedOptions);
-        String explanation = sample.getExplanation();
-
-        // Validate all text fields are actual strings, not null or objects
-        if (questionText == null || questionText.trim().isEmpty()) {
-          log.warn("Question {} has empty questionText, skipping", i + 1);
-          continue;
-        }
-        if (correctAnswerForPersist == null || correctAnswerForPersist.trim().isEmpty()) {
-          log.warn("Question {} has empty correctAnswer key, skipping", i + 1);
-          continue;
-        }
-        if (explanation == null || explanation.trim().isEmpty()) {
-          explanation = "Provided by AI";
-        }
-
-        // Check if options contain set notation (indicates template formula issue)
-        if (sample.getOptions() != null) {
-          boolean hasSetNotation =
-              sample.getOptions().values().stream()
-                  .anyMatch(opt -> opt != null && opt.contains("{") && opt.contains("}"));
-          if (hasSetNotation) {
-            log.warn(
-                "Question {} has set notation in options (template issue), skipping: {}",
-                i + 1,
-                sample.getOptions());
-            continue;
-          }
-        }
-
-        // Check if answer is the error placeholder
-        if ("?".equals(correctAnswerForPersist.trim())) {
-          log.warn(
-              "Question {} has placeholder answer '?', template formula likely failed, skipping",
-              i + 1);
-          continue;
-        }
-
-        // Convert GeneratedQuestionSample to CreateQuestionRequest
-        CreateQuestionRequest createRequest =
-            CreateQuestionRequest.builder()
-                .questionText(questionText.trim())
-                .questionType(template.getTemplateType())
-                .options(convertOptionsToObjectMap(normalizedOptions))
-                .correctAnswer(correctAnswerForPersist.trim())
-                .explanation(explanation.trim())
-            .solutionSteps(sample.getSolutionSteps())
-            .diagramData(sample.getDiagramData())
-                .difficulty(
-                    sample.getCalculatedDifficulty() != null
-                        ? sample.getCalculatedDifficulty()
-                        : com.fptu.math_master.enums.QuestionDifficulty.MEDIUM)
-                .cognitiveLevel(cognitiveLevel)
-                .templateId(templateId)
-            .canonicalQuestionId(template.getCanonicalQuestionId())
-                // Save into the same Question Bank as the template (if template belongs to a bank)
-                .questionBankId(templateQuestionBankId)
-                .build();
-
-        // Validate request before creating question
-        if (createRequest.getQuestionText() == null || createRequest.getQuestionText().isEmpty()) {
-          log.error("CreateQuestionRequest has null/empty questionText, skipping");
-          continue;
-        }
-
-        // Log detailed info about what we're saving
-        log.info("Creating question {} of {}:", i + 1, remainingCount);
-        log.info(
-            "  - questionText: {}",
-            createRequest
-                .getQuestionText()
-                .substring(0, Math.min(50, createRequest.getQuestionText().length())));
-        log.info("  - correctAnswer: {}", createRequest.getCorrectAnswer());
-        log.info(
-            "  - explanation: {}",
-            createRequest
-                .getExplanation()
-                .substring(0, Math.min(50, createRequest.getExplanation().length())));
-        log.info("  - options: {}", createRequest.getOptions());
-
-        // Create the question using QuestionService
-        var questionResponse = questionService.createQuestion(createRequest);
-
-        // Store the ID for later batch retrieval
-        if (questionResponse != null && questionResponse.getId() != null) {
-          newQuestionIds.add(questionResponse.getId());
-          log.info("Question {} created with ID: {}", i + 1, questionResponse.getId());
-        }
-
-      } catch (Exception e) {
-        log.error(
-            "Failed to generate question {} from template {}: {}",
-            i + 1,
-            templateId,
-            e.getMessage());
-      }
-    }
-
-    // Batch retrieve all newly created questions using their IDs
-    if (!newQuestionIds.isEmpty()) {
-      log.info("Retrieving {} newly created questions from database", newQuestionIds.size());
-      try {
-        List<Question> newQuestions = questionRepository.findAllById(newQuestionIds);
-        log.info(
-            "Retrieved {} questions (expected {})", newQuestions.size(), newQuestionIds.size());
-        result.addAll(newQuestions);
-      } catch (Exception e) {
-        log.error("Failed to retrieve created questions: {}", e.getMessage(), e);
-      }
-    }
-
-    log.info(
-        "Generated {} new questions from template {}, total now: {}",
-        remainingCount - (count - result.size()),
-        templateId,
-        result.size());
-    return result;
-  }
-
-  private SelectionResult selectQuestionsByStrategy(
-      ExamMatrixBankMapping bankMapping,
-      QuestionDifficulty difficulty,
-      int required,
-      AssessmentSelectionStrategy strategy,
-      List<String> warnings) {
-    List<Question> selected = new ArrayList<>();
-    Set<UUID> selectedIds = new HashSet<>();
-    int fromBank = 0;
-    int fromAi = 0;
-
-    switch (strategy) {
-      case AI_FIRST -> {
-        List<Question> ai = generateAiFallbackQuestions(bankMapping, difficulty, required, warnings);
-        fromAi += addUnique(selected, selectedIds, ai);
-        int remaining = required - selected.size();
-        if (remaining > 0) {
-          List<Question> bank = fetchRandomApprovedFromBank(bankMapping, difficulty, remaining);
-          fromBank += addUnique(selected, selectedIds, bank);
-        }
-      }
-      case MIXED -> {
-        int bankTarget = required / 2;
-        int aiTarget = required - bankTarget;
-
-        List<Question> bank = fetchRandomApprovedFromBank(bankMapping, difficulty, bankTarget);
-        fromBank += addUnique(selected, selectedIds, bank);
-
-        List<Question> ai = generateAiFallbackQuestions(bankMapping, difficulty, aiTarget, warnings);
-        fromAi += addUnique(selected, selectedIds, ai);
-
-        int remaining = required - selected.size();
-        if (remaining > 0) {
-          List<Question> bankFill = fetchRandomApprovedFromBank(bankMapping, difficulty, remaining);
-          fromBank += addUnique(selected, selectedIds, bankFill);
-          remaining = required - selected.size();
-        }
-        if (remaining > 0) {
-          List<Question> aiFill = generateAiFallbackQuestions(bankMapping, difficulty, remaining, warnings);
-          fromAi += addUnique(selected, selectedIds, aiFill);
-        }
-      }
-      default -> {
-        List<Question> bank = fetchRandomApprovedFromBank(bankMapping, difficulty, required);
-        fromBank += addUnique(selected, selectedIds, bank);
-        int remaining = required - selected.size();
-        if (remaining > 0) {
-          warnings.add(
-              String.format(
-                  "Bank %s has insufficient approved questions for %s/%s. AI fallback generated %d question(s).",
-                  bankMapping.getQuestionBankId(),
-                  difficulty,
-                  bankMapping.getCognitiveLevel(),
-                  remaining));
-          List<Question> ai = generateAiFallbackQuestions(bankMapping, difficulty, remaining, warnings);
-          fromAi += addUnique(selected, selectedIds, ai);
-        }
-      }
-    }
-
-    return new SelectionResult(selected, fromBank, fromAi);
-  }
-
-  private List<Question> fetchRandomApprovedFromBank(
-      ExamMatrixBankMapping bankMapping, QuestionDifficulty difficulty, int limit) {
-    if (limit <= 0) {
-      return List.of();
-    }
-    return questionRepository.findRandomApprovedByBankAndDifficultyAndCognitive(
-        bankMapping.getQuestionBankId(),
-        difficulty != null ? difficulty.name() : null,
-        bankMapping.getCognitiveLevel() != null ? bankMapping.getCognitiveLevel().name() : null,
-        limit);
-  }
-
-  private int addUnique(List<Question> target, Set<UUID> selectedIds, List<Question> incoming) {
-    int added = 0;
-    for (Question q : incoming) {
-      if (q == null || q.getId() == null || selectedIds.contains(q.getId())) {
-        continue;
-      }
-      target.add(q);
-      selectedIds.add(q.getId());
-      added++;
-    }
-    return added;
-  }
-
-  private List<Question> generateAiFallbackQuestions(
-      ExamMatrixBankMapping bankMapping,
-      QuestionDifficulty difficulty,
-      int count,
-      List<String> warnings) {
-    if (count <= 0) {
-      return List.of();
-    }
-
-    List<QuestionTemplate> templates =
-        questionTemplateRepository.findPublishedByBankAndCognitive(
-            bankMapping.getQuestionBankId(), bankMapping.getCognitiveLevel());
-
-    if (templates.isEmpty()) {
-      warnings.add(
-          String.format(
-              "No published template found for bank %s and cognitive level %s. Could not generate %d fallback question(s).",
-              bankMapping.getQuestionBankId(), bankMapping.getCognitiveLevel(), count));
-      return List.of();
-    }
-
-    QuestionTemplate template = templates.getFirst();
-    List<Question> generated = new ArrayList<>();
-
-    for (int i = 0; i < count; i++) {
-      try {
-        GeneratedQuestionSample sample = aiEnhancementService.generateQuestion(template, i);
-        if (sample == null || sample.getQuestionText() == null || sample.getQuestionText().isBlank()) {
-          continue;
-        }
-
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("fallback", true);
-        metadata.put("bankMappingId", bankMapping.getId().toString());
-
-        Question question =
-            Question.builder()
-                .questionBankId(bankMapping.getQuestionBankId())
-                .templateId(template.getId())
-            .canonicalQuestionId(template.getCanonicalQuestionId())
-                .questionType(template.getTemplateType())
-                .questionText(sample.getQuestionText())
-                .options(
-                    sample.getOptions() != null
-                        ? new HashMap<String, Object>(sample.getOptions())
-                        : null)
-                .correctAnswer(
-                  resolveCorrectAnswerForPersist(
-                    template.getTemplateType(),
-                    sample.getCorrectAnswer(),
-                    normalizeMcqOptions(sample.getOptions())))
-                .explanation(sample.getExplanation())
-            .solutionSteps(sample.getSolutionSteps())
-            .diagramData(sample.getDiagramData())
-                .difficulty(difficulty)
-                .cognitiveLevel(bankMapping.getCognitiveLevel())
-                .questionStatus(QuestionStatus.APPROVED)
-                .questionSourceType(QuestionSourceType.AI_GENERATED)
-                .generationMetadata(metadata)
-                .build();
-        question.setCreatedBy(getCurrentUserId());
-
-        generated.add(questionRepository.save(question));
-      } catch (Exception ex) {
-        warnings.add("AI fallback generation failed: " + ex.getMessage());
-      }
-    }
-
-    return generated;
+      .totalQuestionsGenerated(totalQuestionsGenerated)
+      .questionsFromBank(totalQuestionsGenerated)
+      .questionsFromAi(0)
+      .totalPoints(totalPoints)
+      .warnings(null)
+      .message(
+        String.format(
+          "%d questions selected from Question Bank based on Exam Matrix rules. Total points: %d",
+          totalQuestionsGenerated, totalPoints))
+      .build();
   }
 
   private Map<QuestionDifficulty, Integer> normalizeDifficultyDistribution(
       Map<QuestionDifficulty, Integer> source) {
     Map<QuestionDifficulty, Integer> normalized = new LinkedHashMap<>();
-    normalized.put(QuestionDifficulty.EASY, source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.EASY, 0)) : 0);
-    normalized.put(QuestionDifficulty.MEDIUM, source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.MEDIUM, 0)) : 0);
-    normalized.put(QuestionDifficulty.HARD, source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.HARD, 0)) : 0);
+    normalized.put(
+        QuestionDifficulty.EASY,
+        source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.EASY, 0)) : 0);
+    normalized.put(
+        QuestionDifficulty.MEDIUM,
+        source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.MEDIUM, 0)) : 0);
+    normalized.put(
+        QuestionDifficulty.HARD,
+        source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.HARD, 0)) : 0);
     return normalized;
-  }
-
-  private record SelectionResult(List<Question> questions, int bankCount, int aiCount) {}
-
-  private Map<String, Object> convertOptionsToObjectMap(Map<String, String> stringOptions) {
-    if (stringOptions == null) {
-      return null;
-    }
-    Map<String, Object> objectMap = new LinkedHashMap<>();
-    stringOptions.forEach((key, value) -> objectMap.put(key, value));
-    return objectMap;
-  }
-
-  private Map<String, String> normalizeMcqOptions(Map<String, String> options) {
-    if (options == null || options.isEmpty()) {
-      return options;
-    }
-
-    Map<String, String> normalized = new LinkedHashMap<>();
-    for (Map.Entry<String, String> entry : options.entrySet()) {
-      String rawKey = entry.getKey() == null ? "" : entry.getKey().trim();
-      String key = switch (rawKey.toUpperCase()) {
-        case "1" -> "A";
-        case "2" -> "B";
-        case "3" -> "C";
-        case "4" -> "D";
-        default -> rawKey.toUpperCase();
-      };
-      normalized.put(key, entry.getValue());
-    }
-    return normalized;
-  }
-
-  private String resolveCorrectAnswerForPersist(
-      com.fptu.math_master.enums.QuestionType questionType,
-      String rawCorrectAnswer,
-      Map<String, String> normalizedOptions) {
-    if (rawCorrectAnswer == null) {
-      return null;
-    }
-
-    String trimmed = rawCorrectAnswer.trim();
-    if (trimmed.isEmpty()) {
-      return trimmed;
-    }
-
-    if (questionType != com.fptu.math_master.enums.QuestionType.MULTIPLE_CHOICE) {
-      return trimmed;
-    }
-
-    String upper = trimmed.toUpperCase();
-    if (Set.of("A", "B", "C", "D").contains(upper)) {
-      return upper;
-    }
-
-    if (normalizedOptions != null) {
-      for (Map.Entry<String, String> entry : normalizedOptions.entrySet()) {
-        if (entry.getValue() != null && entry.getValue().trim().equalsIgnoreCase(trimmed)) {
-          String key = entry.getKey() == null ? "" : entry.getKey().trim().toUpperCase();
-          if (Set.of("A", "B", "C", "D").contains(key)) {
-            return key;
-          }
-        }
-      }
-    }
-
-    return "A";
   }
 
   private Assessment loadAssessmentOrThrow(UUID id) {
@@ -1312,6 +815,39 @@ public class AssessmentServiceImpl implements AssessmentService {
     return new BigDecimal(raw.toString());
   }
 
+  private void validatePublishedMatrixCellCoverage(Assessment assessment) {
+    ExamMatrix matrix =
+        examMatrixRepository
+            .findByIdAndNotDeleted(assessment.getExamMatrixId())
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+
+    if (matrix.getStatus() != MatrixStatus.APPROVED) {
+      throw new AppException(ErrorCode.MATRIX_NOT_APPROVED);
+    }
+
+    List<ExamMatrixBankMapping> mappings =
+        examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
+    if (mappings.isEmpty()) {
+      throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
+    }
+
+    for (ExamMatrixBankMapping mapping : mappings) {
+      Map<QuestionDifficulty, Integer> distribution =
+          normalizeDifficultyDistribution(mapping.getDifficultyDistribution());
+      long requiredCount = distribution.values().stream().mapToLong(Integer::longValue).sum();
+
+      long actualCount =
+          assessmentQuestionRepository.countByAssessmentIdAndMatrixBankMappingId(
+              assessment.getId(), mapping.getId());
+
+      if (actualCount != requiredCount) {
+        throw new AppException(ErrorCode.MATRIX_CELL_FILL_INCOMPLETE);
+      }
+    }
+
+    examMatrixService.lockMatrix(matrix.getId());
+  }
+
   /**
    * FIX: build a UUID → [questionCount, totalPoints*100, submissionCount] map from a single bulk
    * query so mapToResponse doesn't fire 3 extra queries per assessment (N+1 fix).
@@ -1343,7 +879,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     Long submissionCount = assessmentRepository.countSubmissionsByAssessmentId(assessment.getId());
 
     String teacherName =
-        userRepository.findById(assessment.getTeacherId()).map(User::getFullName).orElse("Unknown");
+      userRepository.findById(assessment.getTeacherId()).map(User::getFullName).orElse(UNKNOWN_NAME);
 
     return buildResponse(assessment, teacherName, totalQuestions, totalPoints, submissionCount);
   }
@@ -1372,7 +908,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         lessonRepository.findByIdInAndNotDeleted(lessonIds).stream()
             .collect(Collectors.toMap(Lesson::getId, Lesson::getTitle));
     List<String> lessonTitles =
-        lessonIds.stream().map(id -> lessonTitleById.getOrDefault(id, "Unknown")).toList();
+      lessonIds.stream().map(id -> lessonTitleById.getOrDefault(id, UNKNOWN_NAME)).toList();
 
     return AssessmentResponse.builder()
         .id(assessment.getId())
@@ -1427,8 +963,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     }
 
     Set<UUID> matrixLessonIds =
-        new java.util.HashSet<>(
-            examMatrixTemplateMappingRepository.findDistinctLessonIdsByExamMatrixId(matrixId));
+        new java.util.HashSet<>(examMatrixRowRepository.findDistinctLessonIdsByExamMatrixId(matrixId));
 
     // Bank-only matrices do not have template-linked lessons, so lesson constraints are skipped.
     if (matrixLessonIds.isEmpty()) {
@@ -1454,10 +989,10 @@ public class AssessmentServiceImpl implements AssessmentService {
       return;
     }
 
-    List<ExamMatrixTemplateMapping> templateMappings =
-        examMatrixTemplateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
+    List<ExamMatrixBankMapping> bankMappings =
+      examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
 
-    if (templateMappings.isEmpty()) {
+    if (bankMappings.isEmpty()) {
       return;
     }
 
@@ -1467,7 +1002,7 @@ public class AssessmentServiceImpl implements AssessmentService {
             .reuseApprovedQuestions(true)
             .build();
 
-    generateQuestionsFromMatrix(assessmentId, generateRequest);
+    generateQuestionsFromMatrixInternal(assessmentId, generateRequest);
   }
 
   private void syncAssessmentLessons(UUID assessmentId, List<UUID> lessonIds) {
@@ -1522,17 +1057,8 @@ public class AssessmentServiceImpl implements AssessmentService {
     Assessment savedAssessment = assessmentRepository.save(assessment);
     log.info("Created assessment {} from matrix {}", savedAssessment.getId(), matrix.getId());
 
-    // Generate questions from matrix
-    try {
-      generateQuestionsFromMatrix(savedAssessment.getId(), request);
-    } catch (Exception e) {
-      log.error(
-          "Failed to generate questions for assessment {}: {}",
-          savedAssessment.getId(),
-          e.getMessage(),
-          e);
-      // Assessment is created, return it even if generation partially failed
-    }
+    // Generate questions from matrix using strict bank-based selection.
+    generateQuestionsFromMatrixInternal(savedAssessment.getId(), request);
 
     // Return the created assessment with its questions
     return mapToResponse(savedAssessment);
