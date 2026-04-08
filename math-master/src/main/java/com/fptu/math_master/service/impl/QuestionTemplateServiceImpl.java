@@ -880,10 +880,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       }
     }
 
-    if (request.getDifficultyRules() == null || request.getDifficultyRules().isEmpty()) {
-      errors.add("Difficulty rules are required");
-    }
-
     return errors;
   }
 

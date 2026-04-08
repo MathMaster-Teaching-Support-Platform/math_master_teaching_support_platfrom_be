@@ -580,14 +580,7 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
       List<ValidationIssue> warnings) {
 
     if (difficultyRules == null || difficultyRules.isEmpty()) {
-      errors.add(
-          ValidationIssue.builder()
-              .category("DIFFICULTY_RULES")
-              .field("difficultyRules")
-              .message("Difficulty rules are required")
-              .severity(IssueSeverity.ERROR)
-              .suggestion("Add rules for 'easy', 'medium', and 'hard' difficulties")
-              .build());
+      // difficultyRules is optional: generation will fallback to MEDIUM if not provided.
       return;
     }
 

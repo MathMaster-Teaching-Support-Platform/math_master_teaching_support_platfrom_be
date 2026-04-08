@@ -45,7 +45,6 @@ public class QuestionTemplateRequest {
 
   private Map<String, Object> optionsGenerator;
 
-  @NotNull(message = "Difficulty rules are required")
   private Map<String, Object> difficultyRules;
 
   private String[] constraints;
