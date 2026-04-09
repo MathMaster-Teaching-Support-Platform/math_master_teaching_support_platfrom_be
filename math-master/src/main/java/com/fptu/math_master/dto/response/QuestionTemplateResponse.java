@@ -1,7 +1,6 @@
 package com.fptu.math_master.dto.response;
 
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.enums.TemplateVariant;
@@ -30,13 +29,9 @@ public class QuestionTemplateResponse {
   private Map<String, Object> templateText;
   private Map<String, Object> parameters;
   private String answerFormula;
-  private String solutionTemplate;
-  private Map<String, Object> diagramTemplate;
-  private Map<String, Object> variableDefinitions;
+  private String diagramTemplate;
   private Map<String, Object> optionsGenerator;
-  private Map<String, Object> difficultyRules;
   private String topic;
-  private QuestionDifficulty difficulty;
   private String[] constraints;
   private CognitiveLevel cognitiveLevel;
   private String[] tags;

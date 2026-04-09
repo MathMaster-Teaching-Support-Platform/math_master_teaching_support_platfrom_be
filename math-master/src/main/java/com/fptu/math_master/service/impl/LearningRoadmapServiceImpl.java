@@ -544,7 +544,6 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .parameters(template.getParameters())
         .answerFormula(template.getAnswerFormula())
         .optionsGenerator(template.getOptionsGenerator())
-        .difficultyRules(template.getDifficultyRules())
         .constraints(template.getConstraints())
         .cognitiveLevel(template.getCognitiveLevel())
         .tags(template.getTags())

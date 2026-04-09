@@ -110,16 +110,8 @@ public class QuestionTemplate extends BaseEntity {
   @Column(name = "answer_formula", columnDefinition = "TEXT")
   private String answerFormula;
 
-  @Column(name = "solution_template", columnDefinition = "TEXT")
-  private String solutionTemplate;
-
-  @Type(JsonBinaryType.class)
-  @Column(name = "diagram_template", columnDefinition = "jsonb")
-  private Map<String, Object> diagramTemplate;
-
-  @Type(JsonBinaryType.class)
-  @Column(name = "variable_definitions", columnDefinition = "jsonb")
-  private Map<String, Object> variableDefinitions;
+  @Column(name = "diagram_template", columnDefinition = "TEXT")
+  private String diagramTemplate;
 
   /**
    * Configuration for generating multiple choice options (PARAMETRIC variant)
@@ -128,14 +120,6 @@ public class QuestionTemplate extends BaseEntity {
   @Type(JsonBinaryType.class)
   @Column(name = "options_generator", columnDefinition = "jsonb")
   private Map<String, Object> optionsGenerator;
-
-  /**
-   * Rules for determining difficulty based on parameters (PARAMETRIC variant)
-   * Example: {"easy": "x < 10 AND y < 10", "medium": "x < 50 AND y < 50", "hard": "x >= 50 OR y >= 50"}
-   */
-  @Type(JsonBinaryType.class)
-  @Column(name = "difficulty_rules", columnDefinition = "jsonb")
-  private Map<String, Object> difficultyRules;
 
   /** Constraints for parameter generation (PARAMETRIC variant) Example: ["x < y", "x + y < 1000"] */
   @Type(StringArrayType.class)

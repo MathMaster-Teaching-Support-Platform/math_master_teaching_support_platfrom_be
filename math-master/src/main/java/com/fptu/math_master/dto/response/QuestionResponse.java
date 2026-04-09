@@ -1,7 +1,6 @@
 package com.fptu.math_master.dto.response;
 
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionSourceType;
 import com.fptu.math_master.enums.QuestionStatus;
 import com.fptu.math_master.enums.QuestionType;
@@ -48,14 +47,11 @@ public class QuestionResponse {
   @Schema(description = "Generated step-by-step solution")
   private String solutionSteps;
 
-  @Schema(description = "Generated diagram payload")
-  private Map<String, Object> diagramData;
+  @Schema(description = "Generated diagram latex")
+  private String diagramData;
 
   @Schema(description = "Points value")
   private BigDecimal points;
-
-  @Schema(description = "Difficulty level")
-  private QuestionDifficulty difficulty;
 
   @Schema(description = "Cognitive level (Bloom's taxonomy)")
   private CognitiveLevel cognitiveLevel;

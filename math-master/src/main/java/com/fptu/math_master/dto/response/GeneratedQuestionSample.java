@@ -18,7 +18,7 @@ public class GeneratedQuestionSample {
   private String correctAnswer;
   private String explanation;
   private String solutionSteps;
-  private Map<String, Object> diagramData;
+  private String diagramData;
   private QuestionDifficulty calculatedDifficulty;
   private Map<String, Object> usedParameters;
   private String answerCalculation;

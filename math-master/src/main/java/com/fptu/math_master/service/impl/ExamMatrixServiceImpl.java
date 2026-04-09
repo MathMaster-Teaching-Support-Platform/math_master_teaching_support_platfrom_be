@@ -988,7 +988,6 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               .correctAnswer(item.getCorrectAnswer())
               .explanation(item.getExplanation())
               .points(request.getPointsPerQuestion())
-              .difficulty(item.getDifficulty())
               .cognitiveLevel(item.getCognitiveLevel())
               .tags(item.getTags())
               .templateId(template.getId())

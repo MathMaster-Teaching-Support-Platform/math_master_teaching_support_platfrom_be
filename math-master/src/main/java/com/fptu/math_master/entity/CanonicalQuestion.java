@@ -1,8 +1,7 @@
 package com.fptu.math_master.entity;
 
-import com.fptu.math_master.enums.QuestionDifficulty;
+import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
-import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,7 +12,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
-import java.util.Map;
 import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,7 +20,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Nationalized;
-import org.hibernate.annotations.Type;
 
 @Builder
 @AllArgsConstructor
@@ -36,7 +33,7 @@ import org.hibernate.annotations.Type;
     indexes = {
       @Index(name = "idx_canonical_questions_created_by", columnList = "created_by"),
       @Index(name = "idx_canonical_questions_type", columnList = "problem_type"),
-      @Index(name = "idx_canonical_questions_difficulty", columnList = "difficulty")
+      @Index(name = "idx_canonical_questions_cognitive", columnList = "cognitive_level")
     })
 public class CanonicalQuestion extends BaseEntity {
 
@@ -52,17 +49,16 @@ public class CanonicalQuestion extends BaseEntity {
   @Column(name = "solution_steps", columnDefinition = "TEXT")
   private String solutionSteps;
 
-  @Type(JsonBinaryType.class)
-  @Column(name = "diagram_definition", columnDefinition = "jsonb")
-  private Map<String, Object> diagramDefinition;
+  @Column(name = "diagram_definition", columnDefinition = "TEXT")
+  private String diagramDefinition;
 
   @Column(name = "problem_type", nullable = false)
   @Enumerated(EnumType.STRING)
   private QuestionType problemType;
 
-  @Column(name = "difficulty")
+  @Column(name = "cognitive_level", nullable = false)
   @Enumerated(EnumType.STRING)
-  private QuestionDifficulty difficulty;
+  private CognitiveLevel cognitiveLevel;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by", insertable = false, updatable = false)

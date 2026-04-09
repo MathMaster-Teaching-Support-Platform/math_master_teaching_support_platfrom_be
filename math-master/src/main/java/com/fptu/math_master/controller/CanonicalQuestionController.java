@@ -1,8 +1,10 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.CanonicalQuestionRequest;
+import com.fptu.math_master.dto.request.GenerateCanonicalQuestionsRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.CanonicalQuestionResponse;
+import com.fptu.math_master.dto.response.GeneratedQuestionsBatchResponse;
 import com.fptu.math_master.service.CanonicalQuestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -73,6 +75,25 @@ public class CanonicalQuestionController {
 
     return ApiResponse.<Page<CanonicalQuestionResponse>>builder()
         .result(canonicalQuestionService.getMyCanonicalQuestions(pageable))
+        .build();
+  }
+
+  @PostMapping("/{id}/generate-questions")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Generate questions from canonical question",
+      description =
+          "Generate AI_DRAFT questions by combining canonical prompt structure with a selected parameterized template.")
+  public ApiResponse<GeneratedQuestionsBatchResponse> generateQuestionsFromCanonical(
+      @PathVariable UUID id, @Valid @RequestBody GenerateCanonicalQuestionsRequest request) {
+    log.info(
+        "REST request to generate {} questions from canonical {} using template {}",
+        request.getCount(),
+        id,
+        request.getTemplateId());
+    return ApiResponse.<GeneratedQuestionsBatchResponse>builder()
+        .message("Questions generated from canonical flow and saved as AI_DRAFT.")
+        .result(canonicalQuestionService.generateQuestionsFromCanonical(id, request))
         .build();
   }
 }

@@ -1,6 +1,7 @@
 package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
+import com.fptu.math_master.dto.request.GenerateCanonicalQuestionsRequest;
 import com.fptu.math_master.dto.request.GenerateTemplateQuestionsRequest;
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
@@ -42,6 +43,9 @@ public interface QuestionTemplateService {
 
   GeneratedQuestionsBatchResponse generateQuestionsFromTemplate(
       UUID id, GenerateTemplateQuestionsRequest request);
+
+    GeneratedQuestionsBatchResponse generateQuestionsFromCanonical(
+      UUID canonicalQuestionId, GenerateCanonicalQuestionsRequest request);
 
   /**
    * AI generates one or more question templates based on lesson content

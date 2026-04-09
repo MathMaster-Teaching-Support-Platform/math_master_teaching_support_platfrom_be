@@ -1,7 +1,6 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionSourceType;
 import com.fptu.math_master.enums.QuestionStatus;
 import com.fptu.math_master.enums.QuestionType;
@@ -43,7 +42,6 @@ import org.hibernate.annotations.Type;
       @Index(name = "idx_questions_bank", columnList = "question_bank_id"),
       @Index(name = "idx_questions_created_by", columnList = "created_by"),
       @Index(name = "idx_questions_type", columnList = "question_type"),
-      @Index(name = "idx_questions_difficulty", columnList = "difficulty"),
       @Index(name = "idx_questions_cognitive_level", columnList = "cognitive_level"),
       @Index(name = "idx_questions_status", columnList = "question_status"),
       @Index(name = "idx_questions_source_type", columnList = "question_source_type"),
@@ -83,10 +81,6 @@ public class Question extends BaseEntity {
   @Column(name = "points", precision = 5, scale = 2)
   private BigDecimal points;
 
-  @Column(name = "difficulty")
-  @Enumerated(EnumType.STRING)
-  private QuestionDifficulty difficulty;
-
   @Column(name = "cognitive_level", nullable = false)
   @Enumerated(EnumType.STRING)
   private CognitiveLevel cognitiveLevel;
@@ -120,9 +114,8 @@ public class Question extends BaseEntity {
   @Column(name = "solution_steps", columnDefinition = "TEXT")
   private String solutionSteps;
 
-  @Type(JsonBinaryType.class)
-  @Column(name = "diagram_data", columnDefinition = "jsonb")
-  private Map<String, Object> diagramData;
+  @Column(name = "diagram_data", columnDefinition = "TEXT")
+  private String diagramData;
 
   @Type(JsonBinaryType.class)
   @Column(name = "generation_metadata", columnDefinition = "jsonb")
@@ -163,7 +156,6 @@ public class Question extends BaseEntity {
   public void prePersist() {
     super.prePersist();
     if (points == null) points = BigDecimal.valueOf(1.0);
-    if (difficulty == null) difficulty = QuestionDifficulty.MEDIUM;
     if (questionStatus == null) questionStatus = QuestionStatus.AI_DRAFT;
     if (questionSourceType == null) questionSourceType = QuestionSourceType.MANUAL;
   }

@@ -2,6 +2,10 @@ spring:
   application:
     name: math-master
   servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
     multipart:
       max-file-size: 25MB
       max-request-size: 25MB
@@ -78,6 +82,7 @@ server:
   port: 8080
   forward-headers-strategy: framework
   tomcat:
+    uri-encoding: UTF-8
     remoteip:
       protocol-header: x-forwarded-proto
       remote-ip-header: x-forwarded-for
@@ -91,6 +96,9 @@ jwt:
   refreshable-duration: 36000
 
 logging:
+  charset:
+    console: UTF-8
+    file: UTF-8
   level:
     org.springframework: INFO
     org.hibernate.SQL: INFO

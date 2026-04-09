@@ -82,7 +82,6 @@ public class QuestionServiceImpl implements QuestionService {
           .solutionSteps(request.getSolutionSteps())
           .diagramData(request.getDiagramData())
             .points(request.getPoints())
-            .difficulty(request.getDifficulty())
             .cognitiveLevel(request.getCognitiveLevel())
             .tags(request.getTags())
             .questionBankId(request.getQuestionBankId())
@@ -220,9 +219,6 @@ public class QuestionServiceImpl implements QuestionService {
     }
     if (request.getPoints() != null) {
       question.setPoints(request.getPoints());
-    }
-    if (request.getDifficulty() != null) {
-      question.setDifficulty(request.getDifficulty());
     }
     if (request.getCognitiveLevel() != null) {
       question.setCognitiveLevel(request.getCognitiveLevel());
@@ -364,7 +360,6 @@ public class QuestionServiceImpl implements QuestionService {
               .solutionSteps(questionRequest.getSolutionSteps())
               .diagramData(questionRequest.getDiagramData())
                 .points(questionRequest.getPoints())
-                .difficulty(questionRequest.getDifficulty())
                 .cognitiveLevel(questionRequest.getCognitiveLevel())
                 .tags(questionRequest.getTags())
                 .questionBankId(questionRequest.getQuestionBankId())
@@ -441,7 +436,7 @@ public class QuestionServiceImpl implements QuestionService {
 
   @Override
   public Page<QuestionResponse> searchQuestions(
-      String searchTerm, String difficulty, String type, Pageable pageable) {
+      String searchTerm, String type, Pageable pageable) {
     UUID currentUserId = getCurrentUserId();
 
     if (searchTerm != null && !searchTerm.isEmpty()) {
@@ -450,15 +445,6 @@ public class QuestionServiceImpl implements QuestionService {
           .searchByCreatedBy(currentUserId, searchPattern, pageable)
           .map(this::mapToResponse);
     } else {
-      com.fptu.math_master.enums.QuestionDifficulty difficultyEnum = null;
-      if (difficulty != null && !difficulty.isBlank()) {
-        try {
-          difficultyEnum = com.fptu.math_master.enums.QuestionDifficulty.valueOf(difficulty);
-        } catch (IllegalArgumentException ignored) {
-          // Keep null to mean "no filter" (backward-compatible behavior)
-        }
-      }
-
       com.fptu.math_master.enums.QuestionType typeEnum = null;
       if (type != null && !type.isBlank()) {
         try {
@@ -469,7 +455,7 @@ public class QuestionServiceImpl implements QuestionService {
       }
 
       return questionRepository
-          .findByFilters(currentUserId, difficultyEnum, typeEnum, pageable)
+          .findByFilters(currentUserId, typeEnum, pageable)
           .map(this::mapToResponse);
     }
   }
@@ -499,7 +485,6 @@ public class QuestionServiceImpl implements QuestionService {
         .solutionSteps(question.getSolutionSteps())
         .diagramData(question.getDiagramData())
         .points(question.getPoints())
-        .difficulty(question.getDifficulty())
         .cognitiveLevel(question.getCognitiveLevel())
         .questionStatus(question.getQuestionStatus())
         .questionSourceType(question.getQuestionSourceType())

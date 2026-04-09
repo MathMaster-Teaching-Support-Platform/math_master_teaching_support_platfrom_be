@@ -59,6 +59,5 @@ public interface QuestionService {
   /**
    * Search questions
    */
-  Page<QuestionResponse> searchQuestions(
-      String searchTerm, String difficulty, String type, Pageable pageable);
+  Page<QuestionResponse> searchQuestions(String searchTerm, String type, Pageable pageable);
 }

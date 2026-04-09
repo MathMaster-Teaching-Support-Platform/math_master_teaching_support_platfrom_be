@@ -84,12 +84,10 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       "SELECT q FROM Question q "
           + "WHERE q.deletedAt IS NULL "
           + "AND q.createdBy = :createdBy "
-          + "AND (:difficulty IS NULL OR q.difficulty = :difficulty) "
           + "AND (:questionType IS NULL OR q.questionType = :questionType) "
           + "ORDER BY q.createdAt DESC")
   Page<Question> findByFilters(
       @Param("createdBy") UUID createdBy,
-      @Param("difficulty") QuestionDifficulty difficulty,
       @Param("questionType") QuestionType questionType,
       Pageable pageable);
 
@@ -121,7 +119,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
           + "WHERE q.questionBankId = :bankId "
           + "AND q.questionStatus = 'APPROVED' "
           + "AND q.deletedAt IS NULL "
-          + "AND (:difficulty IS NULL OR q.difficulty = :difficulty) "
+          + "AND (:difficulty IS NULL OR :difficulty IS NOT NULL) "
           + "AND (:cognitiveLevel IS NULL OR q.cognitiveLevel = :cognitiveLevel)")
   long countApprovedByBankAndDifficultyAndCognitive(
       @Param("bankId") UUID bankId,
@@ -134,7 +132,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
               + "WHERE q.question_bank_id = :bankId "
               + "AND q.question_status = 'APPROVED' "
               + "AND q.deleted_at IS NULL "
-              + "AND (:difficulty IS NULL OR q.difficulty = CAST(:difficulty AS text)) "
+              + "AND (:difficulty IS NULL OR :difficulty IS NOT NULL) "
               + "AND (:cognitiveLevel IS NULL OR q.cognitive_level = CAST(:cognitiveLevel AS text)) "
               + "AND (:topic IS NULL "
               + "  OR EXISTS ( "
@@ -154,7 +152,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
               + "WHERE q.question_bank_id = :bankId "
               + "AND q.question_status = 'APPROVED' "
               + "AND q.deleted_at IS NULL "
-              + "AND (:difficulty IS NULL OR q.difficulty = CAST(:difficulty AS text)) "
+              + "AND (:difficulty IS NULL OR :difficulty IS NOT NULL) "
               + "AND (:cognitiveLevel IS NULL OR q.cognitive_level = CAST(:cognitiveLevel AS text)) "
               + "AND (:topic IS NULL "
               + "  OR EXISTS ( "
@@ -175,7 +173,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
               + "WHERE q.question_bank_id = :bankId "
               + "AND q.question_status = 'APPROVED' "
               + "AND q.deleted_at IS NULL "
-              + "AND (:difficulty IS NULL OR q.difficulty = CAST(:difficulty AS text)) "
+                  + "AND (:difficulty IS NULL OR :difficulty IS NOT NULL) "
               + "AND (:cognitiveLevel IS NULL OR q.cognitive_level = CAST(:cognitiveLevel AS text)) "
               + "ORDER BY random() LIMIT :limit",
       nativeQuery = true)

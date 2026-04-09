@@ -263,7 +263,7 @@ public class QuestionTemplateController {
     @Operation(
             summary = "Generate multiple AI questions from template",
             description =
-                    "Generate a batch of AI questions by difficulty distribution and save them as AI_DRAFT for review.")
+                "Generate a batch of AI questions from the template (parametric or canonical-guided mode) and save them as AI_DRAFT for review.")
     public ApiResponse<GeneratedQuestionsBatchResponse> generateQuestions(
             @PathVariable UUID id, @Valid @RequestBody GenerateTemplateQuestionsRequest request) {
         log.info("REST request to generate {} questions from template: {}", request.getCount(), id);

@@ -332,11 +332,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     prompt.append("    \"formulaExplanation\": \"Solve ax + b = c => x = (c - b) / a\",\n");
     prompt.append("    \"cognitiveLevel\": \"APPLY\",\n");
     prompt.append("    \"tags\": [\"linear-equation\", \"algebra\"],\n");
-    prompt.append("    \"difficultyRules\": {\n");
-    prompt.append("      \"easy\": \"a <= 3 AND b >= 0 AND c <= 20\",\n");
-    prompt.append("      \"medium\": \"a <= 7 OR b < 0\",\n");
-    prompt.append("      \"hard\": \"a > 7 OR ABS(b) > 15\"\n");
-    prompt.append("    },\n");
     prompt.append("    \"constraints\": [\"a != 0\"]\n");
     prompt.append("  },\n");
     prompt.append(
@@ -466,7 +461,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
               .templateText(templateTextMap)
               .parameters(buildParametersFromNode(templateNode.path("parameters")))
               .answerFormula(templateNode.path("answerFormula").asText())
-              .difficultyRules(parseDifficultyRules(templateNode.path("difficultyRules")))
               .cognitiveLevel(parseCognitiveLevel(templateNode.path("cognitiveLevel").asText()))
               .tags(parseStringArray(templateNode.path("tags")).toArray(new String[0]))
               .build();
@@ -563,23 +557,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
           }
         }
 
-        // 5. Validate difficulty rules are mutually exclusive
-        Map<String, String> diffRules = response.getSuggestedTemplate().getDifficultyRules();
-        if (diffRules != null && diffRules.size() >= 2) {
-          // This is a simplified check - in production you'd parse the conditions
-          if (diffRules.containsKey("easy")
-              && diffRules.containsKey("medium")
-              && diffRules.containsKey("hard")) {
-            String easy = diffRules.get("easy");
-            String medium = diffRules.get("medium");
-            // Check for overlapping conditions (simplified)
-            if ((easy.contains("<=") && medium.contains("<="))
-                || (easy.contains("AND") && !medium.contains("AND"))) {
-              additionalWarnings.add(
-                  "WARNING: Difficulty rules may overlap - verify mutual exclusivity");
-            }
-          }
-        }
       }
 
       // Update warnings
@@ -659,11 +636,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
             .templateText(Map.of("en", text))
             .parameters(new HashMap<>())
             .answerFormula("")
-            .difficultyRules(
-                Map.of(
-                    "easy", "true",
-                    "medium", "true",
-                    "hard", "true"))
             .cognitiveLevel(CognitiveLevel.APPLY)
             .tags(new String[] {"imported"})
             .build();
@@ -788,26 +760,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     return buildParameters(parametersNode);
   }
 
-  private Map<String, String> parseDifficultyRules(JsonNode node) {
-    Map<String, String> rules = new HashMap<>();
-
-    if (node.isObject()) {
-      Iterator<String> fieldNames = node.fieldNames();
-      while (fieldNames.hasNext()) {
-        String key = fieldNames.next();
-        rules.put(key, node.get(key).asText());
-      }
-    }
-
-    if (rules.isEmpty()) {
-      rules.put("easy", "true");
-      rules.put("medium", "true");
-      rules.put("hard", "true");
-    }
-
-    return rules;
-  }
-
   private List<String> extractSampleQuestions(String text) {
     List<String> samples = new ArrayList<>();
 
@@ -895,7 +847,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
             .parameters(draft.getParameters() != null ? draft.getParameters() : new HashMap<>())
             .answerFormula(draft.getAnswerFormula() != null ? draft.getAnswerFormula() : "")
             .optionsGenerator(draft.getOptionsGenerator())
-            .difficultyRules(convertDifficultyRules(draft.getDifficultyRules()))
             .constraints(new String[0])
             .cognitiveLevel(
                 draft.getCognitiveLevel() != null
@@ -950,12 +901,4 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 
-  /** Convert difficulty rules Map<String, String> to Map<String, Object> for JSONB */
-  private Map<String, Object> convertDifficultyRules(Map<String, String> rules) {
-    if (rules == null) {
-      return new HashMap<>();
-    }
-    Map<String, Object> result = new HashMap<>(rules);
-    return result;
-  }
 }

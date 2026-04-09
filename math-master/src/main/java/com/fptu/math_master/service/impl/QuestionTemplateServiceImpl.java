@@ -2,6 +2,7 @@ package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.dto.request.AIEnhancementRequest;
 import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
+import com.fptu.math_master.dto.request.GenerateCanonicalQuestionsRequest;
 import com.fptu.math_master.dto.request.GenerateTemplateQuestionsRequest;
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
@@ -17,7 +18,6 @@ import com.fptu.math_master.entity.QuestionBank;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionGenerationMode;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionSourceType;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.QuestionStatus;
@@ -97,11 +97,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .templateText(request.getTemplateText())
             .parameters(request.getParameters())
             .answerFormula(request.getAnswerFormula())
-          .solutionTemplate(request.getSolutionTemplate())
           .diagramTemplate(request.getDiagramTemplate())
-          .variableDefinitions(request.getVariableDefinitions())
             .optionsGenerator(request.getOptionsGenerator())
-            .difficultyRules(request.getDifficultyRules())
             .constraints(request.getConstraints())
             .cognitiveLevel(request.getCognitiveLevel())
             .tags(request.getTags())
@@ -158,11 +155,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     template.setTemplateText(request.getTemplateText());
     template.setParameters(request.getParameters());
     template.setAnswerFormula(request.getAnswerFormula());
-    template.setSolutionTemplate(request.getSolutionTemplate());
     template.setDiagramTemplate(request.getDiagramTemplate());
-    template.setVariableDefinitions(request.getVariableDefinitions());
     template.setOptionsGenerator(request.getOptionsGenerator());
-    template.setDifficultyRules(request.getDifficultyRules());
     template.setConstraints(request.getConstraints());
     template.setCognitiveLevel(request.getCognitiveLevel());
     template.setTags(request.getTags());
@@ -409,7 +403,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
                 .explanation(enhanced.getExplanation())
                 .solutionSteps(sample.getSolutionSteps())
                 .diagramData(sample.getDiagramData())
-                .difficulty(sample.getCalculatedDifficulty())
                 .cognitiveLevel(template.getCognitiveLevel())
                 .generationMetadata(generationMetadata)
                 .build();
@@ -471,10 +464,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     }
 
     int requested = request.getCount() != null ? request.getCount() : 0;
-    int distributionSum =
-        request.getDifficultyDistribution().values().stream().mapToInt(Integer::intValue).sum();
-
-    if (requested <= 0 || distributionSum != requested) {
+    if (requested <= 0) {
       throw new AppException(ErrorCode.INVALID_KEY);
     }
 
@@ -482,68 +472,60 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     List<String> warnings = new ArrayList<>();
     int sampleIndex = 0;
 
-    for (Map.Entry<QuestionDifficulty, Integer> entry : request.getDifficultyDistribution().entrySet()) {
-      QuestionDifficulty targetDifficulty = entry.getKey();
-      int targetCount = entry.getValue() == null ? 0 : entry.getValue();
-      UUID effectiveCanonicalId =
-          mode == QuestionGenerationMode.AI_FROM_CANONICAL && canonicalQuestion != null
-              ? canonicalQuestion.getId()
-              : template.getCanonicalQuestionId();
-      for (int i = 0; i < targetCount; i++) {
-        try {
-          GeneratedQuestionSample sample =
-              mode == QuestionGenerationMode.AI_FROM_CANONICAL
-                  ? aiEnhancementService.generateQuestionFromCanonical(
-                      canonicalQuestion, template, sampleIndex++)
-                  : aiEnhancementService.generateQuestion(template, sampleIndex++);
-          if (sample == null || sample.getQuestionText() == null || sample.getQuestionText().isBlank()) {
-            warnings.add("Generated sample was empty for difficulty " + targetDifficulty);
-            continue;
-          }
+    UUID effectiveCanonicalId =
+        mode == QuestionGenerationMode.AI_FROM_CANONICAL && canonicalQuestion != null
+            ? canonicalQuestion.getId()
+            : template.getCanonicalQuestionId();
 
-          Map<String, Object> metadata = new HashMap<>();
-          metadata.put("status", "AI_DRAFT");
-          metadata.put("requestedDifficulty", targetDifficulty.name());
-          metadata.put("usedParameters", sample.getUsedParameters());
+    for (int i = 0; i < requested; i++) {
+      try {
+        GeneratedQuestionSample sample =
+            mode == QuestionGenerationMode.AI_FROM_CANONICAL
+                ? aiEnhancementService.generateQuestionFromCanonical(
+                    canonicalQuestion, template, sampleIndex++)
+                : aiEnhancementService.generateQuestion(template, sampleIndex++);
+        if (sample == null || sample.getQuestionText() == null || sample.getQuestionText().isBlank()) {
+          warnings.add("Generated sample was empty at index " + (i + 1));
+          continue;
+        }
 
-          Question question =
-              Question.builder()
-                  .questionBankId(template.getQuestionBankId())
-                  .templateId(template.getId())
-                    .canonicalQuestionId(effectiveCanonicalId)
-                  .questionType(template.getTemplateType())
-                  .questionText(sample.getQuestionText())
-                    .options(
-                      sample.getOptions() != null
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("status", "AI_DRAFT");
+        metadata.put("generationMode", mode.name());
+        metadata.put("usedParameters", sample.getUsedParameters());
+
+        Question question =
+            Question.builder()
+                .questionBankId(template.getQuestionBankId())
+                .templateId(template.getId())
+                .canonicalQuestionId(effectiveCanonicalId)
+                .questionType(template.getTemplateType())
+                .questionText(sample.getQuestionText())
+                .options(
+                    sample.getOptions() != null
                         ? new HashMap<String, Object>(sample.getOptions())
                         : null)
-                  .correctAnswer(sample.getCorrectAnswer())
-                  .explanation(sample.getExplanation())
-                  .solutionSteps(sample.getSolutionSteps())
-                  .diagramData(sample.getDiagramData())
-                  .difficulty(targetDifficulty)
-                  .cognitiveLevel(template.getCognitiveLevel())
-                  .questionStatus(QuestionStatus.AI_DRAFT)
-                  .questionSourceType(QuestionSourceType.AI_GENERATED)
-                  .generationMetadata(metadata)
-                  .build();
-          question.setCreatedBy(currentUserId);
+                .correctAnswer(sample.getCorrectAnswer())
+                .explanation(sample.getExplanation())
+                .solutionSteps(sample.getSolutionSteps())
+                .diagramData(sample.getDiagramData())
+                .cognitiveLevel(template.getCognitiveLevel())
+                .questionStatus(QuestionStatus.AI_DRAFT)
+                .questionSourceType(QuestionSourceType.AI_GENERATED)
+                .generationMetadata(metadata)
+                .build();
+        question.setCreatedBy(currentUserId);
 
-          Question saved = questionRepository.save(question);
-          generatedIds.add(saved.getId());
-        } catch (Exception ex) {
-          log.warn(
-              "Failed to generate/save question {}/{} for template {}: {}",
-              i + 1,
-              targetCount,
-              id,
-              ex.getMessage());
-          warnings.add(
-              "Failed to generate question for difficulty "
-                  + targetDifficulty
-                  + ": "
-                  + ex.getMessage());
-        }
+        Question saved = questionRepository.save(question);
+        generatedIds.add(saved.getId());
+      } catch (Exception ex) {
+        log.warn(
+            "Failed to generate/save question {}/{} for template {}: {}",
+            i + 1,
+            requested,
+            id,
+            ex.getMessage());
+        warnings.add("Failed to generate question at index " + (i + 1) + ": " + ex.getMessage());
       }
     }
 
@@ -553,6 +535,20 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         .generatedQuestionIds(generatedIds)
         .warnings(warnings.isEmpty() ? null : warnings)
         .build();
+  }
+
+  @Override
+  @Transactional
+  public GeneratedQuestionsBatchResponse generateQuestionsFromCanonical(
+      UUID canonicalQuestionId, GenerateCanonicalQuestionsRequest request) {
+    GenerateTemplateQuestionsRequest delegatedRequest =
+        GenerateTemplateQuestionsRequest.builder()
+            .count(request.getCount())
+            .generationMode(QuestionGenerationMode.AI_FROM_CANONICAL)
+            .canonicalQuestionId(canonicalQuestionId)
+            .build();
+
+    return generateQuestionsFromTemplate(request.getTemplateId(), delegatedRequest);
   }
 
   @Override
@@ -816,7 +812,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         .explanation(sample.getExplanation())
         .solutionSteps(sample.getSolutionSteps())
         .diagramData(sample.getDiagramData())
-            .difficulty(sample.getCalculatedDifficulty())
             .cognitiveLevel(template.getCognitiveLevel())
             .generationMetadata(generationMetadata)
             .build();
@@ -894,11 +889,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .templateText(template.getTemplateText())
             .parameters(template.getParameters())
             .answerFormula(template.getAnswerFormula())
-            .solutionTemplate(template.getSolutionTemplate())
             .diagramTemplate(template.getDiagramTemplate())
-            .variableDefinitions(template.getVariableDefinitions())
             .optionsGenerator(template.getOptionsGenerator())
-            .difficultyRules(template.getDifficultyRules())
             .constraints(template.getConstraints())
             .cognitiveLevel(template.getCognitiveLevel())
             .tags(template.getTags())

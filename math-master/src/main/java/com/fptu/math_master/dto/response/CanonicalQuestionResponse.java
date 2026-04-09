@@ -1,9 +1,8 @@
 package com.fptu.math_master.dto.response;
 
-import com.fptu.math_master.enums.QuestionDifficulty;
+import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,9 +21,9 @@ public class CanonicalQuestionResponse {
   private String title;
   private String problemText;
   private String solutionSteps;
-  private Map<String, Object> diagramDefinition;
+  private String diagramDefinition;
   private QuestionType problemType;
-  private QuestionDifficulty difficulty;
+  private CognitiveLevel cognitiveLevel;
   private Instant createdAt;
   private Instant updatedAt;
 }

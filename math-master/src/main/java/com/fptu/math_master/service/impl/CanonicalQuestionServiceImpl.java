@@ -1,7 +1,9 @@
 package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.dto.request.CanonicalQuestionRequest;
+import com.fptu.math_master.dto.request.GenerateCanonicalQuestionsRequest;
 import com.fptu.math_master.dto.response.CanonicalQuestionResponse;
+import com.fptu.math_master.dto.response.GeneratedQuestionsBatchResponse;
 import com.fptu.math_master.entity.CanonicalQuestion;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.exception.AppException;
@@ -9,6 +11,7 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.CanonicalQuestionRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.CanonicalQuestionService;
+import com.fptu.math_master.service.QuestionTemplateService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -28,6 +31,7 @@ public class CanonicalQuestionServiceImpl implements CanonicalQuestionService {
 
   CanonicalQuestionRepository canonicalQuestionRepository;
   UserRepository userRepository;
+  QuestionTemplateService questionTemplateService;
 
   @Override
   @Transactional
@@ -41,7 +45,7 @@ public class CanonicalQuestionServiceImpl implements CanonicalQuestionService {
             .solutionSteps(request.getSolutionSteps())
             .diagramDefinition(request.getDiagramDefinition())
             .problemType(request.getProblemType())
-            .difficulty(request.getDifficulty())
+        .cognitiveLevel(request.getCognitiveLevel())
             .build();
     canonicalQuestion.setCreatedBy(currentUserId);
 
@@ -73,6 +77,23 @@ public class CanonicalQuestionServiceImpl implements CanonicalQuestionService {
         .map(this::mapToResponse);
   }
 
+  @Override
+  @Transactional
+  public GeneratedQuestionsBatchResponse generateQuestionsFromCanonical(
+      UUID canonicalQuestionId, GenerateCanonicalQuestionsRequest request) {
+    CanonicalQuestion canonicalQuestion =
+        canonicalQuestionRepository
+            .findByIdAndNotDeleted(canonicalQuestionId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    if (!canonicalQuestion.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.TEMPLATE_ACCESS_DENIED);
+    }
+
+    return questionTemplateService.generateQuestionsFromCanonical(canonicalQuestionId, request);
+  }
+
   private CanonicalQuestionResponse mapToResponse(CanonicalQuestion canonicalQuestion) {
     String creatorName =
         userRepository
@@ -89,7 +110,7 @@ public class CanonicalQuestionServiceImpl implements CanonicalQuestionService {
         .solutionSteps(canonicalQuestion.getSolutionSteps())
         .diagramDefinition(canonicalQuestion.getDiagramDefinition())
         .problemType(canonicalQuestion.getProblemType())
-        .difficulty(canonicalQuestion.getDifficulty())
+        .cognitiveLevel(canonicalQuestion.getCognitiveLevel())
         .createdAt(canonicalQuestion.getCreatedAt())
         .updatedAt(canonicalQuestion.getUpdatedAt())
         .build();

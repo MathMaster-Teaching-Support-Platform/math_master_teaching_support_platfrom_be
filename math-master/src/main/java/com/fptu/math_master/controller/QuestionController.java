@@ -177,27 +177,21 @@ public class QuestionController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Search questions",
-      description = "Search questions with filters (search term, difficulty, type)")
+      description = "Search questions with filters (search term, type)")
   public ApiResponse<Page<QuestionResponse>> searchQuestions(
       @Parameter(description = "Search term") @RequestParam(required = false) String search,
-      @Parameter(description = "Difficulty level filter") @RequestParam(required = false)
-          String difficulty,
       @Parameter(description = "Question type filter") @RequestParam(required = false) String type,
       @Parameter(description = "Page number (0-indexed)") @RequestParam(defaultValue = "0")
           int page,
       @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
 
-    log.info(
-        "REST request to search questions: search={}, difficulty={}, type={}",
-        search,
-        difficulty,
-        type);
+    log.info("REST request to search questions: search={}, type={}", search, type);
 
     Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
     return ApiResponse.<Page<QuestionResponse>>builder()
         .message("Questions found successfully")
-        .result(questionService.searchQuestions(search, difficulty, type, pageable))
+        .result(questionService.searchQuestions(search, type, pageable))
         .build();
   }
 
@@ -208,7 +202,7 @@ public class QuestionController {
       description =
           "Batch import questions from CSV file. "
               + "CSV format: question_text, question_type, cognitive_level, correct_answer, "
-              + "explanation, points, difficulty, options (A:value,B:value), tags")
+              + "explanation, points, options (A:value,B:value), tags")
   public ApiResponse<ImportQuestionsResponse> importQuestions(
       @Valid @RequestBody ImportQuestionsRequest request) {
     log.info("REST request to import questions");

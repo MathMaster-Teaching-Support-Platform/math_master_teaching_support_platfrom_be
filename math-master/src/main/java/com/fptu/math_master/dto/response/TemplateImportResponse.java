@@ -112,9 +112,6 @@ public class TemplateImportResponse {
     /** Options generator config */
     Map<String, Object> optionsGenerator;
 
-    /** Difficulty rules */
-    Map<String, String> difficultyRules;
-
     /** Suggested cognitive level */
     CognitiveLevel cognitiveLevel;
 

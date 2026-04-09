@@ -26,6 +26,9 @@ import org.springframework.stereotype.Service;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AIEnhancementServiceImpl implements AIEnhancementService {
 
+  private static final Pattern PLACEHOLDER_PATTERN =
+      Pattern.compile("\\{\\{\\s*(.+?)\\s*}}|\\{\\s*(.+?)\\s*}");
+
   GeminiService geminiService;
   ObjectMapper objectMapper = new ObjectMapper();
 
@@ -294,9 +297,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           String key = fieldNames.next();
           String rawValue = optionsNode.get(key).asText();
 
-          // Clean option value: remove any explanatory text in parentheses
-          String cleanedValue = cleanOptionValue(rawValue);
-          options.put(key, cleanedValue);
+          String renderedValue = renderOptionValue(rawValue, request.getParameters());
+          options.put(key, renderedValue);
         }
         response.setEnhancedOptions(options);
       }
@@ -660,7 +662,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .build();
     }
 
-    QuestionDifficulty difficulty = determineDifficulty(template.getDifficultyRules(), params);
+    QuestionDifficulty difficulty = determineDifficulty(null, params);
     String questionTextBase = fillTemplateText(template.getTemplateText(), params);
 
     try {
@@ -685,10 +687,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .correctAnswer(correctKey) // KEY (A/B/C/D)
           .explanation(
               "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr)
-          .solutionSteps(
-            template.getSolutionTemplate() != null
-              ? fillSolutionTemplate(template.getSolutionTemplate(), params)
-              : "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr)
+          .solutionSteps("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr)
           .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
@@ -705,10 +704,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       }
 
       Map<String, Object> params = pickParameters(template, sampleIndex);
-      QuestionDifficulty difficulty =
-        canonicalQuestion.getDifficulty() != null
-          ? canonicalQuestion.getDifficulty()
-          : determineDifficulty(template.getDifficultyRules(), params);
+      QuestionDifficulty difficulty = determineDifficulty(null, params);
 
       String canonicalProblem =
         canonicalQuestion.getProblemText() != null
@@ -721,7 +717,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
       GeneratedQuestionSample baseSample = generateQuestion(template, sampleIndex);
 
-      Map<String, Object> diagramData =
+      String diagramData =
         canonicalQuestion.getDiagramDefinition() != null
           ? renderDiagramTemplate(canonicalQuestion.getDiagramDefinition(), params)
           : renderDiagramTemplate(template.getDiagramTemplate(), params);
@@ -799,7 +795,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     // Prefer internal evaluator first to avoid JS-engine differences for '^' and math functions.
     try {
-      return evaluateFormulaSimple(normalizedFormula, paramsForFormula);
+      String directResult = evaluateFormulaSimple(normalizedFormula, paramsForFormula);
+      if (!"?".equals(directResult)) {
+        return directResult;
+      }
     } catch (Exception e) {
       log.debug("Internal evaluator failed for '{}': {}", normalizedFormula, e.getMessage());
     }
@@ -818,7 +817,11 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     // If no ScriptEngine available, internal evaluator is already attempted above.
     if (engine == null) {
-      return "?";
+      String symbolicAnswer = buildSymbolicFormulaAnswer(normalizedFormula, paramsForFormula);
+      if (!"?".equals(symbolicAnswer)) {
+        log.info("Using symbolic formula fallback answer: '{}'", symbolicAnswer);
+      }
+      return symbolicAnswer;
     }
 
     try {
@@ -844,14 +847,53 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           "ScriptEngine evaluation failed for '{}': {}, trying simple evaluator",
           normalizedFormula,
           e.getMessage());
-      // Try simple fallback
+      // Try simple fallback, then symbolic fallback.
       try {
-        return evaluateFormulaSimple(normalizedFormula, paramsForFormula);
+        String fallbackResult = evaluateFormulaSimple(normalizedFormula, paramsForFormula);
+        if (!"?".equals(fallbackResult)) {
+          return fallbackResult;
+        }
       } catch (Exception fallbackError) {
         log.warn("Simple fallback also failed: {}", fallbackError.getMessage());
-        return "?";
+      }
+
+      String symbolicAnswer = buildSymbolicFormulaAnswer(normalizedFormula, paramsForFormula);
+      if (!"?".equals(symbolicAnswer)) {
+        log.info("Using symbolic formula fallback answer: '{}'", symbolicAnswer);
+      }
+      return symbolicAnswer;
+    }
+  }
+
+  /**
+   * Build a symbolic answer by substituting known parameters while preserving unknown math
+   * symbols (e.g. x). This prevents hard failures for valid symbolic formulas.
+   */
+  private String buildSymbolicFormulaAnswer(String formula, Map<String, Object> params) {
+    if (formula == null || formula.isBlank()) {
+      return "?";
+    }
+
+    String expression = formula;
+    boolean replacedAnyParameter = false;
+    for (Map.Entry<String, Object> entry : params.entrySet()) {
+      String paramName = entry.getKey();
+      Object paramValue = entry.getValue();
+      String valueStr = paramValue != null ? paramValue.toString() : "0";
+      String replaced = expression.replaceAll("\\b" + Pattern.quote(paramName) + "\\b", valueStr);
+      if (!replaced.equals(expression)) {
+        replacedAnyParameter = true;
+        expression = replaced;
       }
     }
+
+    expression = expression.replaceAll("\\s+", " ").trim();
+    if (expression.isEmpty()) {
+      return "?";
+    }
+
+    // Avoid returning raw formula when nothing was substituted.
+    return replacedAnyParameter ? expression : "?";
   }
 
   /**
@@ -1319,7 +1361,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         Iterator<String> fields = optionsNode.fieldNames();
         while (fields.hasNext()) {
           String k = fields.next();
-          options.put(k, cleanOptionValue(optionsNode.get(k).asText()));
+          options.put(k, renderOptionValue(optionsNode.get(k).asText(), params));
         }
       }
 
@@ -1346,7 +1388,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .options(options)
           .correctAnswer(correctKey) // KEY (A/B/C/D), not numeric value
           .explanation(explanation)
-          .solutionSteps(buildSolutionSteps(template, explanation, params))
+          .solutionSteps(buildSolutionSteps(explanation))
           .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
@@ -1364,7 +1406,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .options(fallbackOptions)
           .correctAnswer(correctKey) // KEY (A/B/C/D)
           .explanation("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
-          .solutionSteps(buildSolutionSteps(template, null, params))
+          .solutionSteps(buildSolutionSteps("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer))
           .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
@@ -1373,46 +1415,83 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     }
   }
 
-  private String buildSolutionSteps(
-      QuestionTemplate template, String aiExplanation, Map<String, Object> params) {
-    if (template.getSolutionTemplate() != null && !template.getSolutionTemplate().isBlank()) {
-      return fillSolutionTemplate(template.getSolutionTemplate(), params);
-    }
+  private String buildSolutionSteps(String aiExplanation) {
     return aiExplanation;
-  }
-
-  private String fillSolutionTemplate(String solutionTemplate, Map<String, Object> params) {
-    return fillText(solutionTemplate, params);
   }
 
   private String fillText(String raw, Map<String, Object> params) {
     if (raw == null || params == null || params.isEmpty()) {
       return raw;
     }
-    String out = raw;
-    for (Map.Entry<String, Object> e : params.entrySet()) {
-      String value = e.getValue() == null ? "" : String.valueOf(e.getValue());
-      out = out.replace("{{" + e.getKey() + "}}", value);
-      out = out.replace("{" + e.getKey() + "}", value);
+
+    Matcher matcher = PLACEHOLDER_PATTERN.matcher(raw);
+    StringBuffer sb = new StringBuffer();
+    while (matcher.find()) {
+      String token = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+      Object resolved = resolvePlaceholderValue(token, params);
+      String replacement = resolved == null ? matcher.group() : String.valueOf(resolved);
+      matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
     }
-    return out;
+    matcher.appendTail(sb);
+    return sb.toString();
   }
 
-  private Map<String, Object> renderDiagramTemplate(
-      Map<String, Object> diagramTemplate, Map<String, Object> params) {
-    if (diagramTemplate == null) {
+  /**
+   * For options: if there is no parameter placeholder, keep original value unchanged.
+   * Only render placeholders when present.
+   */
+  private String renderOptionValue(String rawValue, Map<String, Object> params) {
+    if (rawValue == null) {
       return null;
     }
-    Map<String, Object> rendered = new LinkedHashMap<>();
-    for (Map.Entry<String, Object> entry : diagramTemplate.entrySet()) {
-      Object value = entry.getValue();
-      if (value instanceof String textValue) {
-        rendered.put(entry.getKey(), fillText(textValue, params));
-      } else {
-        rendered.put(entry.getKey(), value);
-      }
+
+    boolean hasPlaceholder = PLACEHOLDER_PATTERN.matcher(rawValue).find();
+    if (!hasPlaceholder) {
+      return rawValue;
     }
-    return rendered;
+
+    String rendered = fillText(rawValue, params);
+    return rendered == null ? rawValue : rendered;
+  }
+
+  private Object resolvePlaceholderValue(String token, Map<String, Object> params) {
+    if (token == null) {
+      return null;
+    }
+
+    String expr = token.trim();
+    if (expr.isEmpty()) {
+      return null;
+    }
+
+    if (params.containsKey(expr)) {
+      return params.get(expr);
+    }
+
+    String evaluated = evaluateFormula(expr, params);
+    if ("?".equals(evaluated)) {
+      return null;
+    }
+
+    try {
+      if (evaluated.matches("^-?\\d+$")) {
+        return Long.parseLong(evaluated);
+      }
+      if (evaluated.matches("^-?\\d*\\.\\d+$")) {
+        return Double.parseDouble(evaluated);
+      }
+    } catch (Exception ignored) {
+      // Keep evaluated string if numeric coercion fails.
+    }
+
+    return evaluated;
+  }
+
+  private String renderDiagramTemplate(String diagramTemplate, Map<String, Object> params) {
+    if (diagramTemplate == null || diagramTemplate.isBlank()) {
+      return null;
+    }
+    return fillText(diagramTemplate, params);
   }
 
   /** Attempt to repair common truncation: add missing closing braces/brackets */

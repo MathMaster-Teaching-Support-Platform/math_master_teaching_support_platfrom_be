@@ -1,7 +1,6 @@
 package com.fptu.math_master.dto.request;
 
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
@@ -44,10 +43,6 @@ public class CreateQuestionRequest {
   @Schema(description = "Points for this question", example = "1.0")
   private BigDecimal points = BigDecimal.valueOf(1.0);
 
-  @Schema(description = "Difficulty level", example = "MEDIUM")
-  @Builder.Default
-  private QuestionDifficulty difficulty = QuestionDifficulty.MEDIUM;
-
   @NotNull(message = "Cognitive level is required")
   @Schema(
       description =
@@ -69,6 +64,6 @@ public class CreateQuestionRequest {
   @Schema(description = "Generated step-by-step solution in LaTeX or plain text")
   private String solutionSteps;
 
-  @Schema(description = "Generated diagram data payload")
-  private Map<String, Object> diagramData;
+  @Schema(description = "Generated diagram latex")
+  private String diagramData;
 }

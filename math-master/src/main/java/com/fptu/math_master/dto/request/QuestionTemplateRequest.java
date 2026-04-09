@@ -37,15 +37,9 @@ public class QuestionTemplateRequest {
   @NotBlank(message = "Answer formula is required")
   private String answerFormula;
 
-  private String solutionTemplate;
-
-  private Map<String, Object> diagramTemplate;
-
-  private Map<String, Object> variableDefinitions;
+  private String diagramTemplate;
 
   private Map<String, Object> optionsGenerator;
-
-  private Map<String, Object> difficultyRules;
 
   private String[] constraints;
 
