@@ -45,7 +45,8 @@ import org.hibernate.annotations.Type;
       @Index(name = "idx_questions_cognitive_level", columnList = "cognitive_level"),
       @Index(name = "idx_questions_status", columnList = "question_status"),
       @Index(name = "idx_questions_source_type", columnList = "question_source_type"),
-      @Index(name = "idx_questions_template", columnList = "template_id")
+      @Index(name = "idx_questions_template", columnList = "template_id"),
+      @Index(name = "idx_questions_rendered_latex_hash", columnList = "rendered_latex_hash")
     })
 /**
  * The entity of 'Question'.
@@ -116,6 +117,12 @@ public class Question extends BaseEntity {
 
   @Column(name = "diagram_data", columnDefinition = "TEXT")
   private String diagramData;
+
+  @Column(name = "rendered_image_url", columnDefinition = "TEXT")
+  private String renderedImageUrl;
+
+  @Column(name = "rendered_latex_hash", length = 64)
+  private String renderedLatexHash;
 
   @Type(JsonBinaryType.class)
   @Column(name = "generation_metadata", columnDefinition = "jsonb")

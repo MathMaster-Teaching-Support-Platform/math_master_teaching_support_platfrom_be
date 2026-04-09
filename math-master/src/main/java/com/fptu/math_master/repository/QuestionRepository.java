@@ -6,6 +6,7 @@ import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionStatus;
 import com.fptu.math_master.enums.QuestionType;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -38,6 +39,9 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
 
   @Query("SELECT q FROM Question q WHERE q.id = :id AND q.deletedAt IS NULL")
   java.util.Optional<Question> findByIdAndNotDeleted(@Param("id") UUID id);
+
+    Optional<Question> findFirstByRenderedLatexHashAndRenderedImageUrlIsNotNullAndDeletedAtIsNullOrderByCreatedAtDesc(
+            String renderedLatexHash);
 
   @Query(
       "SELECT q FROM Question q WHERE q.createdBy = :createdBy AND q.deletedAt IS NULL ORDER BY q.createdAt DESC")

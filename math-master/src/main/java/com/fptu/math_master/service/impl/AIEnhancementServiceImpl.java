@@ -1356,13 +1356,23 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
       // Parse options
       Map<String, String> options = new LinkedHashMap<>();
+      JsonNode optionsNode = null;
       if (root.has("options") && !root.get("options").isNull()) {
-        JsonNode optionsNode = root.get("options");
+        optionsNode = root.get("options");
         Iterator<String> fields = optionsNode.fieldNames();
         while (fields.hasNext()) {
           String k = fields.next();
           options.put(k, renderOptionValue(optionsNode.get(k).asText(), params));
         }
+      }
+
+      Map<String, String> templateOptions = buildTemplateOptions(template, params);
+      if (!templateOptions.isEmpty()
+          && !aiOptionsUseTemplateParameters(optionsNode, params)
+          && !containsValueApprox(templateOptions, correctAnswer)) {
+        log.warn(
+            "AI options do not contain template parameters; fallback to template options and only update correct answer.");
+        options = new LinkedHashMap<>(templateOptions);
       }
 
       // Ensure all 4 keys exist
@@ -1491,7 +1501,129 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     if (diagramTemplate == null || diagramTemplate.isBlank()) {
       return null;
     }
-    return fillText(diagramTemplate, params);
+
+    // AI output can occasionally produce malformed placeholders like {{2*1} or {2*1}}.
+    // Repair them before/after substitution so diagram latex remains compilable.
+    String repairedTemplate = repairMalformedDoubleBracePlaceholders(diagramTemplate);
+    repairedTemplate = repairTikzCoordinatesSyntax(repairedTemplate);
+    String rendered = fillText(repairedTemplate, params);
+    rendered = repairDanglingRenderedDoubleBraces(rendered);
+    return repairTikzCoordinatesSyntax(rendered);
+  }
+
+  private String repairMalformedDoubleBracePlaceholders(String input) {
+    if (input == null || input.isBlank()) {
+      return input;
+    }
+
+    String fixed = input;
+    // Missing one trailing brace: {{expr} -> {{expr}}
+    fixed = fixed.replaceAll("\\{\\{\\s*([^{}\\n]+?)\\s*}(?!})", "{{$1}}");
+    // Missing one leading brace: {expr}} -> {{expr}}
+    fixed = fixed.replaceAll("(?<!\\{)\\{\\s*([^{}\\n]+?)\\s*}}", "{{$1}}");
+    return fixed;
+  }
+
+  private String repairDanglingRenderedDoubleBraces(String input) {
+    if (input == null || input.isBlank()) {
+      return input;
+    }
+
+    String fixed = input;
+    // After replacement, unresolved malformed tokens should degrade to valid latex braces.
+    // Example: {{2*1} -> {2*1}, {2*1}} -> {2*1}
+    fixed = fixed.replaceAll("\\{\\{\\s*([^{}\\n]+?)\\s*}", "{$1}");
+    fixed = fixed.replaceAll("\\{\\s*([^{}\\n]+?)\\s*}}", "{$1}");
+    return fixed;
+  }
+
+  private String repairTikzCoordinatesSyntax(String input) {
+    if (input == null || input.isBlank()) {
+      return input;
+    }
+
+    String fixed = input;
+    // Fix: \addplot[...] coordinates (...)  ->  \addplot[...] coordinates { (...) 
+    fixed = fixed.replaceAll(
+        "(\\\\addplot\\s*\\[[^\\]]*]\\s*coordinates)\\s*\\(", "$1 {\\n    (");
+
+    // If opening '{' exists but block ends with ');', convert to proper '};'.
+    fixed = fixed.replaceAll(
+        "(\\\\addplot\\s*\\[[^\\]]*]\\s*coordinates\\s*\\{[\\s\\S]*?)\\)\\s*;",
+        "$1)\\n};");
+    return fixed;
+  }
+
+  private Map<String, String> buildTemplateOptions(QuestionTemplate template, Map<String, Object> params) {
+    Map<String, String> built = new LinkedHashMap<>();
+    if (template == null || template.getOptionsGenerator() == null) {
+      return built;
+    }
+
+    String[] keys = {"A", "B", "C", "D"};
+    for (String key : keys) {
+      Object value = template.getOptionsGenerator().get(key);
+      if (value == null) {
+        continue;
+      }
+      String raw = extractTemplateOptionRawValue(value);
+      if (raw == null || raw.isBlank()) {
+        continue;
+      }
+      built.put(key, renderOptionValue(raw, params));
+    }
+    return built;
+  }
+
+  @SuppressWarnings("unchecked")
+  private String extractTemplateOptionRawValue(Object value) {
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof String s) {
+      return s;
+    }
+    if (value instanceof Map<?, ?> map) {
+      Object nested = map.get("value");
+      if (nested instanceof String nestedStr) {
+        return nestedStr;
+      }
+      Object text = map.get("text");
+      if (text instanceof String textStr) {
+        return textStr;
+      }
+    }
+    return String.valueOf(value);
+  }
+
+  private boolean aiOptionsUseTemplateParameters(JsonNode optionsNode, Map<String, Object> params) {
+    if (optionsNode == null || !optionsNode.isObject() || params == null || params.isEmpty()) {
+      return false;
+    }
+
+    Iterator<String> fields = optionsNode.fieldNames();
+    while (fields.hasNext()) {
+      String key = fields.next();
+      JsonNode valueNode = optionsNode.get(key);
+      if (valueNode == null || valueNode.isNull()) {
+        continue;
+      }
+      String raw = valueNode.asText("");
+      if (PLACEHOLDER_PATTERN.matcher(raw).find()) {
+        return true;
+      }
+
+      for (String paramName : params.keySet()) {
+        if (raw.matches(".*\\b" + Pattern.quote(paramName) + "\\b.*")) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private boolean containsValueApprox(Map<String, String> options, String targetValue) {
+    return findKeyByValue(options, targetValue) != null;
   }
 
   /** Attempt to repair common truncation: add missing closing braces/brackets */
