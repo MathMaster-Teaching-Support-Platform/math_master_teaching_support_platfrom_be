@@ -65,4 +65,9 @@ public interface QuestionService {
    * Assign multiple existing questions into one question bank
    */
   Integer assignQuestionsToBank(UUID bankId, List<UUID> questionIds);
+
+  /**
+   * Remove multiple questions from one question bank
+   */
+  Integer removeQuestionsFromBank(UUID bankId, List<UUID> questionIds);
 }

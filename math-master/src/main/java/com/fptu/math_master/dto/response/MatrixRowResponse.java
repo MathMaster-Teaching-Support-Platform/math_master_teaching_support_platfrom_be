@@ -24,9 +24,11 @@ public class MatrixRowResponse {
   private UUID rowId;
   private UUID chapterId;
   private UUID lessonId;
+  private String subjectName;
+  private String schoolGradeName;
+  private String chapterName;
   private UUID questionBankId;
   private QuestionDifficulty questionDifficulty;
-  private UUID templateId;
 
   /** Display name for the dạng bài column. */
   private String questionTypeName;

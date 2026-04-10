@@ -26,6 +26,28 @@ public interface QuestionBankRepository
   Page<QuestionBank> findPublicQuestionBanks(Pageable pageable);
 
   @Query(
+      "SELECT qb FROM QuestionBank qb "
+          + "WHERE qb.deletedAt IS NULL "
+          + "AND qb.teacherId = :teacherId "
+          + "AND (:chapterId IS NULL OR qb.chapterId = :chapterId) "
+          + "AND (:searchTerm IS NULL OR LOWER(qb.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+  Page<QuestionBank> searchMineByChapterAndName(
+      @Param("teacherId") UUID teacherId,
+      @Param("chapterId") UUID chapterId,
+      @Param("searchTerm") String searchTerm,
+      Pageable pageable);
+
+  @Query(
+      "SELECT qb FROM QuestionBank qb "
+          + "WHERE qb.deletedAt IS NULL "
+          + "AND (:chapterId IS NULL OR qb.chapterId = :chapterId) "
+          + "AND (:searchTerm IS NULL OR LOWER(qb.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+  Page<QuestionBank> searchAllActiveByChapterAndName(
+      @Param("chapterId") UUID chapterId,
+      @Param("searchTerm") String searchTerm,
+      Pageable pageable);
+
+  @Query(
       "SELECT COUNT(q) FROM Question q WHERE q.questionBankId = :questionBankId AND q.deletedAt IS NULL")
   Long countQuestionsByQuestionBankId(@Param("questionBankId") UUID questionBankId);
 

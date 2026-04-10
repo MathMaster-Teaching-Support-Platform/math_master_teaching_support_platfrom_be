@@ -218,6 +218,28 @@ public class QuestionController {
         .build();
   }
 
+  @PatchMapping("/bank/{bankId}/batch-remove")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Batch remove questions from a bank",
+      description =
+          "Remove multiple existing questions from one question bank in a single request.")
+  public ApiResponse<Integer> batchRemoveQuestionsFromBank(
+      @PathVariable UUID bankId,
+      @Valid @RequestBody BulkAssignQuestionsToBankRequest request) {
+
+    log.info(
+        "REST request to batch remove {} questions from bank {}",
+        request.getQuestionIds().size(),
+        bankId);
+
+    Integer removedCount = questionService.removeQuestionsFromBank(bankId, request.getQuestionIds());
+    return ApiResponse.<Integer>builder()
+        .message("Questions removed from bank successfully")
+        .result(removedCount)
+        .build();
+  }
+
   @PostMapping("/import")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(

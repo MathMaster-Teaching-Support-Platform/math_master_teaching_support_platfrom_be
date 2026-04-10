@@ -46,9 +46,9 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_emr_matrix", columnList = "exam_matrix_id"),
       @Index(name = "idx_emr_chapter", columnList = "chapter_id"),
       @Index(name = "idx_emr_lesson", columnList = "lesson_id"),
+      @Index(name = "idx_emr_subject", columnList = "subject_id"),
       @Index(name = "idx_emr_bank", columnList = "question_bank_id"),
       @Index(name = "idx_emr_difficulty", columnList = "question_difficulty"),
-      @Index(name = "idx_emr_tpl", columnList = "template_id"),
       @Index(name = "idx_emr_order", columnList = "order_index")
     })
 public class ExamMatrixRow extends BaseEntity {
@@ -64,6 +64,28 @@ public class ExamMatrixRow extends BaseEntity {
   @Column(name = "lesson_id")
   private UUID lessonId;
 
+  /** Snapshot of subject id at row creation time. */
+  @Column(name = "subject_id")
+  private UUID subjectId;
+
+  /** Snapshot of subject name at row creation time. */
+  @Size(max = 255)
+  @Nationalized
+  @Column(name = "subject_name", length = 255)
+  private String subjectName;
+
+  /** Snapshot of school-grade name (lop) at row creation time. */
+  @Size(max = 100)
+  @Nationalized
+  @Column(name = "school_grade_name", length = 100)
+  private String schoolGradeName;
+
+  /** Snapshot of chapter title at row creation time. */
+  @Size(max = 255)
+  @Nationalized
+  @Column(name = "chapter_name", length = 255)
+  private String chapterName;
+
   /**
    * Bank source for this row in bank-only matrix mode.
    */
@@ -76,16 +98,8 @@ public class ExamMatrixRow extends BaseEntity {
   private QuestionDifficulty questionDifficulty;
 
   /**
-   * If this row is backed by an existing {@link QuestionTemplate}, store its id.
-   * The template's name will be used as {@code questionTypeName} by default.
-   */
-  @Column(name = "template_id")
-  private UUID templateId;
-
-  /**
    * Human-readable name of the question type / dạng bài shown in the matrix,
    * e.g. "Đơn điệu của HS", "PT Mũ – Logarit".
-   * Required when {@code templateId} is null.
    */
   @Size(max = 500)
   @Nationalized
@@ -121,10 +135,6 @@ public class ExamMatrixRow extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
   private QuestionBank questionBank;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "template_id", insertable = false, updatable = false)
-  private QuestionTemplate questionTemplate;
 
   /** The individual cognitive-level cells for this row. */
   @OneToMany(mappedBy = "matrixRow", cascade = CascadeType.ALL, orphanRemoval = true)

@@ -42,15 +42,8 @@ public class MatrixRowRequest {
   private QuestionDifficulty questionDifficulty;
 
   /**
-   * Optional FK to an existing {@link com.fptu.math_master.entity.QuestionTemplate}.
-   * If provided, {@code questionTypeName} defaults to the template's name.
-    * Legacy field kept for backward compatibility.
-   */
-  private UUID templateId;
-
-  /**
    * Human-readable label for the dạng bài column.
-   * Required for bank-only row and optional for template row.
+    * Required for bank-only row.
    */
   @Size(max = 500, message = "questionTypeName must not exceed 500 characters")
   private String questionTypeName;

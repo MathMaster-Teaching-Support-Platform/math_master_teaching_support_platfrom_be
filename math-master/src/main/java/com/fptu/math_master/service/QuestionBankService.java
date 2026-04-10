@@ -20,8 +20,8 @@ public interface QuestionBankService {
 
   Page<QuestionBankResponse> getMyQuestionBanks(Pageable pageable);
 
-  Page<QuestionBankResponse> searchQuestionBanks(
-      Boolean isPublic, String searchTerm, Pageable pageable);
+    Page<QuestionBankResponse> searchQuestionBanks(
+      String searchTerm, UUID chapterId, Boolean mineOnly, Pageable pageable);
 
   QuestionBankResponse togglePublicStatus(UUID id);
 

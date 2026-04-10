@@ -502,6 +502,48 @@ public class QuestionServiceImpl implements QuestionService {
     return assignedCount;
   }
 
+  @Override
+  public Integer removeQuestionsFromBank(UUID bankId, List<UUID> questionIds) {
+    if (questionIds == null || questionIds.isEmpty()) {
+      return 0;
+    }
+
+    UUID currentUserId = getCurrentUserId();
+
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    if (!bank.getTeacherId().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
+    }
+
+    Set<UUID> uniqueQuestionIds = new LinkedHashSet<>(questionIds);
+    int removedCount = 0;
+
+    for (UUID questionId : uniqueQuestionIds) {
+      Question question =
+          questionRepository
+              .findByIdAndNotDeleted(questionId)
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+      if (!question.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+      }
+
+      if (bankId.equals(question.getQuestionBankId())) {
+        question.setQuestionBankId(null);
+        question.setUpdatedAt(Instant.now());
+        questionRepository.save(question);
+        removedCount++;
+      }
+    }
+
+    log.info("Removed {} questions from bank {}", removedCount, bankId);
+    return removedCount;
+  }
+
   private QuestionResponse mapToResponse(Question question) {
     String creatorName =
         userRepository.findById(question.getCreatedBy()).map(User::getFullName).orElse("Unknown");

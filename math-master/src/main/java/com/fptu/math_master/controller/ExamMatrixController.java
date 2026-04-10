@@ -1,21 +1,12 @@
 package com.fptu.math_master.controller;
 
-import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
-import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
 import com.fptu.math_master.dto.request.ExamMatrixRequest;
-import com.fptu.math_master.dto.request.FinalizePreviewRequest;
-import com.fptu.math_master.dto.request.GeneratePreviewRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
-import com.fptu.math_master.dto.response.BatchTemplateMappingsResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
 import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
-import com.fptu.math_master.dto.response.FinalizePreviewResponse;
-import com.fptu.math_master.dto.response.MatchingTemplatesResponse;
 import com.fptu.math_master.dto.response.MatrixValidationReport;
-import com.fptu.math_master.dto.response.PreviewCandidatesResponse;
-import com.fptu.math_master.dto.response.TemplateMappingResponse;
 import com.fptu.math_master.service.ExamMatrixService;
 import com.fptu.math_master.service.impl.ExamMatrixPdfExportService;
 import org.springframework.http.ContentDisposition;
@@ -39,7 +30,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -135,69 +125,6 @@ public class ExamMatrixController {
     return ApiResponse.<Void>builder().message("Exam matrix deleted successfully.").build();
   }
 
-  // ── Template Mappings ───────────────────────────────────────────────────
-
-  @PostMapping("/{matrixId}/template-mappings")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Add template mapping",
-      description =
-          "Add a question template mapping to the matrix. "
-              + "Specifies which template to use, cognitive level, question count, and points per question.")
-  public ApiResponse<TemplateMappingResponse> addTemplateMapping(
-      @PathVariable UUID matrixId, @Valid @RequestBody AddTemplateMappingRequest request) {
-    log.info("REST request to add template mapping to matrix: {}", matrixId);
-    return ApiResponse.<TemplateMappingResponse>builder()
-        .message("Template mapping added successfully.")
-        .result(examMatrixService.addTemplateMapping(matrixId, request))
-        .build();
-  }
-
-  @PostMapping("/{matrixId}/templates")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Add multiple template mappings in batch",
-      description =
-          "Add multiple question template mappings to the matrix in a single transaction. "
-              + "Validates all templateIds exist before adding. "
-              + "Returns a list of all added mappings.")
-  public ApiResponse<BatchTemplateMappingsResponse> addTemplateMappings(
-      @PathVariable UUID matrixId, @Valid @RequestBody BatchAddTemplateMappingsRequest request) {
-    log.info(
-        "REST request to add batch template mappings to matrix: {}, count={}",
-        matrixId,
-        request.getMappings().size());
-    return ApiResponse.<BatchTemplateMappingsResponse>builder()
-        .message("Template mappings added successfully in batch.")
-        .result(examMatrixService.addTemplateMappings(matrixId, request))
-        .build();
-  }
-
-  @DeleteMapping("/{matrixId}/template-mappings/{mappingId}")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Remove template mapping",
-      description =
-          "Remove a template mapping from the matrix. Only DRAFT matrices can be modified.")
-  public ApiResponse<Void> removeTemplateMapping(
-      @PathVariable UUID matrixId, @PathVariable UUID mappingId) {
-    log.info("REST request to remove template mapping {} from matrix: {}", mappingId, matrixId);
-    examMatrixService.removeTemplateMapping(matrixId, mappingId);
-    return ApiResponse.<Void>builder().message("Template mapping removed successfully.").build();
-  }
-
-  @GetMapping("/{matrixId}/template-mappings")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Get all template mappings",
-      description = "Get all template mappings for a matrix.")
-  public ApiResponse<List<TemplateMappingResponse>> getTemplateMappings(
-      @PathVariable UUID matrixId) {
-    log.info("REST request to get template mappings for matrix: {}", matrixId);
-    return ApiResponse.<List<TemplateMappingResponse>>builder()
-        .result(examMatrixService.getTemplateMappings(matrixId))
-        .build();
-  }
 
   // ── Validation & Lifecycle ──────────────────────────────────────────────
 
@@ -261,132 +188,6 @@ public class ExamMatrixController {
         .message("Matrix reset to DRAFT. You can now edit template mappings.")
         .result(examMatrixService.resetMatrix(matrixId))
         .build();
-  }
-
-  // ── Question Generation (template-mapping based) ────────────────────────
-
-  @GetMapping("/{matrixId}/matching-templates")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "List matching question templates for this matrix",
-      description =
-          "Returns a ranked list of question templates that can be used for this matrix. "
-              + "Helps teacher find suitable templates before adding a template mapping.")
-  public ApiResponse<MatchingTemplatesResponse> listMatchingTemplates(
-      @PathVariable UUID matrixId,
-      @RequestParam(required = false) String q,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size,
-      @RequestParam(defaultValue = "false") boolean onlyMine,
-      @RequestParam(defaultValue = "false") boolean publicOnly) {
-
-    log.info("REST request to list matching templates for matrixId={}", matrixId);
-
-    MatchingTemplatesResponse response =
-        examMatrixService.listMatchingTemplates(matrixId, q, page, size, onlyMine, publicOnly);
-
-    String message =
-        response.getTotalTemplatesFound() == 0
-            ? "No matching templates found. You can create a new template or loosen filters."
-            : String.format("Found %d matching template(s).", response.getTotalTemplatesFound());
-
-    return ApiResponse.<MatchingTemplatesResponse>builder()
-        .message(message)
-        .result(response)
-        .build();
-  }
-
-  @PostMapping("/{matrixId}/template-mappings/{mappingId}/generate-preview")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Generate preview questions for a template mapping (no DB persist)",
-      description =
-          "Generates in-memory candidate questions from the template associated with a mapping "
-              + "so the teacher can preview quality before finalising. Nothing is persisted.")
-  public ApiResponse<PreviewCandidatesResponse> generatePreview(
-      @PathVariable UUID matrixId,
-      @PathVariable UUID mappingId,
-      @Valid @RequestBody GeneratePreviewRequest request) {
-
-    log.info(
-        "REST request to generate preview for matrixId={}, mappingId={}, templateId={}, count={}",
-        matrixId,
-        mappingId,
-        request.getTemplateId(),
-        request.getCount());
-
-    PreviewCandidatesResponse response =
-        examMatrixService.generatePreview(matrixId, mappingId, request);
-
-    String message;
-    if (response.getGeneratedCount() == 0) {
-      message =
-          "No questions could be generated. Template constraints may be too strict "
-              + "or parameter ranges too narrow.";
-    } else if (response.getGeneratedCount() < response.getRequestedCount()) {
-      message =
-          String.format(
-              "Partial preview: generated %d of %d requested question(s). "
-                  + "Check warnings for details.",
-              response.getGeneratedCount(), response.getRequestedCount());
-    } else {
-      message =
-          String.format(
-              "Preview generated successfully: %d question(s). "
-                  + "Review candidates before finalising.",
-              response.getGeneratedCount());
-    }
-
-    return ApiResponse.<PreviewCandidatesResponse>builder()
-        .message(message)
-        .result(response)
-        .build();
-  }
-
-  @PostMapping("/{matrixId}/template-mappings/{mappingId}/finalize")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Finalize generated questions for a template mapping (persist to DB)",
-      description =
-          "Persists selected preview questions to the questions table "
-              + "and creates assessment_questions entries when linked to an assessment. "
-              + "Atomic transaction — rollback on any failure.")
-  public ApiResponse<FinalizePreviewResponse> finalizePreview(
-      @PathVariable UUID matrixId,
-      @PathVariable UUID mappingId,
-      @Valid @RequestBody FinalizePreviewRequest request) {
-
-    log.info(
-        "REST request to finalize preview for matrixId={}, mappingId={}, templateId={}, "
-            + "count={}, replaceExisting={}",
-        matrixId,
-        mappingId,
-        request.getTemplateId(),
-        request.getQuestions().size(),
-        request.getReplaceExisting());
-
-    FinalizePreviewResponse response =
-        examMatrixService.finalizePreview(matrixId, mappingId, request);
-
-    String message;
-    if (response.getSavedCount() == 0) {
-      message =
-          "No questions were saved. All submitted questions were duplicates or invalid. "
-              + "Check warnings for details.";
-    } else if (response.getSavedCount() < response.getRequestedCount()) {
-      message =
-          String.format(
-              "Partially saved: %d of %d question(s) committed to DB. "
-                  + "Check warnings for skipped items.",
-              response.getSavedCount(), response.getRequestedCount());
-    } else {
-      message =
-          String.format(
-              "Successfully finalised %d question(s). Questions saved to DB.",
-              response.getSavedCount());
-    }
-
-    return ApiResponse.<FinalizePreviewResponse>builder().message(message).result(response).build();
   }
 
   // ── Structured Matrix Builder ───────────────────────────────────────────

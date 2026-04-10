@@ -247,14 +247,30 @@ public class QuestionBankServiceImpl implements QuestionBankService {
   @Override
   @Transactional(readOnly = true)
   public Page<QuestionBankResponse> searchQuestionBanks(
-      Boolean isPublic, String searchTerm, Pageable pageable) {
-    log.info("Searching question banks – searchTerm: {}, isPublic: {}", searchTerm, isPublic);
+      String searchTerm, UUID chapterId, Boolean mineOnly, Pageable pageable) {
+    log.info(
+        "Searching question banks - searchTerm: {}, chapterId: {}, mineOnly: {}",
+        searchTerm,
+        chapterId,
+        mineOnly);
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
+    boolean admin = SecurityUtils.hasRole("ADMIN");
+    boolean effectiveMineOnly = !admin || !Boolean.FALSE.equals(mineOnly);
 
-    return questionBankRepository
-        .findByTeacherIdAndNotDeleted(currentUserId, pageable)
-        .map(this::mapSingleToResponse);
+    String normalizedSearchTerm = searchTerm != null ? searchTerm.trim() : null;
+    if (normalizedSearchTerm != null && normalizedSearchTerm.isEmpty()) {
+      normalizedSearchTerm = null;
+    }
+
+    Page<QuestionBank> page =
+        effectiveMineOnly
+            ? questionBankRepository.searchMineByChapterAndName(
+                currentUserId, chapterId, normalizedSearchTerm, pageable)
+            : questionBankRepository.searchAllActiveByChapterAndName(
+                chapterId, normalizedSearchTerm, pageable);
+
+    return page.map(this::mapSingleToResponse);
   }
 
   @Override
