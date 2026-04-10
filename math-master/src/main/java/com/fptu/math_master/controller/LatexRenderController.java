@@ -31,7 +31,7 @@ public class LatexRenderController {
   LatexRenderService latexRenderService;
 
   @PostMapping("/render")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN', 'STUDENT')")
   @Operation(
       summary = "Render LaTeX via QuickLaTeX proxy",
       description =

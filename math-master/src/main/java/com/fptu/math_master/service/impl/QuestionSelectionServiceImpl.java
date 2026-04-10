@@ -42,26 +42,14 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     }
 
     for (ExamMatrixBankMapping mapping : mappings) {
-      String topic = normalizeTopic(mapping);
-      Map<QuestionDifficulty, Integer> distribution = normalizeDistribution(mapping);
+      int required = totalRequiredQuestions(normalizeDistribution(mapping));
+      if (required <= 0) {
+        continue;
+      }
 
-      for (Map.Entry<QuestionDifficulty, Integer> entry : distribution.entrySet()) {
-        int required = entry.getValue();
-        if (required <= 0) {
-          continue;
-        }
-
-        QuestionDifficulty difficulty = entry.getKey();
-        long available =
-            questionRepository.countApprovedByBankAndDifficultyAndCognitiveAndTopic(
-                mapping.getQuestionBankId(),
-                difficulty.name(),
-                mapping.getCognitiveLevel() != null ? mapping.getCognitiveLevel().name() : null,
-                topic);
-
-        if (available < required) {
-          throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
-        }
+      long available = countAvailableByBankAndCognitive(mapping);
+      if (available < required) {
+        throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
       }
     }
   }
@@ -77,10 +65,8 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
         new SelectionContext(new ArrayList<>(), new HashSet<>(), startOrderIndex, 0);
 
     for (ExamMatrixBankMapping mapping : mappings) {
-      String topic = normalizeTopic(mapping);
-      Map<QuestionDifficulty, Integer> distribution = normalizeDistribution(mapping);
-
-      appendSelectionFromMapping(assessmentId, mapping, topic, distribution, context);
+      int required = totalRequiredQuestions(normalizeDistribution(mapping));
+      appendSelectionFromMapping(assessmentId, mapping, required, context);
     }
 
     return new SelectionPlan(context.plannedQuestions(), context.totalPoints());
@@ -89,60 +75,63 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
   private void appendSelectionFromMapping(
       UUID assessmentId,
       ExamMatrixBankMapping mapping,
-      String topic,
-      Map<QuestionDifficulty, Integer> distribution,
+      int required,
       SelectionContext context) {
+    if (required <= 0) {
+      return;
+    }
 
-    for (Map.Entry<QuestionDifficulty, Integer> entry : distribution.entrySet()) {
-      int required = entry.getValue();
-      if (required <= 0) {
-        continue;
-      }
+    List<Question> selectedQuestions =
+        selectQuestionsForCell(assessmentId, mapping, required, context.usedQuestionIds());
 
-      List<Question> selectedQuestions =
-          selectQuestionsForCell(
-              assessmentId, mapping, entry.getKey(), topic, required, context.usedQuestionIds());
+    for (Question selected : selectedQuestions) {
+      context.plannedQuestions().add(
+          AssessmentQuestion.builder()
+              .assessmentId(assessmentId)
+              .questionId(selected.getId())
+              .matrixBankMappingId(mapping.getId())
+              .orderIndex(context.nextOrderIndex())
+              .pointsOverride(mapping.getPointsPerQuestion())
+              .build());
 
-      for (Question selected : selectedQuestions) {
-        context.plannedQuestions().add(
-            AssessmentQuestion.builder()
-                .assessmentId(assessmentId)
-                .questionId(selected.getId())
-                .matrixBankMappingId(mapping.getId())
-                .orderIndex(context.nextOrderIndex())
-                .pointsOverride(mapping.getPointsPerQuestion())
-                .build());
-
-        context.incrementOrderIndex();
-        context.usedQuestionIds().add(selected.getId());
-        context.totalPoints +=
-            mapping.getPointsPerQuestion() != null ? mapping.getPointsPerQuestion().intValue() : 0;
-      }
+      context.incrementOrderIndex();
+      context.usedQuestionIds().add(selected.getId());
+      context.totalPoints +=
+          mapping.getPointsPerQuestion() != null ? mapping.getPointsPerQuestion().intValue() : 0;
     }
   }
 
   private List<Question> selectQuestionsForCell(
       UUID assessmentId,
       ExamMatrixBankMapping mapping,
-      QuestionDifficulty difficulty,
-      String topic,
       int required,
       Set<UUID> usedQuestionIds) {
-    List<UUID> candidateIds =
-        questionRepository.findApprovedIdsByBankAndDifficultyAndCognitiveAndTopic(
-            mapping.getQuestionBankId(),
-            difficulty.name(),
-            mapping.getCognitiveLevel() != null ? mapping.getCognitiveLevel().name() : null,
-            topic);
+    List<UUID> candidateIds = findCandidateIdsByBankAndCognitive(mapping);
 
     candidateIds.removeIf(usedQuestionIds::contains);
-    deterministicShuffle(candidateIds, assessmentId, mapping.getId(), difficulty);
+    deterministicShuffle(candidateIds, assessmentId, mapping.getId());
 
     if (candidateIds.size() < required) {
       throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
     }
 
     return fetchQuestionsInOrder(candidateIds.subList(0, required));
+  }
+
+  private long countAvailableByBankAndCognitive(ExamMatrixBankMapping mapping) {
+    String cognitiveLevel = mapping.getCognitiveLevel() != null ? mapping.getCognitiveLevel().name() : null;
+    return questionRepository.countApprovedByBankAndDifficultyAndCognitiveAndTopic(
+        mapping.getQuestionBankId(), null, cognitiveLevel, null);
+  }
+
+  private List<UUID> findCandidateIdsByBankAndCognitive(ExamMatrixBankMapping mapping) {
+    String cognitiveLevel = mapping.getCognitiveLevel() != null ? mapping.getCognitiveLevel().name() : null;
+    return questionRepository.findApprovedIdsByBankAndDifficultyAndCognitiveAndTopic(
+        mapping.getQuestionBankId(), null, cognitiveLevel, null);
+  }
+
+  private int totalRequiredQuestions(Map<QuestionDifficulty, Integer> distribution) {
+    return distribution.values().stream().mapToInt(Integer::intValue).sum();
   }
 
   private List<Question> fetchQuestionsInOrder(List<UUID> selectedIds) {
@@ -162,9 +151,8 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     return ordered;
   }
 
-  private void deterministicShuffle(
-      List<UUID> questionIds, UUID assessmentId, UUID mappingId, QuestionDifficulty difficulty) {
-    long seed = Objects.hash(assessmentId, mappingId, difficulty);
+  private void deterministicShuffle(List<UUID> questionIds, UUID assessmentId, UUID mappingId) {
+    long seed = Objects.hash(assessmentId, mappingId);
     Random random = new Random(seed);
 
     for (int i = questionIds.size() - 1; i > 0; i--) {
@@ -190,15 +178,6 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
         source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.HARD, 0)) : 0);
 
     return normalized;
-  }
-
-  private String normalizeTopic(ExamMatrixBankMapping mapping) {
-    if (mapping.getMatrixRow() == null || mapping.getMatrixRow().getQuestionTypeName() == null) {
-      return null;
-    }
-
-    String topic = mapping.getMatrixRow().getQuestionTypeName().trim();
-    return topic.isEmpty() ? null : topic;
   }
 
   private static final class SelectionContext {

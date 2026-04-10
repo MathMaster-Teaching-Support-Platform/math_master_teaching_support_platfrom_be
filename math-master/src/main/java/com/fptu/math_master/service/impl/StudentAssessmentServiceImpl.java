@@ -681,6 +681,7 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
         .orderIndex(aq.getOrderIndex())
         .questionType(question.getQuestionType())
         .questionText(question.getQuestionText())
+      .diagramData(question.getDiagramData())
         .options(question.getOptions())
         .points(aq.getPointsOverride() != null ? aq.getPointsOverride() : question.getPoints())
         .build();
