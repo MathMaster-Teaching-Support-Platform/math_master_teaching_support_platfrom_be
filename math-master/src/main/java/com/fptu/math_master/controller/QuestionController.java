@@ -1,6 +1,7 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.CreateQuestionRequest;
+import com.fptu.math_master.dto.request.BulkAssignQuestionsToBankRequest;
 import com.fptu.math_master.dto.request.BulkApproveQuestionsRequest;
 import com.fptu.math_master.dto.request.ImportQuestionsRequest;
 import com.fptu.math_master.dto.request.UpdateQuestionRequest;
@@ -192,6 +193,28 @@ public class QuestionController {
     return ApiResponse.<Page<QuestionResponse>>builder()
         .message("Questions found successfully")
         .result(questionService.searchQuestions(search, type, pageable))
+        .build();
+  }
+
+  @PatchMapping("/bank/{bankId}/batch-assign")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Batch assign questions to a bank",
+      description =
+          "Assign multiple existing questions into one question bank in a single request.")
+  public ApiResponse<Integer> batchAssignQuestionsToBank(
+      @PathVariable UUID bankId,
+      @Valid @RequestBody BulkAssignQuestionsToBankRequest request) {
+
+    log.info(
+        "REST request to batch assign {} questions to bank {}",
+        request.getQuestionIds().size(),
+        bankId);
+
+    Integer assignedCount = questionService.assignQuestionsToBank(bankId, request.getQuestionIds());
+    return ApiResponse.<Integer>builder()
+        .message("Questions assigned to bank successfully")
+        .result(assignedCount)
         .build();
   }
 

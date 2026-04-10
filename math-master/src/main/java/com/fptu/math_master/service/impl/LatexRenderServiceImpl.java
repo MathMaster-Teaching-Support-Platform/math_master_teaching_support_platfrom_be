@@ -42,6 +42,7 @@ public class LatexRenderServiceImpl implements LatexRenderService {
   private static final String DEFAULT_PREAMBLE =
       "\\usepackage{tikz}\n"
           + "\\usepackage{pgfplots}\n"
+        + "\\usepackage{tkz-tab}\n"
           + "\\usepackage{tkz-euclide}\n"
           + "\\pgfplotsset{compat=newest}";
 
@@ -59,7 +60,8 @@ public class LatexRenderServiceImpl implements LatexRenderService {
     if (rawLatex == null || rawLatex.isBlank()) {
       throw new IllegalArgumentException("latex must not be blank");
     }
-    String latexHash = sha256(rawLatex);
+    String normalizedLatex = normalizeLatexForRender(rawLatex);
+    String latexHash = sha256(normalizedLatex);
 
     Question targetQuestion = resolveQuestion(request.getQuestionId());
     String questionCachedUrl = getQuestionLevelCachedUrl(targetQuestion, latexHash);
@@ -77,9 +79,39 @@ public class LatexRenderServiceImpl implements LatexRenderService {
       return globalCachedUrl.get();
     }
 
-    String renderedImageUrl = callQuickLatex(rawLatex, request.getOptions(), rawLatex);
+    String renderedImageUrl = callQuickLatex(normalizedLatex, request.getOptions(), rawLatex);
     persistQuestionCache(targetQuestion, latexHash, renderedImageUrl);
     return renderedImageUrl;
+  }
+
+  private String normalizeLatexForRender(String latex) {
+    if (latex == null || latex.isBlank()) {
+      return latex;
+    }
+
+    String fixed = latex;
+
+    // Common AI typo: missing braces in tikz environment commands.
+    fixed = fixed.replace("\\begintikzpicture", "\\begin{tikzpicture}");
+    fixed = fixed.replace("\\endtikzpicture", "\\end{tikzpicture}");
+
+    // Common AI typo in tkz-tab variation command: missing opening brace.
+    fixed =
+        fixed.replaceAll(
+            "(?m)(\\\\tkzTabVar\\s*)(?!\\{)([^\\n]+\\})",
+            "$1{$2");
+
+    // Common AI typo in tkz-tab init: second argument line starts without opening '{'.
+    fixed =
+        fixed.replaceAll(
+            "(?m)(\\\\tkzTabInit[^\\n]*\\n)(\\s*)(?!\\{)([-+]?\\\\infty[^\\n]*\\})",
+            "$1$2{$3");
+
+    if (!fixed.equals(latex)) {
+      log.warn("Normalized malformed LaTeX before render");
+    }
+
+    return fixed;
   }
 
   private Question resolveQuestion(UUID questionId) {

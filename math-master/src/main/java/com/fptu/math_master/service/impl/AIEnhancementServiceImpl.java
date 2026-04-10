@@ -820,8 +820,16 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       String symbolicAnswer = buildSymbolicFormulaAnswer(normalizedFormula, paramsForFormula);
       if (!"?".equals(symbolicAnswer)) {
         log.info("Using symbolic formula fallback answer: '{}'", symbolicAnswer);
+        return symbolicAnswer;
       }
-      return symbolicAnswer;
+
+      String literalAnswer = resolveLiteralFormulaAnswer(formula, paramsForFormula);
+      if (!"?".equals(literalAnswer)) {
+        log.info("Using literal formula fallback answer: '{}'", literalAnswer);
+        return literalAnswer;
+      }
+
+      return "?";
     }
 
     try {
@@ -860,8 +868,16 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       String symbolicAnswer = buildSymbolicFormulaAnswer(normalizedFormula, paramsForFormula);
       if (!"?".equals(symbolicAnswer)) {
         log.info("Using symbolic formula fallback answer: '{}'", symbolicAnswer);
+        return symbolicAnswer;
       }
-      return symbolicAnswer;
+
+      String literalAnswer = resolveLiteralFormulaAnswer(formula, paramsForFormula);
+      if (!"?".equals(literalAnswer)) {
+        log.info("Using literal formula fallback answer: '{}'", literalAnswer);
+        return literalAnswer;
+      }
+
+      return "?";
     }
   }
 
@@ -894,6 +910,50 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     // Avoid returning raw formula when nothing was substituted.
     return replacedAnyParameter ? expression : "?";
+  }
+
+  /**
+   * Resolve textual answer formulas (e.g. option statements) when numeric evaluation is not
+   * applicable.
+   */
+  private String resolveLiteralFormulaAnswer(String formula, Map<String, Object> params) {
+    if (formula == null || formula.isBlank()) {
+      return "?";
+    }
+
+    String rendered = fillText(formula, params);
+    if (rendered == null || rendered.isBlank()) {
+      return "?";
+    }
+
+    String cleaned = rendered.trim();
+    if ((cleaned.startsWith("\"") && cleaned.endsWith("\""))
+        || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+      cleaned = cleaned.substring(1, cleaned.length() - 1).trim();
+    }
+
+    if (cleaned.isBlank() || PLACEHOLDER_PATTERN.matcher(cleaned).find()) {
+      return "?";
+    }
+
+    return looksLikeArithmeticExpression(cleaned) ? "?" : cleaned;
+  }
+
+  private boolean looksLikeArithmeticExpression(String value) {
+    if (value == null || value.isBlank()) {
+      return false;
+    }
+
+    String compact = value.replaceAll("\\s+", "");
+    if (compact.matches("^[0-9().,\\-+*/^]+$")) {
+      return true;
+    }
+
+    if (compact.matches("(?i).*(sqrt|sin|cos|tan|log|ln|abs)\\(.*")) {
+      return true;
+    }
+
+    return compact.matches(".*[+\\-*/^=].*") && compact.matches(".*\\d.*");
   }
 
   /**
@@ -1241,6 +1301,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       String correctAnswer,
       String baseQuestionText,
       int sampleIndex) {
+    boolean textualOptions = templateUsesTextualOptions(template);
     StringBuilder p = new StringBuilder();
     p.append("Return ONLY a JSON object. No markdown, no explanation outside JSON.\n\n");
     p.append("Task: Generate a math question in Vietnamese with 4 options (A,B,C,D).\n\n");
@@ -1261,9 +1322,15 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         .append(" → prefer key ")
         .append(new String[] {"B", "C", "D", "A", "B"}[sampleIndex % 5])
         .append(").\n");
-    p.append(
+    if (textualOptions) {
+      p.append(
+        "2. Create 3 wrong options as plausible statement-level distractors (text), keep style consistent with the template.\n");
+      p.append("3. All 4 option values must be distinct statements.\n");
+    } else {
+      p.append(
         "2. Create 3 wrong options representing common student mistakes. Numeric values only (e.g. \"5\", \"-3.14\"). NO text.\n");
-    p.append("3. All 4 option values must be distinct numbers.\n");
+      p.append("3. All 4 option values must be distinct numbers.\n");
+    }
     p.append(
         "4. correctAnswer field MUST be the LETTER KEY (A, B, C, or D) — NOT the numeric value.\n");
     p.append("5. The letter key in correctAnswer must map to value ")
@@ -1276,6 +1343,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         .append("\".\n\n");
     p.append("8. questionText and explanation MUST be natural Vietnamese with proper accents (UTF-8), no transliteration.\n");
     p.append("9. Numeric values must use plain format: no thousands separators, use dot for decimal if needed (e.g. 3.5).\n\n");
+    p.append(
+      "10. IMPORTANT: keep parameter placeholders in double braces (e.g. {{a}}, {{x1}}, {{yMax}}). Do NOT replace placeholders with concrete numbers; backend will substitute values.\n\n");
+    p.append(
+      "11. You MAY propose usedParameters as numeric values. Backend will validate and use them to render final diagram and substitute placeholders.\n\n");
 
     p.append("JSON format:\n");
     p.append(
@@ -1326,24 +1397,33 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
       JsonNode root = objectMapper.readTree(json);
 
+      Map<String, Object> effectiveParams = resolveEffectiveParameters(root, template, params);
+      String effectiveCorrectAnswer = evaluateFormula(template.getAnswerFormula(), effectiveParams);
+      if ("?".equals(effectiveCorrectAnswer)) {
+        effectiveCorrectAnswer = correctAnswer;
+      }
+      String fallbackQuestionText = fillTemplateText(template.getTemplateText(), effectiveParams);
+
       String questionText = root.path("questionText").asText();
 
       // Validate and fallback
       if (questionText == null || questionText.isBlank()) {
         log.warn("questionText is empty, using baseQuestionText");
-        questionText = baseQuestionText;
+        questionText = fallbackQuestionText;
       } else if (questionText.matches("^\\d+$")) {
         // If it's only numbers, it's likely a parsing error
         log.warn(
             "questionText contains only numbers ({}), using baseQuestionText instead",
             questionText);
-        questionText = baseQuestionText;
+        questionText = fallbackQuestionText;
       }
+      questionText = fillText(questionText, effectiveParams);
 
       String explanation = root.path("explanation").asText();
       if (explanation == null || explanation.isBlank()) {
         explanation = "Solution provided by AI";
       }
+      explanation = fillText(explanation, effectiveParams);
 
       // Difficulty from LLM or pre-computed
       String diffStr = root.path("difficulty").asText("").trim().toUpperCase();
@@ -1362,36 +1442,36 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         Iterator<String> fields = optionsNode.fieldNames();
         while (fields.hasNext()) {
           String k = fields.next();
-          options.put(k, renderOptionValue(optionsNode.get(k).asText(), params));
+          options.put(k, renderOptionValue(optionsNode.get(k).asText(), effectiveParams));
         }
       }
 
-      Map<String, String> templateOptions = buildTemplateOptions(template, params);
+      Map<String, String> templateOptions = buildTemplateOptions(template, effectiveParams);
       if (!templateOptions.isEmpty()
-          && !aiOptionsUseTemplateParameters(optionsNode, params)
-          && !containsValueApprox(templateOptions, correctAnswer)) {
+          && !aiOptionsUseTemplateParameters(optionsNode, effectiveParams)
+          && !containsValueApprox(templateOptions, effectiveCorrectAnswer)) {
         log.warn(
             "AI options do not contain template parameters; fallback to template options and only update correct answer.");
         options = new LinkedHashMap<>(templateOptions);
       }
 
       // Ensure all 4 keys exist
-      ensureFourOptions(options, correctAnswer, params);
+      ensureFourOptions(options, effectiveCorrectAnswer, effectiveParams);
 
       // Always find the correct key by matching the pre-computed answer
-      String correctKey = findKeyByValue(options, correctAnswer);
+      String correctKey = findKeyByValue(options, effectiveCorrectAnswer);
       if (correctKey == null) {
         // LLM didn't put the correct answer in options — inject it at key A and shift others
-        options.put("A", correctAnswer);
+        options.put("A", effectiveCorrectAnswer);
         correctKey = "A";
         log.warn(
-            "LLM did not include correct answer '{}' in options — injected at A", correctAnswer);
+            "LLM did not include correct answer '{}' in options — injected at A", effectiveCorrectAnswer);
       }
 
       String answerCalc =
           template.getAnswerFormula() != null
-              ? template.getAnswerFormula() + " = " + correctAnswer
-              : "= " + correctAnswer;
+              ? template.getAnswerFormula() + " = " + effectiveCorrectAnswer
+              : "= " + effectiveCorrectAnswer;
 
       return GeneratedQuestionSample.builder()
           .questionText(questionText)
@@ -1399,9 +1479,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .correctAnswer(correctKey) // KEY (A/B/C/D), not numeric value
           .explanation(explanation)
           .solutionSteps(buildSolutionSteps(explanation))
-          .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
+          .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), effectiveParams))
           .calculatedDifficulty(difficulty)
-          .usedParameters(params)
+          .usedParameters(effectiveParams)
           .answerCalculation(answerCalc)
           .build();
 
@@ -1427,6 +1507,196 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
   private String buildSolutionSteps(String aiExplanation) {
     return aiExplanation;
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> resolveEffectiveParameters(
+      JsonNode root, QuestionTemplate template, Map<String, Object> fallbackParams) {
+    Map<String, Object> effective = new LinkedHashMap<>();
+    if (fallbackParams != null) {
+      effective.putAll(fallbackParams);
+    }
+
+    if (root == null || template == null || template.getParameters() == null) {
+      return effective;
+    }
+
+    JsonNode usedParametersNode = root.path("usedParameters");
+    if (!usedParametersNode.isObject()) {
+      return effective;
+    }
+
+    boolean updated = false;
+    for (Map.Entry<String, Object> entry : template.getParameters().entrySet()) {
+      String paramName = entry.getKey();
+      JsonNode valueNode = usedParametersNode.get(paramName);
+      if (valueNode == null || valueNode.isNull()) {
+        continue;
+      }
+
+      if (!(entry.getValue() instanceof Map<?, ?> defMapAny)) {
+        continue;
+      }
+
+      Map<String, Object> def = (Map<String, Object>) defMapAny;
+      String type = String.valueOf(def.getOrDefault("type", "integer"));
+      Object parsed = parseAIParameterValue(valueNode, type);
+      if (parsed == null) {
+        continue;
+      }
+
+      if (!isAIParameterValueAllowed(paramName, parsed, type, def)) {
+        continue;
+      }
+
+      effective.put(paramName, parsed);
+      updated = true;
+    }
+
+    if (updated) {
+      log.info("Using AI-proposed parameters for final rendering: {}", effective);
+    }
+
+    return effective;
+  }
+
+  private Object parseAIParameterValue(JsonNode valueNode, String type) {
+    if (isIntegerParameterType(type)) {
+      Long longValue = extractLongValue(valueNode);
+      if (longValue == null) {
+        return null;
+      }
+      if (longValue > Integer.MAX_VALUE || longValue < Integer.MIN_VALUE) {
+        return null;
+      }
+      return longValue.intValue();
+    }
+
+    Double doubleValue = extractDoubleValue(valueNode);
+    return doubleValue;
+  }
+
+  private Long extractLongValue(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return null;
+    }
+    if (node.isIntegralNumber()) {
+      return node.longValue();
+    }
+    if (node.isNumber()) {
+      double d = node.doubleValue();
+      if (d == Math.rint(d)) {
+        return (long) d;
+      }
+      return null;
+    }
+
+    String text = normalizeNumericLocale(node.asText(""));
+    if (text == null || text.isBlank()) {
+      return null;
+    }
+    text = text.trim();
+    if (text.matches("^-?\\d+$")) {
+      try {
+        return Long.parseLong(text);
+      } catch (Exception e) {
+        return null;
+      }
+    }
+    if (text.matches("^-?\\d*\\.\\d+$")) {
+      try {
+        double d = Double.parseDouble(text);
+        if (d == Math.rint(d)) {
+          return (long) d;
+        }
+      } catch (Exception e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  private Double extractDoubleValue(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return null;
+    }
+    if (node.isNumber()) {
+      return node.doubleValue();
+    }
+
+    String text = normalizeNumericLocale(node.asText(""));
+    if (text == null || text.isBlank()) {
+      return null;
+    }
+    text = text.trim();
+    try {
+      return Double.parseDouble(text);
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private boolean isAIParameterValueAllowed(
+      String paramName, Object value, String type, Map<String, Object> def) {
+    if (value == null) {
+      return false;
+    }
+
+    if (isIntegerParameterType(type)) {
+      int intValue = ((Number) value).intValue();
+      int minVal = ((Number) def.getOrDefault("min", 1)).intValue();
+      int maxVal = ((Number) def.getOrDefault("max", 10)).intValue();
+      if (maxVal < minVal) {
+        maxVal = minVal;
+      }
+      if (intValue < minVal || intValue > maxVal) {
+        return false;
+      }
+
+      List<Integer> exclude = new ArrayList<>();
+      Object excObj = def.get("exclude");
+      if (excObj instanceof List<?>) {
+        for (Object o : (List<?>) excObj) {
+          if (o instanceof Number n) {
+            exclude.add(n.intValue());
+          }
+        }
+      }
+      if ("a".equals(paramName)) {
+        exclude.add(0);
+      }
+      return !exclude.contains(intValue);
+    }
+
+    double doubleValue = ((Number) value).doubleValue();
+    double minVal = ((Number) def.getOrDefault("min", 1.0)).doubleValue();
+    double maxVal = ((Number) def.getOrDefault("max", 10.0)).doubleValue();
+    if (maxVal < minVal) {
+      maxVal = minVal;
+    }
+    return doubleValue >= minVal && doubleValue <= maxVal;
+  }
+
+  private boolean templateUsesTextualOptions(QuestionTemplate template) {
+    if (template == null || template.getOptionsGenerator() == null) {
+      return false;
+    }
+
+    String[] keys = {"A", "B", "C", "D"};
+    for (String key : keys) {
+      Object value = template.getOptionsGenerator().get(key);
+      String raw = extractTemplateOptionRawValue(value);
+      if (raw == null || raw.isBlank()) {
+        continue;
+      }
+
+      String normalized = raw.replaceAll("\\{\\{[^}]+}}", "").trim();
+      if (normalized.matches(".*[A-Za-zÀ-ỹ].*")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private String fillText(String raw, Map<String, Object> params) {
@@ -1502,26 +1772,24 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       return null;
     }
 
-    // AI output can occasionally produce malformed placeholders like {{2*1} or {2*1}}.
-    // Repair them before/after substitution so diagram latex remains compilable.
-    String repairedTemplate = repairMalformedDoubleBracePlaceholders(diagramTemplate);
-    repairedTemplate = repairTikzCoordinatesSyntax(repairedTemplate);
-    String rendered = fillText(repairedTemplate, params);
-    rendered = repairDanglingRenderedDoubleBraces(rendered);
-    return repairTikzCoordinatesSyntax(rendered);
-  }
-
-  private String repairMalformedDoubleBracePlaceholders(String input) {
-    if (input == null || input.isBlank()) {
-      return input;
+    // Strict mode: only replace exact double-brace placeholders (e.g. {{a}} -> 6).
+    // Do not repair or transform any other diagram content.
+    if (params == null || params.isEmpty()) {
+      return diagramTemplate;
     }
 
-    String fixed = input;
-    // Missing one trailing brace: {{expr} -> {{expr}}
-    fixed = fixed.replaceAll("\\{\\{\\s*([^{}\\n]+?)\\s*}(?!})", "{{$1}}");
-    // Missing one leading brace: {expr}} -> {{expr}}
-    fixed = fixed.replaceAll("(?<!\\{)\\{\\s*([^{}\\n]+?)\\s*}}", "{{$1}}");
-    return fixed;
+    String rendered = diagramTemplate;
+    for (Map.Entry<String, Object> entry : params.entrySet()) {
+      String key = entry.getKey();
+      if (key == null || key.isBlank()) {
+        continue;
+      }
+      String token = "{{" + key + "}}";
+      String value = formatParameterValue(entry.getValue());
+      rendered = rendered.replace(token, value);
+    }
+
+    return rendered;
   }
 
   private String repairDanglingRenderedDoubleBraces(String input) {
@@ -1529,11 +1797,11 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       return input;
     }
 
+    // Only collapse duplicated braces tokens. Keep normal single braces untouched.
     String fixed = input;
-    // After replacement, unresolved malformed tokens should degrade to valid latex braces.
-    // Example: {{2*1} -> {2*1}, {2*1}} -> {2*1}
-    fixed = fixed.replaceAll("\\{\\{\\s*([^{}\\n]+?)\\s*}", "{$1}");
-    fixed = fixed.replaceAll("\\{\\s*([^{}\\n]+?)\\s*}}", "{$1}");
+    while (fixed.contains("{{") || fixed.contains("}}")) {
+      fixed = fixed.replace("{{", "{").replace("}}", "}");
+    }
     return fixed;
   }
 

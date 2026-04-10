@@ -60,4 +60,9 @@ public interface QuestionService {
    * Search questions
    */
   Page<QuestionResponse> searchQuestions(String searchTerm, String type, Pageable pageable);
+
+  /**
+   * Assign multiple existing questions into one question bank
+   */
+  Integer assignQuestionsToBank(UUID bankId, List<UUID> questionIds);
 }

@@ -20,8 +20,10 @@ import com.fptu.math_master.util.SecurityUtils;
 import com.fptu.math_master.util.CSVParser;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
@@ -458,6 +460,46 @@ public class QuestionServiceImpl implements QuestionService {
           .findByFilters(currentUserId, typeEnum, pageable)
           .map(this::mapToResponse);
     }
+  }
+
+  @Override
+  public Integer assignQuestionsToBank(UUID bankId, List<UUID> questionIds) {
+    if (questionIds == null || questionIds.isEmpty()) {
+      return 0;
+    }
+
+    UUID currentUserId = getCurrentUserId();
+
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    if (!bank.getTeacherId().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
+    }
+
+    Set<UUID> uniqueQuestionIds = new LinkedHashSet<>(questionIds);
+    int assignedCount = 0;
+
+    for (UUID questionId : uniqueQuestionIds) {
+      Question question =
+          questionRepository
+              .findByIdAndNotDeleted(questionId)
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+      if (!question.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+      }
+
+      question.setQuestionBankId(bankId);
+      question.setUpdatedAt(Instant.now());
+      questionRepository.save(question);
+      assignedCount++;
+    }
+
+    log.info("Assigned {} questions to bank {}", assignedCount, bankId);
+    return assignedCount;
   }
 
   private QuestionResponse mapToResponse(Question question) {
