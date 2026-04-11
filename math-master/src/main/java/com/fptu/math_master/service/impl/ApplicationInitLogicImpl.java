@@ -49,7 +49,8 @@ public class ApplicationInitLogicImpl implements ApplicationInitLogic {
   private static final String LOG_ROLE_CREATED = "Creating role: {} with {} permissions";
   private static final String LOG_USER_CREATED =
       "Default user created - Username: {} - PLEASE CHANGE THE PASSWORD!";
-  private static final String LOG_USER_UPDATED = "Default user credentials synchronized: {}";
+  private static final String LOG_USER_UPDATED =
+      "\u001B[32m\u001B[1mDefault user credentials synchronized: {}\u001B[0m";
   private static final String LOG_USER_CONFLICT_RESOLVED =
       "Resolved seed-user conflict for username={} email={} by deactivating duplicate user {}";
 

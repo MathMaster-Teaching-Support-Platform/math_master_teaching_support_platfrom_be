@@ -100,9 +100,8 @@ logging:
     console: UTF-8
     file: UTF-8
   level:
-    org.springframework: INFO
-    org.hibernate.SQL: INFO
-    org.hibernate.type.descriptor.sql: INFO
+    root: WARN
+    com.fptu.math_master: INFO
 
 # ================================
 # Springdoc OpenAPI Configuration
