@@ -1,14 +1,16 @@
 package com.fptu.math_master.service;
 
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import com.fptu.math_master.dto.request.ChangePasswordRequest;
 import com.fptu.math_master.dto.request.UserCreationRequest;
 import com.fptu.math_master.dto.request.UserSearchRequest;
 import com.fptu.math_master.dto.request.UserUpdateRequest;
 import com.fptu.math_master.dto.response.UserResponse;
-import java.util.List;
-import java.util.UUID;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 public interface UserService {
   UserResponse createUser(UserCreationRequest request);

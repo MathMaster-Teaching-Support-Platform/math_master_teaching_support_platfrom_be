@@ -1,12 +1,13 @@
 package com.fptu.math_master.service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import com.fptu.math_master.dto.response.AdminDashboardStatsResponse;
 import com.fptu.math_master.dto.response.AdminQuickStatsResponse;
 import com.fptu.math_master.dto.response.AdminRevenueByMonthResponse;
 import com.fptu.math_master.dto.response.AdminSystemStatusResponse;
 import com.fptu.math_master.dto.response.AdminTransactionResponse;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 public interface AdminDashboardService {
 
