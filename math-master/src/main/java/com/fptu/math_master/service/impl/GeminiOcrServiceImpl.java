@@ -54,8 +54,8 @@ public class GeminiOcrServiceImpl implements OcrService {
 
         // Generate pre-signed URL for document
         String documentUrl = minioUploadService.getPresignedUrl(
-                minioProperties.getVerificationBucket(),
-                documentPath
+                documentPath,
+                minioProperties.getVerificationBucket()
         );
 
         // Extract data from image using Gemini
@@ -179,23 +179,28 @@ public class GeminiOcrServiceImpl implements OcrService {
      */
     private String buildOcrPrompt() {
         return """
-                Analyze this Vietnamese ID card or teacher certification document and extract the following information in JSON format:
+                Analyze this Vietnamese teacher ID card (Thẻ viên chức giáo viên) and extract the following information in JSON format:
                 
                 {
-                  "fullName": "Full name as shown on document",
-                  "idNumber": "ID number or certification number",
-                  "dateOfBirth": "Date of birth in DD/MM/YYYY format",
-                  "placeOfBirth": "Place of birth",
-                  "address": "Current address",
-                  "issueDate": "Issue date in DD/MM/YYYY format",
-                  "expiryDate": "Expiry date in DD/MM/YYYY format"
+                  "fullName": "Full name of the teacher as shown on the card",
+                  "idNumber": "Employee ID number or card number if visible",
+                  "dateOfBirth": "Date of birth in DD/MM/YYYY format if visible",
+                  "placeOfBirth": "Place of birth if visible",
+                  "address": "Address if visible",
+                  "position": "Position/title (e.g., Giáo viên, Chức vụ)",
+                  "schoolName": "School name (e.g., Trường Tiểu học...)",
+                  "issueDate": "Issue date in DD/MM/YYYY format if visible",
+                  "expiryDate": "Expiry date in DD/MM/YYYY format if visible"
                 }
                 
                 Important:
-                - Extract text exactly as shown
-                - Use DD/MM/YYYY format for dates
-                - If a field is not found, use null
-                - Return only valid JSON, no additional text
+                - This is a TEACHER ID CARD (Thẻ viên chức), not a national ID card
+                - Extract the teacher's full name prominently displayed on the card
+                - Look for school name (Trường Tiểu học, THCS, THPT, etc.)
+                - Look for position/title (Giáo viên, Hiệu trưởng, etc.)
+                - Extract text exactly as shown, preserving Vietnamese diacritics
+                - If a field is not found or not visible, use null
+                - Return only valid JSON, no additional text or explanation
                 """;
     }
 
@@ -219,6 +224,8 @@ public class GeminiOcrServiceImpl implements OcrService {
                     .dateOfBirth(getJsonString(jsonNode, "dateOfBirth"))
                     .placeOfBirth(getJsonString(jsonNode, "placeOfBirth"))
                     .address(getJsonString(jsonNode, "address"))
+                    .position(getJsonString(jsonNode, "position"))
+                    .schoolName(getJsonString(jsonNode, "schoolName"))
                     .issueDate(getJsonString(jsonNode, "issueDate"))
                     .expiryDate(getJsonString(jsonNode, "expiryDate"))
                     .build();

@@ -76,8 +76,11 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
             .schoolWebsite(request.getSchoolWebsite())
             .position(request.getPosition())
             .verificationDocumentKey(documentUrl)
+            .verificationDocumentPath(documentUrl)
             .description(request.getDescription())
             .status(ProfileStatus.PENDING)
+            // Copy personal info from User account (from Google registration)
+            .fullName(user.getFullName())
             .build();
 
     profile = teacherProfileRepository.save(profile);

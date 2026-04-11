@@ -41,12 +41,24 @@ public class RedisStreamConfig {
         template.setKeySerializer(new StringRedisSerializer());
         template.setHashKeySerializer(new StringRedisSerializer());
         
-        // Use JSON serializer for values
+        // Use JSON serializer for values with type information
         Jackson2JsonRedisSerializer<Object> serializer = new Jackson2JsonRedisSerializer<>(objectMapper, Object.class);
-        template.setValueSerializer(serializer);
-        template.setHashValueSerializer(serializer);
+        
+        // Enable default typing to preserve type information during serialization
+        // This ensures LinkedHashMap doesn't replace our OcrJobResult objects
+        ObjectMapper mapperCopy = objectMapper.copy();
+        mapperCopy.activateDefaultTyping(
+                mapperCopy.getPolymorphicTypeValidator(),
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                com.fasterxml.jackson.annotation.JsonTypeInfo.As.PROPERTY
+        );
+        
+        Jackson2JsonRedisSerializer<Object> typedSerializer = new Jackson2JsonRedisSerializer<>(mapperCopy, Object.class);
+        template.setValueSerializer(typedSerializer);
+        template.setHashValueSerializer(typedSerializer);
         
         template.afterPropertiesSet();
+        log.info("Configured ocrRedisTemplate with type-preserving JSON serialization");
         return template;
     }
 

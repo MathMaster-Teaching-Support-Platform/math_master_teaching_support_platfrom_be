@@ -110,11 +110,14 @@ public class OcrJobProducer {
      * Initialize job status in Redis
      */
     private void initializeJobStatus(OcrJob job) {
+        Instant now = Instant.now();
         OcrJobResult result = OcrJobResult.builder()
                 .jobId(job.getJobId())
+                .profileId(job.getProfileId().toString())
                 .status(OcrJobStatus.PENDING)
                 .progress(0)
                 .createdAt(job.getCreatedAt())
+                .updatedAt(now)
                 .retryCount(0)
                 .build();
 
@@ -126,11 +129,15 @@ public class OcrJobProducer {
      */
     private void saveJobResult(OcrJobResult result) {
         String key = getJobResultKey(result.getJobId());
+        log.debug("Initializing job result in Redis: key={}, jobId={}", key, result.getJobId());
+        
         ocrRedisTemplate.opsForValue().set(
                 key,
                 result,
                 Duration.ofSeconds(ocrAsyncProperties.getJobTtl())
         );
+        
+        log.info("Job result initialized in Redis: jobId={}, status={}", result.getJobId(), result.getStatus());
     }
 
     /**

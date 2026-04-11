@@ -76,6 +76,8 @@ public class OcrComparisonResult {
         private String dateOfBirth;
         private String placeOfBirth;
         private String address;
+        private String position;      // Teacher position (Giáo viên, etc.)
+        private String schoolName;    // School name from card
         private String issueDate;
         private String expiryDate;
     }
