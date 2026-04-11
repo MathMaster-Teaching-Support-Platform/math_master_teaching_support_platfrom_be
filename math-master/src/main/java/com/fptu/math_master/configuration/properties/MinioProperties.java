@@ -14,6 +14,9 @@ public class MinioProperties {
 
   @NotBlank private String endpoint;
 
+  /** Browser-accessible MinIO URL. Defaults to endpoint if not set. */
+  private String publicEndpoint;
+
   @NotBlank private String accessKey;
 
   @NotBlank private String secretKey;
@@ -21,4 +24,6 @@ public class MinioProperties {
   @NotBlank private String templateBucket = "slide-templates";
 
   @NotBlank private String verificationBucket = "teacher-verifications";
+
+  @NotBlank private String courseVideosBucket = "course-videos";
 }

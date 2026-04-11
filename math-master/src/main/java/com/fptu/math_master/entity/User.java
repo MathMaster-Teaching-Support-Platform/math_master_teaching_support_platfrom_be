@@ -109,6 +109,12 @@ public class User extends BaseEntity {
   private Status status = Status.INACTIVE;
 
   /**
+   * last_login
+   */
+  @Column(name = "last_login")
+  private Instant lastLogin;
+
+  /**
    * ban_reason
    */
   @Column(name = "ban_reason", length = 500)

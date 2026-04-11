@@ -1,9 +1,12 @@
 package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.Question;
+import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionDifficulty;
+import com.fptu.math_master.enums.QuestionStatus;
 import com.fptu.math_master.enums.QuestionType;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +40,9 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
   @Query("SELECT q FROM Question q WHERE q.id = :id AND q.deletedAt IS NULL")
   java.util.Optional<Question> findByIdAndNotDeleted(@Param("id") UUID id);
 
+    Optional<Question> findFirstByRenderedLatexHashAndRenderedImageUrlIsNotNullAndDeletedAtIsNullOrderByCreatedAtDesc(
+            String renderedLatexHash);
+
   @Query(
       "SELECT q FROM Question q WHERE q.createdBy = :createdBy AND q.deletedAt IS NULL ORDER BY q.createdAt DESC")
   Page<Question> findByCreatedByAndNotDeleted(
@@ -49,6 +55,19 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
   @Query(
       "SELECT q FROM Question q WHERE q.templateId = :templateId AND q.deletedAt IS NULL ORDER BY q.createdAt DESC")
   List<Question> findByTemplateIdAndNotDeleted(@Param("templateId") UUID templateId);
+
+  @Query(
+      "SELECT q FROM Question q WHERE q.canonicalQuestionId = :canonicalQuestionId AND q.deletedAt IS NULL ORDER BY q.createdAt DESC")
+  Page<Question> findByCanonicalQuestionIdAndNotDeleted(
+      @Param("canonicalQuestionId") UUID canonicalQuestionId, Pageable pageable);
+
+  @Query(
+      "SELECT q FROM Question q "
+          + "WHERE q.templateId = :templateId "
+          + "AND q.questionStatus = 'APPROVED' "
+          + "AND q.deletedAt IS NULL "
+          + "ORDER BY q.createdAt DESC")
+  List<Question> findApprovedByTemplateIdAndNotDeleted(@Param("templateId") UUID templateId);
 
   @Query(
       nativeQuery = true,
@@ -74,12 +93,10 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       "SELECT q FROM Question q "
           + "WHERE q.deletedAt IS NULL "
           + "AND q.createdBy = :createdBy "
-          + "AND (:difficulty IS NULL OR q.difficulty = :difficulty) "
           + "AND (:questionType IS NULL OR q.questionType = :questionType) "
           + "ORDER BY q.createdAt DESC")
   Page<Question> findByFilters(
       @Param("createdBy") UUID createdBy,
-      @Param("difficulty") QuestionDifficulty difficulty,
       @Param("questionType") QuestionType questionType,
       Pageable pageable);
 
@@ -92,8 +109,86 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       "SELECT q FROM Question q "
           + "WHERE q.templateId = :templateId "
           + "AND q.questionBankId = :bankId "
+          + "AND q.questionStatus = 'APPROVED' "
           + "AND q.deletedAt IS NULL "
           + "ORDER BY q.createdAt DESC")
   List<Question> findApprovedByTemplateIdAndQuestionBankIdAndNotDeleted(
       @Param("templateId") UUID templateId, @Param("bankId") UUID bankId);
+
+  @Query(
+      "SELECT q FROM Question q "
+          + "WHERE q.id = :id "
+          + "AND q.deletedAt IS NULL "
+          + "AND q.questionStatus = :status")
+  java.util.Optional<Question> findByIdAndStatusAndNotDeleted(
+      @Param("id") UUID id, @Param("status") QuestionStatus status);
+
+  @Query(
+      "SELECT COUNT(q) FROM Question q "
+          + "WHERE q.questionBankId = :bankId "
+          + "AND q.questionStatus = 'APPROVED' "
+          + "AND q.deletedAt IS NULL "
+          + "AND (:difficulty IS NULL OR :difficulty IS NOT NULL) "
+          + "AND (:cognitiveLevel IS NULL OR q.cognitiveLevel = :cognitiveLevel)")
+  long countApprovedByBankAndDifficultyAndCognitive(
+      @Param("bankId") UUID bankId,
+      @Param("difficulty") QuestionDifficulty difficulty,
+      @Param("cognitiveLevel") CognitiveLevel cognitiveLevel);
+
+  @Query(
+      value =
+          "SELECT COUNT(*) FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND (:difficulty IS NULL OR :difficulty IS NOT NULL) "
+              + "AND (:cognitiveLevel IS NULL OR q.cognitive_level = CAST(:cognitiveLevel AS text)) "
+              + "AND (:topic IS NULL "
+              + "  OR EXISTS ( "
+              + "      SELECT 1 FROM unnest(COALESCE(q.tags, ARRAY[]::text[])) t "
+              + "      WHERE lower(trim(t)) = lower(trim(CAST(:topic AS text))) "
+              + "  ))",
+      nativeQuery = true)
+  long countApprovedByBankAndDifficultyAndCognitiveAndTopic(
+      @Param("bankId") UUID bankId,
+      @Param("difficulty") String difficulty,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("topic") String topic);
+
+  @Query(
+      value =
+          "SELECT q.id FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND (:difficulty IS NULL OR :difficulty IS NOT NULL) "
+              + "AND (:cognitiveLevel IS NULL OR q.cognitive_level = CAST(:cognitiveLevel AS text)) "
+              + "AND (:topic IS NULL "
+              + "  OR EXISTS ( "
+              + "      SELECT 1 FROM unnest(COALESCE(q.tags, ARRAY[]::text[])) t "
+              + "      WHERE lower(trim(t)) = lower(trim(CAST(:topic AS text))) "
+              + "  )) "
+              + "ORDER BY q.id",
+      nativeQuery = true)
+  List<UUID> findApprovedIdsByBankAndDifficultyAndCognitiveAndTopic(
+      @Param("bankId") UUID bankId,
+      @Param("difficulty") String difficulty,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("topic") String topic);
+
+  @Query(
+      value =
+          "SELECT * FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND (:difficulty IS NULL OR :difficulty IS NOT NULL) "
+              + "AND (:cognitiveLevel IS NULL OR q.cognitive_level = CAST(:cognitiveLevel AS text)) "
+              + "ORDER BY random() LIMIT :limit",
+      nativeQuery = true)
+  List<Question> findRandomApprovedByBankAndDifficultyAndCognitive(
+      @Param("bankId") UUID bankId,
+      @Param("difficulty") String difficulty,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("limit") int limit);
 }

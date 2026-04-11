@@ -19,6 +19,11 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
   @Query("SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator WHERE t.id = :id")
   Optional<QuestionTemplate> findByIdWithCreator(@Param("id") UUID id);
 
+    @Query(
+            "SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator "
+                    + "WHERE t.id = :id AND t.deletedAt IS NULL")
+    Optional<QuestionTemplate> findByIdWithCreatorAndNotDeleted(@Param("id") UUID id);
+
   // Kept for backward-compat with any callers that still use the unfiltered page
   @Query("SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator")
   Page<QuestionTemplate> findAllWithCreator(Pageable pageable);
@@ -97,4 +102,20 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
    */
   @Query("SELECT t FROM QuestionTemplate t WHERE t.lessonId = :lessonId AND t.deletedAt IS NULL")
   List<QuestionTemplate> findByLessonIdAndNotDeleted(@Param("lessonId") UUID lessonId);
+
+    @Query(
+            "SELECT t FROM QuestionTemplate t "
+                    + "WHERE t.questionBankId = :bankId "
+                    + "AND t.cognitiveLevel = :cognitiveLevel "
+                    + "AND t.status = 'PUBLISHED' "
+                    + "AND t.deletedAt IS NULL "
+                    + "ORDER BY t.createdAt")
+    List<QuestionTemplate> findPublishedByBankAndCognitive(
+            @Param("bankId") UUID bankId, @Param("cognitiveLevel") CognitiveLevel cognitiveLevel);
+
+    @Query(
+            "SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator "
+                    + "WHERE t.questionBankId = :bankId AND t.deletedAt IS NULL "
+                    + "ORDER BY t.createdAt DESC")
+    List<QuestionTemplate> findByQuestionBankIdAndNotDeleted(@Param("bankId") UUID bankId);
 }

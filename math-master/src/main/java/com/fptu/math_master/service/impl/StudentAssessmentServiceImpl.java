@@ -20,6 +20,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -104,38 +105,62 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
             .findById(assessmentId)
             .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
-    validateAssessmentCanStart(assessment, studentId, now);
+    validateAssessmentAvailability(assessment, now);
 
-    Submission submission =
-        submissionRepository
-            .findByAssessmentIdAndStudentId(assessmentId, studentId)
-            .orElseGet(() -> createSubmission(assessment, studentId));
+    // Lock on student-assessment pair to make submission creation atomic.
+    String attemptLockKey = ("attempt_" + assessmentId + "_" + studentId).intern();
+    synchronized (attemptLockKey) {
+      Submission submission = findOrCreateSubmission(assessment, studentId);
 
-    Integer attemptNumber = quizAttemptRepository.countBySubmissionId(submission.getId()) + 1;
+      // Double-check for IN_PROGRESS attempts inside synchronized block
+      List<QuizAttempt> inProgressAttempts =
+        quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
+          assessmentId, studentId, SubmissionStatus.IN_PROGRESS);
+      if (!inProgressAttempts.isEmpty()) {
+        QuizAttempt activeAttempt = inProgressAttempts.get(0);
+        log.info(
+          "Found existing active attempt {} in synchronized block for student {} and assessment {}",
+          activeAttempt.getId(),
+          studentId,
+          assessmentId);
+        return buildAttemptStartResponse(assessment, activeAttempt, false);
+      }
 
-    QuizAttempt attempt =
-        QuizAttempt.builder()
-            .submissionId(submission.getId())
-            .assessmentId(assessmentId)
-            .studentId(studentId)
-            .attemptNumber(attemptNumber)
-            .status(SubmissionStatus.IN_PROGRESS)
-            .startedAt(now)
-            .ipAddress(request.getIpAddress())
-            .build();
+      // Check attempt limits only when starting a new attempt.
+      validateAttemptLimit(assessment, submission.getId());
 
-    attempt = quizAttemptRepository.save(attempt);
-    log.info("Created quiz attempt: {}", attempt.getId());
+      Integer attemptNumber = quizAttemptRepository.countBySubmissionId(submission.getId()) + 1;
 
-    draftService.initDraft(attempt.getId(), assessmentId, assessment.getTimeLimitMinutes());
+      QuizAttempt attempt =
+          QuizAttempt.builder()
+              .submissionId(submission.getId())
+              .assessmentId(assessmentId)
+              .studentId(studentId)
+              .attemptNumber(attemptNumber)
+              .status(SubmissionStatus.IN_PROGRESS)
+              .startedAt(now)
+              .build();
+
+      attempt = quizAttemptRepository.save(attempt);
+      log.info("Created quiz attempt: {}", attempt.getId());
+
+      draftService.initDraft(attempt.getId(), assessmentId, assessment.getTimeLimitMinutes());
+
+      return buildAttemptStartResponse(assessment, attempt, Boolean.TRUE.equals(assessment.getRandomizeQuestions()));
+    }
+  }
+
+  private AttemptStartResponse buildAttemptStartResponse(
+      Assessment assessment, QuizAttempt attempt, boolean randomizeQuestions) {
+    UUID studentId = attempt.getStudentId();
 
     String connectionToken = centrifugoService.generateConnectionToken(studentId, attempt.getId());
     String channelName = centrifugoService.getAttemptChannel(attempt.getId());
 
     List<AssessmentQuestion> assessmentQuestions =
-        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessmentId);
+        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessment.getId());
 
-    if (Boolean.TRUE.equals(assessment.getRandomizeQuestions())) {
+    if (randomizeQuestions) {
       Collections.shuffle(assessmentQuestions);
     }
 
@@ -144,14 +169,15 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
 
     Instant expiresAt =
         assessment.getTimeLimitMinutes() != null
-            ? now.plusSeconds(assessment.getTimeLimitMinutes() * 60L)
+        ? attempt.getStartedAt().plusSeconds(assessment.getTimeLimitMinutes() * 60L)
             : null;
 
     return AttemptStartResponse.builder()
         .attemptId(attempt.getId())
-        .assessmentId(assessmentId)
-        .attemptNumber(attemptNumber)
-        .startedAt(now)
+        .submissionId(attempt.getSubmissionId())
+      .assessmentId(assessment.getId())
+      .attemptNumber(attempt.getAttemptNumber())
+      .startedAt(attempt.getStartedAt())
         .expiresAt(expiresAt)
         .timeLimitMinutes(assessment.getTimeLimitMinutes())
         .totalQuestions((long) questions.size())
@@ -241,6 +267,20 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     centrifugoService.publishSubmitted(attemptId);
 
     log.info("Assessment submitted successfully: {}", attemptId);
+
+    // Trigger auto-grading for objective questions
+    try {
+      log.info("Triggering auto-grading for submission: {}", attempt.getSubmissionId());
+      gradingService.autoGradeSubmission(attempt.getSubmissionId());
+      log.info("Auto-grading completed for submission: {}", attempt.getSubmissionId());
+    } catch (Exception e) {
+      log.error(
+          "Auto-grading failed for submission: {}. Teacher can grade manually later.",
+          attempt.getSubmissionId(),
+          e);
+      // Continue - don't fail the submission if auto-grading fails
+      // Teacher can still grade manually
+    }
   }
 
   @Override
@@ -328,15 +368,18 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     Integer attemptNumber = 0;
 
     if (submissionOpt.isPresent()) {
+      List<QuizAttempt> inProgressAttempts =
+          quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
+              assessment.getId(), studentId, SubmissionStatus.IN_PROGRESS);
+      if (!inProgressAttempts.isEmpty()) {
+        currentAttemptId = inProgressAttempts.get(0).getId();
+      }
+
       List<QuizAttempt> attempts =
           quizAttemptRepository.findBySubmissionIdOrderByAttemptNumberDesc(
               submissionOpt.get().getId());
 
       if (!attempts.isEmpty()) {
-        QuizAttempt latestAttempt = attempts.get(0);
-        if (latestAttempt.getStatus() == SubmissionStatus.IN_PROGRESS) {
-          currentAttemptId = latestAttempt.getId();
-        }
         attemptNumber = attempts.size();
       }
     }
@@ -353,6 +396,7 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
         .totalQuestions(totalQuestions)
         .totalPoints(totalPoints)
         .timeLimitMinutes(assessment.getTimeLimitMinutes())
+        .passingScore(assessment.getPassingScore())
         .dueDate(assessment.getEndDate())
         .startDate(assessment.getStartDate())
         .endDate(assessment.getEndDate())
@@ -392,7 +436,7 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
       return "COMPLETED";
     }
 
-    return "IN_PROGRESS";
+    return "UPCOMING";
   }
 
   private boolean matchesStatusFilter(StudentAssessmentResponse response, String statusFilter) {
@@ -403,6 +447,26 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
   }
 
   private void validateAssessmentCanStart(Assessment assessment, UUID studentId, Instant now) {
+    validateAssessmentAvailability(assessment, now);
+
+    Optional<Submission> submissionOpt =
+        submissionRepository.findByAssessmentIdAndStudentId(assessment.getId(), studentId);
+
+    if (submissionOpt.isEmpty()) {
+      return;
+    }
+
+    List<QuizAttempt> inProgressAttempts =
+        quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
+            assessment.getId(), studentId, SubmissionStatus.IN_PROGRESS);
+    if (!inProgressAttempts.isEmpty()) {
+      return;
+    }
+
+    validateAttemptLimit(assessment, submissionOpt.get().getId());
+  }
+
+  private void validateAssessmentAvailability(Assessment assessment, Instant now) {
     if (assessment.getStatus() != AssessmentStatus.PUBLISHED) {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_PUBLISHED);
     }
@@ -414,29 +478,18 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     if (assessment.getEndDate() != null && now.isAfter(assessment.getEndDate())) {
       throw new AppException(ErrorCode.ASSESSMENT_EXPIRED);
     }
+  }
 
-    Optional<Submission> submissionOpt =
-        submissionRepository.findByAssessmentIdAndStudentId(assessment.getId(), studentId);
+  private void validateAttemptLimit(Assessment assessment, UUID submissionId) {
+    Integer attemptCount = quizAttemptRepository.countBySubmissionId(submissionId);
 
-    if (submissionOpt.isPresent()) {
-      Integer attemptCount = quizAttemptRepository.countBySubmissionId(submissionOpt.get().getId());
-
-      if (Boolean.TRUE.equals(assessment.getAllowMultipleAttempts())) {
-        if (assessment.getMaxAttempts() != null && attemptCount >= assessment.getMaxAttempts()) {
-          throw new AppException(ErrorCode.MAX_ATTEMPTS_REACHED);
-        }
-      } else {
-        if (attemptCount > 0) {
-          throw new AppException(ErrorCode.MAX_ATTEMPTS_REACHED);
-        }
+    if (Boolean.TRUE.equals(assessment.getAllowMultipleAttempts())) {
+      if (assessment.getMaxAttempts() != null && attemptCount >= assessment.getMaxAttempts()) {
+        throw new AppException(ErrorCode.MAX_ATTEMPTS_REACHED);
       }
-
-      List<QuizAttempt> inProgressAttempts =
-          quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
-              assessment.getId(), studentId, SubmissionStatus.IN_PROGRESS);
-
-      if (!inProgressAttempts.isEmpty()) {
-        throw new AppException(ErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+    } else {
+      if (attemptCount > 0) {
+        throw new AppException(ErrorCode.MAX_ATTEMPTS_REACHED);
       }
     }
   }
@@ -463,6 +516,13 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     }
 
     if (submissionOpt.isPresent()) {
+      List<QuizAttempt> inProgressAttempts =
+          quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
+              assessment.getId(), submissionOpt.get().getStudentId(), SubmissionStatus.IN_PROGRESS);
+      if (!inProgressAttempts.isEmpty()) {
+        return null;
+      }
+
       Integer attemptCount = quizAttemptRepository.countBySubmissionId(submissionOpt.get().getId());
 
       if (Boolean.TRUE.equals(assessment.getAllowMultipleAttempts())) {
@@ -495,6 +555,22 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
             .build();
 
     return submissionRepository.save(submission);
+  }
+
+  private Submission findOrCreateSubmission(Assessment assessment, UUID studentId) {
+    return submissionRepository
+        .findByAssessmentIdAndStudentId(assessment.getId(), studentId)
+        .orElseGet(
+            () -> {
+              try {
+                return createSubmission(assessment, studentId);
+              } catch (DataIntegrityViolationException e) {
+                // Another concurrent request created the same submission first.
+                return submissionRepository
+                    .findByAssessmentIdAndStudentId(assessment.getId(), studentId)
+                    .orElseThrow(() -> e);
+              }
+            });
   }
 
   private QuizAttempt validateAttemptAccess(UUID attemptId, UUID studentId) {
@@ -605,6 +681,7 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
         .orderIndex(aq.getOrderIndex())
         .questionType(question.getQuestionType())
         .questionText(question.getQuestionText())
+      .diagramData(question.getDiagramData())
         .options(question.getOptions())
         .points(aq.getPointsOverride() != null ? aq.getPointsOverride() : question.getPoints())
         .build();

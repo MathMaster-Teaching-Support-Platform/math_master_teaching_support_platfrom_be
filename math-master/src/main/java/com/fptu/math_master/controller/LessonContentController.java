@@ -107,10 +107,12 @@ public class LessonContentController {
 
   @GetMapping("/chapters/{chapterId}/lessons")
   @Operation(summary = "List lessons of a chapter")
-  public ApiResponse<List<LessonResponse>> getLessonsByChapter(@PathVariable UUID chapterId) {
+  public ApiResponse<List<LessonResponse>> getLessonsByChapter(
+      @PathVariable UUID chapterId,
+      @RequestParam(required = false) String name) {
     log.info("GET /lessons/chapters/{}/lessons", chapterId);
     return ApiResponse.<List<LessonResponse>>builder()
-        .result(lessonService.getLessonsByChapterId(chapterId))
+        .result(lessonService.searchLessonsByChapterId(chapterId, name))
         .build();
   }
 
@@ -147,7 +149,7 @@ public class LessonContentController {
       description = "Manually creates a lesson inside a chapter (chapterId required in body).")
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<LessonResponse> createLesson(@Valid @RequestBody CreateLessonRequest request) {
     log.info("POST /lessons – chapterId={}", request.getChapterId());
     return ApiResponse.<LessonResponse>builder()
@@ -157,7 +159,7 @@ public class LessonContentController {
 
   @Operation(summary = "Update a lesson")
   @PutMapping("/{lessonId}")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<LessonResponse> updateLesson(
       @PathVariable UUID lessonId, @Valid @RequestBody UpdateLessonRequest request) {
     log.info("PUT /lessons/{}", lessonId);

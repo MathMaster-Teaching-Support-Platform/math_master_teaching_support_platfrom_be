@@ -79,6 +79,7 @@ public class MatrixUsageStats extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (studentsCompleted == null) studentsCompleted = 0;
   }
 }

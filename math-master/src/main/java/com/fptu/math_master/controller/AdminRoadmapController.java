@@ -4,14 +4,19 @@ import com.fptu.math_master.dto.request.CreateAdminRoadmapRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapEntryTestRequest;
 import com.fptu.math_master.dto.request.CreateRoadmapTopicRequest;
 import com.fptu.math_master.dto.request.UpdateAdminRoadmapRequest;
+import com.fptu.math_master.dto.request.UpdateRoadmapTopicRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.RoadmapDetailResponse;
+import com.fptu.math_master.dto.response.RoadmapFeedbackResponse;
+import com.fptu.math_master.dto.response.RoadmapResourceOptionResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
 import com.fptu.math_master.dto.response.RoadmapTopicResponse;
 import com.fptu.math_master.service.RoadmapAdminService;
+import com.fptu.math_master.service.RoadmapFeedbackService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +45,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminRoadmapController {
 
   RoadmapAdminService roadmapAdminService;
+    RoadmapFeedbackService roadmapFeedbackService;
 
   @GetMapping
   @PreAuthorize("hasRole('ADMIN')")
@@ -111,18 +117,75 @@ public class AdminRoadmapController {
         .build();
   }
 
-    @PostMapping("/{roadmapId}/entry-test")
+  @PutMapping("/{roadmapId}/topics/{topicId}")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(summary = "Update roadmap topic", description = "Update roadmap topic metadata")
+  public ApiResponse<RoadmapTopicResponse> updateTopic(
+      @PathVariable UUID roadmapId,
+      @PathVariable UUID topicId,
+      @Valid @RequestBody UpdateRoadmapTopicRequest request) {
+    return ApiResponse.<RoadmapTopicResponse>builder()
+        .message("Roadmap topic updated successfully")
+        .result(roadmapAdminService.updateTopic(roadmapId, topicId, request))
+        .build();
+  }
+
+  @DeleteMapping("/{roadmapId}/topics/{topicId}")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(summary = "Soft delete roadmap topic", description = "Archive roadmap topic via soft delete")
+  public ApiResponse<String> softDeleteTopic(@PathVariable UUID roadmapId, @PathVariable UUID topicId) {
+    roadmapAdminService.softDeleteTopic(roadmapId, topicId);
+    return ApiResponse.<String>builder()
+        .message("Roadmap topic archived successfully")
+        .result("OK")
+        .build();
+  }
+
+  @PostMapping("/{roadmapId}/entry-test")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(
+      summary = "Configure roadmap entry test",
+      description =
+          "Configure one entry test assessment and question-to-topic mapping to detect student start topic")
+  public ApiResponse<String> configureRoadmapEntryTest(
+      @PathVariable UUID roadmapId, @Valid @RequestBody CreateRoadmapEntryTestRequest request) {
+    roadmapAdminService.configureEntryTest(roadmapId, request);
+    return ApiResponse.<String>builder()
+        .message("Roadmap entry test configured successfully")
+        .result("OK")
+        .build();
+  }
+
+  @GetMapping("/resource-options")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(
+      summary = "Search roadmap resource options",
+      description =
+          "Search resources for topic linking flow. "
+              + "Use type=LESSON|TEMPLATE_SLIDE|MINDMAP|LESSON_PLAN|ASSESSMENT. "
+              + "For LESSON/TEMPLATE_SLIDE, filter by chapterId and/or name. "
+              + "For MINDMAP/LESSON_PLAN, filter by lessonId and/or name. "
+              + "ASSESSMENT supports name search only.")
+  public ApiResponse<List<RoadmapResourceOptionResponse>> searchResourceOptions(
+      @RequestParam String type,
+      @RequestParam(required = false) UUID chapterId,
+      @RequestParam(required = false) UUID lessonId,
+      @RequestParam(required = false) String name) {
+    return ApiResponse.<List<RoadmapResourceOptionResponse>>builder()
+        .result(roadmapAdminService.searchResourceOptions(type, chapterId, lessonId, name))
+        .build();
+  }
+
+    @GetMapping("/{roadmapId}/feedback")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Configure roadmap entry test",
-            description =
-                    "Configure one entry test assessment and question-to-topic mapping to detect student start topic")
-    public ApiResponse<String> configureRoadmapEntryTest(
-            @PathVariable UUID roadmapId, @Valid @RequestBody CreateRoadmapEntryTestRequest request) {
-        roadmapAdminService.configureEntryTest(roadmapId, request);
-        return ApiResponse.<String>builder()
-                .message("Roadmap entry test configured successfully")
-                .result("OK")
+    @Operation(summary = "List roadmap feedback", description = "List student feedback for a roadmap")
+    public ApiResponse<Page<RoadmapFeedbackResponse>> getRoadmapFeedbacks(
+            @PathVariable UUID roadmapId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return ApiResponse.<Page<RoadmapFeedbackResponse>>builder()
+                .result(roadmapFeedbackService.getRoadmapFeedbacks(roadmapId, pageable))
                 .build();
     }
 

@@ -1,0 +1,136 @@
+package com.fptu.math_master.controller;
+
+import com.fptu.math_master.dto.request.CreateCourseRequest;
+import com.fptu.math_master.dto.request.PublishCourseRequest;
+import com.fptu.math_master.dto.request.UpdateCourseRequest;
+import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.CourseResponse;
+import com.fptu.math_master.dto.response.StudentInCourseResponse;
+import com.fptu.math_master.service.CourseService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import java.util.List;
+import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/courses")
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
+@Tag(name = "Course", description = "APIs for course management")
+public class CourseController {
+
+  CourseService courseService;
+
+  @Operation(summary = "Create a new course")
+  @PostMapping
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> createCourse(@Valid @RequestBody CreateCourseRequest request) {
+    log.info("POST /courses – title={}", request.getTitle());
+    return ApiResponse.<CourseResponse>builder().result(courseService.createCourse(request)).build();
+  }
+
+  @Operation(summary = "Get my courses (teacher)")
+  @GetMapping("/my")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<List<CourseResponse>> getMyCourses() {
+    return ApiResponse.<List<CourseResponse>>builder()
+        .result(courseService.getMyCourses())
+        .build();
+  }
+
+  @Operation(summary = "Get course by ID")
+  @GetMapping("/{courseId}")
+  public ApiResponse<CourseResponse> getCourseById(@PathVariable UUID courseId) {
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.getCourseById(courseId))
+        .build();
+  }
+
+  @Operation(summary = "Update course")
+  @PutMapping("/{courseId}")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> updateCourse(
+      @PathVariable UUID courseId, @Valid @RequestBody UpdateCourseRequest request) {
+    log.info("PUT /courses/{}", courseId);
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.updateCourse(courseId, request))
+        .build();
+  }
+
+  @Operation(summary = "Delete course (soft delete)")
+  @DeleteMapping("/{courseId}")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<Void> deleteCourse(@PathVariable UUID courseId) {
+    log.info("DELETE /courses/{}", courseId);
+    courseService.deleteCourse(courseId);
+    return ApiResponse.<Void>builder().message("Course deleted successfully").build();
+  }
+
+  @Operation(summary = "Publish or unpublish course")
+  @PatchMapping("/{courseId}/publish")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> publishCourse(
+      @PathVariable UUID courseId, @Valid @RequestBody PublishCourseRequest request) {
+    log.info("PATCH /courses/{}/publish – published={}", courseId, request.getPublished());
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.publishCourse(courseId, request.getPublished()))
+        .build();
+  }
+
+  @Operation(summary = "Get students enrolled in a course")
+  @GetMapping("/{courseId}/students")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<Page<StudentInCourseResponse>> getStudentsInCourse(
+      @PathVariable UUID courseId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    var pageable = PageRequest.of(page, size, Sort.by("enrolledAt").descending());
+    return ApiResponse.<Page<StudentInCourseResponse>>builder()
+        .result(courseService.getStudentsInCourse(courseId, pageable))
+        .build();
+  }
+
+  @Operation(summary = "Browse published courses (public)")
+  @GetMapping
+  public ApiResponse<Page<CourseResponse>> getPublicCourses(
+      @RequestParam(required = false) UUID schoolGradeId,
+      @RequestParam(required = false) UUID subjectId,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+    return ApiResponse.<Page<CourseResponse>>builder()
+        .result(courseService.getPublicCourses(schoolGradeId, subjectId, keyword, pageable))
+        .build();
+  }
+}

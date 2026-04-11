@@ -367,7 +367,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     List<RoadmapTopic> topics =
         topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmap.getId());
     List<RoadmapTopicResponse> topicResponses =
-        topics.stream().map(this::mapToTopicResponse).collect(Collectors.toList());
+        topics.stream()
+            .filter(topic -> topic.getDeletedAt() == null && topic.getStatus() != TopicStatus.COMPLETED)
+            .map(this::mapToTopicResponse)
+            .collect(Collectors.toList());
 
     return RoadmapDetailResponse.builder()
         .id(roadmap.getId())
@@ -410,6 +413,22 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .build();
   }
 
+  private List<RoadmapTopicCourseResponse> extractTopicCourses(RoadmapTopic topic) {
+    if (topic.getCourses() == null || topic.getCourses().isEmpty()) {
+      return List.of();
+    }
+
+    return topic.getCourses().stream()
+        .filter(course -> course.getDeletedAt() == null)
+        .map(
+            course ->
+                RoadmapTopicCourseResponse.builder()
+                    .id(course.getId())
+                    .title(course.getTitle())
+                    .build())
+        .toList();
+  }
+
   private RoadmapTopicResponse mapToTopicResponse(RoadmapTopic topic) {
     List<QuestionTemplateResponse> questionTemplateResponses = new ArrayList<>();
     List<MindmapResponse> mindmapResponses = new ArrayList<>();
@@ -433,6 +452,9 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
               .collect(Collectors.toList());
     }
 
+    List<RoadmapTopicCourseResponse> courseResponses = extractTopicCourses(topic);
+    List<UUID> courseIds = courseResponses.stream().map(RoadmapTopicCourseResponse::getId).toList();
+
     return RoadmapTopicResponse.builder()
         .id(topic.getId())
         .title(topic.getTitle())
@@ -440,13 +462,11 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .status(topic.getStatus())
         .difficulty(topic.getDifficulty())
         .sequenceOrder(topic.getSequenceOrder())
-        .priority(topic.getPriority())
-        .progressPercentage(topic.getProgressPercentage())
-        .estimatedHours(topic.getEstimatedHours())
+        .mark(topic.getMark())
         .topicAssessmentId(topic.getTopicAssessmentId())
-        .passThresholdPercentage(topic.getPassThresholdPercentage())
+      .courseIds(courseIds)
+      .courses(courseResponses)
         .startedAt(topic.getStartedAt())
-        .completedAt(topic.getCompletedAt())
         .questionTemplates(questionTemplateResponses)
         .mindmaps(mindmapResponses)
         .build();
@@ -524,7 +544,6 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .parameters(template.getParameters())
         .answerFormula(template.getAnswerFormula())
         .optionsGenerator(template.getOptionsGenerator())
-        .difficultyRules(template.getDifficultyRules())
         .constraints(template.getConstraints())
         .cognitiveLevel(template.getCognitiveLevel())
         .tags(template.getTags())

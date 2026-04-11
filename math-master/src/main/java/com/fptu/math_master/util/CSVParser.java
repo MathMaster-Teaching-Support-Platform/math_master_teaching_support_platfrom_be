@@ -2,7 +2,6 @@ package com.fptu.math_master.util;
 
 import com.fptu.math_master.dto.request.CreateQuestionRequest;
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
 import java.io.BufferedReader;
 import java.io.StringReader;
@@ -121,18 +120,6 @@ public class CSVParser {
       }
     } else {
       request.setPoints(BigDecimal.valueOf(1.0));
-    }
-
-    String difficultyStr = getColumnValue(values, headerIndex, "difficulty", false);
-    if (difficultyStr != null && !difficultyStr.isEmpty()) {
-      try {
-        request.setDifficulty(QuestionDifficulty.valueOf(difficultyStr.toUpperCase()));
-      } catch (IllegalArgumentException e) {
-        log.warn("Invalid difficulty level: {}, using MEDIUM", difficultyStr);
-        request.setDifficulty(QuestionDifficulty.MEDIUM);
-      }
-    } else {
-      request.setDifficulty(QuestionDifficulty.MEDIUM);
     }
 
     String optionsStr = getColumnValue(values, headerIndex, "options", false);

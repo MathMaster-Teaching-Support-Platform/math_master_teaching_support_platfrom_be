@@ -1,9 +1,8 @@
 package com.fptu.math_master.configuration;
 
 import java.util.Arrays;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
+import java.util.List;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,6 +19,10 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -30,15 +33,15 @@ public class SecurityConfig {
   CustomJwtDecoder customJwtDecoder;
 
   private static final String[] PUBLIC_POST_ENDPOINTS = {
-    "/auth/register",
-    "/auth/login",
-    "/auth/google",
-    "/auth/introspect",
-    "/auth/logout",
-    "/auth/refresh",
+    "/api/auth/register",
+    "/api/auth/login",
+    "/api/auth/google",
+    "/api/auth/introspect",
+    "/api/auth/logout",
+    "/api/auth/refresh",
     "/api/payment/webhook",
-    "/ai/chat",
-    "/question-templates/import-from-file",
+    "/api/ai/chat",
+    "/api/question-templates/import-from-file",
   };
 
   private static final String[] PUBLIC_GET_ENDPOINTS = {
@@ -46,12 +49,23 @@ public class SecurityConfig {
     "/actuator/health",
     "/actuator/info",
     "/actuator/mappings",
-    "/ai/test",
-    "/lessons/**",
+    "/api/ai/test",
+    "/api/lessons/**",
+    "/api/auth/confirm-email",
+    "/api/courses",
+    "/api/courses/{id}",
+    "/api/courses/{courseId}/lessons",
+    "/api/courses/{courseId}/lessons/{lessonId}/video-url",
+    // Stream endpoint removed - using presigned URL directly from MinIO
   };
 
   private static final String[] SWAGGER_WHITELIST = {
-    "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/swagger-resources/**", "/webjars/**"
+    "/v3/api-docs/**",
+    "/api/v3/api-docs/**",
+    "/swagger-ui/**",
+    "/swagger-ui.html",
+    "/swagger-resources/**",
+    "/webjars/**"
   };
 
   @Bean
@@ -92,12 +106,15 @@ public class SecurityConfig {
         Arrays.asList(
             "http://localhost:5173",
             "http://localhost:3000",
+            "http://localhost:3001",
+        "https://sep.nhducminhqt.name.vn",
             "https://nhducminhqt.name.vn",
-            "http://nhducminhqt.name.vn"));
+        "http://nhducminhqt.name.vn",
+        "https://math-master-teaching-support-platfr.vercel.app"));
 
     configuration.setAllowedMethods(
         Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-    configuration.setAllowedHeaders(Arrays.asList("*"));
+    configuration.setAllowedHeaders(List.of("*"));
     configuration.setAllowCredentials(true);
     configuration.setMaxAge(3600L);
 

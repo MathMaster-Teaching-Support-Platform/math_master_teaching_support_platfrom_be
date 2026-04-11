@@ -1,8 +1,9 @@
 package com.fptu.math_master.exception;
 
-import lombok.Getter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+
+import lombok.Getter;
 
 @Getter
 /**
@@ -222,7 +223,49 @@ public enum ErrorCode {
       1127, "questionTypeName is required when templateId is not provided", HttpStatus.BAD_REQUEST),
   SCHOOL_GRADE_NOT_FOUND(1128, "School grade not found", HttpStatus.NOT_FOUND),
   DOCUMENT_NOT_FOUND(1129, "Document not found", HttpStatus.NOT_FOUND),
-  SCHOOL_GRADE_ALREADY_EXISTS(1129, "School grade already exists", HttpStatus.BAD_REQUEST);
+  SCHOOL_GRADE_ALREADY_EXISTS(1129, "School grade already exists", HttpStatus.BAD_REQUEST),
+  ROADMAP_TOPIC_NOT_FOUND(1130, "Roadmap topic not found", HttpStatus.NOT_FOUND),
+  TEACHING_RESOURCE_NOT_FOUND(1131, "Teaching resource not found", HttpStatus.NOT_FOUND),
+  TEACHING_RESOURCE_ACCESS_DENIED(
+      1132, "You do not have permission to access this teaching resource", HttpStatus.FORBIDDEN),
+  RESOURCE_FILE_TOO_LARGE(1133, "Resource file exceeds the allowed size", HttpStatus.BAD_REQUEST),
+  CHAT_SESSION_NOT_FOUND(1134, "Chat session not found", HttpStatus.NOT_FOUND),
+  CHAT_SESSION_ACCESS_DENIED(
+      1135, "You do not have permission to access this chat session", HttpStatus.FORBIDDEN),
+  CHAT_SESSION_ARCHIVED(1136, "Chat session is archived", HttpStatus.BAD_REQUEST),
+  CHAT_PROMPT_EMPTY(1137, "Prompt must not be empty", HttpStatus.BAD_REQUEST),
+  CHAT_MESSAGE_NOT_FOUND(1138, "Chat message not found", HttpStatus.NOT_FOUND),
+  CHAT_AI_CALL_FAILED(1139, "Failed to process chat with AI", HttpStatus.INTERNAL_SERVER_ERROR),
+  ACCOUNT_NOT_ACTIVE(1140, "Account is not activated. Please check your email for a confirmation link.", HttpStatus.UNAUTHORIZED),
+  LESSON_PLAN_NOT_FOUND(1141, "Lesson plan not found", HttpStatus.NOT_FOUND),
+  LESSON_PLAN_ALREADY_EXISTS(1142, "You already have a lesson plan for this lesson", HttpStatus.BAD_REQUEST),
+    LESSON_PLAN_ACCESS_DENIED(1143, "You do not have permission to access this lesson plan", HttpStatus.FORBIDDEN),
+    QUESTION_REVIEW_STATUS_INVALID(
+            1144,
+            "Only AI_DRAFT questions can be approved",
+            HttpStatus.BAD_REQUEST),
+  COURSE_NOT_FOUND(1145, "Course not found", HttpStatus.NOT_FOUND),
+  COURSE_ACCESS_DENIED(
+      1146, "You do not have permission to access this course", HttpStatus.FORBIDDEN),
+  COURSE_ALREADY_PUBLISHED(1147, "Course is already published", HttpStatus.BAD_REQUEST),
+  ALREADY_ENROLLED(1148, "Student is already enrolled in this course", HttpStatus.BAD_REQUEST),
+  ENROLLMENT_NOT_FOUND(1149, "Enrollment not found", HttpStatus.NOT_FOUND),
+  ENROLLMENT_ACCESS_DENIED(
+      1150, "You do not have permission to access this enrollment", HttpStatus.FORBIDDEN),
+  COURSE_LESSON_NOT_FOUND(1151, "Course lesson not found", HttpStatus.NOT_FOUND),
+    COURSE_NOT_PUBLISHED(1152, "Course is not published", HttpStatus.BAD_REQUEST),
+    QUESTION_TEMPLATE_NOT_IN_BANK(
+            1153, "Question template does not belong to this question bank", HttpStatus.BAD_REQUEST),
+  SUBSCRIPTION_PLAN_NOT_FOUND(1154, "Subscription plan not found", HttpStatus.NOT_FOUND),
+  SUBSCRIPTION_PLAN_SLUG_EXISTS(1155, "A plan with this slug already exists", HttpStatus.BAD_REQUEST),
+  SUBSCRIPTION_PLAN_HAS_ACTIVE_USERS(
+      1156,
+      "Cannot delete a plan that has active subscribers. Deactivate the plan instead.",
+      HttpStatus.BAD_REQUEST),
+  USER_SUBSCRIPTION_NOT_FOUND(1157, "User subscription not found", HttpStatus.NOT_FOUND),
+  OCR_JOB_NOT_FOUND(1158, "OCR job not found", HttpStatus.NOT_FOUND),
+  OCR_JOB_NOT_COMPLETED(1159, "OCR job not completed yet", HttpStatus.BAD_REQUEST),
+  OCR_JOB_FAILED(1160, "OCR job failed", HttpStatus.INTERNAL_SERVER_ERROR);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

@@ -3,10 +3,12 @@ package com.fptu.math_master.controller;
 import com.fptu.math_master.dto.request.QuestionBankRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.QuestionBankResponse;
+import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.service.QuestionBankService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -121,24 +123,27 @@ public class QuestionBankController {
   }
 
   @GetMapping("/search")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN', 'STUDENT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Search and filter question banks",
       description =
-          "Search question banks with filters: public/private status and search term. "
-              + "Returns both owned and public question banks. Supports sorting and pagination.")
+                    "Search active question banks with optional chapter filter and name keyword. "
+                            + "By default, returns only current teacher banks (mineOnly=true). "
+                            + "Admin can set mineOnly=false to search all active banks.")
   public ApiResponse<Page<QuestionBankResponse>> searchQuestionBanks(
-      @RequestParam(required = false) Boolean isPublic,
       @RequestParam(required = false) String searchTerm,
+            @RequestParam(required = false) UUID chapterId,
+            @RequestParam(defaultValue = "true") Boolean mineOnly,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
-      @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "updatedAt") String sortBy,
       @RequestParam(defaultValue = "DESC") String sortDirection) {
 
     log.info(
-        "REST request to search question banks - isPublic: {}, searchTerm: {}",
-        isPublic,
-        searchTerm);
+                "REST request to search question banks - searchTerm: {}, chapterId: {}, mineOnly: {}",
+                searchTerm,
+                chapterId,
+                mineOnly);
 
     Sort sort =
         sortDirection.equalsIgnoreCase("ASC")
@@ -148,7 +153,8 @@ public class QuestionBankController {
     Pageable pageable = PageRequest.of(page, size, sort);
 
     return ApiResponse.<Page<QuestionBankResponse>>builder()
-        .result(questionBankService.searchQuestionBanks(isPublic, searchTerm, pageable))
+        .message("Question banks found")
+        .result(questionBankService.searchQuestionBanks(searchTerm, chapterId, mineOnly, pageable))
         .build();
   }
 
@@ -193,4 +199,45 @@ public class QuestionBankController {
         .result(questionBankService.canDeleteQuestionBank(id))
         .build();
   }
+
+    @PostMapping("/{id}/templates/{templateId}")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Map template to question bank",
+            description =
+                    "Assign a question template to a question bank. Only owner or admin can modify mappings.")
+    public ApiResponse<QuestionTemplateResponse> mapTemplateToBank(
+            @PathVariable UUID id, @PathVariable UUID templateId) {
+        log.info("REST request to map template {} to question bank {}", templateId, id);
+        return ApiResponse.<QuestionTemplateResponse>builder()
+                .message("Template mapped to question bank successfully")
+                .result(questionBankService.mapTemplateToBank(id, templateId))
+                .build();
+    }
+
+    @DeleteMapping("/{id}/templates/{templateId}")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Unmap template from question bank",
+            description =
+                    "Remove the question template assignment from a question bank. Only owner or admin can modify mappings.")
+    public ApiResponse<Void> unmapTemplateFromBank(
+            @PathVariable UUID id, @PathVariable UUID templateId) {
+        log.info("REST request to unmap template {} from question bank {}", templateId, id);
+        questionBankService.unmapTemplateFromBank(id, templateId);
+        return ApiResponse.<Void>builder().message("Template unmapped from question bank successfully").build();
+    }
+
+    @GetMapping("/{id}/templates")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN', 'STUDENT')")
+    @Operation(
+            summary = "Get templates mapped to question bank",
+            description =
+                    "List all active question templates currently mapped to this question bank.")
+    public ApiResponse<List<QuestionTemplateResponse>> getMappedTemplates(@PathVariable UUID id) {
+        log.info("REST request to list mapped templates for question bank {}", id);
+        return ApiResponse.<List<QuestionTemplateResponse>>builder()
+                .result(questionBankService.getMappedTemplates(id))
+                .build();
+    }
 }

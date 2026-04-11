@@ -4,17 +4,32 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.stream.Consumer;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.ReadOffset;
+import org.springframework.data.redis.connection.stream.StreamOffset;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.data.redis.stream.StreamMessageListenerContainer;
+import com.fptu.math_master.component.StreamConsumerListener;
+import com.fptu.math_master.dto.request.NotificationRequest;
+
+import java.time.Duration;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.Collections;
+import java.util.UUID;
 
 @Configuration
 @EnableCaching
 @RequiredArgsConstructor
+@Slf4j
 public class RedisConfig {
 
   @Bean
@@ -40,5 +55,48 @@ public class RedisConfig {
 
     template.afterPropertiesSet();
     return template;
+  }
+
+  @Bean
+  public StreamMessageListenerContainer<String, MapRecord<String, String, String>> streamMessageListenerContainer(
+      RedisConnectionFactory connectionFactory,
+      StreamConsumerListener streamConsumerListener,
+      RedisTemplate<String, Object> redisTemplate) {
+
+    // Ensure stream exists before creating group
+    if (Boolean.FALSE.equals(redisTemplate.hasKey("notifications"))) {
+        log.info("Stream 'notifications' does not exist. Creating it with a dummy message...");
+        redisTemplate.opsForStream().add("notifications", Collections.singletonMap("_ign", "init_stream"));
+    }
+
+    try {
+        redisTemplate.opsForStream().createGroup("notifications", "notif-group");
+        log.info("Created consumer group 'notif-group' for stream 'notifications'");
+    } catch (Exception e) {
+        log.info("Consumer group 'notif-group' already exists or could not be created");
+    }
+
+    String consumerName;
+    try {
+        consumerName = InetAddress.getLocalHost().getHostName() + "-" + UUID.randomUUID().toString().substring(0, 8);
+    } catch (UnknownHostException e) {
+        consumerName = "consumer-" + UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    StreamMessageListenerContainer.StreamMessageListenerContainerOptions<String, MapRecord<String, String, String>> options =
+        StreamMessageListenerContainer.StreamMessageListenerContainerOptions.builder()
+            .pollTimeout(Duration.ofSeconds(1))
+            .build();
+
+    StreamMessageListenerContainer<String, MapRecord<String, String, String>> container =
+        StreamMessageListenerContainer.create(connectionFactory, options);
+
+    container.receive(
+        Consumer.from("notif-group", consumerName),
+        StreamOffset.create("notifications", ReadOffset.lastConsumed()),
+        streamConsumerListener);
+
+    container.start();
+    return container;
   }
 }

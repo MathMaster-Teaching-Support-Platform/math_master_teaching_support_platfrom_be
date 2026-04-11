@@ -22,5 +22,11 @@ public interface ExamMatrixRowRepository extends JpaRepository<ExamMatrixRow, UU
   List<ExamMatrixRow> findByMatrixAndChapter(
       @Param("matrixId") UUID matrixId, @Param("chapterId") UUID chapterId);
 
+  @Query(
+      "SELECT DISTINCT r.lessonId FROM ExamMatrixRow r "
+          + "WHERE r.examMatrixId = :matrixId "
+          + "AND r.lessonId IS NOT NULL")
+  List<UUID> findDistinctLessonIdsByExamMatrixId(@Param("matrixId") UUID matrixId);
+
   void deleteAllByExamMatrixId(UUID examMatrixId);
 }

@@ -1,15 +1,21 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
+import com.fptu.math_master.dto.request.GenerateTemplateQuestionsRequest;
+import com.fptu.math_master.dto.request.QuestionTemplateBatchImportRequest;
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.dto.response.AIGeneratedTemplatesResponse;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.ExcelPreviewResponse;
+import com.fptu.math_master.dto.response.GeneratedQuestionsBatchResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
+import com.fptu.math_master.dto.response.TemplateBatchImportResponse;
 import com.fptu.math_master.dto.response.TemplateImportResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.service.ExcelImportService;
 import com.fptu.math_master.service.QuestionTemplateService;
 import com.fptu.math_master.service.TemplateImportService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,6 +31,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,6 +46,7 @@ public class QuestionTemplateController {
 
   QuestionTemplateService questionTemplateService;
   TemplateImportService templateImportService;
+  ExcelImportService excelImportService;
 
   @PostMapping
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
@@ -256,6 +264,21 @@ public class QuestionTemplateController {
         .build();
   }
 
+    @PostMapping("/{id}/generate-questions")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Generate multiple AI questions from template",
+            description =
+                "Generate a batch of AI questions from the template (parametric or canonical-guided mode) and save them as AI_DRAFT for review.")
+    public ApiResponse<GeneratedQuestionsBatchResponse> generateQuestions(
+            @PathVariable UUID id, @Valid @RequestBody GenerateTemplateQuestionsRequest request) {
+        log.info("REST request to generate {} questions from template: {}", request.getCount(), id);
+        return ApiResponse.<GeneratedQuestionsBatchResponse>builder()
+                .message("Questions generated and saved as AI_DRAFT.")
+                .result(questionTemplateService.generateQuestionsFromTemplate(id, request))
+                .build();
+    }
+
   @PostMapping(value = "/import-from-file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @Operation(
       summary = "Import Template from File (FR-AI-013)",
@@ -277,5 +300,58 @@ public class QuestionTemplateController {
             : "Template import completed with warnings. Please review carefully: "
                 + String.join(", ", response.getWarnings());
     return ApiResponse.<TemplateImportResponse>builder().message(message).result(response).build();
+  }
+
+  @PostMapping(value = "/bulk-import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Preview Excel Bulk Import",
+      description =
+          "Upload Excel file (.xlsx) and preview parsed templates with validation results. "
+              + "Returns valid and invalid rows for teacher review before final import.")
+  public ApiResponse<ExcelPreviewResponse> previewBulkImport(
+      @RequestParam("file") MultipartFile file) {
+    log.info("REST request to preview bulk import from Excel: {}", file.getOriginalFilename());
+    ExcelPreviewResponse response = excelImportService.previewExcelImport(file);
+    String message =
+        String.format(
+            "Preview completed: %d valid, %d invalid rows out of %d total",
+            response.getValidRows(), response.getInvalidRows(), response.getTotalRows());
+    return ApiResponse.<ExcelPreviewResponse>builder().message(message).result(response).build();
+  }
+
+  @PostMapping("/bulk-import/submit")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Submit Bulk Import",
+      description =
+          "Import validated question templates in batch. "
+              + "Only valid templates will be saved. Returns success/failure summary.")
+  public ApiResponse<TemplateBatchImportResponse> submitBulkImport(
+      @Valid @RequestBody QuestionTemplateBatchImportRequest request) {
+    log.info("REST request to submit bulk import with {} templates", request.getTemplates().size());
+    TemplateBatchImportResponse response = excelImportService.importTemplatesBatch(request);
+    String message =
+        String.format(
+            "Import completed: %d succeeded, %d failed out of %d total",
+            response.getSuccessCount(), response.getFailedCount(), response.getTotalRows());
+    return ApiResponse.<TemplateBatchImportResponse>builder()
+        .message(message)
+        .result(response)
+        .build();
+  }
+
+  @GetMapping("/bulk-import/template")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Download Excel Template",
+      description = "Download a blank Excel template with proper headers and example rows for bulk import.")
+  public ResponseEntity<byte[]> downloadExcelTemplate() {
+    log.info("REST request to download Excel template");
+    byte[] excelBytes = excelImportService.generateExcelTemplate();
+    return ResponseEntity.ok()
+        .header("Content-Disposition", "attachment; filename=question_template_import.xlsx")
+        .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .body(excelBytes);
   }
 }

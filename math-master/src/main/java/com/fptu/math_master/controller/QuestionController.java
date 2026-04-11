@@ -1,6 +1,8 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.CreateQuestionRequest;
+import com.fptu.math_master.dto.request.BulkAssignQuestionsToBankRequest;
+import com.fptu.math_master.dto.request.BulkApproveQuestionsRequest;
 import com.fptu.math_master.dto.request.ImportQuestionsRequest;
 import com.fptu.math_master.dto.request.UpdateQuestionRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -135,6 +137,34 @@ public class QuestionController {
         .build();
   }
 
+  @PostMapping("/{id}/approve")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Approve AI draft question",
+      description = "Approve a question currently in AI_DRAFT status so it can be used downstream.")
+  public ApiResponse<QuestionResponse> approveQuestion(@PathVariable UUID id) {
+    log.info("REST request to approve question: {}", id);
+    return ApiResponse.<QuestionResponse>builder()
+        .message("Question approved successfully")
+        .result(questionService.approveQuestion(id))
+        .build();
+  }
+
+  @PostMapping("/bulk-approve")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Bulk approve AI draft questions",
+      description = "Approve multiple AI_DRAFT questions in one call.")
+  public ApiResponse<Integer> bulkApproveQuestions(
+      @Valid @RequestBody BulkApproveQuestionsRequest request) {
+    log.info("REST request to bulk approve {} questions", request.getQuestionIds().size());
+    Integer approved = questionService.bulkApproveQuestions(request.getQuestionIds());
+    return ApiResponse.<Integer>builder()
+        .message("Bulk approve completed")
+        .result(approved)
+        .build();
+  }
+
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(summary = "Delete question", description = "Soft delete a question (only by creator)")
@@ -148,27 +178,65 @@ public class QuestionController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Search questions",
-      description = "Search questions with filters (search term, difficulty, type)")
+      description = "Search questions with filters (search term, type)")
   public ApiResponse<Page<QuestionResponse>> searchQuestions(
       @Parameter(description = "Search term") @RequestParam(required = false) String search,
-      @Parameter(description = "Difficulty level filter") @RequestParam(required = false)
-          String difficulty,
       @Parameter(description = "Question type filter") @RequestParam(required = false) String type,
       @Parameter(description = "Page number (0-indexed)") @RequestParam(defaultValue = "0")
           int page,
       @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
 
-    log.info(
-        "REST request to search questions: search={}, difficulty={}, type={}",
-        search,
-        difficulty,
-        type);
+    log.info("REST request to search questions: search={}, type={}", search, type);
 
     Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
     return ApiResponse.<Page<QuestionResponse>>builder()
         .message("Questions found successfully")
-        .result(questionService.searchQuestions(search, difficulty, type, pageable))
+        .result(questionService.searchQuestions(search, type, pageable))
+        .build();
+  }
+
+  @PatchMapping("/bank/{bankId}/batch-assign")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Batch assign questions to a bank",
+      description =
+          "Assign multiple existing questions into one question bank in a single request.")
+  public ApiResponse<Integer> batchAssignQuestionsToBank(
+      @PathVariable UUID bankId,
+      @Valid @RequestBody BulkAssignQuestionsToBankRequest request) {
+
+    log.info(
+        "REST request to batch assign {} questions to bank {}",
+        request.getQuestionIds().size(),
+        bankId);
+
+    Integer assignedCount = questionService.assignQuestionsToBank(bankId, request.getQuestionIds());
+    return ApiResponse.<Integer>builder()
+        .message("Questions assigned to bank successfully")
+        .result(assignedCount)
+        .build();
+  }
+
+  @PatchMapping("/bank/{bankId}/batch-remove")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Batch remove questions from a bank",
+      description =
+          "Remove multiple existing questions from one question bank in a single request.")
+  public ApiResponse<Integer> batchRemoveQuestionsFromBank(
+      @PathVariable UUID bankId,
+      @Valid @RequestBody BulkAssignQuestionsToBankRequest request) {
+
+    log.info(
+        "REST request to batch remove {} questions from bank {}",
+        request.getQuestionIds().size(),
+        bankId);
+
+    Integer removedCount = questionService.removeQuestionsFromBank(bankId, request.getQuestionIds());
+    return ApiResponse.<Integer>builder()
+        .message("Questions removed from bank successfully")
+        .result(removedCount)
         .build();
   }
 
@@ -179,7 +247,7 @@ public class QuestionController {
       description =
           "Batch import questions from CSV file. "
               + "CSV format: question_text, question_type, cognitive_level, correct_answer, "
-              + "explanation, points, difficulty, options (A:value,B:value), tags")
+              + "explanation, points, options (A:value,B:value), tags")
   public ApiResponse<ImportQuestionsResponse> importQuestions(
       @Valid @RequestBody ImportQuestionsRequest request) {
     log.info("REST request to import questions");

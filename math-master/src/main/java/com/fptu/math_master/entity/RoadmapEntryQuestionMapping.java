@@ -34,8 +34,7 @@ import lombok.Setter;
     indexes = {
       @Index(name = "idx_roadmap_entry_roadmap", columnList = "roadmap_id"),
       @Index(name = "idx_roadmap_entry_assessment", columnList = "assessment_id"),
-      @Index(name = "idx_roadmap_entry_question", columnList = "question_id"),
-      @Index(name = "idx_roadmap_entry_topic", columnList = "roadmap_topic_id")
+      @Index(name = "idx_roadmap_entry_question", columnList = "question_id")
     })
 public class RoadmapEntryQuestionMapping extends BaseEntity {
 
@@ -47,9 +46,6 @@ public class RoadmapEntryQuestionMapping extends BaseEntity {
 
   @Column(name = "question_id", nullable = false)
   private UUID questionId;
-
-  @Column(name = "roadmap_topic_id", nullable = false)
-  private UUID roadmapTopicId;
 
   @Column(name = "order_index")
   private Integer orderIndex;
@@ -64,10 +60,6 @@ public class RoadmapEntryQuestionMapping extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "question_id", insertable = false, updatable = false)
   private Question question;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "roadmap_topic_id", insertable = false, updatable = false)
-  private RoadmapTopic roadmapTopic;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "assessment_id", insertable = false, updatable = false)

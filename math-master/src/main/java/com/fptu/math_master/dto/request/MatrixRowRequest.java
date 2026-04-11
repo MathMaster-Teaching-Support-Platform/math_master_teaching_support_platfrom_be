@@ -1,5 +1,6 @@
 package com.fptu.math_master.dto.request;
 
+import com.fptu.math_master.enums.QuestionDifficulty;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -29,14 +30,20 @@ public class MatrixRowRequest {
   private UUID lessonId;
 
   /**
-   * Optional FK to an existing {@link com.fptu.math_master.entity.QuestionTemplate}.
-   * If provided, {@code questionTypeName} defaults to the template's name.
+   * Question bank used for this row in bank-only matrix mode.
    */
-  private UUID templateId;
+  @NotNull(message = "questionBankId is required")
+  private UUID questionBankId;
+
+  /**
+   * Selected difficulty for this row (EASY/MEDIUM/HARD).
+   */
+  @NotNull(message = "questionDifficulty is required")
+  private QuestionDifficulty questionDifficulty;
 
   /**
    * Human-readable label for the dạng bài column.
-   * Required when {@code templateId} is null.
+    * Required for bank-only row.
    */
   @Size(max = 500, message = "questionTypeName must not exceed 500 characters")
   private String questionTypeName;

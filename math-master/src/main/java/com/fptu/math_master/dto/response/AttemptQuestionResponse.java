@@ -19,6 +19,7 @@ public class AttemptQuestionResponse {
   private Integer orderIndex;
   private QuestionType questionType;
   private String questionText;
+  private String diagramData;
   private Map<String, Object> options;
   private BigDecimal points;
 }

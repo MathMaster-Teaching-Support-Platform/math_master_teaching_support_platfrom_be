@@ -2,16 +2,22 @@ package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.dto.request.QuestionBankRequest;
 import com.fptu.math_master.dto.response.QuestionBankResponse;
+import com.fptu.math_master.dto.response.QuestionTemplateResponse;
+import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.entity.QuestionBank;
+import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionRepository;
+import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.QuestionBankService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +36,8 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
   QuestionBankRepository questionBankRepository;
   QuestionRepository questionRepository;
+  QuestionTemplateRepository questionTemplateRepository;
+  ChapterRepository chapterRepository;
   UserRepository userRepository;
 
   @Override
@@ -37,6 +45,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
   public QuestionBankResponse createQuestionBank(QuestionBankRequest request) {
     log.info("Creating question bank: {}", request.getName());
     UUID currentUserId = SecurityUtils.getCurrentUserId();
+    UUID chapterId = validateChapterId(request.getChapterId());
 
     QuestionBank questionBank =
         QuestionBank.builder()
@@ -44,6 +53,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             .name(request.getName())
             .description(request.getDescription())
             .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
+        .chapterId(chapterId)
             .build();
 
     questionBank = questionBankRepository.save(questionBank);
@@ -72,6 +82,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
     questionBank.setName(request.getName());
     questionBank.setDescription(request.getDescription());
+    questionBank.setChapterId(validateChapterId(request.getChapterId()));
     if (request.getIsPublic() != null) {
       questionBank.setIsPublic(request.getIsPublic());
     }
@@ -131,6 +142,75 @@ public class QuestionBankServiceImpl implements QuestionBankService {
   }
 
   @Override
+  @Transactional
+  public QuestionTemplateResponse mapTemplateToBank(UUID bankId, UUID templateId) {
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    validateOwnerOrAdmin(bank.getTeacherId(), currentUserId);
+
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findByIdWithCreatorAndNotDeleted(templateId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+    validateTemplateOwnerOrAdmin(template, currentUserId);
+
+    template.setQuestionBankId(bankId);
+    QuestionTemplate saved = questionTemplateRepository.save(template);
+    return mapTemplateToResponse(saved);
+  }
+
+  @Override
+  @Transactional
+  public void unmapTemplateFromBank(UUID bankId, UUID templateId) {
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    validateOwnerOrAdmin(bank.getTeacherId(), currentUserId);
+
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findByIdWithCreatorAndNotDeleted(templateId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+    if (!bankId.equals(template.getQuestionBankId())) {
+      throw new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_IN_BANK);
+    }
+
+    validateTemplateOwnerOrAdmin(template, currentUserId);
+
+    template.setQuestionBankId(null);
+    questionTemplateRepository.save(template);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<QuestionTemplateResponse> getMappedTemplates(UUID bankId) {
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    if (!bank.getTeacherId().equals(currentUserId)
+        && !Boolean.TRUE.equals(bank.getIsPublic())
+        && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
+    }
+
+    return questionTemplateRepository.findByQuestionBankIdAndNotDeleted(bankId).stream()
+        .map(this::mapTemplateToResponse)
+        .toList();
+  }
+
+  @Override
   @Transactional(readOnly = true)
   public QuestionBankResponse getQuestionBankById(UUID id) {
     log.info("Getting question bank: {}", id);
@@ -167,14 +247,30 @@ public class QuestionBankServiceImpl implements QuestionBankService {
   @Override
   @Transactional(readOnly = true)
   public Page<QuestionBankResponse> searchQuestionBanks(
-      Boolean isPublic, String searchTerm, Pageable pageable) {
-    log.info("Searching question banks – searchTerm: {}, isPublic: {}", searchTerm, isPublic);
+      String searchTerm, UUID chapterId, Boolean mineOnly, Pageable pageable) {
+    log.info(
+        "Searching question banks - searchTerm: {}, chapterId: {}, mineOnly: {}",
+        searchTerm,
+        chapterId,
+        mineOnly);
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
+    boolean admin = SecurityUtils.hasRole("ADMIN");
+    boolean effectiveMineOnly = !admin || !Boolean.FALSE.equals(mineOnly);
 
-    return questionBankRepository
-        .findByTeacherIdAndNotDeleted(currentUserId, pageable)
-        .map(this::mapSingleToResponse);
+    String normalizedSearchTerm = searchTerm != null ? searchTerm.trim() : null;
+    if (normalizedSearchTerm != null && normalizedSearchTerm.isEmpty()) {
+      normalizedSearchTerm = null;
+    }
+
+    Page<QuestionBank> page =
+        effectiveMineOnly
+            ? questionBankRepository.searchMineByChapterAndName(
+                currentUserId, chapterId, normalizedSearchTerm, pageable)
+            : questionBankRepository.searchAllActiveByChapterAndName(
+                chapterId, normalizedSearchTerm, pageable);
+
+    return page.map(this::mapSingleToResponse);
   }
 
   @Override
@@ -211,6 +307,17 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     String teacherName =
         userRepository.findById(questionBank.getTeacherId()).map(User::getFullName).orElse(null);
 
+    String chapterTitle =
+        questionBank.getChapter() != null
+            ? questionBank.getChapter().getTitle()
+        : (questionBank.getChapterId() == null
+          ? null
+          : chapterRepository
+            .findById(questionBank.getChapterId())
+            .filter(ch -> ch.getDeletedAt() == null)
+            .map(Chapter::getTitle)
+            .orElse(null));
+
     return QuestionBankResponse.builder()
         .id(questionBank.getId())
         .teacherId(questionBank.getTeacherId())
@@ -218,9 +325,62 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         .name(questionBank.getName())
         .description(questionBank.getDescription())
         .isPublic(questionBank.getIsPublic())
+        .chapterId(questionBank.getChapterId())
+        .chapterTitle(chapterTitle)
         .questionCount(questionCount)
         .createdAt(questionBank.getCreatedAt())
         .updatedAt(questionBank.getUpdatedAt())
+        .build();
+  }
+
+  private UUID validateChapterId(UUID chapterId) {
+    if (chapterId == null) {
+      return null;
+    }
+    Chapter chapter =
+        chapterRepository
+            .findById(chapterId)
+            .orElseThrow(() -> new AppException(ErrorCode.CHAPTER_NOT_FOUND));
+    if (chapter.getDeletedAt() != null) {
+      throw new AppException(ErrorCode.CHAPTER_NOT_FOUND);
+    }
+    return chapterId;
+  }
+
+  private void validateTemplateOwnerOrAdmin(QuestionTemplate template, UUID currentUserId) {
+    if (!template.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.TEMPLATE_ACCESS_DENIED);
+    }
+  }
+
+  private QuestionTemplateResponse mapTemplateToResponse(QuestionTemplate template) {
+    String creatorName =
+        template.getCreator() != null
+            ? template.getCreator().getFullName()
+            : userRepository.findById(template.getCreatedBy()).map(User::getFullName).orElse(null);
+
+    return QuestionTemplateResponse.builder()
+        .id(template.getId())
+        .createdBy(template.getCreatedBy())
+        .creatorName(creatorName)
+        .name(template.getName())
+        .description(template.getDescription())
+        .templateType(template.getTemplateType())
+        .templateVariant(template.getTemplateVariant())
+        .templateText(template.getTemplateText())
+        .parameters(template.getParameters())
+        .answerFormula(template.getAnswerFormula())
+        .optionsGenerator(template.getOptionsGenerator())
+        .constraints(template.getConstraints())
+        .cognitiveLevel(template.getCognitiveLevel())
+        .tags(template.getTags())
+        .isPublic(template.getIsPublic())
+        .status(template.getStatus())
+        .usageCount(template.getUsageCount())
+        .avgSuccessRate(template.getAvgSuccessRate())
+        .createdAt(template.getCreatedAt())
+        .updatedAt(template.getUpdatedAt())
+        .questionBankId(template.getQuestionBankId())
         .build();
   }
 }

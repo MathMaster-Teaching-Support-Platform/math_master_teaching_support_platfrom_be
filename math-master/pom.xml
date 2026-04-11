@@ -151,6 +151,13 @@
             <version>5.4.0</version>
         </dependency>
 
+        <!-- Render LaTeX formulas to images for PPTX export -->
+        <dependency>
+            <groupId>org.scilab.forge</groupId>
+            <artifactId>jlatexmath</artifactId>
+            <version>1.0.7</version>
+        </dependency>
+
         <!-- PDFBox for PDF processing -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
@@ -181,6 +188,13 @@
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
             <version>8.5.11</version>
+        </dependency>
+
+        <!-- AWS SDK v2 S3 — dùng cho S3 Multipart Upload với MinIO (S3-compatible) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.25.0</version>
         </dependency>
         
         <!-- Email -->

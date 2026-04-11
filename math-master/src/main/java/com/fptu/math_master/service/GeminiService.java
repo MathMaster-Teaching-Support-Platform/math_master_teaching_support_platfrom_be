@@ -17,4 +17,13 @@ public interface GeminiService {
    * @return true if the API responds successfully
    */
   boolean testConnection();
+
+  /**
+   * Analyze an image with a text prompt using Gemini Vision API.
+   *
+   * @param imageBytes The image data as byte array
+   * @param prompt The text prompt to guide the analysis
+   * @return The text response from Gemini
+   */
+  String analyzeImageWithPrompt(byte[] imageBytes, String prompt);
 }

@@ -37,10 +37,9 @@ public class QuestionTemplateRequest {
   @NotBlank(message = "Answer formula is required")
   private String answerFormula;
 
-  private Map<String, Object> optionsGenerator;
+  private String diagramTemplate;
 
-  @NotNull(message = "Difficulty rules are required")
-  private Map<String, Object> difficultyRules;
+  private Map<String, Object> optionsGenerator;
 
   private String[] constraints;
 
@@ -54,4 +53,6 @@ public class QuestionTemplateRequest {
 
   /** Optional: assign this template to a question bank */
   private UUID questionBankId;
+
+  private UUID canonicalQuestionId;
 }

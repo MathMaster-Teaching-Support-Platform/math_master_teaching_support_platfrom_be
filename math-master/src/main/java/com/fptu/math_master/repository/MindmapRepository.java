@@ -1,9 +1,9 @@
 package com.fptu.math_master.repository;
 
-import com.fptu.math_master.entity.Mindmap;
-import com.fptu.math_master.enums.MindmapStatus;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +11,9 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import com.fptu.math_master.entity.Mindmap;
+import com.fptu.math_master.enums.MindmapStatus;
 
 @Repository
 public interface MindmapRepository
@@ -43,6 +46,12 @@ public interface MindmapRepository
   Page<Mindmap> findByLessonIdAndNotDeleted(@Param("lessonId") UUID lessonId, Pageable pageable);
 
   @Query(
+      "SELECT m FROM Mindmap m WHERE m.lessonId = :lessonId AND m.deletedAt IS NULL "
+          + "AND LOWER(m.title) LIKE LOWER(CONCAT('%', :name, '%')) ORDER BY m.createdAt DESC")
+  List<Mindmap> findByLessonIdAndTitleContainingAndNotDeleted(
+      @Param("lessonId") UUID lessonId, @Param("name") String name);
+
+  @Query(
       "SELECT m FROM Mindmap m "
           + "LEFT JOIN FETCH m.teacher "
           + "LEFT JOIN FETCH m.lesson "
@@ -70,4 +79,7 @@ public interface MindmapRepository
 
   @Query("SELECT COUNT(m) FROM Mindmap m WHERE m.teacherId = :teacherId AND m.deletedAt IS NULL")
   long countByTeacherId(@Param("teacherId") UUID teacherId);
+
+  @Query("SELECT COUNT(m) FROM Mindmap m WHERE m.deletedAt IS NULL")
+  long countAllNotDeleted();
 }

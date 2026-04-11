@@ -332,11 +332,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     prompt.append("    \"formulaExplanation\": \"Solve ax + b = c => x = (c - b) / a\",\n");
     prompt.append("    \"cognitiveLevel\": \"APPLY\",\n");
     prompt.append("    \"tags\": [\"linear-equation\", \"algebra\"],\n");
-    prompt.append("    \"difficultyRules\": {\n");
-    prompt.append("      \"easy\": \"a <= 3 AND b >= 0 AND c <= 20\",\n");
-    prompt.append("      \"medium\": \"a <= 7 OR b < 0\",\n");
-    prompt.append("      \"hard\": \"a > 7 OR ABS(b) > 15\"\n");
-    prompt.append("    },\n");
     prompt.append("    \"constraints\": [\"a != 0\"]\n");
     prompt.append("  },\n");
     prompt.append(
@@ -466,7 +461,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
               .templateText(templateTextMap)
               .parameters(buildParametersFromNode(templateNode.path("parameters")))
               .answerFormula(templateNode.path("answerFormula").asText())
-              .difficultyRules(parseDifficultyRules(templateNode.path("difficultyRules")))
               .cognitiveLevel(parseCognitiveLevel(templateNode.path("cognitiveLevel").asText()))
               .tags(parseStringArray(templateNode.path("tags")).toArray(new String[0]))
               .build();
@@ -563,23 +557,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
           }
         }
 
-        // 5. Validate difficulty rules are mutually exclusive
-        Map<String, String> diffRules = response.getSuggestedTemplate().getDifficultyRules();
-        if (diffRules != null && diffRules.size() >= 2) {
-          // This is a simplified check - in production you'd parse the conditions
-          if (diffRules.containsKey("easy")
-              && diffRules.containsKey("medium")
-              && diffRules.containsKey("hard")) {
-            String easy = diffRules.get("easy");
-            String medium = diffRules.get("medium");
-            // Check for overlapping conditions (simplified)
-            if ((easy.contains("<=") && medium.contains("<="))
-                || (easy.contains("AND") && !medium.contains("AND"))) {
-              additionalWarnings.add(
-                  "WARNING: Difficulty rules may overlap - verify mutual exclusivity");
-            }
-          }
-        }
       }
 
       // Update warnings
@@ -659,11 +636,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
             .templateText(Map.of("en", text))
             .parameters(new HashMap<>())
             .answerFormula("")
-            .difficultyRules(
-                Map.of(
-                    "easy", "true",
-                    "medium", "true",
-                    "hard", "true"))
             .cognitiveLevel(CognitiveLevel.APPLY)
             .tags(new String[] {"imported"})
             .build();
@@ -688,31 +660,36 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     }
 
     log.debug(
-        "Extracting JSON from content: {}",
+        "Extracting JSON from content (first 200 chars): {}",
         content.substring(0, Math.min(200, content.length())) + "...");
 
-    // Try to extract from markdown code block
-    Pattern pattern = Pattern.compile("```(?:json)?\\s*\\n?(.+?)```", Pattern.DOTALL);
-    Matcher matcher = pattern.matcher(content);
-
-    if (matcher.find()) {
-      String extracted = matcher.group(1).trim();
-      log.info("Extracted JSON from markdown code block, length: {}", extracted.length());
-      return extracted;
-    }
-
-    // Try to find JSON by braces
+    // Find first { or [ and last } or ]
     int startIdx = content.indexOf('{');
-    int endIdx = content.lastIndexOf('}');
+    int startArrayIdx = content.indexOf('[');
 
-    if (startIdx >= 0 && endIdx > startIdx) {
-      String extracted = content.substring(startIdx, endIdx + 1);
-      log.info("Extracted JSON by braces, length: {}", extracted.length());
+    // Pick the earliest valid start bracket
+    int finalStart = -1;
+    if (startIdx >= 0 && startArrayIdx >= 0) finalStart = Math.min(startIdx, startArrayIdx);
+    else if (startIdx >= 0) finalStart = startIdx;
+    else if (startArrayIdx >= 0) finalStart = startArrayIdx;
+
+    int endIdx = content.lastIndexOf('}');
+    int endArrayIdx = content.lastIndexOf(']');
+
+    // Pick the latest valid end bracket
+    int finalEnd = -1;
+    if (endIdx >= 0 && endArrayIdx >= 0) finalEnd = Math.max(endIdx, endArrayIdx);
+    else if (endIdx >= 0) finalEnd = endIdx;
+    else if (endArrayIdx >= 0) finalEnd = endArrayIdx;
+
+    if (finalStart >= 0 && finalEnd > finalStart) {
+      String extracted = content.substring(finalStart, finalEnd + 1);
+      log.info("Extracted JSON by bracket detection, length: {}", extracted.length());
       return extracted;
     }
 
-    log.warn("Could not extract JSON structure, returning original content");
-    return content;
+    log.warn("Could not extract JSON structure, returning trimmed original content as fallback.");
+    return content.trim();
   }
 
   private QuestionType parseQuestionType(String type) {
@@ -781,26 +758,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
 
   private Map<String, Object> buildParametersFromNode(JsonNode parametersNode) {
     return buildParameters(parametersNode);
-  }
-
-  private Map<String, String> parseDifficultyRules(JsonNode node) {
-    Map<String, String> rules = new HashMap<>();
-
-    if (node.isObject()) {
-      Iterator<String> fieldNames = node.fieldNames();
-      while (fieldNames.hasNext()) {
-        String key = fieldNames.next();
-        rules.put(key, node.get(key).asText());
-      }
-    }
-
-    if (rules.isEmpty()) {
-      rules.put("easy", "true");
-      rules.put("medium", "true");
-      rules.put("hard", "true");
-    }
-
-    return rules;
   }
 
   private List<String> extractSampleQuestions(String text) {
@@ -890,7 +847,6 @@ public class TemplateImportServiceImpl implements TemplateImportService {
             .parameters(draft.getParameters() != null ? draft.getParameters() : new HashMap<>())
             .answerFormula(draft.getAnswerFormula() != null ? draft.getAnswerFormula() : "")
             .optionsGenerator(draft.getOptionsGenerator())
-            .difficultyRules(convertDifficultyRules(draft.getDifficultyRules()))
             .constraints(new String[0])
             .cognitiveLevel(
                 draft.getCognitiveLevel() != null
@@ -945,12 +901,4 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     throw new IllegalStateException("Authentication is not JwtAuthenticationToken");
   }
 
-  /** Convert difficulty rules Map<String, String> to Map<String, Object> for JSONB */
-  private Map<String, Object> convertDifficultyRules(Map<String, String> rules) {
-    if (rules == null) {
-      return new HashMap<>();
-    }
-    Map<String, Object> result = new HashMap<>(rules);
-    return result;
-  }
 }

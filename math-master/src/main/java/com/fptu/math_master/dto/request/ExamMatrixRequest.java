@@ -29,4 +29,5 @@ public class ExamMatrixRequest {
 
   @DecimalMin(value = "0.01", message = "Total points target must be greater than 0")
   private BigDecimal totalPointsTarget;
+
 }

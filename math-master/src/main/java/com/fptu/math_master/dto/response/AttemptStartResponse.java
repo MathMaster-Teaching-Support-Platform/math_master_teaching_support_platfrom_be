@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 public class AttemptStartResponse {
 
   private UUID attemptId;
+  private UUID submissionId;
   private UUID assessmentId;
   private Integer attemptNumber;
   private Instant startedAt;

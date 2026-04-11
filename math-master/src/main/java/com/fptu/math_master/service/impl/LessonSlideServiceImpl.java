@@ -12,6 +12,7 @@ import com.fptu.math_master.dto.response.LessonResponse;
 import com.fptu.math_master.dto.response.LessonSlideGeneratedContentResponse;
 import com.fptu.math_master.dto.response.LessonSlideJsonItemResponse;
 import com.fptu.math_master.dto.response.SlideTemplateResponse;
+import com.fptu.math_master.enums.LessonSlideOutputFormat;
 import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.SchoolGrade;
@@ -33,6 +34,11 @@ import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.StatObjectArgs;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.geom.Rectangle2D;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -43,15 +49,24 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.imageio.ImageIO;
+import javax.swing.JLabel;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.sl.usermodel.PictureData;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
+import org.apache.poi.xslf.usermodel.XSLFPictureData;
+import org.apache.poi.xslf.usermodel.XSLFPictureShape;
 import org.apache.poi.xslf.usermodel.XSLFShape;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
+import org.scilab.forge.jlatexmath.TeXConstants;
+import org.scilab.forge.jlatexmath.TeXFormula;
+import org.scilab.forge.jlatexmath.TeXIcon;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -63,6 +78,26 @@ import org.springframework.web.multipart.MultipartFile;
 public class LessonSlideServiceImpl implements LessonSlideService {
 
   private static final Pattern NON_ALNUM = Pattern.compile("[^a-zA-Z0-9._-]");
+  private static final Pattern LATEX_SEGMENT_PATTERN =
+      Pattern.compile(
+          "(?s)\\\\\\((.+?)\\\\\\)|\\\\\\[(.+?)\\\\\\]|\\$\\$(.+?)\\$\\$|(?<!\\\\)\\$(.+?)(?<!\\\\)\\$");
+  private static final float LATEX_FONT_SIZE = 22f;
+  private static final double LATEX_HORIZONTAL_PADDING = 2d;
+  private static final double LATEX_VERTICAL_PADDING = 6d;
+  private static final double LATEX_MAX_IMAGE_HEIGHT = 120d;
+  private static final double LATEX_MIN_IMAGE_HEIGHT = 20d;
+  private static final List<String> TAGGED_SECTIONS =
+      List.of(
+          "LESSON_SUMMARY",
+          "LEARNING_OBJECTIVES",
+          "OPENING",
+          "MAIN_PART_1",
+          "MAIN_PART_2",
+          "MAIN_PART_3",
+          "EXAMPLE_PART",
+          "PRACTICE_PART",
+          "CLOSING_SUMMARY",
+          "ADDITIONAL_NOTES");
   private static final String PPTX_MIME =
       "application/vnd.openxmlformats-officedocument.presentationml.presentation";
   private static final String PNG_MIME = "image/png";
@@ -122,7 +157,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
 
     int slideCount = request.getSlideCount() == null ? 10 : request.getSlideCount();
-    DeckSections deckSections = buildDeckSectionsWithAi(lesson, request.getAdditionalPrompt());
+  LessonSlideOutputFormat outputFormat = resolveOutputFormat(request.getOutputFormat());
+  DeckSections deckSections =
+    buildDeckSectionsWithAi(lesson, request.getAdditionalPrompt(), outputFormat);
     List<LessonSlideJsonItemResponse> slides = buildPreviewSlides(deckSections, slideCount);
 
     return LessonSlideGeneratedContentResponse.builder()
@@ -131,6 +168,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         .lessonId(lesson.getId())
         .lessonTitle(lesson.getTitle())
         .slideCount(slideCount)
+    .outputFormat(outputFormat)
         .slides(slides)
         .additionalPrompt(request.getAdditionalPrompt())
         .build();
@@ -411,7 +449,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       for (int i = 0; i < slideshow.getSlides().size(); i++) {
         XSLFSlide slide = slideshow.getSlides().get(i);
         Map<String, String> slideValues = buildSlidePlaceholders(i + 1, deckSections);
-        for (XSLFShape shape : slide.getShapes()) {
+        List<XSLFShape> shapesSnapshot = new ArrayList<>(slide.getShapes());
+        for (XSLFShape shape : shapesSnapshot) {
           if (shape instanceof XSLFTextShape textShape) {
             String text = textShape.getText();
             if (text == null || text.isBlank()) {
@@ -419,8 +458,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             }
             String replaced = replacePlaceholders(text, slideValues);
             if (!text.equals(replaced)) {
-              textShape.clearText();
-              textShape.setText(replaced);
+              applyTextAndLatex(slideshow, slide, textShape, replaced);
             }
           }
         }
@@ -439,7 +477,33 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     for (Map.Entry<String, String> entry : values.entrySet()) {
       replaced = replaced.replace(entry.getKey(), entry.getValue());
     }
-    return replaced;
+    return normalizeEscapedLineBreaks(replaced);
+  }
+
+  private String normalizeEscapedLineBreaks(String value) {
+    if (value == null || value.isEmpty()) {
+      return value;
+    }
+    return value.replace("\\r\\n", "\n").replace("\\n", "\n");
+  }
+
+  private String normalizeLatexInput(String value) {
+    if (value == null || value.isEmpty()) {
+      return value;
+    }
+    String normalized = value.replace("\\$", "$");
+    normalized = normalized.replace("\\\\(", "\\(").replace("\\\\)", "\\)");
+    return normalized.replace("\\\\[", "\\[").replace("\\\\]", "\\]");
+  }
+
+  private String sanitizeDisplayText(String value) {
+    if (value == null || value.isEmpty()) {
+      return value;
+    }
+    String withoutTextCommands =
+        value.replaceAll("\\\\(?:textbf|textit|text|mathrm)\\{([^{}]+)}", "$1");
+    String withoutSpacingMacros = withoutTextCommands.replaceAll("\\\\(?:quad|qquad)", " ");
+    return withoutSpacingMacros.replaceAll(" {2,}", " ").trim();
   }
 
   private Map<String, String> buildSlidePlaceholders(int slideIndex, DeckSections deck) {
@@ -498,7 +562,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         XSLFSlide slide = slideshow.getSlides().get(i);
         LessonSlideJsonItemRequest item = slides.get(i);
         Map<String, String> slideValues = buildJsonSlidePlaceholders(item, lesson);
-        for (XSLFShape shape : slide.getShapes()) {
+        List<XSLFShape> shapesSnapshot = new ArrayList<>(slide.getShapes());
+        for (XSLFShape shape : shapesSnapshot) {
           if (shape instanceof XSLFTextShape textShape) {
             String text = textShape.getText();
             if (text == null || text.isBlank()) {
@@ -506,8 +571,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             }
             String replaced = replacePlaceholders(text, slideValues);
             if (!text.equals(replaced)) {
-              textShape.clearText();
-              textShape.setText(replaced);
+              applyTextAndLatex(slideshow, slide, textShape, replaced);
             }
           }
         }
@@ -516,10 +580,129 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       slideshow.write(outputStream);
       return outputStream.toByteArray();
     } catch (Exception ex) {
-      log.error("Failed to generate pptx from confirmed json", ex);
+      log.error(
+          "Failed to generate pptx from confirmed json. lessonId={}, slideCount={}, reason={}",
+          lesson.getId(),
+          slides == null ? 0 : slides.size(),
+          ex.getMessage(),
+          ex);
       throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
     }
   }
+
+  private void applyTextAndLatex(
+      XMLSlideShow slideshow, XSLFSlide slide, XSLFTextShape textShape, String content) {
+    String normalizedContent = normalizeLatexInput(content);
+    List<LatexToken> latexTokens = new ArrayList<>();
+    String displayText = sanitizeDisplayText(replaceLatexWithMarkers(normalizedContent, latexTokens));
+
+    textShape.clearText();
+    textShape.setText(displayText);
+
+    if (latexTokens.isEmpty()) {
+      return;
+    }
+
+    Rectangle2D anchor = textShape.getAnchor();
+    if (anchor == null) {
+      log.debug("Skip LaTeX image insertion because text shape anchor is null");
+      return;
+    }
+
+    double x = anchor.getX() + LATEX_HORIZONTAL_PADDING;
+    double y = anchor.getY() + anchor.getHeight() + LATEX_VERTICAL_PADDING;
+    double maxWidth = Math.max(40d, anchor.getWidth() - LATEX_HORIZONTAL_PADDING * 2);
+
+    for (LatexToken token : latexTokens) {
+      byte[] imageBytes = renderLatexToPng(token.expression());
+      if (imageBytes.length == 0) {
+        continue;
+      }
+
+      try (ByteArrayInputStream imageInput = new ByteArrayInputStream(imageBytes)) {
+        BufferedImage sourceImage = ImageIO.read(imageInput);
+        if (sourceImage == null) {
+          continue;
+        }
+
+        double width = sourceImage.getWidth();
+        double height = sourceImage.getHeight();
+        if (width <= 0 || height <= 0) {
+          continue;
+        }
+
+        double widthScale = maxWidth / width;
+        double heightScale = LATEX_MAX_IMAGE_HEIGHT / height;
+        double scale = Math.min(1d, Math.min(widthScale, heightScale));
+
+        double renderWidth = Math.max(40d, width * scale);
+        double renderHeight = Math.max(LATEX_MIN_IMAGE_HEIGHT, height * scale);
+
+        XSLFPictureData pictureData = slideshow.addPicture(imageBytes, PictureData.PictureType.PNG);
+        XSLFPictureShape pictureShape = slide.createPicture(pictureData);
+        pictureShape.setAnchor(new Rectangle2D.Double(x, y, renderWidth, renderHeight));
+        y += renderHeight + LATEX_VERTICAL_PADDING;
+      } catch (Exception ex) {
+        log.warn("Failed to append LaTeX image for expression: {}", token.expression(), ex);
+      }
+    }
+  }
+
+  private String replaceLatexWithMarkers(String content, List<LatexToken> latexTokens) {
+    Matcher matcher = LATEX_SEGMENT_PATTERN.matcher(content);
+    StringBuffer out = new StringBuffer();
+
+    while (matcher.find()) {
+      String expression =
+          firstNonBlank(matcher.group(1), matcher.group(2), matcher.group(3), matcher.group(4));
+      if (expression == null || expression.isBlank()) {
+        continue;
+      }
+
+      LatexToken token = new LatexToken(expression.trim());
+      latexTokens.add(token);
+      matcher.appendReplacement(out, Matcher.quoteReplacement(" "));
+    }
+    matcher.appendTail(out);
+
+    return out.toString();
+  }
+
+  private String firstNonBlank(String... values) {
+    for (String value : values) {
+      if (value != null && !value.isBlank()) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  private byte[] renderLatexToPng(String expression) {
+    try {
+      TeXFormula formula = new TeXFormula(expression);
+      TeXIcon icon = formula.createTeXIcon(TeXConstants.STYLE_DISPLAY, LATEX_FONT_SIZE);
+      int width = Math.max(1, icon.getIconWidth());
+      int height = Math.max(1, icon.getIconHeight());
+
+      BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+      Graphics2D graphics = image.createGraphics();
+      graphics.setColor(new Color(255, 255, 255, 0));
+      graphics.fillRect(0, 0, width, height);
+      graphics.setColor(Color.BLACK);
+      graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+      icon.paintIcon(new JLabel(), graphics, 0, 0);
+      graphics.dispose();
+
+      ByteArrayOutputStream output = new ByteArrayOutputStream();
+      ImageIO.write(image, "png", output);
+      return output.toByteArray();
+    } catch (Exception ex) {
+      log.warn("Failed to render LaTeX expression: {}", expression, ex);
+      return new byte[0];
+    }
+  }
+
+  private record LatexToken(String expression) {}
 
   private Map<String, String> buildJsonSlidePlaceholders(
       LessonSlideJsonItemRequest item, Lesson lesson) {
@@ -674,15 +857,16 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         lessonContent);
   }
 
-  private DeckSections buildDeckSectionsWithAi(Lesson lesson, String additionalPrompt) {
+  private DeckSections buildDeckSectionsWithAi(
+      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
     DeckSections fallback = buildDeckSections(lesson, additionalPrompt);
 
     try {
-      String prompt = buildSlideDeckPrompt(lesson, additionalPrompt);
+      String prompt = buildSlideDeckPrompt(lesson, additionalPrompt, outputFormat);
       String aiResponse = geminiService.sendMessage(prompt);
       AiDeckSections aiDeck = parseAiDeckSections(aiResponse);
       if (aiDeck == null || !hasEnoughAiContent(aiDeck)) {
-        String taggedPrompt = buildSlideDeckTaggedPrompt(lesson, additionalPrompt);
+        String taggedPrompt = buildSlideDeckTaggedPrompt(lesson, additionalPrompt, outputFormat);
         String taggedResponse = geminiService.sendMessage(taggedPrompt);
         AiDeckSections taggedDeck = parseTaggedDeckSections(taggedResponse);
         if (taggedDeck != null && hasEnoughAiContent(taggedDeck)) {
@@ -793,12 +977,14 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
   }
 
-  private String buildSlideDeckPrompt(Lesson lesson, String additionalPrompt) {
+  private String buildSlideDeckPrompt(
+      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
     String lessonTitle = safe(lesson.getTitle());
     String lessonContent = safe(lesson.getLessonContent());
     String lessonSummary = safe(lesson.getSummary());
     String learningObjectives = safe(lesson.getLearningObjectives());
     String opening = safe(additionalPrompt);
+    String formatGuidance = buildFormatGuidance(outputFormat, true);
 
     return """
         Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
@@ -817,6 +1003,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         - Nội dung phải cụ thể, không lặp lại cùng một câu giữa các phần.
         - Mỗi mục mainPart1/mainPart2/mainPart3/examplePart/practicePart cần có nhiều ý (dạng gạch đầu dòng ngắn, tách dòng bằng ký tự xuống dòng \n).
         - closingSummary phải tóm tắt được kiến thức trọng tâm và nhấn mạnh cách áp dụng.
+        - outputFormat: %s
+        %s
         - Không thêm markdown, không thêm giải thích ngoài JSON.
 
         Trả về CHI DUY NHAT mot JSON object dung schema sau:
@@ -833,15 +1021,24 @@ public class LessonSlideServiceImpl implements LessonSlideService {
           "additionalNotes": "..."
         }
         """
-        .formatted(lessonTitle, lessonSummary, learningObjectives, opening, lessonContent);
+        .formatted(
+            lessonTitle,
+            lessonSummary,
+            learningObjectives,
+            opening,
+            lessonContent,
+            outputFormat,
+            formatGuidance);
   }
 
-  private String buildSlideDeckTaggedPrompt(Lesson lesson, String additionalPrompt) {
+  private String buildSlideDeckTaggedPrompt(
+      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
     String lessonTitle = safe(lesson.getTitle());
     String lessonContent = safe(lesson.getLessonContent());
     String lessonSummary = safe(lesson.getSummary());
     String learningObjectives = safe(lesson.getLearningObjectives());
     String opening = safe(additionalPrompt);
+    String formatGuidance = buildFormatGuidance(outputFormat, false);
 
     return """
         Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
@@ -858,6 +1055,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         YÊU CẦU:
         - Viết tiếng Việt có dấu, nội dung cụ thể, không lặp lại giữa các phần.
         - Mỗi phần mainPart1/mainPart2/mainPart3/examplePart/practicePart có nhiều ý và xuống dòng rõ ràng.
+        - outputFormat: %s
+        %s
         - Chỉ trả về đúng định dạng marker dưới đây, không thêm markdown.
 
         [LESSON_SUMMARY]
@@ -881,7 +1080,14 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         [ADDITIONAL_NOTES]
         ...
         """
-        .formatted(lessonTitle, lessonSummary, learningObjectives, opening, lessonContent);
+        .formatted(
+          lessonTitle,
+          lessonSummary,
+          learningObjectives,
+          opening,
+          lessonContent,
+          outputFormat,
+          formatGuidance);
   }
 
   private AiDeckSections parseTaggedDeckSections(String raw) {
@@ -912,30 +1118,48 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
 
     int contentStart = start + startTag.length();
-    int nextTagStart = raw.length();
-    int cursor = contentStart;
-    while (cursor < raw.length()) {
-      int openBracket = raw.indexOf('[', cursor);
-      if (openBracket < 0) {
-        break;
-      }
-      int closeBracket = raw.indexOf(']', openBracket + 1);
-      if (closeBracket < 0) {
-        break;
-      }
-      String candidateTag = raw.substring(openBracket + 1, closeBracket);
-      if (!candidateTag.isBlank()) {
-        nextTagStart = openBracket;
-        break;
-      }
-      cursor = closeBracket + 1;
-    }
+    int nextTagStart = findNextTaggedSectionStart(raw, contentStart);
 
     String value = raw.substring(contentStart, nextTagStart).trim();
     if (value.startsWith(":")) {
       value = value.substring(1).trim();
     }
     return value;
+  }
+
+  private int findNextTaggedSectionStart(String raw, int fromIndex) {
+    int nextTagStart = raw.length();
+    for (String section : TAGGED_SECTIONS) {
+      int candidateStart = raw.indexOf("[" + section + "]", fromIndex);
+      if (candidateStart >= 0 && candidateStart < nextTagStart) {
+        nextTagStart = candidateStart;
+      }
+    }
+    return nextTagStart;
+  }
+
+  private LessonSlideOutputFormat resolveOutputFormat(LessonSlideOutputFormat outputFormat) {
+    return outputFormat == null ? LessonSlideOutputFormat.PLAIN_TEXT : outputFormat;
+  }
+
+  private String buildFormatGuidance(LessonSlideOutputFormat outputFormat, boolean jsonMode) {
+    return switch (outputFormat) {
+      case LATEX ->
+          jsonMode
+              ? "- Tất cả biểu thức toán học phải viết bằng LaTeX. KHÔNG dùng diễn đạt công thức dạng chữ thuần."
+                  + "\\n- Vì output là JSON string, bắt buộc escape dấu \\\\ trong LaTeX (ví dụ: \\\\frac, \\\\sqrt, \\\\left, \\\\right)."
+              : "- Tất cả biểu thức toán học phải viết bằng LaTeX."
+                  + "\\n- Dùng delimiters chuẩn: inline \\( ... \\), block \\[ ... \\].";
+      case HYBRID ->
+          jsonMode
+              ? "- Ưu tiên nội dung tiếng Việt dễ hiểu, nhưng công thức/ký hiệu toán phải dùng LaTeX."
+                  + "\\n- Vì output là JSON string, bắt buộc escape dấu \\\\ trong LaTeX (ví dụ: \\\\frac, \\\\sqrt)."
+              : "- Nội dung mô tả bằng tiếng Việt, công thức/ký hiệu toán thể hiện bằng LaTeX."
+                  + "\\n- Dùng delimiters chuẩn: inline \\( ... \\), block \\[ ... \\].";
+      case PLAIN_TEXT ->
+          "- Dùng văn bản thuần như hiện tại, không bắt buộc LaTeX."
+              + "\\n- Nếu có công thức thì giữ ở dạng dễ đọc bằng chữ.";
+    };
   }
 
   private String nonBlankOrDefault(String value, String fallback) {

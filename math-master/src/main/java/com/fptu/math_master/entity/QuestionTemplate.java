@@ -68,6 +68,9 @@ public class QuestionTemplate extends BaseEntity {
   @Column(name = "question_bank_id")
   private UUID questionBankId;
 
+  @Column(name = "canonical_question_id")
+  private UUID canonicalQuestionId;
+
   @Nationalized
   @Column(name = "name", nullable = false, columnDefinition = "TEXT")
   private String name;
@@ -107,6 +110,9 @@ public class QuestionTemplate extends BaseEntity {
   @Column(name = "answer_formula", columnDefinition = "TEXT")
   private String answerFormula;
 
+  @Column(name = "diagram_template", columnDefinition = "TEXT")
+  private String diagramTemplate;
+
   /**
    * Configuration for generating multiple choice options (PARAMETRIC variant)
    * Example: {"type": "around_answer", "count": 4, "range": 10}
@@ -114,14 +120,6 @@ public class QuestionTemplate extends BaseEntity {
   @Type(JsonBinaryType.class)
   @Column(name = "options_generator", columnDefinition = "jsonb")
   private Map<String, Object> optionsGenerator;
-
-  /**
-   * Rules for determining difficulty based on parameters (PARAMETRIC variant)
-   * Example: {"easy": "x < 10 AND y < 10", "medium": "x < 50 AND y < 50", "hard": "x >= 50 OR y >= 50"}
-   */
-  @Type(JsonBinaryType.class)
-  @Column(name = "difficulty_rules", columnDefinition = "jsonb")
-  private Map<String, Object> difficultyRules;
 
   /** Constraints for parameter generation (PARAMETRIC variant) Example: ["x < y", "x + y < 1000"] */
   @Type(StringArrayType.class)
@@ -180,6 +178,10 @@ public class QuestionTemplate extends BaseEntity {
   @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
   private QuestionBank questionBank;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "canonical_question_id", insertable = false, updatable = false)
+  private CanonicalQuestion canonicalQuestion;
+
   @OneToMany(mappedBy = "questionTemplate", cascade = CascadeType.ALL)
   private Set<Question> questions;
 
@@ -189,6 +191,7 @@ public class QuestionTemplate extends BaseEntity {
   @PrePersist
   @Override
   public void prePersist() {
+    super.prePersist();
     if (isPublic == null) isPublic = false;
     if (usageCount == null) usageCount = 0;
     if (status == null) status = TemplateStatus.DRAFT;
@@ -208,7 +211,7 @@ public class QuestionTemplate extends BaseEntity {
       BigDecimal total =
           this.avgSuccessRate.multiply(BigDecimal.valueOf(this.usageCount)).add(newRate);
       this.avgSuccessRate =
-          total.divide(BigDecimal.valueOf((long) (this.usageCount + 1)), 2, RoundingMode.HALF_UP);
+          total.divide(BigDecimal.valueOf(this.usageCount + 1L), 2, RoundingMode.HALF_UP);
     }
   }
 }

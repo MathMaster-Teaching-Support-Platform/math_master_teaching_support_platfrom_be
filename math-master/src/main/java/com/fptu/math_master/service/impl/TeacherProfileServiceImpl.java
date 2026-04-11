@@ -4,7 +4,9 @@ import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.ProfileReviewRequest;
 import com.fptu.math_master.dto.request.TeacherProfileRequest;
+import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.dto.response.TeacherProfileResponse;
+import com.fptu.math_master.component.StreamPublisher;
 import com.fptu.math_master.entity.Role;
 import com.fptu.math_master.entity.TeacherProfile;
 import com.fptu.math_master.entity.User;
@@ -42,6 +44,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   UploadService uploadService;
   MinioProperties minioProperties;
   com.fptu.math_master.service.EmailService emailService;
+  StreamPublisher streamPublisher;
 
   @Override
   @Transactional
@@ -73,8 +76,11 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
             .schoolWebsite(request.getSchoolWebsite())
             .position(request.getPosition())
             .verificationDocumentKey(documentUrl)
+            .verificationDocumentPath(documentUrl)
             .description(request.getDescription())
             .status(ProfileStatus.PENDING)
+            // Copy personal info from User account (from Google registration)
+            .fullName(user.getFullName())
             .build();
 
     profile = teacherProfileRepository.save(profile);
@@ -198,10 +204,32 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     String teacherEmail = profile.getUser().getEmail();
     String teacherName = profile.getUser().getFullName();
     
+    NotificationRequest streamNotif = NotificationRequest.builder()
+        .id(UUID.randomUUID().toString())
+        .recipientId(profile.getUser().getId().toString())
+        .senderId(adminId.toString())
+        .timestamp(LocalDateTime.now())
+        .build();
+
     if (request.getStatus() == ProfileStatus.APPROVED) {
         emailService.sendTeacherApprovalEmail(teacherEmail, teacherName);
+        streamNotif.setType("PROFILE_VERIFICATION");
+        streamNotif.setTitle("Hồ sơ Giáo viên được phê duyệt");
+        streamNotif.setContent("Chúc mừng " + teacherName + ", yêu cầu nâng cấp tài khoản Giáo viên của bạn đã được quản trị viên phê duyệt thành công!");
     } else if (request.getStatus() == ProfileStatus.REJECTED) {
         emailService.sendTeacherRejectionEmail(teacherEmail, teacherName, request.getAdminComment());
+        streamNotif.setType("PROFILE_VERIFICATION");
+        streamNotif.setTitle("Hồ sơ Giáo viên bị từ chối");
+        streamNotif.setContent("Hồ sơ Giáo viên của bạn đã bị từ chối với lý do: " + request.getAdminComment());
+    }
+
+    try {
+        if (streamNotif.getType() != null) {
+            streamPublisher.publish(streamNotif);
+            log.info("In-app notification published to stream for user {}", profile.getUser().getId());
+        }
+    } catch (Exception e) {
+        log.error("Failed to publish stream notification", e);
     }
 
     return mapToResponse(profile);

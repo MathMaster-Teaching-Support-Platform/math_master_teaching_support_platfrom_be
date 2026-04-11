@@ -1,5 +1,6 @@
 package com.fptu.math_master.dto.request;
 
+import com.fptu.math_master.enums.AssessmentSelectionStrategy;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -17,4 +18,6 @@ public class GenerateAssessmentQuestionsRequest {
   private UUID examMatrixId;
 
   private Boolean reuseApprovedQuestions;
+
+  private AssessmentSelectionStrategy selectionStrategy;
 }

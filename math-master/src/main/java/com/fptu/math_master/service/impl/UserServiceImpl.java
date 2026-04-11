@@ -1,5 +1,18 @@
 package com.fptu.math_master.service.impl;
 
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fptu.math_master.dto.request.ChangePasswordRequest;
 import com.fptu.math_master.dto.request.UserCreationRequest;
 import com.fptu.math_master.dto.request.UserSearchRequest;
@@ -13,22 +26,12 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.RoleRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.UserService;
-import java.time.Instant;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
+import com.fptu.math_master.util.SecurityUtils;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -213,12 +216,11 @@ public class UserServiceImpl implements UserService {
   public UserResponse getMyInfo() {
     log.info("Getting current user info");
 
-    var context = SecurityContextHolder.getContext();
-    String email = context.getAuthentication().getName();
+    UUID userId = SecurityUtils.getCurrentUserId();
 
     User user =
         userRepository
-            .findByEmail(email)
+            .findByIdWithRoles(userId)
             .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     return mapToUserResponse(user);
@@ -229,12 +231,11 @@ public class UserServiceImpl implements UserService {
   public UserResponse updateMyInfo(UserUpdateRequest request) {
     log.info("Updating current user info");
 
-    var context = SecurityContextHolder.getContext();
-    String email = context.getAuthentication().getName();
+    UUID userId = SecurityUtils.getCurrentUserId();
 
     User user =
         userRepository
-            .findByEmail(email)
+            .findById(userId)
             .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     // Update password if provided
@@ -357,11 +358,10 @@ public class UserServiceImpl implements UserService {
   @Transactional
   public void changePassword(ChangePasswordRequest request) {
     log.info("Changing password for current user");
-    var context = SecurityContextHolder.getContext();
-    String email = context.getAuthentication().getName();
+    UUID userId = SecurityUtils.getCurrentUserId();
     User user =
         userRepository
-            .findByEmail(email)
+            .findById(userId)
             .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
       throw new AppException(ErrorCode.INCORRECT_PASSWORD);
@@ -371,7 +371,14 @@ public class UserServiceImpl implements UserService {
     }
     user.setPassword(passwordEncoder.encode(request.getNewPassword()));
     userRepository.save(user);
-    log.info("Password changed successfully for user: {}", email);
+    log.info("Password changed successfully for user: {}", userId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<UserResponse> getRecentUsers(Pageable pageable) {
+    log.info("Getting recent users, page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
+    return userRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::mapToUserResponse);
   }
 
   private UserResponse mapToUserResponse(User user) {
@@ -391,6 +398,7 @@ public class UserServiceImpl implements UserService {
         .dob(user.getDob())
         .code(user.getCode())
         .status(user.getStatus())
+        .lastLogin(user.getLastLogin())
         .banReason(user.getBanReason())
         .banDate(user.getBanDate())
         .roles(roles)

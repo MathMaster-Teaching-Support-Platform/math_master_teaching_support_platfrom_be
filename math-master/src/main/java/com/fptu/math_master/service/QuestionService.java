@@ -38,9 +38,18 @@ public interface QuestionService {
   List<QuestionResponse> getQuestionsByTemplate(UUID templateId);
 
   /**
+   * Get questions by canonical question
+   */
+  Page<QuestionResponse> getQuestionsByCanonicalQuestion(UUID canonicalQuestionId, Pageable pageable);
+
+  /**
    * Update question
    */
   QuestionResponse updateQuestion(UUID id, UpdateQuestionRequest request);
+
+  QuestionResponse approveQuestion(UUID id);
+
+  Integer bulkApproveQuestions(java.util.List<UUID> questionIds);
 
   /**
    * Delete question (soft delete)
@@ -55,6 +64,15 @@ public interface QuestionService {
   /**
    * Search questions
    */
-  Page<QuestionResponse> searchQuestions(
-      String searchTerm, String difficulty, String type, Pageable pageable);
+  Page<QuestionResponse> searchQuestions(String searchTerm, String type, Pageable pageable);
+
+  /**
+   * Assign multiple existing questions into one question bank
+   */
+  Integer assignQuestionsToBank(UUID bankId, List<UUID> questionIds);
+
+  /**
+   * Remove multiple questions from one question bank
+   */
+  Integer removeQuestionsFromBank(UUID bankId, List<UUID> questionIds);
 }

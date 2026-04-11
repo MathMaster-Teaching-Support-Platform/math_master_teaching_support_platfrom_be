@@ -1,7 +1,6 @@
 package com.fptu.math_master.dto.request;
 
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
@@ -33,13 +32,16 @@ public class UpdateQuestionRequest {
   @Schema(description = "Explanation for the answer")
   private String explanation;
 
+  @Schema(description = "Generated step-by-step solution in LaTeX or plain text")
+  private String solutionSteps;
+
+  @Schema(description = "Generated diagram latex")
+  private String diagramData;
+
   @DecimalMin(value = "0.0", message = "Points must be at least 0")
   @DecimalMax(value = "1000.0", message = "Points must not exceed 1000")
   @Schema(description = "Points for this question")
   private BigDecimal points;
-
-  @Schema(description = "Difficulty level")
-  private QuestionDifficulty difficulty;
 
   @Schema(description = "Bloom's cognitive level")
   private CognitiveLevel cognitiveLevel;

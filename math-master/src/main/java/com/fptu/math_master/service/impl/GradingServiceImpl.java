@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -32,6 +33,7 @@ public class GradingServiceImpl implements GradingService {
   SubmissionRepository submissionRepository;
   AnswerRepository answerRepository;
   QuestionRepository questionRepository;
+  AssessmentQuestionRepository assessmentQuestionRepository;
   AssessmentRepository assessmentRepository;
   UserRepository userRepository;
   GradeAuditLogRepository gradeAuditLogRepository;
@@ -40,7 +42,7 @@ public class GradingServiceImpl implements GradingService {
   AiReviewRepository aiReviewRepository;
 
   @Override
-  @Transactional
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void autoGradeSubmission(UUID submissionId) {
     log.info("Auto-grading submission: {}", submissionId);
 
@@ -48,6 +50,11 @@ public class GradingServiceImpl implements GradingService {
         submissionRepository
             .findById(submissionId)
             .orElseThrow(() -> new AppException(ErrorCode.SUBMISSION_NOT_FOUND));
+
+    if (submission.getStatus() == SubmissionStatus.GRADED) {
+      log.info("Skipping auto-grade for already graded submission: {}", submissionId);
+      return;
+    }
 
     if (submission.getStatus() != SubmissionStatus.SUBMITTED) {
       throw new AppException(ErrorCode.SUBMISSION_ALREADY_GRADED);
@@ -59,6 +66,9 @@ public class GradingServiceImpl implements GradingService {
     Map<UUID, Question> questionMap =
         questionRepository.findAllById(questionIds).stream()
             .collect(Collectors.toMap(Question::getId, q -> q));
+    Map<UUID, AssessmentQuestion> assessmentQuestionMap =
+      assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(submission.getAssessmentId()).stream()
+        .collect(Collectors.toMap(AssessmentQuestion::getQuestionId, aq -> aq, (left, right) -> left));
 
     boolean hasSubjectiveQuestions = false;
     BigDecimal totalScore = BigDecimal.ZERO;
@@ -74,7 +84,8 @@ public class GradingServiceImpl implements GradingService {
         continue;
       }
 
-      boolean autoGraded = autoGradeAnswer(answer, question);
+      BigDecimal effectiveMaxPoints = resolveEffectivePoints(question, assessmentQuestionMap.get(answer.getQuestionId()));
+      boolean autoGraded = autoGradeAnswer(answer, question, effectiveMaxPoints);
       if (!autoGraded) {
         hasSubjectiveQuestions = true;
       } else {
@@ -140,16 +151,16 @@ public class GradingServiceImpl implements GradingService {
         finalTotalScore);
   }
 
-  private boolean autoGradeAnswer(Answer answer, Question question) {
+  private boolean autoGradeAnswer(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
     QuestionType type = question.getQuestionType();
 
     switch (type) {
       case MULTIPLE_CHOICE:
-        return gradeMultipleChoice(answer, question);
+        return gradeMultipleChoice(answer, question, effectiveMaxPoints);
       case TRUE_FALSE:
-        return gradeTrueFalse(answer, question);
+        return gradeTrueFalse(answer, question, effectiveMaxPoints);
       case SHORT_ANSWER:
-        return gradeShortAnswer(answer, question);
+        return gradeShortAnswer(answer, question, effectiveMaxPoints);
       case ESSAY:
       case CODING:
         return false;
@@ -158,30 +169,65 @@ public class GradingServiceImpl implements GradingService {
     }
   }
 
-  private boolean gradeMultipleChoice(Answer answer, Question question) {
-    if (answer.getAnswerData() == null || question.getCorrectAnswer() == null) {
+  private boolean gradeMultipleChoice(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
+    if (question.getCorrectAnswer() == null) {
       return false;
     }
-    Object selected = answer.getAnswerData().get("selected");
-    boolean isCorrect = selected != null && selected.toString().equals(question.getCorrectAnswer());
+    
+    // Try to get answer from answerData first (structured format)
+    String studentAnswer = null;
+    if (answer.getAnswerData() != null) {
+      Object selected = answer.getAnswerData().get("selected");
+      if (selected != null) {
+        studentAnswer = selected.toString();
+      }
+    }
+    
+    // Fallback to answerText (simple string format)
+    if (studentAnswer == null && answer.getAnswerText() != null) {
+      studentAnswer = answer.getAnswerText().trim();
+    }
+    
+    if (studentAnswer == null) {
+      return false;
+    }
+    
+    boolean isCorrect = studentAnswer.equals(question.getCorrectAnswer());
     answer.setIsCorrect(isCorrect);
-    answer.setPointsEarned(isCorrect ? question.getPoints() : BigDecimal.ZERO);
+    answer.setPointsEarned(isCorrect ? effectiveMaxPoints : BigDecimal.ZERO);
     return true;
   }
 
-  private boolean gradeTrueFalse(Answer answer, Question question) {
-    if (answer.getAnswerData() == null || question.getCorrectAnswer() == null) {
+  private boolean gradeTrueFalse(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
+    if (question.getCorrectAnswer() == null) {
       return false;
     }
-    Object selected = answer.getAnswerData().get("value");
-    boolean isCorrect =
-        selected != null && selected.toString().equalsIgnoreCase(question.getCorrectAnswer());
+    
+    // Try to get answer from answerData first (structured format)
+    String studentAnswer = null;
+    if (answer.getAnswerData() != null) {
+      Object value = answer.getAnswerData().get("value");
+      if (value != null) {
+        studentAnswer = value.toString();
+      }
+    }
+    
+    // Fallback to answerText (simple string format)
+    if (studentAnswer == null && answer.getAnswerText() != null) {
+      studentAnswer = answer.getAnswerText().trim();
+    }
+    
+    if (studentAnswer == null) {
+      return false;
+    }
+    
+    boolean isCorrect = studentAnswer.equalsIgnoreCase(question.getCorrectAnswer());
     answer.setIsCorrect(isCorrect);
-    answer.setPointsEarned(isCorrect ? question.getPoints() : BigDecimal.ZERO);
+    answer.setPointsEarned(isCorrect ? effectiveMaxPoints : BigDecimal.ZERO);
     return true;
   }
 
-  private boolean gradeShortAnswer(Answer answer, Question question) {
+  private boolean gradeShortAnswer(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
     if (answer.getAnswerText() == null || question.getCorrectAnswer() == null) {
       return false;
     }
@@ -189,7 +235,7 @@ public class GradingServiceImpl implements GradingService {
     String correctAnswer = question.getCorrectAnswer().trim().toLowerCase();
     boolean isCorrect = studentAnswer.equals(correctAnswer);
     answer.setIsCorrect(isCorrect);
-    answer.setPointsEarned(isCorrect ? question.getPoints() : BigDecimal.ZERO);
+    answer.setPointsEarned(isCorrect ? effectiveMaxPoints : BigDecimal.ZERO);
     return true;
   }
 
@@ -223,6 +269,9 @@ public class GradingServiceImpl implements GradingService {
     UUID teacherId = SecurityUtils.getCurrentUserId();
 
     validateGradingAccess(submission.getAssessmentId(), teacherId);
+    Map<UUID, AssessmentQuestion> assessmentQuestionMap =
+      assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(submission.getAssessmentId()).stream()
+        .collect(Collectors.toMap(AssessmentQuestion::getQuestionId, aq -> aq, (left, right) -> left));
 
     BigDecimal totalScore = submission.getScore() != null ? submission.getScore() : BigDecimal.ZERO;
 
@@ -245,7 +294,9 @@ public class GradingServiceImpl implements GradingService {
               .findById(answer.getQuestionId())
               .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
 
-      answer.setIsCorrect(gradeRequest.getPointsEarned().compareTo(question.getPoints()) == 0);
+        BigDecimal effectiveMaxPoints =
+          resolveEffectivePoints(question, assessmentQuestionMap.get(answer.getQuestionId()));
+        answer.setIsCorrect(gradeRequest.getPointsEarned().compareTo(effectiveMaxPoints) == 0);
       answerRepository.save(answer);
 
       if (oldPoints != null) {
@@ -469,6 +520,13 @@ public class GradingServiceImpl implements GradingService {
           .totalSubmissions(0L)
           .gradedSubmissions(0L)
           .pendingSubmissions(0L)
+          .averageScore(BigDecimal.ZERO)
+          .medianScore(BigDecimal.ZERO)
+          .highestScore(BigDecimal.ZERO)
+          .lowestScore(BigDecimal.ZERO)
+          .passRate(0.0)
+          .scoreDistribution(Map.of())
+          .averageTimeSpentSeconds(0L)
           .build();
     }
 
@@ -519,35 +577,36 @@ public class GradingServiceImpl implements GradingService {
       passRate = (double) passedCount / scores.size() * 100;
     }
 
+    // Score distribution theo thang điểm Việt Nam (0-10)
     Map<String, Long> scoreDistribution = new LinkedHashMap<>();
     scoreDistribution.put(
-        "0-20", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(20)) <= 0).count());
+        "0-2", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(2)) <= 0).count());
     scoreDistribution.put(
-        "21-40",
+        "2-4",
         scores.stream()
             .filter(
                 s ->
-                    s.compareTo(BigDecimal.valueOf(20)) > 0
-                        && s.compareTo(BigDecimal.valueOf(40)) <= 0)
+                    s.compareTo(BigDecimal.valueOf(2)) > 0
+                        && s.compareTo(BigDecimal.valueOf(4)) <= 0)
             .count());
     scoreDistribution.put(
-        "41-60",
+        "4-6",
         scores.stream()
             .filter(
                 s ->
-                    s.compareTo(BigDecimal.valueOf(40)) > 0
-                        && s.compareTo(BigDecimal.valueOf(60)) <= 0)
+                    s.compareTo(BigDecimal.valueOf(4)) > 0
+                        && s.compareTo(BigDecimal.valueOf(6)) <= 0)
             .count());
     scoreDistribution.put(
-        "61-80",
+        "6-8",
         scores.stream()
             .filter(
                 s ->
-                    s.compareTo(BigDecimal.valueOf(60)) > 0
-                        && s.compareTo(BigDecimal.valueOf(80)) <= 0)
+                    s.compareTo(BigDecimal.valueOf(6)) > 0
+                        && s.compareTo(BigDecimal.valueOf(8)) <= 0)
             .count());
     scoreDistribution.put(
-        "81-100", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(80)) > 0).count());
+        "8-10", scores.stream().filter(s -> s.compareTo(BigDecimal.valueOf(8)) > 0).count());
 
     Long averageTimeSpent =
         (long)
@@ -977,6 +1036,9 @@ public class GradingServiceImpl implements GradingService {
     Map<UUID, Question> questionMap =
         questionRepository.findAllById(questionIds).stream()
             .collect(Collectors.toMap(Question::getId, q -> q));
+    Map<UUID, AssessmentQuestion> assessmentQuestionMap =
+      assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(submission.getAssessmentId()).stream()
+        .collect(Collectors.toMap(AssessmentQuestion::getQuestionId, aq -> aq, (left, right) -> left));
 
     Set<UUID> manuallyAdjustedAnswerIds =
         gradeAuditLogRepository.findBySubmissionId(submission.getId()).stream()
@@ -992,6 +1054,10 @@ public class GradingServiceImpl implements GradingService {
             .map(
                 answer -> {
                   Question question = questionMap.get(answer.getQuestionId());
+                  BigDecimal effectiveMaxPoints =
+                      resolveEffectivePoints(
+                          question,
+                          assessmentQuestionMap.get(answer.getQuestionId()));
                   return AnswerGradeResponse.builder()
                       .answerId(answer.getId())
                       .questionId(answer.getQuestionId())
@@ -1001,8 +1067,9 @@ public class GradingServiceImpl implements GradingService {
                       // needed
                       .correctAnswer(question != null ? question.getCorrectAnswer() : null)
                       .isCorrect(answer.getIsCorrect())
-                      .pointsEarned(answer.getPointsEarned())
-                      .maxPoints(question != null ? question.getPoints() : null)
+                        .pointsEarned(
+                          answer.getPointsEarned() != null ? answer.getPointsEarned() : BigDecimal.ZERO)
+                        .maxPoints(effectiveMaxPoints)
                       .feedback(answer.getFeedback())
                       .isManuallyAdjusted(manuallyAdjustedAnswerIds.contains(answer.getId()))
                       .gradedAt(answer.getUpdatedAt())
@@ -1021,13 +1088,14 @@ public class GradingServiceImpl implements GradingService {
         .studentEmail(student != null ? student.getEmail() : null)
         .status(submission.getStatus())
         .submittedAt(submission.getSubmittedAt())
-        .score(submission.getScore())
-        .maxScore(submission.getMaxScore())
-        .percentage(submission.getPercentage())
-        .manualAdjustment(submission.getManualAdjustment())
+        .score(submission.getScore() != null ? submission.getScore() : BigDecimal.ZERO)
+        .maxScore(submission.getMaxScore() != null ? submission.getMaxScore() : BigDecimal.ZERO)
+        .percentage(submission.getPercentage() != null ? submission.getPercentage() : BigDecimal.ZERO)
+        .manualAdjustment(
+          submission.getManualAdjustment() != null ? submission.getManualAdjustment() : BigDecimal.ZERO)
         .manualAdjustmentReason(submission.getManualAdjustmentReason())
-        .finalScore(submission.getFinalScore())
-        .timeSpentSeconds(submission.getTimeSpentSeconds())
+        .finalScore(submission.getFinalScore() != null ? submission.getFinalScore() : BigDecimal.ZERO)
+        .timeSpentSeconds(submission.getTimeSpentSeconds() != null ? submission.getTimeSpentSeconds() : 0)
         .attemptNumber(attemptNumber)
         .pendingQuestionsCount(pendingCount)
         .autoGradedQuestionsCount(autoGradedCount)
@@ -1035,6 +1103,16 @@ public class GradingServiceImpl implements GradingService {
         .gradesReleased(submission.getGradesReleased())
         .gradedAt(submission.getGradedAt())
         .build();
+  }
+
+  private BigDecimal resolveEffectivePoints(Question question, AssessmentQuestion assessmentQuestion) {
+    if (assessmentQuestion != null && assessmentQuestion.getPointsOverride() != null) {
+      return assessmentQuestion.getPointsOverride();
+    }
+    if (question != null && question.getPoints() != null) {
+      return question.getPoints();
+    }
+    return BigDecimal.ZERO;
   }
 
   private RegradeRequestResponse mapToRegradeRequestResponse(RegradeRequest request) {

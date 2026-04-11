@@ -4,6 +4,8 @@ import com.fptu.math_master.entity.TopicLearningMaterial;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -34,4 +36,10 @@ public interface TopicLearningMaterialRepository
    * Find materials linked to specific question
    */
   List<TopicLearningMaterial> findByQuestionIdAndTopicId(UUID questionId, UUID topicId);
+
+  void deleteByTopicIdAndResourceType(UUID topicId, String resourceType);
+
+  @Query(
+      "SELECT COALESCE(MAX(t.sequenceOrder), 0) FROM TopicLearningMaterial t WHERE t.topicId = :topicId")
+  Integer findMaxSequenceOrderByTopicId(@Param("topicId") UUID topicId);
 }

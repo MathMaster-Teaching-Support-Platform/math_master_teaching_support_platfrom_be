@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="vi">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Xác nhận tài khoản MathMaster</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 40px auto;
+            background: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a73e8, #0d47a1);
+            padding: 36px 32px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #ffffff;
+            font-size: 26px;
+            letter-spacing: 0.5px;
+        }
+
+        .header p {
+            margin: 6px 0 0;
+            color: #cfe2ff;
+            font-size: 14px;
+        }
+
+        .body {
+            padding: 36px 40px;
+        }
+
+        .body p {
+            font-size: 15px;
+            line-height: 1.7;
+            margin: 0 0 16px;
+        }
+
+        .btn-wrap {
+            text-align: center;
+            margin: 32px 0;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 14px 40px;
+            background: #1a73e8;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .btn:hover {
+            background: #1558b0;
+        }
+
+        .fallback {
+            background: #f0f4ff;
+            border: 1px solid #d0dff7;
+            border-radius: 6px;
+            padding: 14px 18px;
+            margin: 24px 0 0;
+            word-break: break-all;
+        }
+
+        .fallback p {
+            margin: 0;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .fallback a {
+            color: #1a73e8;
+            font-size: 12px;
+        }
+
+        .footer {
+            background: #f4f6f9;
+            padding: 24px 40px;
+            text-align: center;
+            border-top: 1px solid #e0e6ed;
+        }
+
+        .footer p {
+            margin: 0;
+            font-size: 12px;
+            color: #888;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>MathMaster</h1>
+            <p>Nền tảng hỗ trợ giảng dạy toán học</p>
+        </div>
+        <div class="body">
+            <p>Xin chào <strong th:text="${userName}">bạn</strong>,</p>
+            <p>Cảm ơn bạn đã đăng ký tài khoản tại <strong>MathMaster</strong>. Vui lòng nhấn vào nút bên dưới để xác
+                nhận địa chỉ email và kích hoạt tài khoản của bạn.</p>
+            <div class="btn-wrap">
+                <a th:href="${confirmationUrl}" class="btn">Xác nhận tài khoản</a>
+            </div>
+            <p style="font-size:13px; color:#666;">Liên kết xác nhận sẽ hết hạn sau <strong>24 giờ</strong>. Nếu bạn
+                không thực hiện đăng ký này, vui lòng bỏ qua email này.</p>
+            <div class="fallback">
+                <p>Nếu nút trên không hoạt động, hãy sao chép đường dẫn sau vào trình duyệt:</p>
+                <a th:href="${confirmationUrl}" th:text="${confirmationUrl}">confirmation link</a>
+            </div>
+        </div>
+        <div class="footer">
+            <p>© 2025 MathMaster. Đây là email tự động, vui lòng không trả lời.<br />
+                Nếu bạn cần hỗ trợ, liên hệ: <a href="mailto:support@mathmaster.vn">support@mathmaster.vn</a></p>
+        </div>
+    </div>
+</body>
+
+</html>

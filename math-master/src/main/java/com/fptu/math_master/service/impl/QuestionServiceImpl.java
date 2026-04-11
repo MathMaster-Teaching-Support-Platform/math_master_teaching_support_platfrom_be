@@ -16,11 +16,14 @@ import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.QuestionService;
+import com.fptu.math_master.util.SecurityUtils;
 import com.fptu.math_master.util.CSVParser;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
@@ -78,12 +81,14 @@ public class QuestionServiceImpl implements QuestionService {
             .options(request.getOptions())
             .correctAnswer(correctAnswer)
             .explanation(explanation)
+          .solutionSteps(request.getSolutionSteps())
+          .diagramData(request.getDiagramData())
             .points(request.getPoints())
-            .difficulty(request.getDifficulty())
             .cognitiveLevel(request.getCognitiveLevel())
             .tags(request.getTags())
             .questionBankId(request.getQuestionBankId())
             .templateId(request.getTemplateId())
+          .canonicalQuestionId(request.getCanonicalQuestionId())
             .questionStatus(QuestionStatus.AI_DRAFT)
             .questionSourceType(QuestionSourceType.MANUAL)
             .build();
@@ -174,6 +179,15 @@ public class QuestionServiceImpl implements QuestionService {
   }
 
   @Override
+  public Page<QuestionResponse> getQuestionsByCanonicalQuestion(
+      UUID canonicalQuestionId, Pageable pageable) {
+    log.info("Fetching questions for canonical question: {}", canonicalQuestionId);
+    return questionRepository
+        .findByCanonicalQuestionIdAndNotDeleted(canonicalQuestionId, pageable)
+        .map(this::mapToResponse);
+  }
+
+  @Override
   public QuestionResponse updateQuestion(UUID id, UpdateQuestionRequest request) {
     Question question =
         questionRepository
@@ -208,11 +222,14 @@ public class QuestionServiceImpl implements QuestionService {
     if (request.getExplanation() != null) {
       question.setExplanation(request.getExplanation());
     }
+    if (request.getSolutionSteps() != null) {
+      question.setSolutionSteps(request.getSolutionSteps());
+    }
+    if (request.getDiagramData() != null) {
+      question.setDiagramData(request.getDiagramData());
+    }
     if (request.getPoints() != null) {
       question.setPoints(request.getPoints());
-    }
-    if (request.getDifficulty() != null) {
-      question.setDifficulty(request.getDifficulty());
     }
     if (request.getCognitiveLevel() != null) {
       question.setCognitiveLevel(request.getCognitiveLevel());
@@ -221,6 +238,10 @@ public class QuestionServiceImpl implements QuestionService {
       question.setTags(request.getTags());
     }
     if (request.getStatus() != null) {
+      if (request.getStatus() == QuestionStatus.APPROVED
+          && question.getQuestionStatus() != QuestionStatus.AI_DRAFT) {
+        throw new AppException(ErrorCode.QUESTION_REVIEW_STATUS_INVALID);
+      }
       question.setQuestionStatus(request.getStatus());
     }
 
@@ -229,6 +250,58 @@ public class QuestionServiceImpl implements QuestionService {
 
     log.info("Question updated: {}", id);
     return mapToResponse(question);
+  }
+
+  @Override
+  public QuestionResponse approveQuestion(UUID id) {
+    Question question =
+        questionRepository
+            .findByIdAndNotDeleted(id)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+    UUID currentUserId = getCurrentUserId();
+    if (!question.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.UNAUTHORIZED);
+    }
+    if (question.getQuestionStatus() != QuestionStatus.AI_DRAFT) {
+      throw new AppException(ErrorCode.QUESTION_REVIEW_STATUS_INVALID);
+    }
+
+    question.setQuestionStatus(QuestionStatus.APPROVED);
+    question.setUpdatedAt(Instant.now());
+    question = questionRepository.save(question);
+    return mapToResponse(question);
+  }
+
+  @Override
+  public Integer bulkApproveQuestions(List<UUID> questionIds) {
+    if (questionIds == null || questionIds.isEmpty()) {
+      return 0;
+    }
+
+    UUID currentUserId = getCurrentUserId();
+    int approvedCount = 0;
+
+    for (UUID id : questionIds) {
+      Question question =
+          questionRepository
+              .findByIdAndNotDeleted(id)
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+      if (!question.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+      }
+      if (question.getQuestionStatus() != QuestionStatus.AI_DRAFT) {
+        throw new AppException(ErrorCode.QUESTION_REVIEW_STATUS_INVALID);
+      }
+
+      question.setQuestionStatus(QuestionStatus.APPROVED);
+      question.setUpdatedAt(Instant.now());
+      questionRepository.save(question);
+      approvedCount++;
+    }
+
+    return approvedCount;
   }
 
   @Override
@@ -295,12 +368,14 @@ public class QuestionServiceImpl implements QuestionService {
                 .options(questionRequest.getOptions())
                 .correctAnswer(questionRequest.getCorrectAnswer())
                 .explanation(questionRequest.getExplanation())
+              .solutionSteps(questionRequest.getSolutionSteps())
+              .diagramData(questionRequest.getDiagramData())
                 .points(questionRequest.getPoints())
-                .difficulty(questionRequest.getDifficulty())
                 .cognitiveLevel(questionRequest.getCognitiveLevel())
                 .tags(questionRequest.getTags())
                 .questionBankId(questionRequest.getQuestionBankId())
                 .templateId(questionRequest.getTemplateId())
+              .canonicalQuestionId(questionRequest.getCanonicalQuestionId())
                 .questionStatus(QuestionStatus.AI_DRAFT)
                 .questionSourceType(QuestionSourceType.BANK_IMPORTED)
                 .build();
@@ -372,7 +447,7 @@ public class QuestionServiceImpl implements QuestionService {
 
   @Override
   public Page<QuestionResponse> searchQuestions(
-      String searchTerm, String difficulty, String type, Pageable pageable) {
+      String searchTerm, String type, Pageable pageable) {
     UUID currentUserId = getCurrentUserId();
 
     if (searchTerm != null && !searchTerm.isEmpty()) {
@@ -381,15 +456,6 @@ public class QuestionServiceImpl implements QuestionService {
           .searchByCreatedBy(currentUserId, searchPattern, pageable)
           .map(this::mapToResponse);
     } else {
-      com.fptu.math_master.enums.QuestionDifficulty difficultyEnum = null;
-      if (difficulty != null && !difficulty.isBlank()) {
-        try {
-          difficultyEnum = com.fptu.math_master.enums.QuestionDifficulty.valueOf(difficulty);
-        } catch (IllegalArgumentException ignored) {
-          // Keep null to mean "no filter" (backward-compatible behavior)
-        }
-      }
-
       com.fptu.math_master.enums.QuestionType typeEnum = null;
       if (type != null && !type.isBlank()) {
         try {
@@ -400,9 +466,91 @@ public class QuestionServiceImpl implements QuestionService {
       }
 
       return questionRepository
-          .findByFilters(currentUserId, difficultyEnum, typeEnum, pageable)
+          .findByFilters(currentUserId, typeEnum, pageable)
           .map(this::mapToResponse);
     }
+  }
+
+  @Override
+  public Integer assignQuestionsToBank(UUID bankId, List<UUID> questionIds) {
+    if (questionIds == null || questionIds.isEmpty()) {
+      return 0;
+    }
+
+    UUID currentUserId = getCurrentUserId();
+
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    if (!bank.getTeacherId().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
+    }
+
+    Set<UUID> uniqueQuestionIds = new LinkedHashSet<>(questionIds);
+    int assignedCount = 0;
+
+    for (UUID questionId : uniqueQuestionIds) {
+      Question question =
+          questionRepository
+              .findByIdAndNotDeleted(questionId)
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+      if (!question.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+      }
+
+      question.setQuestionBankId(bankId);
+      question.setUpdatedAt(Instant.now());
+      questionRepository.save(question);
+      assignedCount++;
+    }
+
+    log.info("Assigned {} questions to bank {}", assignedCount, bankId);
+    return assignedCount;
+  }
+
+  @Override
+  public Integer removeQuestionsFromBank(UUID bankId, List<UUID> questionIds) {
+    if (questionIds == null || questionIds.isEmpty()) {
+      return 0;
+    }
+
+    UUID currentUserId = getCurrentUserId();
+
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    if (!bank.getTeacherId().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
+    }
+
+    Set<UUID> uniqueQuestionIds = new LinkedHashSet<>(questionIds);
+    int removedCount = 0;
+
+    for (UUID questionId : uniqueQuestionIds) {
+      Question question =
+          questionRepository
+              .findByIdAndNotDeleted(questionId)
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+      if (!question.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+      }
+
+      if (bankId.equals(question.getQuestionBankId())) {
+        question.setQuestionBankId(null);
+        question.setUpdatedAt(Instant.now());
+        questionRepository.save(question);
+        removedCount++;
+      }
+    }
+
+    log.info("Removed {} questions from bank {}", removedCount, bankId);
+    return removedCount;
   }
 
   private QuestionResponse mapToResponse(Question question) {
@@ -427,13 +575,15 @@ public class QuestionServiceImpl implements QuestionService {
         .options(question.getOptions())
         .correctAnswer(question.getCorrectAnswer())
         .explanation(question.getExplanation())
+        .solutionSteps(question.getSolutionSteps())
+        .diagramData(question.getDiagramData())
         .points(question.getPoints())
-        .difficulty(question.getDifficulty())
         .cognitiveLevel(question.getCognitiveLevel())
         .questionStatus(question.getQuestionStatus())
         .questionSourceType(question.getQuestionSourceType())
         .tags(question.getTags())
         .templateId(question.getTemplateId())
+        .canonicalQuestionId(question.getCanonicalQuestionId())
         .questionBankId(question.getQuestionBankId())
         .questionBankName(bankName)
         .createdAt(question.getCreatedAt())

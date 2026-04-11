@@ -1,5 +1,6 @@
 package com.fptu.math_master.dto.response;
 
+import com.fptu.math_master.enums.LessonSlideOutputFormat;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -18,6 +19,7 @@ public class LessonSlideGeneratedContentResponse {
   private UUID lessonId;
   private String lessonTitle;
   private Integer slideCount;
+  private LessonSlideOutputFormat outputFormat;
   private List<LessonSlideJsonItemResponse> slides;
   private String additionalPrompt;
 }

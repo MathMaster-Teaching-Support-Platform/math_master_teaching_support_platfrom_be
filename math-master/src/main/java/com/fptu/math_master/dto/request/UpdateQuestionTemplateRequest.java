@@ -56,13 +56,6 @@ public class UpdateQuestionTemplateRequest {
   private Map<String, Object> optionsGenerator;
 
   /**
-   * Difficulty rules mapping difficulty levels to conditions Example: {"easy": "a <= 3 AND b >= 0",
-   * "medium": "a <= 7 OR b < 0", "hard": "a > 7"}
-   */
-  @NotNull(message = "Difficulty rules are required")
-  private Map<String, Object> difficultyRules;
-
-  /**
    * Mathematical constraints for parameter generation Example: ["a != 0", "answer > 0", "answer % 1
    * == 0"]
    */

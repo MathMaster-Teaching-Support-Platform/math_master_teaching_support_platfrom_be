@@ -388,7 +388,6 @@ class ExamMatrixServiceBuildFullMatrixTest {
     MatrixRowRequest badRow =
         MatrixRowRequest.builder()
             .chapterId(CH_DAO_HAM)
-            .templateId(null)
             .questionTypeName(null)
             .referenceQuestions("1")
             .orderIndex(1)
@@ -440,7 +439,6 @@ class ExamMatrixServiceBuildFullMatrixTest {
     MatrixRowRequest rowWithBadTemplate =
         MatrixRowRequest.builder()
             .chapterId(CH_DAO_HAM)
-            .templateId(fakeTemplateId)
             .questionTypeName("D\u1ea1ng b\u00e0i test")
             .referenceQuestions("1")
             .orderIndex(1)
@@ -506,7 +504,6 @@ class ExamMatrixServiceBuildFullMatrixTest {
                 List.of(
                     MatrixRowRequest.builder()
                         .chapterId(CH_DAO_HAM)
-                        .templateId(TEMPLATE_ID)
                         .questionTypeName("Tr\u1eafc Nghi\u1ec7m")
                         .orderIndex(1)
                         .cells(
@@ -663,7 +660,6 @@ class ExamMatrixServiceBuildFullMatrixTest {
     MatrixRowRequest rowNoTemplate =
         MatrixRowRequest.builder()
             .chapterId(CH_DAO_HAM)
-            .templateId(null)
             .questionTypeName("D\u1ea1ng b\u00e0i th\u1ee7 c\u00f4ng")
             .referenceQuestions("1,2")
             .orderIndex(1)
@@ -845,7 +841,6 @@ class ExamMatrixServiceBuildFullMatrixTest {
       MatrixCellRequest... cells) {
     return MatrixRowRequest.builder()
         .chapterId(chapterId)
-        .templateId(TEMPLATE_ID)
         .questionTypeName(questionTypeName)
         .referenceQuestions(referenceQuestions)
         .orderIndex(orderCounter.getAndIncrement())

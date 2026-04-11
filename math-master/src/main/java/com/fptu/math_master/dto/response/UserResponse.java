@@ -1,12 +1,18 @@
 package com.fptu.math_master.dto.response;
 
-import com.fptu.math_master.enums.Gender;
-import com.fptu.math_master.enums.Status;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
-import lombok.*;
+
+import com.fptu.math_master.enums.Gender;
+import com.fptu.math_master.enums.Status;
+
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
 @Data
@@ -35,6 +41,8 @@ public class UserResponse {
   String code;
 
   Status status;
+
+  Instant lastLogin;
 
   String banReason;
 

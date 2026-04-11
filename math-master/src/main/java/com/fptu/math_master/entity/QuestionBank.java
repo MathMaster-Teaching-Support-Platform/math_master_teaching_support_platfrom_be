@@ -35,6 +35,7 @@ import lombok.Setter;
     indexes = {
       @Index(name = "idx_question_banks_teacher", columnList = "teacher_id"),
       @Index(name = "idx_question_banks_curriculum", columnList = "curriculum_id"),
+      @Index(name = "idx_question_banks_chapter", columnList = "chapter_id"),
       @Index(name = "idx_question_banks_public", columnList = "is_public")
     })
 /**
@@ -53,6 +54,10 @@ public class QuestionBank extends BaseEntity {
    */
   @Column(name = "curriculum_id")
   private UUID curriculumId;
+
+  /** chapter_id */
+  @Column(name = "chapter_id")
+  private UUID chapterId;
 
   /**
    * name
@@ -88,11 +93,16 @@ public class QuestionBank extends BaseEntity {
   @JoinColumn(name = "curriculum_id", insertable = false, updatable = false)
   private Curriculum curriculum;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "chapter_id", insertable = false, updatable = false)
+  private Chapter chapter;
+
   @OneToMany(mappedBy = "questionBank", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<QuestionTemplate> questionTemplates;
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (isPublic == null) isPublic = false;
   }
 }

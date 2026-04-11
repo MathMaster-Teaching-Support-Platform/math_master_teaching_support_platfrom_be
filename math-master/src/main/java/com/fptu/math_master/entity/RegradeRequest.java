@@ -120,6 +120,7 @@ public class RegradeRequest extends BaseEntity {
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (status == null) status = RegradeRequestStatus.PENDING;
   }
 }

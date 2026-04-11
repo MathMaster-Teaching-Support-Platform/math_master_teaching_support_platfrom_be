@@ -38,7 +38,6 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
     validateParameters(request.getParameters(), errors, warnings, info);
     validateAnswerFormula(request.getAnswerFormula(), request.getParameters(), errors, warnings);
     validateConstraints(request.getConstraints(), request.getParameters(), errors, warnings);
-    validateDifficultyRules(request.getDifficultyRules(), errors, warnings);
     validateOptionsGenerator(
         request.getOptionsGenerator(), request.getTemplateType(), errors, warnings, info);
     validateTags(request.getTags(), warnings, info);
@@ -57,7 +56,6 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
     validateParameters(request.getParameters(), errors, warnings, info);
     validateAnswerFormula(request.getAnswerFormula(), request.getParameters(), errors, warnings);
     validateConstraints(request.getConstraints(), request.getParameters(), errors, warnings);
-    validateDifficultyRules(request.getDifficultyRules(), errors, warnings);
     validateOptionsGenerator(
         request.getOptionsGenerator(), request.getTemplateType(), errors, warnings, info);
     validateTags(request.getTags(), warnings, info);
@@ -574,117 +572,6 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
   }
 
   @SuppressWarnings("unchecked")
-  private void validateDifficultyRules(
-      Map<String, Object> difficultyRules,
-      List<ValidationIssue> errors,
-      List<ValidationIssue> warnings) {
-
-    if (difficultyRules == null || difficultyRules.isEmpty()) {
-      errors.add(
-          ValidationIssue.builder()
-              .category("DIFFICULTY_RULES")
-              .field("difficultyRules")
-              .message("Difficulty rules are required")
-              .severity(IssueSeverity.ERROR)
-              .suggestion("Add rules for 'easy', 'medium', and 'hard' difficulties")
-              .build());
-      return;
-    }
-
-    // Check for standard difficulty levels
-    boolean hasEasy = difficultyRules.containsKey("easy");
-    boolean hasMedium = difficultyRules.containsKey("medium");
-    boolean hasHard = difficultyRules.containsKey("hard");
-
-    if (!hasEasy || !hasMedium || !hasHard) {
-      warnings.add(
-          ValidationIssue.builder()
-              .category("DIFFICULTY_RULES")
-              .field("difficultyRules")
-              .message(
-                  "Missing standard difficulty levels. Found: "
-                      + difficultyRules.keySet()
-                      + ". Expected: easy, medium, hard")
-              .severity(IssueSeverity.WARNING)
-              .suggestion("Add all three difficulty levels for completeness")
-              .build());
-    }
-
-    // Check for overlapping or non-exclusive rules
-    List<String> ruleStrings = new ArrayList<>();
-    for (Map.Entry<String, Object> entry : difficultyRules.entrySet()) {
-      String level = entry.getKey();
-      String rule = entry.getValue().toString();
-
-      if (rule == null || rule.trim().isEmpty()) {
-        errors.add(
-            ValidationIssue.builder()
-                .category("DIFFICULTY_RULES")
-                .field("difficultyRules." + level)
-                .message("Difficulty rule for '" + level + "' is empty")
-                .severity(IssueSeverity.ERROR)
-                .build());
-        continue;
-      }
-
-      ruleStrings.add(rule);
-
-      // Check if rule is always true or always false
-      if (rule.equalsIgnoreCase("true")) {
-        warnings.add(
-            ValidationIssue.builder()
-                .category("DIFFICULTY_RULES")
-                .field("difficultyRules." + level)
-                .message("Difficulty rule for '" + level + "' is always true")
-                .severity(IssueSeverity.WARNING)
-                .suggestion("Add specific conditions based on parameters")
-                .build());
-      }
-      if (rule.equalsIgnoreCase("false")) {
-        warnings.add(
-            ValidationIssue.builder()
-                .category("DIFFICULTY_RULES")
-                .field("difficultyRules." + level)
-                .message(
-                    "Difficulty rule for '"
-                        + level
-                        + "' is always false - this level will never match")
-                .severity(IssueSeverity.WARNING)
-                .build());
-      }
-    }
-
-    // Warn about potentially overlapping rules
-    if (ruleStrings.size() >= 2) {
-      boolean mayOverlap = false;
-      for (int i = 0; i < ruleStrings.size(); i++) {
-        for (int j = i + 1; j < ruleStrings.size(); j++) {
-          String rule1 = ruleStrings.get(i);
-          String rule2 = ruleStrings.get(j);
-          // Simple heuristic: if rules share variables but different operators, might overlap
-          if (containsSimilarVariables(rule1, rule2)) {
-            mayOverlap = true;
-            break;
-          }
-        }
-      }
-
-      if (mayOverlap) {
-        warnings.add(
-            ValidationIssue.builder()
-                .category("DIFFICULTY_RULES")
-                .field("difficultyRules")
-                .message(
-                    "Difficulty rules may overlap. Ensure rules are mutually exclusive or define priority.")
-                .severity(IssueSeverity.WARNING)
-                .suggestion(
-                    "Use exclusive conditions like: easy: 'x <= 3', medium: 'x > 3 AND x <= 7', hard: 'x > 7'")
-                .build());
-      }
-    }
-  }
-
-  @SuppressWarnings("unchecked")
   private void validateOptionsGenerator(
       Map<String, Object> optionsGenerator,
       QuestionType templateType,
@@ -869,26 +756,6 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
             "typeof",
             "instanceof");
     return keywords.contains(word);
-  }
-
-  private boolean containsSimilarVariables(String rule1, String rule2) {
-    Pattern varPattern = Pattern.compile("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b");
-
-    Set<String> vars1 = new HashSet<>();
-    Matcher matcher1 = varPattern.matcher(rule1);
-    while (matcher1.find()) {
-      vars1.add(matcher1.group(1));
-    }
-
-    Set<String> vars2 = new HashSet<>();
-    Matcher matcher2 = varPattern.matcher(rule2);
-    while (matcher2.find()) {
-      vars2.add(matcher2.group(1));
-    }
-
-    // Check for any common variables
-    vars1.retainAll(vars2);
-    return !vars1.isEmpty();
   }
 
   /**

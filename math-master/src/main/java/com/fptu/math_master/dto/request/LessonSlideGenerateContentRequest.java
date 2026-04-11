@@ -1,5 +1,6 @@
 package com.fptu.math_master.dto.request;
 
+import com.fptu.math_master.enums.LessonSlideOutputFormat;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -28,6 +29,9 @@ public class LessonSlideGenerateContentRequest {
   @Max(15)
   @Builder.Default
   private Integer slideCount = 10;
+
+  @Builder.Default
+  private LessonSlideOutputFormat outputFormat = LessonSlideOutputFormat.PLAIN_TEXT;
 
   @NotBlank private String additionalPrompt;
 }

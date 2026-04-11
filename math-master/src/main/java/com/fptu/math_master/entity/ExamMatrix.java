@@ -100,10 +100,14 @@ public class ExamMatrix extends BaseEntity {
   private Set<ExamMatrixTemplateMapping> templateMappings;
 
   @OneToMany(mappedBy = "examMatrix", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<ExamMatrixBankMapping> bankMappings;
+
+  @OneToMany(mappedBy = "examMatrix", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<ExamMatrixRow> matrixRows;
 
   @PrePersist
   public void prePersist() {
+    super.prePersist();
     if (isReusable == null) isReusable = false;
     if (status == null) status = MatrixStatus.DRAFT;
   }

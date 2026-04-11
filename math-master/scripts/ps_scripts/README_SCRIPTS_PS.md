@@ -21,11 +21,11 @@ cd scripts\ps_scripts
 
 ```
 scripts/ps_scripts/
-â”œâ”€â”€ manager.ps1          # Main manager (all logic lives here)
-â”œâ”€â”€ deploy-on-local.ps1  # Wrapper -> manager -Task DeployLocal
-â”œâ”€â”€ apply-format.ps1     # Wrapper -> manager -Task ApplyFormat
-â”œâ”€â”€ install.ps1          # One-time alias installer
-â””â”€â”€ README_SCRIPTS_PS.md # This file
+manager.ps1          # Main manager (all logic lives here)
+deploy-on-local.ps1  # Wrapper -> manager -Task DeployLocal
+apply-format.ps1     # Wrapper -> manager -Task ApplyFormat
+install.ps1          # One-time alias installer
+README_SCRIPTS_PS.md # This file
 ```
 
 ---

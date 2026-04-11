@@ -1,7 +1,6 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionSourceType;
 import com.fptu.math_master.enums.QuestionStatus;
 import com.fptu.math_master.enums.QuestionType;
@@ -43,11 +42,11 @@ import org.hibernate.annotations.Type;
       @Index(name = "idx_questions_bank", columnList = "question_bank_id"),
       @Index(name = "idx_questions_created_by", columnList = "created_by"),
       @Index(name = "idx_questions_type", columnList = "question_type"),
-      @Index(name = "idx_questions_difficulty", columnList = "difficulty"),
       @Index(name = "idx_questions_cognitive_level", columnList = "cognitive_level"),
       @Index(name = "idx_questions_status", columnList = "question_status"),
       @Index(name = "idx_questions_source_type", columnList = "question_source_type"),
-      @Index(name = "idx_questions_template", columnList = "template_id")
+      @Index(name = "idx_questions_template", columnList = "template_id"),
+      @Index(name = "idx_questions_rendered_latex_hash", columnList = "rendered_latex_hash")
     })
 /**
  * The entity of 'Question'.
@@ -56,6 +55,12 @@ public class Question extends BaseEntity {
 
   @Column(name = "question_bank_id")
   private UUID questionBankId;
+
+  @Column(name = "chapter_id")
+  private UUID chapterId;
+
+  @Column(name = "lesson_id")
+  private UUID lessonId;
 
   @Column(name = "question_type", nullable = false)
   @Enumerated(EnumType.STRING)
@@ -76,10 +81,6 @@ public class Question extends BaseEntity {
 
   @Column(name = "points", precision = 5, scale = 2)
   private BigDecimal points;
-
-  @Column(name = "difficulty")
-  @Enumerated(EnumType.STRING)
-  private QuestionDifficulty difficulty;
 
   @Column(name = "cognitive_level", nullable = false)
   @Enumerated(EnumType.STRING)
@@ -108,6 +109,21 @@ public class Question extends BaseEntity {
   @Column(name = "template_id")
   private UUID templateId;
 
+  @Column(name = "canonical_question_id")
+  private UUID canonicalQuestionId;
+
+  @Column(name = "solution_steps", columnDefinition = "TEXT")
+  private String solutionSteps;
+
+  @Column(name = "diagram_data", columnDefinition = "TEXT")
+  private String diagramData;
+
+  @Column(name = "rendered_image_url", columnDefinition = "TEXT")
+  private String renderedImageUrl;
+
+  @Column(name = "rendered_latex_hash", length = 64)
+  private String renderedLatexHash;
+
   @Type(JsonBinaryType.class)
   @Column(name = "generation_metadata", columnDefinition = "jsonb")
   private Map<String, Object> generationMetadata;
@@ -117,12 +133,24 @@ public class Question extends BaseEntity {
   private QuestionBank questionBank;
 
   @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "chapter_id", insertable = false, updatable = false)
+  private Chapter chapter;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
+  private Lesson lesson;
+
+  @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by", insertable = false, updatable = false)
   private User creator;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "template_id", insertable = false, updatable = false)
   private QuestionTemplate questionTemplate;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "canonical_question_id", insertable = false, updatable = false)
+  private CanonicalQuestion canonicalQuestion;
 
   @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<AssessmentQuestion> assessmentQuestions;
@@ -131,9 +159,10 @@ public class Question extends BaseEntity {
   private Set<Answer> answers;
 
   @PrePersist
+  @Override
   public void prePersist() {
+    super.prePersist();
     if (points == null) points = BigDecimal.valueOf(1.0);
-    if (difficulty == null) difficulty = QuestionDifficulty.MEDIUM;
     if (questionStatus == null) questionStatus = QuestionStatus.AI_DRAFT;
     if (questionSourceType == null) questionSourceType = QuestionSourceType.MANUAL;
   }

@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.fptu.math_master.entity.*;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,6 +32,7 @@ import com.fptu.math_master.dto.request.GeneratePreviewRequest;
 import com.fptu.math_master.dto.request.MatrixCellRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
 import com.fptu.math_master.dto.response.BatchTemplateMappingsResponse;
+import com.fptu.math_master.dto.response.BankMappingResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
 import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
 import com.fptu.math_master.dto.response.FinalizePreviewResponse;
@@ -42,16 +44,6 @@ import com.fptu.math_master.dto.response.MatrixRowResponse;
 import com.fptu.math_master.dto.response.MatrixValidationReport;
 import com.fptu.math_master.dto.response.PreviewCandidatesResponse;
 import com.fptu.math_master.dto.response.TemplateMappingResponse;
-import com.fptu.math_master.entity.Assessment;
-import com.fptu.math_master.entity.AssessmentQuestion;
-import com.fptu.math_master.entity.Curriculum;
-import com.fptu.math_master.entity.ExamMatrix;
-import com.fptu.math_master.entity.ExamMatrixRow;
-import com.fptu.math_master.entity.ExamMatrixTemplateMapping;
-import com.fptu.math_master.entity.Question;
-import com.fptu.math_master.entity.QuestionTemplate;
-import com.fptu.math_master.entity.Subject;
-import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.MatrixStatus;
 import com.fptu.math_master.enums.QuestionDifficulty;
@@ -63,9 +55,11 @@ import com.fptu.math_master.repository.AssessmentRepository;
 import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.CurriculumRepository;
 import com.fptu.math_master.repository.ExamMatrixRepository;
+import com.fptu.math_master.repository.ExamMatrixBankMappingRepository;
 import com.fptu.math_master.repository.ExamMatrixRowRepository;
 import com.fptu.math_master.repository.ExamMatrixTemplateMappingRepository;
 import com.fptu.math_master.repository.QuestionRepository;
+import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.repository.UserRepository;
@@ -84,10 +78,12 @@ import lombok.extern.slf4j.Slf4j;
 public class ExamMatrixServiceImpl implements ExamMatrixService {
 
   ExamMatrixRepository examMatrixRepository;
+  ExamMatrixBankMappingRepository bankMappingRepository;
   ExamMatrixTemplateMappingRepository templateMappingRepository;
   ExamMatrixRowRepository examMatrixRowRepository;
   QuestionTemplateRepository questionTemplateRepository;
   QuestionRepository questionRepository;
+  QuestionBankRepository questionBankRepository;
   AssessmentRepository assessmentRepository;
   AssessmentQuestionRepository assessmentQuestionRepository;
   UserRepository userRepository;
@@ -118,6 +114,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .build();
 
     matrix = examMatrixRepository.save(matrix);
+
     log.info("Exam matrix created with id: {}", matrix.getId());
     return buildMatrixResponse(matrix, Collections.emptyList());
   }
@@ -348,19 +345,31 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
 
     List<ExamMatrixTemplateMapping> mappings =
-        templateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
+      templateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
+    List<ExamMatrixBankMapping> bankMappings =
+      bankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
 
     List<String> errors = new ArrayList<>();
     List<String> warnings = new ArrayList<>();
 
-    if (mappings.isEmpty()) {
-      errors.add("Matrix has no template mappings. Add at least one template mapping.");
+    if (mappings.isEmpty() && bankMappings.isEmpty()) {
+      errors.add("Matrix has no mappings. Add at least one bank mapping.");
     }
 
     // Aggregate totals
-    int totalQuestions =
-        mappings.stream().mapToInt(ExamMatrixTemplateMapping::getQuestionCount).sum();
-    BigDecimal totalPoints =
+    int templateQuestions = mappings.stream().mapToInt(ExamMatrixTemplateMapping::getQuestionCount).sum();
+    int bankQuestions =
+      bankMappings.stream()
+        .mapToInt(
+          m ->
+            m.getDifficultyDistribution() == null
+              ? 0
+              : m.getDifficultyDistribution().values().stream()
+                .mapToInt(Integer::intValue)
+                .sum())
+        .sum();
+    int totalQuestions = templateQuestions + bankQuestions;
+    BigDecimal templateTotalPoints =
         mappings.stream()
             .map(
                 m ->
@@ -369,6 +378,64 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
                         : m.getPointsPerQuestion()
                             .multiply(BigDecimal.valueOf(m.getQuestionCount())))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    BigDecimal bankTotalPoints =
+      bankMappings.stream()
+        .map(
+          m -> {
+            int count =
+              m.getDifficultyDistribution() == null
+                ? 0
+                : m.getDifficultyDistribution().values().stream()
+                  .mapToInt(Integer::intValue)
+                  .sum();
+            BigDecimal pointsPerQuestion =
+              m.getPointsPerQuestion() != null ? m.getPointsPerQuestion() : BigDecimal.ONE;
+            return pointsPerQuestion.multiply(BigDecimal.valueOf(count));
+          })
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    BigDecimal totalPoints = templateTotalPoints.add(bankTotalPoints);
+
+    Map<String, Integer> bankCoverageByDifficulty = new LinkedHashMap<>();
+    boolean aiFallbackLikely = false;
+
+    for (ExamMatrixBankMapping bankMapping : bankMappings) {
+      Map<QuestionDifficulty, Integer> distribution =
+          normalizeDifficultyDistribution(bankMapping.getDifficultyDistribution());
+      for (Map.Entry<QuestionDifficulty, Integer> entry : distribution.entrySet()) {
+        QuestionDifficulty difficulty = entry.getKey();
+        Integer required = entry.getValue();
+        if (required == null || required < 0) {
+          errors.add("Bank mapping has invalid difficulty distribution value.");
+          continue;
+        }
+        if (required == 0) {
+          continue;
+        }
+
+        bankCoverageByDifficulty.merge(
+          difficulty.name(),
+          required,
+          (left, right) -> (left == null ? 0 : left) + (right == null ? 0 : right));
+
+        long approvedAvailable =
+            questionRepository.countApprovedByBankAndDifficultyAndCognitive(
+                bankMapping.getQuestionBankId(), difficulty, bankMapping.getCognitiveLevel());
+
+        if (approvedAvailable < required) {
+          aiFallbackLikely = true;
+          warnings.add(
+              String.format(
+                  "Bank mapping %s has insufficient APPROVED questions for %s/%s: required=%d, available=%d.",
+                  bankMapping.getId(),
+                  difficulty.name(),
+                  bankMapping.getCognitiveLevel().name(),
+                  required,
+                  approvedAvailable));
+        }
+      }
+    }
 
     if (totalQuestions == 0) {
       errors.add("Total question count across all mappings must be greater than 0.");
@@ -418,12 +485,26 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
 
     // Cognitive level coverage
-    Map<String, Integer> cognitiveLevelCoverage =
-        mappings.stream()
-            .collect(
-                Collectors.groupingBy(
-                    m -> m.getCognitiveLevel().name(),
-                    Collectors.summingInt(ExamMatrixTemplateMapping::getQuestionCount)));
+    Map<String, Integer> cognitiveLevelCoverage = new LinkedHashMap<>();
+    mappings.forEach(
+      m ->
+        cognitiveLevelCoverage.merge(
+          m.getCognitiveLevel().name(),
+          m.getQuestionCount(),
+          (left, right) -> (left == null ? 0 : left) + (right == null ? 0 : right)));
+    bankMappings.forEach(
+      m -> {
+        int count =
+          normalizeDifficultyDistribution(m.getDifficultyDistribution())
+            .values()
+            .stream()
+            .mapToInt(Integer::intValue)
+            .sum();
+          cognitiveLevelCoverage.merge(
+              m.getCognitiveLevel().name(),
+              count,
+              (left, right) -> (left == null ? 0 : left) + (right == null ? 0 : right));
+      });
 
     long distinctLevels = cognitiveLevelCoverage.size();
     boolean allCognitiveLevelsCovered = distinctLevels >= 3;
@@ -440,14 +521,17 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .errors(errors)
         .warnings(warnings)
         .totalTemplateMappings(mappings.size())
+      .totalBankMappings(bankMappings.size())
         .totalQuestions(totalQuestions)
         .totalPoints(totalPoints)
         .totalQuestionsTarget(totalQuestionsTarget)
         .totalPointsTarget(totalPointsTarget)
         .cognitiveLevelCoverage(cognitiveLevelCoverage)
+      .bankCoverageByDifficulty(bankCoverageByDifficulty)
         .questionsMatchTarget(questionsMatchTarget)
         .pointsMatchTarget(pointsMatchTarget)
         .allCognitiveLevelsCovered(allCognitiveLevelsCovered)
+      .aiFallbackLikely(aiFallbackLikely)
         .build();
   }
 
@@ -911,7 +995,6 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               .correctAnswer(item.getCorrectAnswer())
               .explanation(item.getExplanation())
               .points(request.getPointsPerQuestion())
-              .difficulty(item.getDifficulty())
               .cognitiveLevel(item.getCognitiveLevel())
               .tags(item.getTags())
               .templateId(template.getId())
@@ -1128,24 +1211,16 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
   }
 
-  private ExamMatrixResponse buildMatrixResponse(
+    private ExamMatrixResponse buildMatrixResponse(
       ExamMatrix matrix, List<ExamMatrixTemplateMapping> mappings) {
 
     String teacherName =
         userRepository.findById(matrix.getTeacherId()).map(User::getFullName).orElse("Unknown");
 
-    List<TemplateMappingResponse> mappingResponses =
-        mappings.stream()
-            .map(
-                m -> {
-                  String templateName =
-                      questionTemplateRepository
-                          .findById(m.getTemplateId())
-                          .map(QuestionTemplate::getName)
-                          .orElse(null);
-                  return buildMappingResponse(m, templateName);
-                })
-            .collect(Collectors.toList());
+    List<BankMappingResponse> bankMappingResponses =
+      bankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId()).stream()
+        .map(this::buildBankMappingResponse)
+        .collect(Collectors.toList());
 
     return ExamMatrixResponse.builder()
         .id(matrix.getId())
@@ -1157,11 +1232,46 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .totalQuestionsTarget(matrix.getTotalQuestionsTarget())
         .totalPointsTarget(matrix.getTotalPointsTarget())
         .status(matrix.getStatus())
-        .templateMappingCount(mappingResponses.size())
-        .templateMappings(mappingResponses)
+        .templateMappingCount(0)
+        .templateMappings(Collections.emptyList())
+        .bankMappingCount(bankMappingResponses.size())
+        .bankMappings(bankMappingResponses)
         .createdAt(matrix.getCreatedAt())
         .updatedAt(matrix.getUpdatedAt())
         .build();
+  }
+
+  private BankMappingResponse buildBankMappingResponse(ExamMatrixBankMapping mapping) {
+    String bankName =
+      questionBankRepository.findById(mapping.getQuestionBankId()).map(QuestionBank::getName).orElse(null);
+    return BankMappingResponse.builder()
+        .id(mapping.getId())
+        .examMatrixId(mapping.getExamMatrixId())
+        .questionBankId(mapping.getQuestionBankId())
+        .questionBankName(bankName)
+      .matrixRowId(mapping.getMatrixRowId())
+        .difficultyDistribution(normalizeDifficultyDistribution(mapping.getDifficultyDistribution()))
+        .cognitiveLevel(mapping.getCognitiveLevel())
+      .pointsPerQuestion(mapping.getPointsPerQuestion() != null ? mapping.getPointsPerQuestion() : BigDecimal.ONE)
+        .createdAt(mapping.getCreatedAt())
+        .updatedAt(mapping.getUpdatedAt())
+        .build();
+  }
+
+  private Map<QuestionDifficulty, Integer> normalizeDifficultyDistribution(
+      Map<QuestionDifficulty, Integer> source) {
+    Map<QuestionDifficulty, Integer> normalized = new LinkedHashMap<>();
+    if (source == null) {
+      normalized.put(QuestionDifficulty.EASY, 0);
+      normalized.put(QuestionDifficulty.MEDIUM, 0);
+      normalized.put(QuestionDifficulty.HARD, 0);
+      return normalized;
+    }
+
+    normalized.put(QuestionDifficulty.EASY, Math.max(0, source.getOrDefault(QuestionDifficulty.EASY, 0)));
+    normalized.put(QuestionDifficulty.MEDIUM, Math.max(0, source.getOrDefault(QuestionDifficulty.MEDIUM, 0)));
+    normalized.put(QuestionDifficulty.HARD, Math.max(0, source.getOrDefault(QuestionDifficulty.HARD, 0)));
+    return normalized;
   }
 
   private TemplateMappingResponse buildMappingResponse(
@@ -1227,25 +1337,50 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   }
 
   /**
-   * Persist one {@link ExamMatrixRow} plus all its {@link ExamMatrixTemplateMapping} cells.
-   * If {@code rowSpec.templateId} is given the template must exist; the cell templateId
-   * will always be that template.  When no templateId is supplied a sentinel (same as row
-   * templateId, which may be null) is used — the mapping is still valid for counting purposes.
+   * Persist one {@link ExamMatrixRow} with bank-based cognitive cells.
+   * <p>
+   * Each row represents one "dạng bài" selected by teacher with a source question bank
+   * and one difficulty. Each cell contributes a question-count for one cognitive level.
    */
   private void persistRow(UUID matrixId, MatrixRowRequest rowSpec, int orderIndex) {
     String qTypeName = rowSpec.getQuestionTypeName();
-
-    // If templateId is supplied and questionTypeName is blank, default to template name
-    if ((qTypeName == null || qTypeName.isBlank()) && rowSpec.getTemplateId() != null) {
-      qTypeName =
-          questionTemplateRepository
-              .findById(rowSpec.getTemplateId())
-              .map(QuestionTemplate::getName)
-              .orElse(null);
+    if (qTypeName == null || qTypeName.isBlank()) {
+      throw new AppException(ErrorCode.MATRIX_ROW_QUESTION_TYPE_REQUIRED);
     }
 
-    if ((qTypeName == null || qTypeName.isBlank()) && rowSpec.getTemplateId() == null) {
-      throw new AppException(ErrorCode.MATRIX_ROW_QUESTION_TYPE_REQUIRED);
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(rowSpec.getQuestionBankId())
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    Chapter chapter =
+        chapterRepository
+            .findById(rowSpec.getChapterId())
+            .filter(ch -> ch.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.CHAPTER_NOT_FOUND));
+
+    UUID subjectId = chapter.getSubjectId();
+    String subjectName = null;
+    String schoolGradeName = null;
+    if (subjectId != null) {
+      Subject subject =
+          subjectRepository
+              .findById(subjectId)
+              .filter(s -> s.getDeletedAt() == null)
+              .orElse(null);
+      if (subject != null) {
+        subjectName = subject.getName();
+        if (subject.getSchoolGrade() != null) {
+          schoolGradeName = subject.getSchoolGrade().getName();
+        }
+      }
+    }
+
+    UUID currentUserId = getCurrentUserId();
+    if (!bank.getTeacherId().equals(currentUserId)
+        && !Boolean.TRUE.equals(bank.getIsPublic())
+        && !hasRole(PredefinedRole.ADMIN_ROLE)) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
     }
 
     ExamMatrixRow row =
@@ -1253,7 +1388,12 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .examMatrixId(matrixId)
             .chapterId(rowSpec.getChapterId())
             .lessonId(rowSpec.getLessonId())
-            .templateId(rowSpec.getTemplateId())
+            .subjectId(subjectId)
+            .subjectName(subjectName)
+            .schoolGradeName(schoolGradeName)
+            .chapterName(chapter.getTitle())
+            .questionBankId(rowSpec.getQuestionBankId())
+            .questionDifficulty(rowSpec.getQuestionDifficulty())
             .questionTypeName(qTypeName)
             .referenceQuestions(rowSpec.getReferenceQuestions())
             .orderIndex(rowSpec.getOrderIndex() != null ? rowSpec.getOrderIndex() : orderIndex)
@@ -1262,29 +1402,24 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     row = examMatrixRowRepository.save(row);
     final UUID rowId = row.getId();
 
-    // Resolve which templateId to use for the mapping cell — must point to a real template
-    // when provided; otherwise use a placeholder UUID approach is avoided: we require
-    // templateId for mapping cells.  If row has no templateId the teacher must add templates
-    // separately via the legacy addTemplateMapping endpoint.
-    if (rowSpec.getTemplateId() != null) {
-      // Validate template exists
-      questionTemplateRepository
-          .findById(rowSpec.getTemplateId())
-          .filter(t -> t.getDeletedAt() == null)
-          .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+    for (MatrixCellRequest cell : rowSpec.getCells()) {
+      Map<QuestionDifficulty, Integer> distribution = new LinkedHashMap<>();
+      distribution.put(QuestionDifficulty.EASY, 0);
+      distribution.put(QuestionDifficulty.MEDIUM, 0);
+      distribution.put(QuestionDifficulty.HARD, 0);
+      distribution.put(rowSpec.getQuestionDifficulty(), cell.getQuestionCount());
 
-      for (MatrixCellRequest cell : rowSpec.getCells()) {
-        ExamMatrixTemplateMapping mapping =
-            ExamMatrixTemplateMapping.builder()
-                .examMatrixId(matrixId)
-                .templateId(rowSpec.getTemplateId())
-                .matrixRowId(rowId)
-                .cognitiveLevel(cell.getCognitiveLevel())
-                .questionCount(cell.getQuestionCount())
-                .pointsPerQuestion(cell.getPointsPerQuestion())
-                .build();
-        templateMappingRepository.save(mapping);
-      }
+      ExamMatrixBankMapping mapping =
+          ExamMatrixBankMapping.builder()
+              .examMatrixId(matrixId)
+              .questionBankId(rowSpec.getQuestionBankId())
+              .matrixRowId(rowId)
+              .difficultyDistribution(distribution)
+              .cognitiveLevel(cell.getCognitiveLevel())
+              .pointsPerQuestion(
+                  cell.getPointsPerQuestion() != null ? cell.getPointsPerQuestion() : BigDecimal.ONE)
+              .build();
+      bankMappingRepository.save(mapping);
     }
   }
 
@@ -1299,13 +1434,13 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     List<ExamMatrixRow> rows =
         examMatrixRowRepository.findByExamMatrixIdOrderByOrderIndex(matrixId);
 
-    // Load all cells for this matrix keyed by rowId
-    List<ExamMatrixTemplateMapping> allCells =
-        templateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
-    Map<UUID, List<ExamMatrixTemplateMapping>> cellsByRow =
+    // Load all bank-based cells for this matrix keyed by rowId
+    List<ExamMatrixBankMapping> allCells =
+      bankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
+    Map<UUID, List<ExamMatrixBankMapping>> cellsByRow =
         allCells.stream()
             .filter(c -> c.getMatrixRowId() != null)
-            .collect(Collectors.groupingBy(ExamMatrixTemplateMapping::getMatrixRowId));
+        .collect(Collectors.groupingBy(ExamMatrixBankMapping::getMatrixRowId));
 
     // Group rows by chapter
     Map<UUID, List<ExamMatrixRow>> rowsByChapter =
@@ -1351,20 +1486,29 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       List<MatrixRowResponse> rowResponses = new ArrayList<>();
 
       for (ExamMatrixRow row : chapterRows) {
-        List<ExamMatrixTemplateMapping> cells =
+        List<ExamMatrixBankMapping> templateCells =
             cellsByRow.getOrDefault(row.getId(), Collections.emptyList());
-
         Map<String, Integer> countByCognitive = new LinkedHashMap<>();
         List<MatrixCellResponse> cellResponses = new ArrayList<>();
         int rowTotalQ = 0;
         BigDecimal rowTotalPts = BigDecimal.ZERO;
 
-        for (ExamMatrixTemplateMapping cell : cells) {
+        for (ExamMatrixBankMapping cell : templateCells) {
           String label = cognitiveLevelLabel(cell.getCognitiveLevel());
-          int count = cell.getQuestionCount();
-          BigDecimal pts = cell.getPointsPerQuestion().multiply(BigDecimal.valueOf(count));
+          int count =
+              normalizeDifficultyDistribution(cell.getDifficultyDistribution())
+                  .values()
+                  .stream()
+                  .mapToInt(Integer::intValue)
+                  .sum();
+          BigDecimal pointsPerQuestion =
+            cell.getPointsPerQuestion() != null ? cell.getPointsPerQuestion() : BigDecimal.ONE;
+          BigDecimal pts = pointsPerQuestion.multiply(BigDecimal.valueOf(count));
 
-          countByCognitive.merge(label, count, Integer::sum);
+            countByCognitive.merge(
+              label,
+              count,
+              (left, right) -> (left == null ? 0 : left) + (right == null ? 0 : right));
           rowTotalQ += count;
           rowTotalPts = rowTotalPts.add(pts);
 
@@ -1374,7 +1518,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
                   .cognitiveLevel(cell.getCognitiveLevel())
                   .cognitiveLevelLabel(label)
                   .questionCount(count)
-                  .pointsPerQuestion(cell.getPointsPerQuestion())
+                    .pointsPerQuestion(pointsPerQuestion)
                   .totalPoints(pts)
                   .build());
         }
@@ -1384,7 +1528,11 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
                 .rowId(row.getId())
                 .chapterId(row.getChapterId())
                 .lessonId(row.getLessonId())
-                .templateId(row.getTemplateId())
+                .subjectName(row.getSubjectName())
+                .schoolGradeName(row.getSchoolGradeName())
+                .chapterName(row.getChapterName())
+                .questionBankId(row.getQuestionBankId())
+                .questionDifficulty(row.getQuestionDifficulty())
                 .questionTypeName(row.getQuestionTypeName())
                 .referenceQuestions(row.getReferenceQuestions())
                 .orderIndex(row.getOrderIndex())
@@ -1395,7 +1543,12 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
                 .build());
 
         // Accumulate chapter totals
-        countByCognitive.forEach((k, v) -> chapterTotalByCognitive.merge(k, v, Integer::sum));
+        countByCognitive.forEach(
+          (k, v) ->
+            chapterTotalByCognitive.merge(
+              k,
+              v,
+              (left, right) -> (left == null ? 0 : left) + (right == null ? 0 : right)));
         chapterTotalQ += rowTotalQ;
         chapterTotalPts = chapterTotalPts.add(rowTotalPts);
       }
@@ -1412,7 +1565,12 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               .build());
 
       // Accumulate grand totals
-      chapterTotalByCognitive.forEach((k, v) -> grandTotalByCognitive.merge(k, v, Integer::sum));
+        chapterTotalByCognitive.forEach(
+          (k, v) ->
+            grandTotalByCognitive.merge(
+              k,
+              v,
+              (left, right) -> (left == null ? 0 : left) + (right == null ? 0 : right)));
       grandTotalQuestions += chapterTotalQ;
       grandTotalPoints = grandTotalPoints.add(chapterTotalPts);
     }
