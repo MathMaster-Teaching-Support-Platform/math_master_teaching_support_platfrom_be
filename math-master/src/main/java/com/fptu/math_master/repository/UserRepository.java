@@ -47,4 +47,10 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
   long countByStatus(Status status);
 
   Page<User> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+  @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.status != com.fptu.math_master.enums.Status.DELETED")
+  long countByRoleName(String roleName);
+
+  @Query("SELECT COUNT(u) FROM User u WHERE u.status != com.fptu.math_master.enums.Status.DELETED")
+  long countNonDeleted();
 }

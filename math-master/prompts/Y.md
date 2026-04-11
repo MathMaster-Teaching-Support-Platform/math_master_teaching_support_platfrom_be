@@ -1,62 +1,46 @@
-# API Contract — AdminDashboard
+﻿# API Contract — Admin / Quản Lý Người Dùng
 
 **Ngày tạo:** 2026-04-11  
 **Người tạo:** BE Team  
-**Phản hồi cho:** X.md (FE spec — AdminDashboard)  
+**Phản hồi cho:** X.md (FE spec request — UserManagement)  
 **Trạng thái:** Chờ FE confirm
 
----
-
-## ⚠️ Lưu ý quan trọng trước khi tích hợp
-
-### Base URL
-
-```
-http://localhost:8080
-```
-
-Không có prefix `/api`. Mọi endpoint đều bắt đầu ngay từ root.
-
-### Response format thực tế của BE
-
-BE **không** trả `"success": true`. Cấu trúc chuẩn:
-
-```json
-{
-  "code": 1000,
-  "result": { ... }
-}
-```
-
-| Field     | Ý nghĩa                                          |
-| --------- | ------------------------------------------------ |
-| `code`    | `1000` = thành công; giá trị khác = lỗi          |
-| `message` | Có khi lỗi hoặc thao tác đặc biệt                |
-| `result`  | Payload thực, tương đương `result` trong spec FE |
-
-FE cần đọc `response.result` thay vì `response.data`.  
-FE cần kiểm tra `response.code === 1000` thay vì `response.success === true`.
+> **Base URL:** `http://<host>:8080`  
+> Không có `/api` prefix — server không cấu hình `context-path`.  
+> Mọi endpoint admin user nằm dưới `/admin/users`.
 
 ---
 
-## 1. Admin Identity (Header / Layout)
+## 1. Danh sách người dùng + Thống kê tổng quan
 
-**Trạng thái:** ✅ Đã có (endpoint khác tên)
+**Trạng thái:** 🔨 Mới implement — endpoint mới tại `AdminUserController`
 
 ### Endpoint
 
 ```
-GET /users/my-info
+GET /admin/users
 ```
 
 ### Auth
-
 - Header: `Authorization: Bearer <JWT>`
-- Role được phép: Tất cả authenticated user (không cần role cụ thể)
+- Role được phép: `ADMIN`
 
 ### Request
 
-Không có body hay query params.
+**Query params:**
+
+| Param    | Type    | Bắt buộc | Mặc định | Mô tả |
+|----------|---------|----------|----------|-------|
+| page     | integer | ❌       | `0`      | Zero-based page index |
+| pageSize | integer | ❌       | `20`     | Số item mỗi trang |
+| role     | string  | ❌       | `all`    | `TEACHER` \| `STUDENT` \| `ADMIN` \| `all` (case-insensitive) |
+| search   | string  | ❌       | —        | Tìm kiếm trên `fullName`, `email`, `userName` (case-insensitive) |
+| status   | string  | ❌       | `all`    | `ACTIVE` \| `INACTIVE` \| `BANNED` \| `all` |
+
+> ⚠️ **Lưu ý khác với FE đề xuất:**  
+> - `page` bắt đầu từ `0` (zero-based), không phải `1`  
+> - `pageSize` thay vì `limit` (nhất quán với các endpoint khác)  
+> - `role` dùng chữ hoa (`TEACHER`, `STUDENT`, `ADMIN`) — FE đề xuất chữ thường
 
 ### Response — 200 OK
 
@@ -64,542 +48,490 @@ Không có body hay query params.
 {
   "code": 1000,
   "result": {
-    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "userName": "admin_system",
-    "fullName": "Admin System",
-    "email": "admin@mathmaster.vn",
-    "phoneNumber": null,
-    "gender": null,
-    "avatar": "https://storage.example.com/avatars/admin.png",
-    "dob": null,
-    "code": null,
-    "status": "ACTIVE",
-    "banReason": null,
-    "banDate": null,
-    "roles": ["ADMIN"],
-    "createdDate": "2024-01-01T00:00:00Z",
-    "createdBy": null,
-    "updatedDate": "2024-01-01T00:00:00Z",
-    "updatedBy": null
+    "users": [
+      {
+        "id": "018eac12-0000-7000-8000-000000000001",
+        "userName": "teacher01",
+        "fullName": "Nguyễn Văn A",
+        "email": "teacher01@mathmaster.vn",
+        "avatar": "https://storage.mathmaster.vn/avatars/teacher01.jpg",
+        "status": "ACTIVE",
+        "lastLogin": "2026-04-10T08:30:00Z",
+        "roles": ["TEACHER"],
+        "createdDate": "2025-09-01T00:00:00Z",
+        "phoneNumber": null,
+        "gender": null,
+        "dob": null,
+        "code": null,
+        "banReason": null,
+        "banDate": null,
+        "updatedDate": "2026-04-10T08:30:00Z"
+      }
+    ],
+    "stats": {
+      "total": 1240,
+      "teachers": 320,
+      "students": 900,
+      "active": 1100
+    },
+    "pagination": {
+      "page": 0,
+      "pageSize": 20,
+      "totalItems": 1240,
+      "totalPages": 62
+    }
   }
 }
 ```
+
+> **Ghi chú về `stats`:** Luôn là global stats (tổng toàn hệ thống), không bị ảnh hưởng bởi filter. Users có status `DELETED` bị loại khỏi stats.
 
 ### Response — Lỗi phổ biến
 
 ```json
 // 401 Unauthorized
 { "code": 1006, "message": "Unauthenticated" }
+
+// 403 Forbidden
+{ "code": 1007, "message": "You do not have permission" }
 ```
 
 ### Validation BE áp dụng
+- `role`/`status` không hợp lệ → bị bỏ qua (treat as `all`)
+- Users với status `DELETED` luôn bị loại khỏi kết quả
 
-- Endpoint lấy thông tin từ JWT subject (userId) trong SecurityContext
-- `roles` là `Set<String>` (ví dụ: `["ADMIN"]`)
-
-### Ghi chú — Thay đổi so với FE spec
-
-| Field spec FE   | Field thực tế BE | Ghi chú                                        |
-| --------------- | ---------------- | ---------------------------------------------- |
-| `name`          | `fullName`       | FE cần đọc `result.fullName`                   |
-| `role` (string) | `roles` (array)  | BE trả array, FE đọc `result.roles[0]`         |
-| `avatar`        | `avatar`         | URL đầy đủ nếu upload MinIO; null nếu chưa set |
+### Ghi chú
+- `lastLogin` được ghi lại mỗi khi user đăng nhập — yêu cầu DB migration (xem Checklist).
+- `avatar` là URL đầy đủ — FE cần fallback nếu `null`.
+- `roles` là mảng string: `["TEACHER"]`, `["STUDENT"]`, `["ADMIN"]`.
 
 ---
 
-## 2. Notification Count (Header Badge)
+## 2. Tạo người dùng mới
 
-**Trạng thái:** ⚠️ Đã có nhưng cần sửa (key thay đổi) — **đã fix trong commit này**
+**Trạng thái:** ⚠️ Đã có nhưng cần sửa — `POST /users` tồn tại nhưng field name khác và thiếu `sendWelcomeEmail`/`requirePasswordChange`
 
 ### Endpoint
 
 ```
-GET /v1/notifications/unread-count
+POST /users
 ```
 
 ### Auth
-
 - Header: `Authorization: Bearer <JWT>`
-- Role được phép: Tất cả authenticated user
+- Role được phép: `ADMIN`
 
-### Response — 200 OK
-
-> ⚠️ **BREAKING thay đổi key**: Trước đây trả `"count"`, đã đổi thành `"unreadCount"` để khớp FE spec.
+### Request Body
 
 ```json
 {
-  "unreadCount": 8
+  "userName": "student_new",
+  "fullName": "Trần Thị B",
+  "email": "tranthib@mathmaster.vn",
+  "password": "StrongP@ss123",
+  "roles": ["STUDENT"],
+  "status": "ACTIVE"
 }
 ```
 
-> ⚠️ Endpoint này **không** wrap trong `ApiResponse`. Trả thẳng JSON object.  
-> FE đọc `response.unreadCount` (không có `code` hay `result`).
+**Mapping với form FE:**
+
+| Field FE | Field BE | Ghi chú |
+|----------|----------|---------|
+| `name` | `fullName` | ⚠️ Khác tên — FE cần đổi |
+| `email` | `email` | ✅ |
+| `role` (string) | `roles` (array) | ⚠️ BE nhận mảng, VD: `["TEACHER"]` |
+| `status` | `status` | ✅ |
+| `password` | `password` | ✅ |
+| `sendWelcomeEmail` | — | ❌ Không hỗ trợ |
+| `requirePasswordChange` | — | ❌ Không hỗ trợ |
+| — | `userName` | ⚠️ **Bắt buộc thêm** — FE cần field này |
+
+### Response — 200 OK
+
+```json
+{
+  "code": 1000,
+  "result": {
+    "id": "018eac12-0000-7000-8000-000000000042",
+    "userName": "student_new",
+    "fullName": "Trần Thị B",
+    "email": "tranthib@mathmaster.vn",
+    "status": "ACTIVE",
+    "roles": ["STUDENT"],
+    "createdDate": "2026-04-11T07:00:00Z",
+    "avatar": null,
+    "lastLogin": null
+  }
+}
+```
 
 ### Response — Lỗi phổ biến
 
 ```json
-// 401 Unauthorized
-{ "status": 401, "error": "Unauthorized" }
+// 400 — Email trùng
+{ "code": 1013, "message": "Email already exists" }
+
+// 400 — Username trùng
+{ "code": 1002, "message": "User existed" }
+
+// 400 — Role không tồn tại
+{ "code": 1009, "message": "Role not existed" }
 ```
 
-### Ghi chú
+### Validation BE áp dụng
 
-- Không gộp vào `/users/my-info` — giữ tách riêng để tiện polling/cache
-- Không có cache, trả real-time từ DB
+| Field | Ràng buộc |
+|-------|----------|
+| `userName` | required, 3–50 ký tự |
+| `password` | required, 8–128 ký tự, phải có chữ hoa + chữ thường + số + ký tự đặc biệt (`!@#$%^&*...`) |
+| `fullName` | required, 2–50 ký tự |
+| `email` | required, format hợp lệ, tối đa 50 ký tự |
+| `roles` | tối đa 10 role; mỗi tên role phải tồn tại (`TEACHER`, `STUDENT`, `ADMIN`) |
 
 ---
 
-## 3. Stats Grid — Tổng quan hệ thống
+## 3. Xem chi tiết người dùng
+
+**Trạng thái:** ✅ Đã có (nay có thêm `lastLogin` sau migration)
+
+### Endpoint
+
+```
+GET /admin/users/{userId}
+```
+
+hoặc
+
+```
+GET /users/{userId}
+```
+
+### Auth
+- Header: `Authorization: Bearer <JWT>`
+- Role được phép: `ADMIN` (cả hai); `TEACHER`, `STUDENT` chỉ dùng `/users/{userId}`
+
+### Response — 200 OK
+
+```json
+{
+  "code": 1000,
+  "result": {
+    "id": "018eac12-0000-7000-8000-000000000001",
+    "userName": "teacher01",
+    "fullName": "Nguyễn Văn A",
+    "email": "teacher01@mathmaster.vn",
+    "phoneNumber": "+84912345678",
+    "gender": "MALE",
+    "avatar": "https://...",
+    "dob": "1990-05-15",
+    "code": "GV001",
+    "status": "ACTIVE",
+    "lastLogin": "2026-04-10T08:30:00Z",
+    "banReason": null,
+    "banDate": null,
+    "roles": ["TEACHER"],
+    "createdDate": "2025-09-01T00:00:00Z",
+    "updatedDate": "2026-04-10T08:30:00Z"
+  }
+}
+```
+
+### Response — Lỗi phổ biến
+
+```json
+// 404
+{ "code": 1005, "message": "User not existed" }
+```
+
+---
+
+## 4. Cập nhật trạng thái người dùng (Kích hoạt / Tạm ngưng)
+
+**Trạng thái:** ⚠️ Đã có — hai PUT endpoints riêng + thêm PATCH mới hợp nhất
+
+### Endpoint (mới, khuyến nghị)
+
+```
+PATCH /admin/users/{userId}/status?status=ACTIVE
+PATCH /admin/users/{userId}/status?status=INACTIVE
+```
+
+### Hoặc dùng endpoints cũ
+
+```
+PUT /users/{userId}/enable       → set ACTIVE
+PUT /users/{userId}/disable      → set INACTIVE
+```
+
+### Auth
+- Header: `Authorization: Bearer <JWT>`
+- Role được phép: `ADMIN`
+
+### Response — 200 OK
+
+```json
+{
+  "code": 1000,
+  "result": {
+    "id": "018eac12-0000-7000-8000-000000000001",
+    "status": "INACTIVE",
+    "userName": "teacher01",
+    "fullName": "Nguyễn Văn A",
+    "email": "teacher01@mathmaster.vn"
+  }
+}
+```
+
+### Response — Lỗi phổ biến
+
+```json
+// 400 — Đã ở trạng thái đó
+{ "code": 1018, "message": "User is already disabled" }
+{ "code": 1019, "message": "User is already enabled" }
+
+// 400 — status value không hợp lệ
+{ "code": 1001, "message": "status must be ACTIVE or INACTIVE" }
+
+// 404
+{ "code": 1005, "message": "User not existed" }
+```
+
+---
+
+## 5. Đặt lại mật khẩu
 
 **Trạng thái:** 🔨 Mới implement
 
 ### Endpoint
 
 ```
-GET /admin/dashboard/stats
+POST /admin/users/{userId}/reset-password
 ```
 
 ### Auth
-
 - Header: `Authorization: Bearer <JWT>`
-- Role được phép: `ADMIN` only
+- Role được phép: `ADMIN`
 
-### Request
-
-**Query params:**
-| Param | Type | Bắt buộc | Mô tả |
-|---------|--------|----------|------------------------------------|
-| `month` | string | ❌ | Format `YYYY-MM`, mặc định: tháng hiện tại |
+### Request Body
+Không có body.
 
 ### Response — 200 OK
 
 ```json
 {
   "code": 1000,
-  "result": {
-    "totalUsers": 1930,
-    "totalUsersGrowthPercent": 12.0,
-    "monthlyRevenue": 45200000,
-    "monthlyRevenueGrowthPercent": 8.0,
-    "activeEnrollments": 680,
-    "activeEnrollmentsGrowthPercent": 15.0,
-    "totalTransactions": 1245,
-    "totalTransactionsGrowthPercent": 5.0,
-    "month": "2026-04"
-  }
+  "message": "Password reset successfully. Temporary password sent to user's email."
 }
 ```
 
-### Thay đổi so với FE spec
-
-| Field FE spec                      | Field BE thực tế                 | Lý do                                                               |
-| ---------------------------------- | -------------------------------- | ------------------------------------------------------------------- |
-| `activeSubscriptions`              | `activeEnrollments`              | Hệ thống không có "gói đăng ký" — tương đương là active enrollments |
-| `activeSubscriptionsGrowthPercent` | `activeEnrollmentsGrowthPercent` | Đổi tên theo field trên                                             |
-
-> **[FE note]** `activeEnrollments` = số lượng enrollments đang ở trạng thái `ACTIVE`. Không phải "subscription plan". FE cần cập nhật label nếu muốn hiển thị chính xác.
-
-### Ghi chú
-
-- `monthlyRevenue` tính từ tổng các transaction `SUCCESS` trong tháng, đơn vị: VNĐ tuyệt đối
-- `totalUsersGrowthPercent` so sánh số user mới đăng ký trong tháng hiện tại vs tháng trước
-- Âm là giảm, dương là tăng
-
----
-
-## 4. Recent Users — Người dùng mới
-
-**Trạng thái:** 🔨 Mới implement (endpoint mới, dùng data từ `/users/page` hiện có)
-
-### Endpoint
-
-```
-GET /users/admin/recent
-```
-
-### Auth
-
-- Header: `Authorization: Bearer <JWT>`
-- Role được phép: `ADMIN` only
-
-### Request
-
-**Query params:**
-| Param | Type | Bắt buộc | Mô tả |
-|---------|--------|----------|----------------------|
-| `page` | number | ❌ | Mặc định: 0 (0-indexed) |
-| `size` | number | ❌ | Mặc định: 10 |
-
-> **[FE note]** Phân trang dùng 0-indexed (`page=0` = trang đầu tiên).
-
-### Response — 200 OK
+### Response — Lỗi phổ biến
 
 ```json
-{
-  "code": 1000,
-  "result": {
-    "content": [
-      {
-        "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-        "userName": "nguyen_van_a",
-        "fullName": "Nguyễn Văn A",
-        "email": "nguyenvana@example.com",
-        "phoneNumber": null,
-        "gender": "MALE",
-        "avatar": null,
-        "dob": null,
-        "code": null,
-        "status": "ACTIVE",
-        "banReason": null,
-        "banDate": null,
-        "roles": ["STUDENT"],
-        "createdDate": "2026-04-10T07:23:00Z",
-        "createdBy": null,
-        "updatedDate": "2026-04-10T07:23:00Z",
-        "updatedBy": null
-      }
-    ],
-    "totalElements": 1930,
-    "totalPages": 193,
-    "size": 10,
-    "number": 0,
-    "first": true,
-    "last": false
-  }
-}
-```
-
-### Thay đổi so với FE spec
-
-| Field FE spec     | Field BE thực tế   | Ghi chú                                                                          |
-| ----------------- | ------------------ | -------------------------------------------------------------------------------- |
-| `name`            | `fullName`         | FE đọc `fullName`                                                                |
-| `role` (string)   | `roles` (array)    | FE đọc `roles[0]`                                                                |
-| `status`          | `status` (enum)    | Giá trị: `ACTIVE`, `INACTIVE`, `BANNED`, `DELETED` (không phải lowercase)        |
-| `joinedDate`      | `createdDate`      | FE đọc `createdDate`                                                             |
-| `lastLogin`       | **Không có**       | Hệ thống chưa track last login time. Field này không tồn tại                     |
-| `school`          | **Không có**       | Không có trong User entity                                                       |
-| Cấu trúc `result` | Spring Page object | FE cần đọc `result.content` để lấy array users, `result.totalElements` cho total |
-
-> **[FE note]** `status` trả UPPER_CASE. `"active"` → `"ACTIVE"`, `"inactive"` → `"INACTIVE"`.  
-> `lastLogin` không có trong response, FE hiển thị `createdDate` hoặc bỏ cột này.
-
----
-
-## 5. Teacher Profile Review — Đếm hồ sơ chờ duyệt
-
-**Trạng thái:** ✅ Đã có — đúng spec
-
-### Endpoint
-
-```
-GET /teacher-profiles/pending/count
-```
-
-### Auth
-
-- Header: `Authorization: Bearer <JWT>`
-- Role được phép: `ADMIN` only
-
-### Response — 200 OK
-
-```json
-{
-  "code": 1000,
-  "result": 12
-}
+// 404
+{ "code": 1005, "message": "User not existed" }
 ```
 
 ### Ghi chú
-
-- `result` là một số nguyên (không phải object)
-- FE hiện dùng `response.result` — đúng
+- BE **tự sinh mật khẩu tạm 12 ký tự** → gửi email async cho user
+- Mật khẩu tạm **không trả về response** vì lý do bảo mật
+- FE chỉ cần hiển thị: "Mật khẩu mới đã được gửi đến email của người dùng"
 
 ---
 
-## 6. Recent Transactions — Giao dịch gần đây
+## 6. Gửi email cho người dùng
 
 **Trạng thái:** 🔨 Mới implement
 
 ### Endpoint
 
 ```
-GET /admin/transactions
+POST /admin/users/{userId}/send-email
 ```
 
 ### Auth
-
 - Header: `Authorization: Bearer <JWT>`
-- Role được phép: `ADMIN` only
+- Role được phép: `ADMIN`
 
-### Request
+### Request Body
 
-**Query params:**
-| Param | Type | Bắt buộc | Mô tả |
-|----------|--------|----------|-----------------------------------------------------|
-| `page` | number | ❌ | Mặc định: 0 (0-indexed) |
-| `size` | number | ❌ | Mặc định: 5 |
-| `sortBy` | string | ❌ | Mặc định: `createdAt` |
-| `order` | string | ❌ | `ASC` hoặc `DESC`, mặc định: `DESC` |
+```json
+{
+  "subject": "Thông báo từ MathMaster",
+  "body": "Xin chào,\n\nĐây là thông báo quan trọng..."
+}
+```
+
+| Field   | Type   | Bắt buộc | Ràng buộc |
+|---------|--------|----------|----------|
+| subject | string | ✅       | max 255 ký tự |
+| body    | string | ✅       | max 10000 ký tự, plain text |
 
 ### Response — 200 OK
 
 ```json
 {
   "code": 1000,
-  "result": {
-    "content": [
-      {
-        "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-        "userId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-        "userName": "Nguyễn Văn A",
-        "planId": null,
-        "planName": "Nạp tiền vào ví",
-        "amount": 199000,
-        "status": "completed",
-        "paymentMethod": "payos",
-        "createdAt": "2026-04-10T07:23:00Z"
-      }
-    ],
-    "totalElements": 1245,
-    "totalPages": 249,
-    "size": 5,
-    "number": 0,
-    "first": true,
-    "last": false
-  }
+  "message": "Email sent successfully."
 }
 ```
 
-### Thay đổi so với FE spec — ⚠️ Architectural mismatch
-
-| Field FE spec         | Field BE thực tế       | Ghi chú                                                                                  |
-| --------------------- | ---------------------- | ---------------------------------------------------------------------------------------- |
-| `planId`              | `null`                 | Hệ thống không có "subscription plan". Sẽ null cho đến khi feature này được build        |
-| `planName`            | `description`          | Mapped từ `Transaction.description` (ví dụ: "Nạp tiền vào ví")                           |
-| `paymentMethod`       | `"payos"`              | Chỉ có 1 gateway: PayOS. Không có wallet/momo/bank_transfer trong model                  |
-| `status`              | mapped string          | `SUCCESS`→`"completed"`, `PENDING/PROCESSING`→`"pending"`, `FAILED/CANCELLED`→`"failed"` |
-| `result.transactions` | `result.content`       | Spring Page — FE đọc `result.content`                                                    |
-| `result.total`        | `result.totalElements` | FE đọc `result.totalElements`                                                            |
-| `result.page`         | `result.number`        | FE đọc `result.number` (0-indexed)                                                       |
-
 ### Ghi chú
-
-- **Không có endpoint `GET /admin/transactions/:id`** hiện tại. Nút 👁️ "Chi tiết" chưa thể kết nối. BE cần thêm endpoint này nếu FE cần.
-- Transaction entity là wallet top-up qua PayOS — không có gói subscription/plan concept trong hệ thống.
+- Gửi email **tùy ý** — không phải template cố định
+- Email gửi **async** — API trả 200 ngay cả khi mail server chậm; nếu lỗi chỉ log, không throw
 
 ---
 
-## 7. Revenue Chart — Doanh thu theo tháng
+## 7. Xóa tài khoản
+
+**Trạng thái:** ✅ Đã có
+
+### Endpoint
+
+```
+DELETE /users/{userId}
+```
+
+### Auth
+- Header: `Authorization: Bearer <JWT>`
+- Role được phép: `ADMIN`
+
+### Response — 200 OK
+
+```json
+{
+  "code": 1000,
+  "message": "User deleted successfully"
+}
+```
+
+### Ghi chú
+- **Soft delete** — set `status = DELETED`, dữ liệu giữ lại trong DB
+- ⚠️ Chưa có guard chống xóa admin cuối cùng — FE nên hiển thị confirm dialog
+
+---
+
+## 8. Xuất Excel danh sách người dùng
 
 **Trạng thái:** 🔨 Mới implement
 
 ### Endpoint
 
 ```
-GET /admin/dashboard/revenue-by-month
+GET /admin/users/export
 ```
 
 ### Auth
-
 - Header: `Authorization: Bearer <JWT>`
-- Role được phép: `ADMIN` only
+- Role được phép: `ADMIN`
 
-### Request
+### Query params
 
-**Query params:**
-| Param | Type | Bắt buộc | Mô tả |
-|--------|--------|----------|------------------------------------|
-| `year` | number | ❌ | Mặc định: năm hiện tại |
+| Param  | Type   | Bắt buộc | Mô tả |
+|--------|--------|----------|-------|
+| role   | string | ❌       | `TEACHER` \| `STUDENT` \| `ADMIN` \| `all` |
+| search | string | ❌       | Tìm kiếm fullName/email/userName |
+| status | string | ❌       | `ACTIVE` \| `INACTIVE` \| `all` |
 
-### Response — 200 OK
+### Response
+- **Content-Type:** `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+- **Content-Disposition:** `attachment; filename="users.xlsx"`
 
-```json
-{
-  "code": 1000,
-  "result": {
-    "year": 2026,
-    "monthly": [
-      { "month": 1, "revenue": 32000000 },
-      { "month": 2, "revenue": 45000000 },
-      { "month": 3, "revenue": 38000000 },
-      { "month": 4, "revenue": 52000000 },
-      { "month": 5, "revenue": 0 },
-      { "month": 6, "revenue": 0 },
-      { "month": 7, "revenue": 0 },
-      { "month": 8, "revenue": 0 },
-      { "month": 9, "revenue": 0 },
-      { "month": 10, "revenue": 0 },
-      { "month": 11, "revenue": 0 },
-      { "month": 12, "revenue": 0 }
-    ]
-  }
-}
+**Cột Excel:** `ID | Username | Full Name | Email | Role(s) | Status | Join Date | Last Login`
+
+### Cách FE trigger download
+
+```typescript
+const res = await fetch('/admin/users/export?role=all&status=all', {
+  headers: { Authorization: `Bearer ${token}` }
+});
+const blob = await res.blob();
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url; a.download = 'users.xlsx'; a.click();
+URL.revokeObjectURL(url);
 ```
-
-### Ghi chú
-
-- **Luôn trả đủ 12 phần tử** (tháng chưa có data trả `revenue: 0`)
-- Đơn vị: VNĐ tuyệt đối (tổng các transaction `SUCCESS` trong tháng)
-- FE tự tính `height%` theo max trong mảng
 
 ---
 
-## 8. Quick Stats — Thống kê nhanh
+## 9. Chỉnh sửa thông tin người dùng
 
-**Trạng thái:** 🔨 Mới implement (một số metric là ước lượng)
+**Trạng thái:** ✅ Đã có
 
 ### Endpoint
 
 ```
-GET /admin/dashboard/quick-stats
+PUT /users/{userId}
 ```
 
 ### Auth
-
 - Header: `Authorization: Bearer <JWT>`
-- Role được phép: `ADMIN` only
+- Role được phép: `ADMIN`
 
-### Response — 200 OK
+### Request Body
 
 ```json
 {
-  "code": 1000,
-  "result": {
-    "conversionRate": 35.0,
-    "activeUsers": 1456,
-    "documentsCreated": 8234,
-    "satisfactionRate": -1.0
-  }
+  "fullName": "Nguyễn Văn B (updated)",
+  "email": "newemail@mathmaster.vn",
+  "status": "ACTIVE",
+  "roles": ["TEACHER"],
+  "avatar": "https://...",
+  "phoneNumber": null,
+  "gender": "MALE",
+  "dob": "1990-05-15",
+  "code": "GV002"
 }
 ```
 
-### Thay đổi và giải thích
+**Mapping với FE đề xuất:**
 
-| Field              | Định nghĩa BE                                         | Ghi chú                                                                   |
-| ------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------- |
-| `conversionRate`   | `(tổng transactions / tổng users) * 100` (%)          | Xấp xỉ. Sẽ chính xác hơn khi có plan subscription                         |
-| `activeUsers`      | Số user có status = `ACTIVE`                          | Không track last login                                                    |
-| `documentsCreated` | `COUNT(lesson_plans) + COUNT(mindmaps)` (non-deleted) | Bao gồm lesson plans và mindmaps của giáo viên                            |
-| `satisfactionRate` | **Luôn trả `-1.0`**                                   | Hệ thống chưa có tính năng đánh giá/rating. FE hiển thị "N/A" khi nhận -1 |
-
-> **[FE note]** Khi `satisfactionRate === -1`, FE nên hiển thị "Chưa có dữ liệu" thay vì thanh progress.
-
----
-
-## 9. System Status — Trạng thái hệ thống
-
-**Trạng thái:** 🔨 Mới implement
-
-### Endpoint
-
-```
-GET /admin/system/status
-```
-
-### Auth
-
-- Header: `Authorization: Bearer <JWT>`
-- Role được phép: `ADMIN` only
+| Field FE | Field BE | Ghi chú |
+|----------|----------|---------|
+| `name` | `fullName` | ⚠️ Khác tên |
+| `role` (string) | `roles` (array) | ⚠️ BE nhận mảng |
+| `email` | `email` | ✅ — nhưng `@NotBlank`, luôn phải gửi |
+| `status` | `status` | ✅ |
+| `avatar` | `avatar` | ✅ URL, max 2048 chars |
 
 ### Response — 200 OK
+Trả về `UserResponse` đầy đủ (giống Feature 3).
+
+### Response — Lỗi phổ biến
 
 ```json
-{
-  "code": 1000,
-  "result": {
-    "services": [
-      {
-        "name": "Web Server",
-        "status": "active",
-        "description": "Đang hoạt động bình thường",
-        "usagePercent": null
-      },
-      {
-        "name": "Database",
-        "status": "active",
-        "description": "Kết nối bình thường",
-        "usagePercent": null
-      },
-      {
-        "name": "AI Service",
-        "status": "active",
-        "description": "Kết nối Gemini API bình thường",
-        "usagePercent": null
-      },
-      {
-        "name": "Storage",
-        "status": "active",
-        "description": "MinIO storage đang hoạt động",
-        "usagePercent": null
-      }
-    ]
-  }
-}
+{ "code": 1013, "message": "Email already exists" }
+{ "code": 1005, "message": "User not existed" }
 ```
-
-### Validation
-
-- `status` trả đúng 3 giá trị: `"active"`, `"warning"`, `"error"` — khớp CSS class FE
-
-### Ghi chú — Giới hạn hiện tại
-
-| Service    | Cách kiểm tra                      | Giới hạn                                                                       |
-| ---------- | ---------------------------------- | ------------------------------------------------------------------------------ |
-| Web Server | Nếu endpoint respond = active      | Luôn active nếu request đến được                                               |
-| Database   | Thực hiện `SELECT COUNT(*)` lên DB | `error` nếu throw exception                                                    |
-| AI Service | Hardcode "active"                  | Không có health-check Gemini API key live                                      |
-| Storage    | Hardcode "active"                  | MinIO không expose API quota trong cấu hình hiện tại; `usagePercent` luôn null |
 
 ---
 
-## Danh sách thay đổi so với đề xuất FE
+## Tóm tắt thay đổi so với đề xuất FE
 
-| Feature             | Thay đổi                                                         | Lý do                                                |
-| ------------------- | ---------------------------------------------------------------- | ---------------------------------------------------- |
-| Admin Identity      | URL `/api/auth/me` → `/users/my-info`                            | Endpoint đã tồn tại với URL khác                     |
-| Admin Identity      | `name` → `fullName`, `role` → `roles[]`                          | UserResponse schema sẵn có                           |
-| Notification Count  | Key `unreadCount` (đã fix, trước là `count`)                     | Đổi để khớp FE spec                                  |
-| Notification Count  | Không wrap ApiResponse                                           | ResponseEntity<Map> — FE đọc trực tiếp               |
-| Stats Grid          | `activeSubscriptions` → `activeEnrollments`                      | Không có subscription plan trong hệ thống            |
-| Recent Users        | URL `/api/admin/users/recent` → `/users/admin/recent`            | Đặt dưới `/users` controller cho nhất quán           |
-| Recent Users        | Phân trang 0-indexed, response là Spring Page object             | `result.content` thay vì `result.users`              |
-| Recent Users        | `lastLogin`, `school` không có                                   | Không có field này trong User entity                 |
-| Recent Users        | `status` UPPER_CASE                                              | Enum Java                                            |
-| Recent Transactions | `planId` luôn null; `paymentMethod` luôn `"payos"`               | Không có subscription plan, chỉ có 1 payment gateway |
-| Recent Transactions | `result.content`, `result.totalElements`, `result.number`        | Spring Page object                                   |
-| Revenue Chart       | Đơn vị VNĐ tuyệt đối (không phải %)                              | FE tự tính height% theo max                          |
-| Quick Stats         | `satisfactionRate: -1.0` khi chưa có dữ liệu                     | Chưa có feature đánh giá/rating                      |
-| System Status       | `usagePercent` luôn null (Storage)                               | MinIO không expose quota API trong config hiện tại   |
-| Global              | Response format `{ code, result }` thay vì `{ success, result }` | Cấu trúc ApiResponse chuẩn của BE                    |
+| Feature | Thay đổi | Lý do |
+|---------|----------|-------|
+| Base URL tất cả | Không có `/api` prefix | Server không cấu hình `context-path` |
+| Phân trang | `page` zero-based (0, 1, 2...) | Spring Data convention |
+| Tạo/Sửa — tên field | `fullName` thay vì `name` | Khớp entity/DB |
+| Tạo/Sửa — role | `roles: ["TEACHER"]` (array, UPPER) thay vì `role: "teacher"` | Multi-role support |
+| Tạo user | `userName` là **bắt buộc** thêm | Field login, unique trong DB |
+| `sendWelcomeEmail`, `requirePasswordChange` | Không hỗ trợ | Chưa implement; để roadmap |
+| Toggle status | PATCH mới + hai PUT cũ | Tương thích ngược |
+| Reset password | BE tự sinh password tạm → email | Không expose qua API |
+| Status | 4 trạng thái: `ACTIVE`, `INACTIVE`, `BANNED`, `DELETED` | Không chỉ 2 |
+| `lastLogin` | Cần DB migration trước khi dùng | Column chưa có trong schema cũ |
 
 ---
 
 ## Checklist trước khi FE integrate
 
-- [x] Tất cả endpoints đã implement và compile thành công
-- [ ] BE deploy lên môi trường staging
-- [ ] Test với Postman/curl
-- [ ] FE cập nhật `response.result` thay vì `response.data`
-- [ ] FE cập nhật check `response.code === 1000` thay vì `response.success`
-- [ ] FE xử lý `roles[]` (array) thay vì `role` (string)
-- [ ] FE xử lý `status` UPPER_CASE (`ACTIVE`/`INACTIVE`/`BANNED`)
-- [ ] FE xử lý Spring Page structure (`result.content`, `result.totalElements`, `result.number`)
-- [ ] FE xử lý `satisfactionRate === -1` → hiển thị "N/A"
-- [ ] Seed data test sẵn sàng
-
----
-
-## Tóm tắt endpoints admin dashboard
-
-| #   | Feature                | Method | URL                                 | Status        |
-| --- | ---------------------- | ------ | ----------------------------------- | ------------- |
-| 1   | Admin Identity         | GET    | `/users/my-info`                    | ✅ Đã có      |
-| 2   | Notification Count     | GET    | `/v1/notifications/unread-count`    | ⚠️ Đã fix key |
-| 3   | Dashboard Stats        | GET    | `/admin/dashboard/stats`            | 🔨 Mới        |
-| 4   | Recent Users           | GET    | `/users/admin/recent`               | 🔨 Mới        |
-| 5   | Pending Profiles Count | GET    | `/teacher-profiles/pending/count`   | ✅ Đã có      |
-| 6   | Admin Transactions     | GET    | `/admin/transactions`               | 🔨 Mới        |
-| 7   | Revenue By Month       | GET    | `/admin/dashboard/revenue-by-month` | 🔨 Mới        |
-| 8   | Quick Stats            | GET    | `/admin/dashboard/quick-stats`      | 🔨 Mới        |
-| 9   | System Status          | GET    | `/admin/system/status`              | 🔨 Mới        |
+- [ ] **[BẮT BUỘC] Chạy DB migration:**
+  ```sql
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ NULL;
+  ```
+- [ ] BE đã deploy lên staging
+- [ ] Swagger: `http://<host>:8080/swagger-ui/index.html`
+- [ ] FE cập nhật form "Tạo người dùng": thêm `userName` (required), đổi `name` → `fullName`, đổi `role` string → `roles` array
+- [ ] FE xử lý `page` zero-based
+- [ ] FE handle `BANNED` status (khác với `INACTIVE`)
+- [ ] FE bỏ `sendWelcomeEmail` và `requirePasswordChange` khỏi create form

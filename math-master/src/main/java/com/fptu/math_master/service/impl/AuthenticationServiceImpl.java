@@ -133,6 +133,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
       throw new AppException(ErrorCode.ACCOUNT_NOT_ACTIVE);
     }
 
+    user.setLastLogin(Instant.now());
+    userRepository.save(user);
+
     var token = generateToken(user);
 
     return AuthenticationResponse.builder()

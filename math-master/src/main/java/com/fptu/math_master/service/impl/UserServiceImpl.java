@@ -398,6 +398,7 @@ public class UserServiceImpl implements UserService {
         .dob(user.getDob())
         .code(user.getCode())
         .status(user.getStatus())
+        .lastLogin(user.getLastLogin())
         .banReason(user.getBanReason())
         .banDate(user.getBanDate())
         .roles(roles)
