@@ -182,7 +182,7 @@ function Invoke-StartAll {
     if (-not (Assert-Docker)) { return }
     $root = Get-ProjectRoot; Assert-EnvFile $root; Push-Location $root
     Write-Step "Starting all containers..."
-    docker compose up -d
+    docker compose up -d --no-recreate
     if ($LASTEXITCODE -eq 0) { Write-OK "All services started."; Write-Host ""; docker compose ps }
     else { Write-Err "Some services failed to start." }
     Pop-Location
