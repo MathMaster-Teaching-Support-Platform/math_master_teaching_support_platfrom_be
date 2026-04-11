@@ -26,6 +26,7 @@ public class AdminUserListResponse {
   @AllArgsConstructor
   public static class Stats {
     long total;
+    long admins;
     long teachers;
     long students;
     long active;

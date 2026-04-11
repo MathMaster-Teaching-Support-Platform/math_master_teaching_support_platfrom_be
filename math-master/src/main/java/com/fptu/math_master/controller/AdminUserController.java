@@ -1,5 +1,6 @@
 package com.fptu.math_master.controller;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.PageRequest;
@@ -46,17 +47,21 @@ public class AdminUserController {
   @GetMapping
   @Operation(
       summary = "List users with stats",
-      description = "Returns paginated user list with global stats (total, teachers, students, active). "
-          + "Supports filter by role, status, and keyword search on name/email.")
+      description = "Returns paginated user list with global stats (total, admins, teachers, students, active). "
+          + "Supports filter by role (TEACHER|STUDENT_ONLY|ADMIN|all), status, search, sort, and date range.")
   public ApiResponse<AdminUserListResponse> listUsers(
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int pageSize,
       @RequestParam(defaultValue = "all") String role,
       @RequestParam(required = false) String search,
-      @RequestParam(defaultValue = "all") String status) {
+      @RequestParam(defaultValue = "all") String status,
+      @RequestParam(required = false) String sortBy,
+      @RequestParam(required = false) String sortOrder,
+      @RequestParam(required = false) Instant createdFrom,
+      @RequestParam(required = false) Instant createdTo) {
 
     Pageable pageable = PageRequest.of(page, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-    AdminUserListResponse result = adminUserService.listUsers(role, search, status, pageable);
+    AdminUserListResponse result = adminUserService.listUsers(role, search, status, sortBy, sortOrder, createdFrom, createdTo, pageable);
     return ApiResponse.<AdminUserListResponse>builder().result(result).build();
   }
 

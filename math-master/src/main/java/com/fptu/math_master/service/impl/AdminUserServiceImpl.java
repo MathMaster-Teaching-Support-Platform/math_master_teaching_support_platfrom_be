@@ -2,6 +2,7 @@ package com.fptu.math_master.service.impl;
 
 import java.io.IOException;
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -20,7 +21,9 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -58,30 +61,42 @@ public class AdminUserServiceImpl implements AdminUserService {
 
   @Override
   @Transactional(readOnly = true)
-  public AdminUserListResponse listUsers(String role, String search, String status, Pageable pageable) {
-    Specification<User> spec = buildSpec(role, search, status);
-    Page<User> page = userRepository.findAll(spec, pageable);
+  public AdminUserListResponse listUsers(String role, String search, String status,
+      String sortBy, String sortOrder, Instant createdFrom, Instant createdTo, Pageable pageable) {
+
+    // Build pageable with dynamic sorting if sortBy is provided
+    Pageable effectivePageable = pageable;
+    if (sortBy != null && !sortBy.isBlank()) {
+      String field = mapSortField(sortBy);
+      Sort.Direction dir = "asc".equalsIgnoreCase(sortOrder) ? Sort.Direction.ASC : Sort.Direction.DESC;
+      effectivePageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(dir, field));
+    }
+
+    Specification<User> spec = buildSpec(role, search, status, createdFrom, createdTo);
+    Page<User> page = userRepository.findAll(spec, effectivePageable);
 
     List<UserResponse> users = page.getContent().stream()
         .map(this::toResponse)
         .collect(Collectors.toList());
 
     long total = userRepository.countNonDeleted();
+    long admins = userRepository.countByRoleName("ADMIN");
     long teachers = userRepository.countByRoleName("TEACHER");
-    long students = userRepository.countByRoleName("STUDENT");
+    long students = userRepository.countStudentOnly();
     long active = userRepository.countByStatus(Status.ACTIVE);
 
     return AdminUserListResponse.builder()
         .users(users)
         .stats(AdminUserListResponse.Stats.builder()
             .total(total)
+            .admins(admins)
             .teachers(teachers)
             .students(students)
             .active(active)
             .build())
         .pagination(AdminUserListResponse.Pagination.builder()
-            .page(pageable.getPageNumber())
-            .pageSize(pageable.getPageSize())
+            .page(effectivePageable.getPageNumber())
+            .pageSize(effectivePageable.getPageSize())
             .totalItems(page.getTotalElements())
             .totalPages(page.getTotalPages())
             .build())
@@ -123,7 +138,7 @@ public class AdminUserServiceImpl implements AdminUserService {
   @Override
   @Transactional(readOnly = true)
   public void exportUsersToExcel(String role, String search, String status, HttpServletResponse response) {
-    Specification<User> spec = buildSpec(role, search, status);
+    Specification<User> spec = buildSpec(role, search, status, null, null);
     List<User> users = userRepository.findAll(spec);
 
     response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -173,12 +188,15 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
   }
 
-  private Specification<User> buildSpec(String role, String search, String status) {
+  private Specification<User> buildSpec(String role, String search, String status, Instant createdFrom, Instant createdTo) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
 
-      // Exclude soft-deleted users
-      predicates.add(cb.notEqual(root.get("status"), Status.DELETED));
+      // Exclude soft-deleted users (unless status filter explicitly requests DELETED)
+      boolean filteringDeleted = status != null && "DELETED".equalsIgnoreCase(status);
+      if (!filteringDeleted) {
+        predicates.add(cb.notEqual(root.get("status"), Status.DELETED));
+      }
 
       if (search != null && !search.isBlank()) {
         String kw = "%" + search.toLowerCase() + "%";
@@ -189,8 +207,26 @@ public class AdminUserServiceImpl implements AdminUserService {
       }
 
       if (role != null && !role.isBlank() && !"all".equalsIgnoreCase(role)) {
-        Join<Object, Object> roles = root.join("roles", JoinType.LEFT);
-        predicates.add(cb.equal(cb.upper(roles.get("name")), role.toUpperCase()));
+        if ("STUDENT_ONLY".equalsIgnoreCase(role)) {
+          // Has STUDENT role AND does NOT have TEACHER role
+          Join<Object, Object> studentJoin = root.join("roles", JoinType.INNER);
+          predicates.add(cb.equal(cb.upper(studentJoin.get("name")), "STUDENT"));
+          // Subquery: exclude users who also have TEACHER role
+          jakarta.persistence.criteria.Subquery<Long> teacherSub = query.subquery(Long.class);
+          jakarta.persistence.criteria.Root<User> subRoot = teacherSub.from(User.class);
+          Join<Object, Object> subRoleJoin = subRoot.join("roles", JoinType.INNER);
+          teacherSub.select(cb.literal(1L))
+              .where(
+                  cb.equal(subRoot.get("id"), root.get("id")),
+                  cb.equal(cb.upper(subRoleJoin.get("name")), "TEACHER"));
+          predicates.add(cb.not(cb.exists(teacherSub)));
+          if (query.getResultType() != Long.class) {
+            query.distinct(true);
+          }
+        } else {
+          Join<Object, Object> roles = root.join("roles", JoinType.LEFT);
+          predicates.add(cb.equal(cb.upper(roles.get("name")), role.toUpperCase()));
+        }
       }
 
       if (status != null && !status.isBlank() && !"all".equalsIgnoreCase(status)) {
@@ -202,7 +238,26 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
       }
 
+      if (createdFrom != null) {
+        predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), createdFrom));
+      }
+      if (createdTo != null) {
+        predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), createdTo));
+      }
+
       return cb.and(predicates.toArray(new Predicate[0]));
+    };
+  }
+
+  private String mapSortField(String sortBy) {
+    return switch (sortBy.toLowerCase()) {
+      case "fullname", "name" -> "fullName";
+      case "email" -> "email";
+      case "createdate", "joindate", "createdat" -> "createdAt";
+      case "lastlogin" -> "lastLogin";
+      case "status" -> "status";
+      case "username" -> "userName";
+      default -> "createdAt";
     };
   }
 

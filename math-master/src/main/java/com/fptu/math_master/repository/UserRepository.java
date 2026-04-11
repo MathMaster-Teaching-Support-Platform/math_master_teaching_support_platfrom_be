@@ -53,4 +53,7 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 
   @Query("SELECT COUNT(u) FROM User u WHERE u.status != com.fptu.math_master.enums.Status.DELETED")
   long countNonDeleted();
+
+  @Query("SELECT COUNT(DISTINCT u) FROM User u JOIN u.roles r WHERE r.name = 'STUDENT' AND u.status != com.fptu.math_master.enums.Status.DELETED AND NOT EXISTS (SELECT 1 FROM User u2 JOIN u2.roles r2 WHERE u2.id = u.id AND r2.name = 'TEACHER')")
+  long countStudentOnly();
 }
