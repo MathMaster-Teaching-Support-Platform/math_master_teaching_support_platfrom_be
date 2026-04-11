@@ -8,9 +8,11 @@
 > **Base URL:** `http://<host>/admin/subscription-plans`  
 > ⚠️ Không có prefix `/api/` — tất cả admin endpoint đều bắt đầu từ `/admin/...`  
 > **Wrapper response:** Tất cả response đều được wrap bởi `ApiResponse<T>`:
+>
 > ```json
 > { "code": 1000, "message": null, "result": <data> }
 > ```
+>
 > - `code: 1000` = thành công
 > - Không có field `success` hay `data` — FE phải đọc từ `result`
 
@@ -27,10 +29,12 @@ GET /admin/subscription-plans
 ```
 
 ### Auth
+
 - Header: `Authorization: Bearer <JWT>`
 - Role: `ADMIN`
 
 ### Request
+
 Không có params — trả toàn bộ danh sách (không bị xóa mềm).
 
 ### Response — 200 OK
@@ -155,6 +159,7 @@ POST /admin/subscription-plans
 ```
 
 ### Auth
+
 - Header: `Authorization: Bearer <JWT>`
 - Role: `ADMIN`
 
@@ -166,10 +171,7 @@ POST /admin/subscription-plans
   "description": "Dành cho giáo viên nâng cao",
   "price": 299000,
   "billingCycle": "MONTH",
-  "features": [
-    "Tạo không giới hạn bài giảng",
-    "Lưu trữ 50GB"
-  ],
+  "features": ["Tạo không giới hạn bài giảng", "Lưu trữ 50GB"],
   "featured": false,
   "isPublic": true
 }
@@ -177,15 +179,15 @@ POST /admin/subscription-plans
 
 **Request fields:**
 
-| Field          | Type                      | Bắt buộc | Mô tả                                     |
-|----------------|---------------------------|----------|-------------------------------------------|
-| `name`         | string                    | ✅        | Tên gói, không rỗng                       |
-| `description`  | string                    | ❌        | Mô tả                                     |
-| `price`        | number (>= 0) hoặc `null` | ❌        | `null` = enterprise/liên hệ; `0` = miễn phí |
-| `billingCycle` | enum string               | ✅        | `FOREVER` \| `MONTH` \| `THREE_MONTHS` \| `SIX_MONTHS` \| `YEAR` \| `CUSTOM` |
-| `features`     | string[]                  | ✅        | Ít nhất 1 phần tử, mỗi phần tử không rỗng |
-| `featured`     | boolean                   | ❌        | Default `false`                           |
-| `isPublic`     | boolean                   | ❌        | Default `true`                            |
+| Field          | Type                      | Bắt buộc | Mô tả                                                                        |
+| -------------- | ------------------------- | -------- | ---------------------------------------------------------------------------- |
+| `name`         | string                    | ✅       | Tên gói, không rỗng                                                          |
+| `description`  | string                    | ❌       | Mô tả                                                                        |
+| `price`        | number (>= 0) hoặc `null` | ❌       | `null` = enterprise/liên hệ; `0` = miễn phí                                  |
+| `billingCycle` | enum string               | ✅       | `FOREVER` \| `MONTH` \| `THREE_MONTHS` \| `SIX_MONTHS` \| `YEAR` \| `CUSTOM` |
+| `features`     | string[]                  | ✅       | Ít nhất 1 phần tử, mỗi phần tử không rỗng                                    |
+| `featured`     | boolean                   | ❌       | Default `false`                                                              |
+| `isPublic`     | boolean                   | ❌       | Default `true`                                                               |
 
 ### Response — 201 Created
 
@@ -248,14 +250,15 @@ PUT /admin/subscription-plans/:planId
 ```
 
 ### Auth
+
 - Header: `Authorization: Bearer <JWT>`
 - Role: `ADMIN`
 
 ### Path Params
 
-| Param    | Type         | Bắt buộc | Mô tả            |
-|----------|--------------|----------|------------------|
-| `planId` | UUID (v7)    | ✅        | ID của gói đăng ký |
+| Param    | Type      | Bắt buộc | Mô tả              |
+| -------- | --------- | -------- | ------------------ |
+| `planId` | UUID (v7) | ✅       | ID của gói đăng ký |
 
 ### Request Body (partial update — chỉ gửi field cần thay đổi)
 
@@ -272,16 +275,16 @@ PUT /admin/subscription-plans/:planId
 }
 ```
 
-| Field          | Type                                  | Bắt buộc | Mô tả                             |
-|----------------|---------------------------------------|----------|-----------------------------------|
-| `name`         | string (not blank)                    | ✅        | Nếu gửi → slug được tái sinh      |
-| `description`  | string                                | ❌        |                                   |
-| `price`        | number (>= 0) hoặc `null`             | ❌        |                                   |
-| `billingCycle` | enum string                           | ❌        |                                   |
-| `features`     | string[]                              | ❌        | Nếu gửi phải có ít nhất 1 phần tử |
-| `featured`     | boolean                               | ❌        |                                   |
-| `isPublic`     | boolean                               | ❌        |                                   |
-| `status`       | `"ACTIVE"` \| `"INACTIVE"`            | ❌        | Để deactivate plan                |
+| Field          | Type                       | Bắt buộc | Mô tả                             |
+| -------------- | -------------------------- | -------- | --------------------------------- |
+| `name`         | string (not blank)         | ✅       | Nếu gửi → slug được tái sinh      |
+| `description`  | string                     | ❌       |                                   |
+| `price`        | number (>= 0) hoặc `null`  | ❌       |                                   |
+| `billingCycle` | enum string                | ❌       |                                   |
+| `features`     | string[]                   | ❌       | Nếu gửi phải có ít nhất 1 phần tử |
+| `featured`     | boolean                    | ❌       |                                   |
+| `isPublic`     | boolean                    | ❌       |                                   |
+| `status`       | `"ACTIVE"` \| `"INACTIVE"` | ❌       | Để deactivate plan                |
 
 ### Response — 200 OK
 
@@ -315,14 +318,15 @@ DELETE /admin/subscription-plans/:planId
 ```
 
 ### Auth
+
 - Header: `Authorization: Bearer <JWT>`
 - Role: `ADMIN`
 
 ### Path Params
 
 | Param    | Type      | Bắt buộc | Mô tả              |
-|----------|-----------|----------|--------------------|
-| `planId` | UUID (v7) | ✅        | ID của gói đăng ký |
+| -------- | --------- | -------- | ------------------ |
+| `planId` | UUID (v7) | ✅       | ID của gói đăng ký |
 
 ### Response — 200 OK
 
@@ -363,14 +367,15 @@ GET /admin/subscription-plans/stats
 ```
 
 ### Auth
+
 - Header: `Authorization: Bearer <JWT>`
 - Role: `ADMIN`
 
 ### Query Params
 
-| Param   | Type   | Bắt buộc | Mô tả                              |
-|---------|--------|----------|------------------------------------|
-| `month` | string | ❌        | Format `YYYY-MM`, mặc định tháng hiện tại |
+| Param   | Type   | Bắt buộc | Mô tả                                     |
+| ------- | ------ | -------- | ----------------------------------------- |
+| `month` | string | ❌       | Format `YYYY-MM`, mặc định tháng hiện tại |
 
 > ⚠️ Không có param `compareWith` — BE luôn so sánh với tháng liền trước
 
@@ -422,19 +427,20 @@ GET /admin/subscription-plans/subscriptions
 > ⚠️ **Thay đổi so với FE đề xuất**: FE đề xuất `/api/admin/subscriptions`, BE dùng `/admin/subscription-plans/subscriptions` (cùng controller, dễ quản lý)
 
 ### Auth
+
 - Header: `Authorization: Bearer <JWT>`
 - Role: `ADMIN`
 
 ### Query Params
 
-| Param    | Type   | Bắt buộc | Mô tả                                               |
-|----------|--------|----------|-----------------------------------------------------|
-| `page`   | number | ❌        | 0-indexed, mặc định `0` ⚠️ (khác với FE đề xuất là 1-indexed) |
-| `size`   | number | ❌        | Mặc định `10`, tối đa không giới hạn phía BE        |
-| `status` | string | ❌        | `"ACTIVE"` \| `"EXPIRED"` \| `"CANCELLED"` \| `"all"` (mặc định: không lọc) |
-| `planId` | UUID   | ❌        | Lọc theo plan                                       |
-| `sortBy` | string | ❌        | Mặc định `"createdAt"`                              |
-| `order`  | string | ❌        | `"ASC"` \| `"DESC"`, mặc định `"DESC"`              |
+| Param    | Type   | Bắt buộc | Mô tả                                                                       |
+| -------- | ------ | -------- | --------------------------------------------------------------------------- |
+| `page`   | number | ❌       | 0-indexed, mặc định `0` ⚠️ (khác với FE đề xuất là 1-indexed)               |
+| `size`   | number | ❌       | Mặc định `10`, tối đa không giới hạn phía BE                                |
+| `status` | string | ❌       | `"ACTIVE"` \| `"EXPIRED"` \| `"CANCELLED"` \| `"all"` (mặc định: không lọc) |
+| `planId` | UUID   | ❌       | Lọc theo plan                                                               |
+| `sortBy` | string | ❌       | Mặc định `"createdAt"`                                                      |
+| `order`  | string | ❌       | `"ASC"` \| `"DESC"`, mặc định `"DESC"`                                      |
 
 ### Response — 200 OK
 
@@ -483,7 +489,10 @@ GET /admin/subscription-plans/subscriptions
 
 ```json
 // 400 — status không hợp lệ
-{ "code": 9999, "message": "No enum constant com.fptu.math_master.enums.UserSubscriptionStatus.INVALID" }
+{
+  "code": 9999,
+  "message": "No enum constant com.fptu.math_master.enums.UserSubscriptionStatus.INVALID"
+}
 ```
 
 ### Validation BE áp dụng
@@ -502,17 +511,17 @@ GET /admin/subscription-plans/subscriptions
 
 ## Danh sách thay đổi so với đề xuất của FE
 
-| Feature                        | Thay đổi                                                                 | Lý do                                                                      |
-|--------------------------------|--------------------------------------------------------------------------|----------------------------------------------------------------------------|
-| Tất cả endpoints               | Không có prefix `/api/` — dùng `/admin/...` trực tiếp                    | Project không cấu hình `context-path = /api`                               |
-| Response wrapper               | `{ "code": 1000, "result": ... }` thay vì `{ "success": true, "data": ... }` | Codebase dùng `ApiResponse<T>` chuẩn                                   |
-| Recent Subscriptions endpoint  | `/admin/subscription-plans/subscriptions` thay vì `/api/admin/subscriptions` | Cùng controller, dễ quản lý authorization                               |
-| Pagination (subscriptions)     | 0-indexed (`page=0` = trang 1), response field `content`/`totalElements` | Spring Data Page convention                                                |
-| `billingCycle` values          | Enum: `FOREVER`, `MONTH`, `THREE_MONTHS`, `SIX_MONTHS`, `YEAR`, `CUSTOM` | FE dùng `"3months"`, `"6months"` — BE dùng enum names                   |
-| `price: null` cho enterprise   | Dùng `price: null`, không có field `contactSales: boolean`               | Đủ để FE phân biệt: `price===null` → "Liên hệ"                           |
-| `stats` trong plan response    | Tính từ `user_subscriptions`, không phải `transactions`                  | Transactions không có `planId` trong model hiện tại                       |
-| `compareWith` param (stats)    | Không có — BE tự so sánh với tháng trước liền kề                         | Đơn giản hóa, đủ dùng cho dashboard                                       |
-| Slug                           | Auto-sinh từ `name`, FE không cần gửi                                    | Tránh nhập thủ công, tránh lỗi                                             |
+| Feature                       | Thay đổi                                                                     | Lý do                                                 |
+| ----------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Tất cả endpoints              | Không có prefix `/api/` — dùng `/admin/...` trực tiếp                        | Project không cấu hình `context-path = /api`          |
+| Response wrapper              | `{ "code": 1000, "result": ... }` thay vì `{ "success": true, "data": ... }` | Codebase dùng `ApiResponse<T>` chuẩn                  |
+| Recent Subscriptions endpoint | `/admin/subscription-plans/subscriptions` thay vì `/api/admin/subscriptions` | Cùng controller, dễ quản lý authorization             |
+| Pagination (subscriptions)    | 0-indexed (`page=0` = trang 1), response field `content`/`totalElements`     | Spring Data Page convention                           |
+| `billingCycle` values         | Enum: `FOREVER`, `MONTH`, `THREE_MONTHS`, `SIX_MONTHS`, `YEAR`, `CUSTOM`     | FE dùng `"3months"`, `"6months"` — BE dùng enum names |
+| `price: null` cho enterprise  | Dùng `price: null`, không có field `contactSales: boolean`                   | Đủ để FE phân biệt: `price===null` → "Liên hệ"        |
+| `stats` trong plan response   | Tính từ `user_subscriptions`, không phải `transactions`                      | Transactions không có `planId` trong model hiện tại   |
+| `compareWith` param (stats)   | Không có — BE tự so sánh với tháng trước liền kề                             | Đơn giản hóa, đủ dùng cho dashboard                   |
+| Slug                          | Auto-sinh từ `name`, FE không cần gửi                                        | Tránh nhập thủ công, tránh lỗi                        |
 
 ---
 
@@ -529,12 +538,12 @@ GET /admin/subscription-plans/subscriptions
 
 ## UNKNOWN đã giải đáp
 
-| Câu hỏi FE                                            | Trả lời BE                                                                                   |
-|-------------------------------------------------------|----------------------------------------------------------------------------------------------|
-| `price: null` vs `contactSales: boolean`?             | Dùng `price: null` — đơn giản và đủ                                                         |
-| BE tự sinh `slug` hay FE gửi?                         | BE tự sinh từ `name`                                                                         |
-| Thay đổi giá khi có user active?                      | Cho phép — giá mới áp dụng cho subscription mới; user cũ giữ nguyên amount đã ghi trong record |
-| Xóa plan có user active?                              | Không cho phép (400) — phải deactivate trước bằng `PUT status=INACTIVE`                     |
-| Endpoint gia hạn `POST .../renew`?                    | Chưa có trong sprint này — ghi vào backlog                                                   |
-| API chi tiết subscription hay dùng row data?          | Dùng row data — không cần API riêng                                                          |
-| Period stats mặc định là tháng hiện tại hay rolling?  | Tháng hiện tại (UTC calendar month)                                                          |
+| Câu hỏi FE                                           | Trả lời BE                                                                                     |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `price: null` vs `contactSales: boolean`?            | Dùng `price: null` — đơn giản và đủ                                                            |
+| BE tự sinh `slug` hay FE gửi?                        | BE tự sinh từ `name`                                                                           |
+| Thay đổi giá khi có user active?                     | Cho phép — giá mới áp dụng cho subscription mới; user cũ giữ nguyên amount đã ghi trong record |
+| Xóa plan có user active?                             | Không cho phép (400) — phải deactivate trước bằng `PUT status=INACTIVE`                        |
+| Endpoint gia hạn `POST .../renew`?                   | Chưa có trong sprint này — ghi vào backlog                                                     |
+| API chi tiết subscription hay dùng row data?         | Dùng row data — không cần API riêng                                                            |
+| Period stats mặc định là tháng hiện tại hay rolling? | Tháng hiện tại (UTC calendar month)                                                            |

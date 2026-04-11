@@ -1,7 +1,13 @@
 package com.fptu.math_master.entity;
 
+import java.math.BigDecimal;
+import java.util.List;
+
+import org.hibernate.annotations.Type;
+
 import com.fptu.math_master.enums.BillingCycle;
 import com.fptu.math_master.enums.SubscriptionPlanStatus;
+
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
@@ -9,15 +15,12 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
-import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.Type;
 
 @Builder
 @AllArgsConstructor

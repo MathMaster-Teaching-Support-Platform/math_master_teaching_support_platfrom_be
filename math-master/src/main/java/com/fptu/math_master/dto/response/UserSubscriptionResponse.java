@@ -1,9 +1,11 @@
 package com.fptu.math_master.dto.response;
 
-import com.fptu.math_master.enums.UserSubscriptionStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+
+import com.fptu.math_master.enums.UserSubscriptionStatus;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
