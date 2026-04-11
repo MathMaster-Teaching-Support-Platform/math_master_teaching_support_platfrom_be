@@ -4,6 +4,7 @@ import com.fptu.math_master.dto.request.CanonicalQuestionRequest;
 import com.fptu.math_master.dto.request.GenerateCanonicalQuestionsRequest;
 import com.fptu.math_master.dto.response.CanonicalQuestionResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionsBatchResponse;
+import com.fptu.math_master.dto.response.QuestionResponse;
 import com.fptu.math_master.entity.CanonicalQuestion;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.exception.AppException;
@@ -11,8 +12,10 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.CanonicalQuestionRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.CanonicalQuestionService;
+import com.fptu.math_master.service.QuestionService;
 import com.fptu.math_master.service.QuestionTemplateService;
 import com.fptu.math_master.util.SecurityUtils;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +35,7 @@ public class CanonicalQuestionServiceImpl implements CanonicalQuestionService {
   CanonicalQuestionRepository canonicalQuestionRepository;
   UserRepository userRepository;
   QuestionTemplateService questionTemplateService;
+  QuestionService questionService;
 
   @Override
   @Transactional
@@ -54,18 +58,49 @@ public class CanonicalQuestionServiceImpl implements CanonicalQuestionService {
   }
 
   @Override
+  @Transactional
+  public CanonicalQuestionResponse updateCanonicalQuestion(UUID id, CanonicalQuestionRequest request) {
+    CanonicalQuestion canonicalQuestion = getCanonicalQuestionAndValidateAccess(id);
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    canonicalQuestion.setTitle(request.getTitle());
+    canonicalQuestion.setProblemText(request.getProblemText());
+    canonicalQuestion.setSolutionSteps(request.getSolutionSteps());
+    canonicalQuestion.setDiagramDefinition(request.getDiagramDefinition());
+    canonicalQuestion.setProblemType(request.getProblemType());
+    canonicalQuestion.setCognitiveLevel(request.getCognitiveLevel());
+    canonicalQuestion.setUpdatedBy(currentUserId);
+    canonicalQuestion.setUpdatedAt(Instant.now());
+
+    canonicalQuestion = canonicalQuestionRepository.save(canonicalQuestion);
+    return mapToResponse(canonicalQuestion);
+  }
+
+  @Override
+  @Transactional
+  public void deleteCanonicalQuestion(UUID id) {
+    CanonicalQuestion canonicalQuestion = getCanonicalQuestionAndValidateAccess(id);
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    canonicalQuestion.setDeletedAt(Instant.now());
+    canonicalQuestion.setDeletedBy(currentUserId);
+    canonicalQuestion.setUpdatedBy(currentUserId);
+    canonicalQuestion.setUpdatedAt(Instant.now());
+    canonicalQuestionRepository.save(canonicalQuestion);
+  }
+
+  @Override
   @Transactional(readOnly = true)
   public CanonicalQuestionResponse getCanonicalQuestionById(UUID id) {
-    CanonicalQuestion canonicalQuestion =
-        canonicalQuestionRepository
-            .findByIdAndNotDeleted(id)
-            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
-
-    UUID currentUserId = SecurityUtils.getCurrentUserId();
-    if (!canonicalQuestion.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
-      throw new AppException(ErrorCode.TEMPLATE_ACCESS_DENIED);
-    }
+    CanonicalQuestion canonicalQuestion = getCanonicalQuestionAndValidateAccess(id);
     return mapToResponse(canonicalQuestion);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<QuestionResponse> getQuestionsByCanonicalQuestion(UUID id, Pageable pageable) {
+    getCanonicalQuestionAndValidateAccess(id);
+    return questionService.getQuestionsByCanonicalQuestion(id, pageable);
   }
 
   @Override
@@ -81,17 +116,22 @@ public class CanonicalQuestionServiceImpl implements CanonicalQuestionService {
   @Transactional
   public GeneratedQuestionsBatchResponse generateQuestionsFromCanonical(
       UUID canonicalQuestionId, GenerateCanonicalQuestionsRequest request) {
+    getCanonicalQuestionAndValidateAccess(canonicalQuestionId);
+
+    return questionTemplateService.generateQuestionsFromCanonical(canonicalQuestionId, request);
+  }
+
+  private CanonicalQuestion getCanonicalQuestionAndValidateAccess(UUID id) {
     CanonicalQuestion canonicalQuestion =
         canonicalQuestionRepository
-            .findByIdAndNotDeleted(canonicalQuestionId)
+            .findByIdAndNotDeleted(id)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
     if (!canonicalQuestion.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
       throw new AppException(ErrorCode.TEMPLATE_ACCESS_DENIED);
     }
-
-    return questionTemplateService.generateQuestionsFromCanonical(canonicalQuestionId, request);
+    return canonicalQuestion;
   }
 
   private CanonicalQuestionResponse mapToResponse(CanonicalQuestion canonicalQuestion) {

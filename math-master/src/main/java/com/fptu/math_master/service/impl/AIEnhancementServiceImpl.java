@@ -28,6 +28,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
   private static final Pattern PLACEHOLDER_PATTERN =
       Pattern.compile("\\{\\{\\s*(.+?)\\s*}}|\\{\\s*(.+?)\\s*}");
+  private static final Pattern DOUBLE_BRACE_PLACEHOLDER_PATTERN =
+      Pattern.compile("\\{\\{\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*}}");
 
   GeminiService geminiService;
   ObjectMapper objectMapper = new ObjectMapper();
@@ -714,28 +716,257 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         canonicalQuestion.getSolutionSteps() != null
           ? fillText(canonicalQuestion.getSolutionSteps(), params)
           : null;
-
-      GeneratedQuestionSample baseSample = generateQuestion(template, sampleIndex);
-
       String diagramData =
         canonicalQuestion.getDiagramDefinition() != null
           ? renderDiagramTemplate(canonicalQuestion.getDiagramDefinition(), params)
           : renderDiagramTemplate(template.getDiagramTemplate(), params);
 
-      // Keep existing option/correct-answer guarantees from current generator,
-      // then override semantic text from canonical source for AI-like similarity mode.
-      return GeneratedQuestionSample.builder()
-        .questionText(canonicalProblem != null && !canonicalProblem.isBlank() ? canonicalProblem : baseSample.getQuestionText())
-        .options(baseSample.getOptions())
-        .correctAnswer(baseSample.getCorrectAnswer())
-        .explanation(baseSample.getExplanation())
-        .solutionSteps(canonicalSolution != null && !canonicalSolution.isBlank() ? canonicalSolution : baseSample.getSolutionSteps())
-        .diagramData(diagramData)
-        .calculatedDifficulty(difficulty)
-        .usedParameters(params)
-        .answerCalculation(baseSample.getAnswerCalculation())
-        .build();
+      String fallbackQuestionText =
+          canonicalProblem != null && !canonicalProblem.isBlank()
+              ? canonicalProblem
+              : fillTemplateText(template.getTemplateText(), params);
+      String fallbackExplanation =
+          canonicalSolution != null && !canonicalSolution.isBlank()
+              ? canonicalSolution
+              : "AI-generated explanation from canonical source";
+
+      try {
+        String prompt =
+            buildCanonicalGenerationPrompt(
+                canonicalQuestion, template, params, fallbackQuestionText, fallbackExplanation, sampleIndex);
+        String aiContent = geminiService.sendMessage(prompt);
+        return parseCanonicalGeneratedQuestion(
+            aiContent,
+            template,
+            params,
+            difficulty,
+            fallbackQuestionText,
+            fallbackExplanation,
+            diagramData);
+      } catch (Exception e) {
+        log.error(
+            "Canonical generation failed for canonical '{}' with template '{}': {}",
+            canonicalQuestion.getId(),
+            template.getId(),
+            e.getMessage());
+
+        Map<String, String> fallbackOptions = buildCanonicalFallbackOptions(template, params);
+        String fallbackCorrectAnswer =
+            template.getTemplateType() == QuestionType.MULTIPLE_CHOICE
+                ? "A"
+                : (template.getAnswerFormula() != null ? template.getAnswerFormula() : "N/A");
+
+        return GeneratedQuestionSample.builder()
+            .questionText(fallbackQuestionText)
+            .options(template.getTemplateType() == QuestionType.MULTIPLE_CHOICE ? fallbackOptions : null)
+            .correctAnswer(fallbackCorrectAnswer)
+            .explanation(fallbackExplanation)
+            .solutionSteps(fallbackExplanation)
+            .diagramData(diagramData)
+            .calculatedDifficulty(difficulty)
+            .usedParameters(params)
+            .answerCalculation(template.getAnswerFormula())
+            .build();
       }
+      }
+
+  private String buildCanonicalGenerationPrompt(
+      CanonicalQuestion canonicalQuestion,
+      QuestionTemplate template,
+      Map<String, Object> params,
+      String canonicalProblem,
+      String canonicalSolution,
+      int sampleIndex) {
+    StringBuilder p = new StringBuilder();
+    p.append("Return ONLY valid JSON. No markdown, no extra text.\n\n");
+    p.append("You are a Vietnamese math teacher assistant.\n");
+    p.append("Generate ONE new question inspired by canonical problem and solution.\n");
+    p.append("Keep mathematical consistency with canonical source, but wording can vary naturally.\n\n");
+
+    p.append("CANONICAL PROBLEM:\n").append(canonicalProblem).append("\n\n");
+    p.append("CANONICAL SOLUTION:\n").append(canonicalSolution).append("\n\n");
+
+    if (canonicalQuestion.getDiagramDefinition() != null
+        && !canonicalQuestion.getDiagramDefinition().isBlank()) {
+      p.append("CANONICAL DIAGRAM (optional):\n")
+          .append(canonicalQuestion.getDiagramDefinition())
+          .append("\n\n");
+    }
+
+    p.append("QUESTION TYPE: ").append(template.getTemplateType()).append("\n");
+    p.append("SAMPLE INDEX: ").append(sampleIndex + 1).append("\n");
+    p.append("PARAMETERS (backend picked): ").append(serializeParamsForPrompt(params)).append("\n\n");
+
+    p.append("Rules:\n");
+    p.append("1. Output strictly in Vietnamese with natural wording.\n");
+    p.append("2. Keep question mathematically aligned with canonical problem/solution.\n");
+    if (template.getTemplateType() == QuestionType.MULTIPLE_CHOICE) {
+      p.append("3. Provide exactly 4 options: A, B, C, D.\n");
+      p.append("4. correctAnswer must be one key among A/B/C/D.\n");
+      p.append("5. Ensure one and only one correct option.\n");
+    } else {
+      p.append("3. For non-MCQ, options can be empty object {}.\n");
+      p.append("4. correctAnswer should be the final answer text.\n");
+    }
+    p.append("6. explanation and solutionSteps should be concise, correct, no self-correction.\n");
+    p.append("7. You may provide usedParameters to override placeholders if needed.\n\n");
+
+    p.append("JSON format:\n");
+    p.append("{");
+    p.append("\"questionText\":\"...\",");
+    p.append("\"options\":{\"A\":\"...\",\"B\":\"...\",\"C\":\"...\",\"D\":\"...\"},");
+    p.append("\"correctAnswer\":\"A\",");
+    p.append("\"explanation\":\"...\",");
+    p.append("\"solutionSteps\":\"...\",");
+    p.append("\"difficulty\":\"EASY|MEDIUM|HARD\",");
+    p.append("\"usedParameters\":{},");
+    p.append("\"answerCalculation\":\"...\"");
+    p.append("}\n");
+
+    return p.toString();
+  }
+
+  private GeneratedQuestionSample parseCanonicalGeneratedQuestion(
+      String aiContent,
+      QuestionTemplate template,
+      Map<String, Object> params,
+      QuestionDifficulty fallbackDifficulty,
+      String fallbackQuestionText,
+      String fallbackExplanation,
+      String fallbackDiagramData) {
+    try {
+      String json = repairTruncatedJson(extractJSON(aiContent));
+      JsonNode root = objectMapper.readTree(json);
+
+      Map<String, Object> effectiveParams = resolveEffectiveParameters(root, template, params);
+
+      String questionText = root.path("questionText").asText();
+      if (questionText == null || questionText.isBlank()) {
+        questionText = fallbackQuestionText;
+      }
+      questionText = fillText(questionText, effectiveParams);
+
+      String explanation = root.path("explanation").asText();
+      if (explanation == null || explanation.isBlank()) {
+        explanation = fallbackExplanation;
+      }
+      explanation = fillText(explanation, effectiveParams);
+
+      String solutionSteps = root.path("solutionSteps").asText();
+      if (solutionSteps == null || solutionSteps.isBlank()) {
+        solutionSteps = explanation;
+      }
+      solutionSteps = fillText(solutionSteps, effectiveParams);
+
+      QuestionDifficulty difficulty = fallbackDifficulty;
+      String diffStr = root.path("difficulty").asText("").trim().toUpperCase();
+      if (!diffStr.isBlank()) {
+        try {
+          difficulty = QuestionDifficulty.valueOf(diffStr);
+        } catch (Exception ignored) {
+        }
+      }
+
+      Map<String, String> options = null;
+      String correctAnswer;
+
+      if (template.getTemplateType() == QuestionType.MULTIPLE_CHOICE) {
+        options = parseCanonicalOptions(root.path("options"), effectiveParams);
+        Map<String, String> templateOptions = buildTemplateOptions(template, effectiveParams);
+        if (options.isEmpty() && !templateOptions.isEmpty()) {
+          options = new LinkedHashMap<>(templateOptions);
+        }
+        ensureCanonicalFourOptionKeys(options);
+
+        String correctKey = root.path("correctAnswer").asText();
+        if (correctKey == null || correctKey.isBlank() || !options.containsKey(correctKey.trim())) {
+          correctKey = "A";
+        }
+        correctAnswer = correctKey.trim();
+      } else {
+        correctAnswer = root.path("correctAnswer").asText();
+        if (correctAnswer == null || correctAnswer.isBlank()) {
+          correctAnswer = template.getAnswerFormula() != null ? template.getAnswerFormula() : "N/A";
+        }
+      }
+
+      String answerCalculation = root.path("answerCalculation").asText();
+      if (answerCalculation == null || answerCalculation.isBlank()) {
+        answerCalculation = template.getAnswerFormula();
+      }
+
+      return GeneratedQuestionSample.builder()
+          .questionText(questionText)
+          .options(options)
+          .correctAnswer(correctAnswer)
+          .explanation(explanation)
+          .solutionSteps(solutionSteps)
+          .diagramData(fallbackDiagramData)
+          .calculatedDifficulty(difficulty)
+          .usedParameters(effectiveParams)
+          .answerCalculation(answerCalculation)
+          .build();
+    } catch (Exception e) {
+      log.error("Failed parsing canonical generated question: {}", e.getMessage());
+      Map<String, String> fallbackOptions = buildCanonicalFallbackOptions(template, params);
+      return GeneratedQuestionSample.builder()
+          .questionText(fallbackQuestionText)
+          .options(template.getTemplateType() == QuestionType.MULTIPLE_CHOICE ? fallbackOptions : null)
+          .correctAnswer(template.getTemplateType() == QuestionType.MULTIPLE_CHOICE ? "A" : "N/A")
+          .explanation(fallbackExplanation)
+          .solutionSteps(fallbackExplanation)
+          .diagramData(fallbackDiagramData)
+          .calculatedDifficulty(fallbackDifficulty)
+          .usedParameters(params)
+          .answerCalculation(template.getAnswerFormula())
+          .build();
+    }
+  }
+
+  private Map<String, String> parseCanonicalOptions(JsonNode optionsNode, Map<String, Object> params) {
+    Map<String, String> options = new LinkedHashMap<>();
+    if (optionsNode == null || !optionsNode.isObject()) {
+      return options;
+    }
+
+    Iterator<String> fields = optionsNode.fieldNames();
+    while (fields.hasNext()) {
+      String key = fields.next();
+      String value = optionsNode.path(key).asText();
+      if (value == null || value.isBlank()) {
+        continue;
+      }
+      options.put(key, renderOptionValue(value, params));
+    }
+    return options;
+  }
+
+  private void ensureCanonicalFourOptionKeys(Map<String, String> options) {
+    if (options == null) {
+      return;
+    }
+    String[] keys = {"A", "B", "C", "D"};
+    for (String key : keys) {
+      options.putIfAbsent(key, "Lua chon " + key);
+    }
+    options.keySet().retainAll(Arrays.asList(keys));
+  }
+
+  private Map<String, String> buildCanonicalFallbackOptions(
+      QuestionTemplate template, Map<String, Object> params) {
+    Map<String, String> templateOptions = buildTemplateOptions(template, params);
+    if (!templateOptions.isEmpty()) {
+      ensureCanonicalFourOptionKeys(templateOptions);
+      return templateOptions;
+    }
+
+    Map<String, String> fallback = new LinkedHashMap<>();
+    fallback.put("A", "Lua chon A");
+    fallback.put("B", "Lua chon B");
+    fallback.put("C", "Lua chon C");
+    fallback.put("D", "Lua chon D");
+    return fallback;
+  }
 
   /** Pick random parameter values within defined ranges, seeded by sampleIndex for variety */
   @SuppressWarnings("unchecked")
@@ -1302,6 +1533,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       String baseQuestionText,
       int sampleIndex) {
     boolean textualOptions = templateUsesTextualOptions(template);
+    boolean optionPlaceholderMode = templateUsesDynamicOptionPlaceholders(template);
+    Set<String> optionPlaceholderNames = collectOptionPlaceholderNames(template);
     StringBuilder p = new StringBuilder();
     p.append("Return ONLY a JSON object. No markdown, no explanation outside JSON.\n\n");
     p.append("Task: Generate a math question in Vietnamese with 4 options (A,B,C,D).\n\n");
@@ -1322,7 +1555,17 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         .append(" → prefer key ")
         .append(new String[] {"B", "C", "D", "A", "B"}[sampleIndex % 5])
         .append(").\n");
-    if (textualOptions) {
+    if (optionPlaceholderMode) {
+      p.append(
+        "2. DO NOT generate option values yourself. Keep options empty {} (or omit options).\n");
+      p.append("3. Provide usedParameters for option placeholders: ")
+          .append(optionPlaceholderNames)
+        .append(".\n");
+      p.append(
+        "4. If placeholder {{para}} exists, generate one concise Vietnamese paragraph for key para.\n");
+      p.append(
+        "5. Keep placeholder values plain text (no wrapping with {{}} in usedParameters).\n");
+    } else if (textualOptions) {
       p.append(
         "2. Create 3 wrong options as plausible statement-level distractors (text), keep style consistent with the template.\n");
       p.append("3. All 4 option values must be distinct statements.\n");
@@ -1349,8 +1592,13 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       "11. You MAY propose usedParameters as numeric values. Backend will validate and use them to render final diagram and substitute placeholders.\n\n");
 
     p.append("JSON format:\n");
-    p.append(
+    if (optionPlaceholderMode) {
+      p.append(
+        "{\"questionText\":\"...\",\"options\":{},");
+    } else {
+      p.append(
         "{\"questionText\":\"...\",\"options\":{\"A\":\"n\",\"B\":\"n\",\"C\":\"n\",\"D\":\"n\"},");
+    }
     p.append(
         "\"correctAnswer\":\"X\",\"explanation\":\"...\",\"difficulty\":\"EASY|MEDIUM|HARD\",");
     p.append("\"usedParameters\":{");
@@ -1436,8 +1684,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
       // Parse options
       Map<String, String> options = new LinkedHashMap<>();
+      boolean optionPlaceholderMode = templateUsesDynamicOptionPlaceholders(template);
       JsonNode optionsNode = null;
-      if (root.has("options") && !root.get("options").isNull()) {
+      if (!optionPlaceholderMode && root.has("options") && !root.get("options").isNull()) {
         optionsNode = root.get("options");
         Iterator<String> fields = optionsNode.fieldNames();
         while (fields.hasNext()) {
@@ -1447,7 +1696,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       }
 
       Map<String, String> templateOptions = buildTemplateOptions(template, effectiveParams);
-      if (!templateOptions.isEmpty()
+      if (optionPlaceholderMode && !templateOptions.isEmpty()) {
+        options = new LinkedHashMap<>(templateOptions);
+      } else if (!templateOptions.isEmpty()
           && !aiOptionsUseTemplateParameters(optionsNode, effectiveParams)
           && !containsValueApprox(templateOptions, effectiveCorrectAnswer)) {
         log.warn(
@@ -1456,7 +1707,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       }
 
       // Ensure all 4 keys exist
-      ensureFourOptions(options, effectiveCorrectAnswer, effectiveParams);
+      if (!optionPlaceholderMode) {
+        ensureFourOptions(options, effectiveCorrectAnswer, effectiveParams);
+      }
 
       // Always find the correct key by matching the pre-computed answer
       String correctKey = findKeyByValue(options, effectiveCorrectAnswer);
@@ -1517,9 +1770,13 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       effective.putAll(fallbackParams);
     }
 
-    if (root == null || template == null || template.getParameters() == null) {
+    if (root == null || template == null) {
       return effective;
     }
+
+    Map<String, Object> definedParameters =
+        template.getParameters() != null ? template.getParameters() : Collections.emptyMap();
+    Set<String> dynamicPlaceholderNames = collectTemplatePlaceholders(template);
 
     JsonNode usedParametersNode = root.path("usedParameters");
     if (!usedParametersNode.isObject()) {
@@ -1527,14 +1784,27 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     }
 
     boolean updated = false;
-    for (Map.Entry<String, Object> entry : template.getParameters().entrySet()) {
-      String paramName = entry.getKey();
+    Iterator<String> aiParamFields = usedParametersNode.fieldNames();
+    while (aiParamFields.hasNext()) {
+      String paramName = aiParamFields.next();
       JsonNode valueNode = usedParametersNode.get(paramName);
       if (valueNode == null || valueNode.isNull()) {
         continue;
       }
 
-      if (!(entry.getValue() instanceof Map<?, ?> defMapAny)) {
+      Object definedParam = definedParameters.get(paramName);
+      if (!(definedParam instanceof Map<?, ?> defMapAny)) {
+        if (!dynamicPlaceholderNames.contains(paramName)) {
+          continue;
+        }
+
+        Object dynamicValue = parseDynamicPlaceholderValue(valueNode);
+        if (dynamicValue == null) {
+          continue;
+        }
+
+        effective.put(paramName, dynamicValue);
+        updated = true;
         continue;
       }
 
@@ -1574,6 +1844,27 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     Double doubleValue = extractDoubleValue(valueNode);
     return doubleValue;
+  }
+
+  private Object parseDynamicPlaceholderValue(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return null;
+    }
+
+    if (node.isIntegralNumber()) {
+      long value = node.longValue();
+      if (value <= Integer.MAX_VALUE && value >= Integer.MIN_VALUE) {
+        return (int) value;
+      }
+      return value;
+    }
+
+    if (node.isFloatingPointNumber()) {
+      return node.doubleValue();
+    }
+
+    String text = node.asText("").trim();
+    return text.isBlank() ? null : text;
   }
 
   private Long extractLongValue(JsonNode node) {
@@ -1697,6 +1988,80 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       }
     }
     return false;
+  }
+
+  private boolean templateUsesDynamicOptionPlaceholders(QuestionTemplate template) {
+    return !collectOptionPlaceholderNames(template).isEmpty();
+  }
+
+  private Set<String> collectOptionPlaceholderNames(QuestionTemplate template) {
+    Set<String> names = new LinkedHashSet<>();
+    if (template == null || template.getOptionsGenerator() == null) {
+      return names;
+    }
+
+    String[] keys = {"A", "B", "C", "D"};
+    for (String key : keys) {
+      Object value = template.getOptionsGenerator().get(key);
+      String raw = extractTemplateOptionRawValue(value);
+      collectDoubleBracePlaceholders(raw, names);
+    }
+
+    return names;
+  }
+
+  private Set<String> collectTemplatePlaceholders(QuestionTemplate template) {
+    Set<String> names = new LinkedHashSet<>();
+    if (template == null) {
+      return names;
+    }
+
+    if (template.getParameters() != null) {
+      names.addAll(template.getParameters().keySet());
+    }
+
+    if (template.getTemplateText() != null) {
+      for (Object value : template.getTemplateText().values()) {
+        collectPlaceholdersFromObject(value, names);
+      }
+    }
+
+    names.addAll(collectOptionPlaceholderNames(template));
+    collectDoubleBracePlaceholders(template.getDiagramTemplate(), names);
+    collectDoubleBracePlaceholders(template.getAnswerFormula(), names);
+    return names;
+  }
+
+  @SuppressWarnings("unchecked")
+  private void collectPlaceholdersFromObject(Object value, Set<String> names) {
+    if (value == null) {
+      return;
+    }
+    if (value instanceof String s) {
+      collectDoubleBracePlaceholders(s, names);
+      return;
+    }
+    if (value instanceof Map<?, ?> map) {
+      for (Object nested : ((Map<?, Object>) map).values()) {
+        collectPlaceholdersFromObject(nested, names);
+      }
+      return;
+    }
+    if (value instanceof Iterable<?> iterable) {
+      for (Object nested : iterable) {
+        collectPlaceholdersFromObject(nested, names);
+      }
+    }
+  }
+
+  private void collectDoubleBracePlaceholders(String text, Set<String> names) {
+    if (text == null || text.isBlank()) {
+      return;
+    }
+    Matcher matcher = DOUBLE_BRACE_PLACEHOLDER_PATTERN.matcher(text);
+    while (matcher.find()) {
+      names.add(matcher.group(1));
+    }
   }
 
   private String fillText(String raw, Map<String, Object> params) {
