@@ -18,6 +18,7 @@ public class AdminTransactionResponse {
   private UUID id;
   private UUID userId;
   private String userName;
+  private String userEmail;
   /**
    * planId is not applicable in the current wallet-deposit model.
    * Will be null until a subscription plan entity is introduced.
@@ -29,5 +30,7 @@ public class AdminTransactionResponse {
   private String status;
   /** Always "payos" — the only payment gateway integrated */
   private String paymentMethod;
+  /** PayOS order code — unique per transaction */
+  private Long orderCode;
   private Instant createdAt;
 }

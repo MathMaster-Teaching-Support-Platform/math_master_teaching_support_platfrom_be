@@ -1,13 +1,17 @@
 package com.fptu.math_master.service.impl;
 
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -18,10 +22,15 @@ import com.fptu.math_master.dto.response.AdminDashboardStatsResponse;
 import com.fptu.math_master.dto.response.AdminQuickStatsResponse;
 import com.fptu.math_master.dto.response.AdminRevenueByMonthResponse;
 import com.fptu.math_master.dto.response.AdminSystemStatusResponse;
+import com.fptu.math_master.dto.response.AdminTransactionPageResponse;
 import com.fptu.math_master.dto.response.AdminTransactionResponse;
+import com.fptu.math_master.dto.response.AdminTransactionStatsResponse;
+import com.fptu.math_master.entity.Transaction;
 import com.fptu.math_master.enums.EnrollmentStatus;
 import com.fptu.math_master.enums.Status;
 import com.fptu.math_master.enums.TransactionStatus;
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.EnrollmentRepository;
 import com.fptu.math_master.repository.LessonPlanRepository;
 import com.fptu.math_master.repository.MindmapRepository;
@@ -29,6 +38,7 @@ import com.fptu.math_master.repository.TransactionRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AdminDashboardService;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -192,27 +202,121 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
   @Override
   @Transactional(readOnly = true)
-  public Page<AdminTransactionResponse> getAllTransactions(Pageable pageable) {
-    return transactionRepository.findAllWithUser(pageable)
-        .map(tx -> {
-          String userName = tx.getWallet() != null && tx.getWallet().getUser() != null
-              ? tx.getWallet().getUser().getFullName()
-              : "Unknown";
-          String mappedStatus = mapStatus(tx.getStatus());
-          return AdminTransactionResponse.builder()
-              .id(tx.getId())
-              .userId(tx.getWallet() != null && tx.getWallet().getUser() != null
-                  ? tx.getWallet().getUser().getId()
-                  : null)
-              .userName(userName)
-              .planId(null)
-              .planName(tx.getDescription())
-              .amount(tx.getAmount())
-              .status(mappedStatus)
-              .paymentMethod("payos")
-              .createdAt(tx.getCreatedAt())
-              .build();
-        });
+  public AdminTransactionPageResponse getAllTransactions(
+      List<TransactionStatus> statuses, String search, Pageable pageable) {
+
+    String searchParam = (search != null && !search.isBlank()) ? search.trim() : "";
+    Page<Transaction> page = transactionRepository.findAllWithUserFiltered(statuses, searchParam, pageable);
+    List<AdminTransactionResponse> items = page.getContent().stream()
+        .map(this::mapToAdminTransactionResponse)
+        .toList();
+
+    return AdminTransactionPageResponse.builder()
+        .items(items)
+        .totalItems(page.getTotalElements())
+        .totalPages(page.getTotalPages())
+        .currentPage(page.getNumber())
+        .build();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public AdminTransactionStatsResponse getTransactionStats() {
+    long total = transactionRepository.count();
+    long completed = transactionRepository.countByStatusIn(List.of(TransactionStatus.SUCCESS));
+    long pending = transactionRepository.countByStatusIn(
+        List.of(TransactionStatus.PENDING, TransactionStatus.PROCESSING));
+    long failed = transactionRepository.countByStatusIn(
+        List.of(TransactionStatus.FAILED, TransactionStatus.CANCELLED));
+    BigDecimal revenue = transactionRepository.sumAllSuccessfulRevenue();
+    long totalRevenue = revenue != null ? revenue.longValue() : 0L;
+
+    return AdminTransactionStatsResponse.builder()
+        .total(total)
+        .completed(completed)
+        .pending(pending)
+        .failed(failed)
+        .totalRevenue(totalRevenue)
+        .build();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public AdminTransactionResponse getTransactionById(UUID transactionId) {
+    Transaction tx = transactionRepository.findByIdWithUser(transactionId)
+        .orElseThrow(() -> new AppException(ErrorCode.TRANSACTION_NOT_FOUND));
+    return mapToAdminTransactionResponse(tx);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public void exportTransactionsCsv(List<TransactionStatus> statuses, String search,
+      HttpServletResponse response) {
+    response.setContentType("text/csv; charset=UTF-8");
+    response.setHeader("Content-Disposition", "attachment; filename=\"transactions.csv\"");
+
+    String searchParam = (search != null && !search.isBlank()) ? search.trim() : "";
+    // Fetch all matching (no size limit) using an unpaged pageable
+    Page<Transaction> page = transactionRepository.findAllWithUserFiltered(
+        statuses, searchParam, Pageable.unpaged());
+
+    DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+        .withZone(ZoneOffset.UTC);
+
+    try (PrintWriter writer = response.getWriter()) {
+      writer.println("id,userId,userName,userEmail,planName,amount,status,paymentMethod,orderCode,createdAt");
+      for (Transaction tx : page.getContent()) {
+        AdminTransactionResponse dto = mapToAdminTransactionResponse(tx);
+        writer.printf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s%n",
+            csv(dto.getId() != null ? dto.getId().toString() : ""),
+            csv(dto.getUserId() != null ? dto.getUserId().toString() : ""),
+            csv(dto.getUserName()),
+            csv(dto.getUserEmail()),
+            csv(dto.getPlanName()),
+            dto.getAmount() != null ? dto.getAmount().toPlainString() : "",
+            csv(dto.getStatus()),
+            csv(dto.getPaymentMethod()),
+            dto.getOrderCode() != null ? dto.getOrderCode().toString() : "",
+            dto.getCreatedAt() != null ? fmt.format(dto.getCreatedAt()) : "");
+      }
+    } catch (IOException e) {
+      log.error("Failed to write CSV export", e);
+    }
+  }
+
+  // ── helpers ──────────────────────────────────────────────────────────────────
+
+  private AdminTransactionResponse mapToAdminTransactionResponse(Transaction tx) {
+    String userName = "Unknown";
+    String userEmail = null;
+    UUID userId = null;
+    if (tx.getWallet() != null && tx.getWallet().getUser() != null) {
+      userName = tx.getWallet().getUser().getFullName();
+      userEmail = tx.getWallet().getUser().getEmail();
+      userId = tx.getWallet().getUser().getId();
+    }
+    return AdminTransactionResponse.builder()
+        .id(tx.getId())
+        .userId(userId)
+        .userName(userName)
+        .userEmail(userEmail)
+        .planId(null)
+        .planName(tx.getDescription())
+        .amount(tx.getAmount())
+        .status(mapStatus(tx.getStatus()))
+        .paymentMethod("payos")
+        .orderCode(tx.getOrderCode())
+        .createdAt(tx.getCreatedAt())
+        .build();
+  }
+
+  /** Escape a CSV field value — wraps in quotes if it contains comma, quote or newline */
+  private String csv(String value) {
+    if (value == null) return "";
+    if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+      return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+    return value;
   }
 
   private String mapStatus(TransactionStatus status) {

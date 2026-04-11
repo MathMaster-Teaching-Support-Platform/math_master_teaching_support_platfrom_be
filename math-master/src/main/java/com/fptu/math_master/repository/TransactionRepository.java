@@ -15,6 +15,8 @@ import org.springframework.stereotype.Repository;
 import com.fptu.math_master.entity.Transaction;
 import com.fptu.math_master.enums.TransactionStatus;
 
+import java.math.BigDecimal;
+
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
 
@@ -26,8 +28,36 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
       UUID walletId, TransactionStatus status, Pageable pageable);
 
   /** All transactions across all wallets — admin view */
-  @Query("SELECT t FROM Transaction t JOIN FETCH t.wallet w JOIN FETCH w.user")
+    @Query("SELECT t FROM Transaction t LEFT JOIN FETCH t.wallet w LEFT JOIN FETCH w.user")
   Page<Transaction> findAllWithUser(Pageable pageable);
+
+  /**
+   * Admin filtered view: filter by status list and optional search on user full name,
+   * user email, transaction description, or order code.
+   */
+  @Query(
+      "SELECT t FROM Transaction t LEFT JOIN FETCH t.wallet w LEFT JOIN FETCH w.user u "
+          + "WHERE t.status IN :statuses "
+          + "AND (:search = '' "
+          + "  OR LOWER(u.fullName) LIKE CONCAT('%', LOWER(:search), '%') "
+          + "  OR LOWER(u.email) LIKE CONCAT('%', LOWER(:search), '%') "
+          + "  OR LOWER(t.description) LIKE CONCAT('%', LOWER(:search), '%') "
+          + "  OR CAST(t.orderCode AS string) LIKE CONCAT('%', :search, '%'))")
+  Page<Transaction> findAllWithUserFiltered(
+      @Param("statuses") List<TransactionStatus> statuses,
+      @Param("search") String search,
+      Pageable pageable);
+
+  /** Fetch a single transaction with user info eagerly loaded — for detail endpoint */
+    @Query("SELECT t FROM Transaction t LEFT JOIN FETCH t.wallet w LEFT JOIN FETCH w.user WHERE t.id = :id")
+  Optional<Transaction> findByIdWithUser(@Param("id") UUID id);
+
+  /** Count transactions grouped by status list */
+  long countByStatusIn(List<TransactionStatus> statuses);
+
+  /** Sum of ALL SUCCESS transaction amounts (no time window) */
+  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t WHERE t.status = 'SUCCESS'")
+  BigDecimal sumAllSuccessfulRevenue();
 
   /** Sum of SUCCESS deposits in a given time window */
   @Query(
