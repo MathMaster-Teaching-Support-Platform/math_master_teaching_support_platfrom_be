@@ -1,0 +1,64 @@
+@startuml
+
+title Course Generate Flow
+autonumber
+
+actor Teacher
+participant ": CourseGeneratorView" as View
+participant ": CourseController" as Controller
+participant ": CourseServiceImpl" as Service
+participant ": CourseRepositoryFacade\n(Course/Chapter/Lesson Repos)" as Repo
+database "Database" as DB
+participant "Gemini API" as AI
+
+== Generate Course Skeleton ==
+Teacher -> View: Click "Generate Course"
+activate View
+View -> Controller: POST /courses/generate(request)
+activate Controller
+Controller -> Service: generateCourse(request)
+activate Service
+
+Service -> Service: validate teacher role + topic + grade + objectives
+
+Service -> AI: sendMessage(generate curriculum structure prompt)
+activate AI
+AI --> Service: course outline json or error
+deactivate AI
+
+alt AI generation failed
+  Service --> Controller: throw COURSE_GENERATION_FAILED
+  deactivate Service
+  Controller --> View: error response
+  deactivate Controller
+  deactivate View
+else AI generation success
+  Service -> Service: normalize chapters and lesson ordering
+
+  Service -> Repo: save course draft
+  activate Repo
+  Repo -> DB: INSERT course/chapter/lesson rows
+  activate DB
+  DB --> Repo: saved draft
+  deactivate DB
+  Repo --> Service: course aggregate
+  deactivate Repo
+
+  Service -> Repo: load generated course for preview
+  activate Repo
+  Repo -> DB: SELECT course aggregate by id
+  activate DB
+  DB --> Repo: course aggregate
+  deactivate DB
+  Repo --> Service: aggregate
+  deactivate Repo
+
+  Service --> Controller: CourseDraftResponse
+  deactivate Service
+  Controller --> View: 201 Created
+  deactivate Controller
+  View --> Teacher: Preview generated course
+  deactivate View
+end
+
+@enduml

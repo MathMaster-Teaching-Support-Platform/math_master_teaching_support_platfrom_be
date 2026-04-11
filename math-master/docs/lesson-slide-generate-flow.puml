@@ -1,0 +1,76 @@
+@startuml
+
+title Simple Generate Slide Flow (User Side)
+autonumber
+
+actor Teacher
+participant ": LessonSlideView" as View
+participant ": LessonSlideController" as Controller
+participant ": LessonSlideServiceImpl" as Service
+participant ": LessonSlideRepositoryFacade\n(Lesson/Chapter/Subject/Grade/Template Repos)" as Repo
+database "Database" as DB
+participant "Gemini API" as AI
+
+== Generate Slide ==
+Teacher -> View: Click "Generate Slide"
+activate View
+View -> Controller: POST /lesson-slides/generate-pptx-from-json(request)
+activate Controller
+Controller -> Service: generatePptxFromJson(request)
+activate Service
+
+Service -> Service: validate teacher role + request body
+
+Service -> Repo: find lesson by id
+activate Repo
+Repo -> DB: SELECT lesson (not deleted)
+activate DB
+DB --> Repo: lesson row
+deactivate DB
+Repo --> Service: lesson
+deactivate Repo
+
+Service -> Repo: find template by id
+activate Repo
+Repo -> DB: SELECT slide_template (not deleted)
+activate DB
+DB --> Repo: template row
+deactivate DB
+Repo --> Service: template
+deactivate Repo
+
+alt lesson/template not found or template inactive
+  Service --> Controller: throw LESSON_NOT_FOUND / TEMPLATE_NOT_USABLE
+  deactivate Service
+  Controller --> View: error response
+  deactivate Controller
+else valid data
+  Service -> Service: sort slides by slideNumber
+end
+
+Service -> AI: sendMessage(generate slide content prompt)
+activate AI
+AI --> Service: generated content OR error
+deactivate AI
+
+alt AI generation failed
+  Service --> Controller: throw TEMPLATE_GENERATION_FAILED
+  deactivate Service
+  Controller --> View: error response
+  deactivate Controller
+else AI generation success
+  loop For each slide item
+    Service -> Service: inject slide content into template
+  end
+
+  Service -> Service: buildOutputFileName()
+
+  Service --> Controller: BinaryFileData (.pptx)
+  deactivate Service
+  Controller --> View: 200 OK (attachment .pptx)
+  View --> Teacher: Download generated .pptx
+  deactivate View
+  deactivate Controller
+end
+
+@enduml

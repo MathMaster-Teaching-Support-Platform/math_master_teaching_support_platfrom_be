@@ -1,0 +1,108 @@
+@startuml
+
+title Student Take Quiz Exam Flow
+autonumber
+
+actor Student
+participant ": StudentExamView" as View
+participant ": ExamAttemptController" as Controller
+participant ": ExamAttemptServiceImpl" as Service
+participant ": ExamRepositoryFacade\n(Exam/Attempt/Question/Answer Repos)" as Repo
+database "Database" as DB
+participant ": AutoGradingService" as Grader
+
+== Start Attempt ==
+Student -> View: Click "Start Quiz Exam"
+activate View
+View -> Controller: POST /exams/{examId}/attempts
+activate Controller
+Controller -> Service: startAttempt(examId)
+activate Service
+
+Service -> Repo: find exam by id (published, within time window)
+activate Repo
+Repo -> DB: SELECT exam
+activate DB
+DB --> Repo: exam row or empty
+deactivate DB
+Repo --> Service: exam
+deactivate Repo
+
+alt exam unavailable
+  Service --> Controller: throw EXAM_NOT_AVAILABLE
+  deactivate Service
+  Controller --> View: 400/404
+  deactivate Controller
+  deactivate View
+else exam available
+  Service -> Repo: create attempt(IN_PROGRESS)
+  activate Repo
+  Repo -> DB: INSERT attempt row
+  activate DB
+  DB --> Repo: attempt row
+  deactivate DB
+  Repo --> Service: attempt
+  deactivate Repo
+
+  Service --> Controller: StartAttemptResponse
+  deactivate Service
+  Controller --> View: 201 Created
+  deactivate Controller
+end
+
+== Submit Attempt ==
+Student -> View: Submit all answers
+activate View
+View -> Controller: POST /attempts/{attemptId}/submit(request)
+activate Controller
+Controller -> Service: submitAttempt(attemptId, answers)
+activate Service
+
+Service -> Repo: validate ownership + attempt status
+activate Repo
+Repo -> DB: SELECT attempt and exam config
+activate DB
+DB --> Repo: attempt aggregate
+deactivate DB
+Repo --> Service: aggregate
+deactivate Repo
+
+alt invalid attempt state
+  Service --> Controller: throw ATTEMPT_NOT_SUBMITTABLE
+  deactivate Service
+  Controller --> View: 400 Bad Request
+  deactivate Controller
+  deactivate View
+else valid attempt
+  Service -> Repo: save answers
+  activate Repo
+  Repo -> DB: INSERT/UPDATE answer rows
+  activate DB
+  DB --> Repo: saved
+  deactivate DB
+  Repo --> Service: persisted answers
+  deactivate Repo
+
+  Service -> Grader: grade(attemptId)
+  activate Grader
+  Grader --> Service: score + correct detail
+  deactivate Grader
+
+  Service -> Repo: finalize attempt(SUBMITTED) + score
+  activate Repo
+  Repo -> DB: UPDATE attempt submittedAt, score
+  activate DB
+  DB --> Repo: updated
+  deactivate DB
+  Repo --> Service: finalized attempt
+  deactivate Repo
+
+  Service --> Controller: ExamResultResponse
+  deactivate Service
+  Controller --> View: 200 OK
+  deactivate Controller
+  View --> Student: Show result and explanations
+  deactivate View
+end
+
+@enduml

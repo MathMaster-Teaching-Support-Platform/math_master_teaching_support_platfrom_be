@@ -1,0 +1,79 @@
+@startuml
+
+title Student Chatbot Flow
+autonumber
+
+actor Student
+participant ": ChatView" as View
+participant ": ChatController" as Controller
+participant ": ChatServiceImpl" as Service
+participant ": ChatRepositoryFacade\n(ChatSession/Message/Memory Repos)" as Repo
+database "Database" as DB
+participant "Gemini API" as AI
+
+== Send Message ==
+Student -> View: Type question and click "Send"
+activate View
+View -> Controller: POST /chat/sessions/{sessionId}/messages(request)
+activate Controller
+Controller -> Service: sendMessage(sessionId, request)
+activate Service
+
+Service -> Service: validate student role + input safety
+
+Service -> Repo: load session and ownership
+activate Repo
+Repo -> DB: SELECT chat_session
+activate DB
+DB --> Repo: session row or empty
+deactivate DB
+Repo --> Service: session
+deactivate Repo
+
+alt session not found
+  Service --> Controller: throw SESSION_NOT_FOUND
+  deactivate Service
+  Controller --> View: 404 Not Found
+  deactivate Controller
+  deactivate View
+else session found
+  Service -> Repo: load memory context(last N messages + lesson context)
+  activate Repo
+  Repo -> DB: SELECT chat_message and memory chunks
+  activate DB
+  DB --> Repo: context dataset
+  deactivate DB
+  Repo --> Service: context
+  deactivate Repo
+
+  Service -> AI: sendMessage(question + context)
+  activate AI
+  AI --> Service: answer or error
+  deactivate AI
+
+  alt AI request failed
+    Service --> Controller: throw CHATBOT_UNAVAILABLE
+    deactivate Service
+    Controller --> View: error response
+    deactivate Controller
+    deactivate View
+  else AI answered
+    Service -> Repo: save user and assistant messages
+    activate Repo
+    Repo -> DB: INSERT chat_message rows
+    activate DB
+    DB --> Repo: saved
+    deactivate DB
+    Repo --> Service: persisted
+    deactivate Repo
+
+    Service --> Controller: ChatMessageResponse
+    deactivate Service
+    Controller --> View: 200 OK
+    deactivate Controller
+    View --> Student: Display assistant answer
+    deactivate View
+  end
+end
+
+@enduml

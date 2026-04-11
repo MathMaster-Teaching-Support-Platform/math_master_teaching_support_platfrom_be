@@ -1,0 +1,61 @@
+@startuml
+
+title Simple Deposit Flow
+autonumber
+
+actor Student
+participant ": WalletView" as View
+participant ": PaymentController" as Controller
+participant ": PaymentServiceImpl" as Service
+participant ": PaymentRepositoryFacade\n(Wallet/Transaction/PaymentOrder Repos)" as Repo
+database "Database" as DB
+participant "Payment Gateway" as Gateway
+
+== Create Deposit Order ==
+Student -> View: Click "Deposit"
+activate View
+View -> Controller: POST /wallet/deposits(request)
+activate Controller
+Controller -> Service: createDepositOrder(request)
+activate Service
+
+Service -> Service: validate student role + amount limits
+
+alt invalid amount
+  Service --> Controller: throw INVALID_DEPOSIT_AMOUNT
+  deactivate Service
+  Controller --> View: 400 Bad Request
+  deactivate Controller
+  deactivate View
+else valid amount
+  Service -> Repo: create payment order(PENDING)
+  activate Repo
+  Repo -> DB: INSERT payment_order
+  activate DB
+  DB --> Repo: payment_order row
+  deactivate DB
+  Repo --> Service: order
+  deactivate Repo
+
+  Service -> Gateway: createCheckoutSession(order)
+  activate Gateway
+  Gateway --> Service: checkoutUrl + gatewayTxnId
+  deactivate Gateway
+
+  Service -> Repo: save gateway transaction reference
+  activate Repo
+  Repo -> DB: UPDATE payment_order gatewayTxnId
+  activate DB
+  DB --> Repo: updated
+  deactivate DB
+  Repo --> Service: updated order
+  deactivate Repo
+
+  Service --> Controller: DepositOrderResponse(checkoutUrl)
+  deactivate Service
+  Controller --> View: 201 Created
+  deactivate Controller
+  View --> Student: Redirect to payment gateway
+end
+
+@enduml

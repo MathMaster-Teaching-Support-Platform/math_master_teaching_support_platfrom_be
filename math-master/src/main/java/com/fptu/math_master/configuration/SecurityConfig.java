@@ -107,8 +107,10 @@ public class SecurityConfig {
             "http://localhost:5173",
             "http://localhost:3000",
             "http://localhost:3001",
+        "https://sep.nhducminhqt.name.vn",
             "https://nhducminhqt.name.vn",
-            "http://nhducminhqt.name.vn"));
+        "http://nhducminhqt.name.vn",
+        "https://math-master-teaching-support-platfr.vercel.app"));
 
     configuration.setAllowedMethods(
         Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));

@@ -1,0 +1,108 @@
+@startuml
+
+title Teacher Verification Flow (Simple but Accurate)
+autonumber
+
+actor Student
+actor Admin
+participant ": TeacherProfileView" as View
+participant ": TeacherProfileController" as Controller
+participant ": TeacherProfileServiceImpl" as Service
+participant ": ProfileRepositoryFacade\n(User/TeacherProfile/Role Repos)" as Repo
+database "Database" as DB
+participant "MinIO" as ObjectStorage
+participant ": EmailService + StreamPublisher" as Notify
+
+== Submit Verification Profile ==
+Student -> View: Fill profile + upload verification files
+activate View
+View -> Controller: POST /teacher-profiles/submit(request, files)
+activate Controller
+Controller -> Service: submitProfile(request, files, userId)
+activate Service
+
+Service -> Repo: check existing profile by userId
+activate Repo
+Repo -> DB: SELECT teacher_profile by userId
+activate DB
+DB --> Repo: profile exists or empty
+deactivate DB
+Repo --> Service: result
+deactivate Repo
+
+alt profile already exists
+  Service --> Controller: throw PROFILE_ALREADY_EXISTS
+  deactivate Service
+  Controller --> View: error response
+  deactivate Controller
+  deactivate View
+else first submission
+  Service -> ObjectStorage: uploadFilesAsZip(files)
+  activate ObjectStorage
+  ObjectStorage --> Service: verificationDocumentKey
+  deactivate ObjectStorage
+
+  Service -> Repo: save teacher_profile(status=PENDING)
+  activate Repo
+  Repo -> DB: INSERT teacher_profile
+  activate DB
+  DB --> Repo: saved profile
+  deactivate DB
+  Repo --> Service: profile
+  deactivate Repo
+
+  Service --> Controller: TeacherProfileResponse(PENDING)
+  deactivate Service
+  Controller --> View: 201 Created
+  deactivate Controller
+  View --> Student: Submission sent, waiting for admin review
+  deactivate View
+end
+
+== Admin Review Profile ==
+Admin -> View: Open pending profiles
+activate View
+View -> Controller: POST /teacher-profiles/{profileId}/review
+activate Controller
+Controller -> Service: reviewProfile(profileId, status, adminComment)
+activate Service
+
+Service -> Repo: find profile and validate status=PENDING
+activate Repo
+Repo -> DB: SELECT teacher_profile by id
+activate DB
+DB --> Repo: profile row
+deactivate DB
+Repo --> Service: profile
+deactivate Repo
+
+alt approve
+  Service -> Repo: add TEACHER role + update profile APPROVED
+  activate Repo
+  Repo -> DB: UPDATE user_role + teacher_profile
+  activate DB
+  DB --> Repo: updated
+  deactivate DB
+  Repo --> Service: approved
+  deactivate Repo
+  Service -> Notify: send approval email + in-app notification
+else reject
+  Service -> Repo: update profile REJECTED + adminComment
+  activate Repo
+  Repo -> DB: UPDATE teacher_profile
+  activate DB
+  DB --> Repo: updated
+  deactivate DB
+  Repo --> Service: rejected
+  deactivate Repo
+  Service -> Notify: send rejection email + in-app notification
+end
+
+Service --> Controller: TeacherProfileResponse(APPROVED/REJECTED)
+deactivate Service
+Controller --> View: 200 OK
+deactivate Controller
+View --> Admin: Review completed
+deactivate View
+
+@enduml

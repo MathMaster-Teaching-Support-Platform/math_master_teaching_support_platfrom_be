@@ -1,0 +1,80 @@
+@startuml
+
+title Teacher Public Resource Flow (Publish For Student Learning)
+autonumber
+
+actor Teacher
+actor Student
+participant ": MindmapManagementView" as TeacherView
+participant ": MindmapBrowseView" as StudentView
+participant ": MindmapController" as Controller
+participant ": MindmapServiceImpl" as Service
+participant ": MindmapRepository" as Repo
+database "Database" as DB
+
+== Teacher Publish Resource ==
+Teacher -> TeacherView: Click "Publish" on mindmap
+activate TeacherView
+TeacherView -> Controller: PATCH /mindmaps/{id}/publish
+activate Controller
+Controller -> Service: publishMindmap(id)
+activate Service
+
+Service -> Repo: find mindmap by id and not deleted
+activate Repo
+Repo -> DB: SELECT mindmap
+activate DB
+DB --> Repo: mindmap row or empty
+deactivate DB
+Repo --> Service: mindmap
+deactivate Repo
+
+alt not found or unauthorized
+  Service --> Controller: throw MINDMAP_NOT_FOUND / ACCESS_DENIED
+  deactivate Service
+  Controller --> TeacherView: error response
+  deactivate Controller
+  deactivate TeacherView
+else publish success
+  Service -> Repo: update status = PUBLISHED
+  activate Repo
+  Repo -> DB: UPDATE mindmap
+  activate DB
+  DB --> Repo: updated
+  deactivate DB
+  Repo --> Service: published mindmap
+  deactivate Repo
+
+  Service --> Controller: MindmapResponse(PUBLISHED)
+  deactivate Service
+  Controller --> TeacherView: 200 OK
+  deactivate Controller
+  TeacherView --> Teacher: Resource is now public
+  deactivate TeacherView
+end
+
+== Student Learn From Public Resource ==
+Student -> StudentView: Open public learning resource
+activate StudentView
+StudentView -> Controller: GET /mindmaps/public/lesson/{lessonId}
+activate Controller
+Controller -> Service: getPublishedMindmapsByLesson(lessonId, pageable)
+activate Service
+
+Service -> Repo: query mindmaps with status PUBLISHED
+activate Repo
+Repo -> DB: SELECT mindmaps WHERE status='PUBLISHED'
+activate DB
+DB --> Repo: published list
+deactivate DB
+Repo --> Service: page of mindmaps
+deactivate Repo
+
+Service --> Controller: Page<MindmapResponse>
+deactivate Service
+Controller --> StudentView: 200 OK
+deactivate Controller
+StudentView --> Student: See published resource and start learning
+deactivate StudentView
+
+@enduml

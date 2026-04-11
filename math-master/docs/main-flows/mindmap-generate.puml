@@ -1,0 +1,72 @@
+@startuml
+
+title Mindmap Generate Flow
+autonumber
+
+actor Teacher
+participant ": MindmapView" as View
+participant ": MindmapController" as Controller
+participant ": MindmapServiceImpl" as Service
+participant ": MindmapRepositoryFacade\n(Lesson/MindmapNode Repos)" as Repo
+database "Database" as DB
+participant "Gemini API" as AI
+
+== Generate Mindmap ==
+Teacher -> View: Click "Generate Mindmap"
+activate View
+View -> Controller: POST /mindmaps/generate(request)
+activate Controller
+Controller -> Service: generateMindmap(request)
+activate Service
+
+Service -> Service: validate teacher role + prompt + lesson id
+
+Service -> Repo: find lesson by id
+activate Repo
+Repo -> DB: SELECT lesson
+activate DB
+DB --> Repo: lesson row or empty
+deactivate DB
+Repo --> Service: lesson
+deactivate Repo
+
+alt lesson not found
+  Service --> Controller: throw LESSON_NOT_FOUND
+  deactivate Service
+  Controller --> View: 404 Not Found
+  deactivate Controller
+  deactivate View
+else lesson exists
+  Service -> AI: sendMessage(mindmap structure prompt)
+  activate AI
+  AI --> Service: mindmap json or error
+  deactivate AI
+
+  alt AI returned invalid format
+    Service --> Controller: throw MINDMAP_GENERATION_FAILED
+    deactivate Service
+    Controller --> View: error response
+    deactivate Controller
+    deactivate View
+  else valid json
+    Service -> Service: normalize root and child ordering
+
+    Service -> Repo: save mindmap nodes
+    activate Repo
+    Repo -> DB: INSERT/UPDATE mindmap_node tree
+    activate DB
+    DB --> Repo: saved nodes
+    deactivate DB
+    Repo --> Service: persisted mindmap
+    deactivate Repo
+
+    Service --> Controller: MindmapResponse
+    deactivate Service
+    Controller --> View: 201 Created
+    deactivate Controller
+    View --> Teacher: Show editable mindmap
+    deactivate View
+  end
+end
+
+@enduml
