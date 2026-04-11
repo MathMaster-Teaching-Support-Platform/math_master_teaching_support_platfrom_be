@@ -1,5 +1,14 @@
 package com.fptu.math_master.service.impl;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fptu.math_master.configuration.properties.InitProperties;
 import com.fptu.math_master.constant.PredefinedPermission;
 import com.fptu.math_master.constant.PredefinedRole;
@@ -11,15 +20,9 @@ import com.fptu.math_master.repository.PermissionRepository;
 import com.fptu.math_master.repository.RoleRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.ApplicationInitLogic;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementation of {@link ApplicationInitLogic}.
