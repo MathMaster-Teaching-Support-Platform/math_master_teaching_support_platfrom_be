@@ -38,14 +38,14 @@ GET /admin/transactions
 
 **Query params:**
 
-| Param   | Type   | Bắt buộc | Mặc định | Mô tả |
-|---------|--------|----------|----------|------|
-| page    | int    | ❌ | 0  | Trang hiện tại (0-based) |
-| size    | int    | ❌ | 10 | Số dòng mỗi trang |
-| sortBy  | string | ❌ | `createdAt` | Field sort |
-| order   | string | ❌ | `DESC` | `ASC` / `DESC` |
-| status  | string | ❌ | (all) | `completed` \| `pending` \| `failed` |
-| search  | string | ❌ | null | Search theo `userName`, `userEmail`, `orderCode`, `planName` |
+| Param  | Type   | Bắt buộc | Mặc định    | Mô tả                                                        |
+| ------ | ------ | -------- | ----------- | ------------------------------------------------------------ |
+| page   | int    | ❌       | 0           | Trang hiện tại (0-based)                                     |
+| size   | int    | ❌       | 10          | Số dòng mỗi trang                                            |
+| sortBy | string | ❌       | `createdAt` | Field sort                                                   |
+| order  | string | ❌       | `DESC`      | `ASC` / `DESC`                                               |
+| status | string | ❌       | (all)       | `completed` \| `pending` \| `failed`                         |
+| search | string | ❌       | null        | Search theo `userName`, `userEmail`, `orderCode`, `planName` |
 
 **Mapping status FE -> BE:**
 
@@ -186,9 +186,9 @@ GET /admin/transactions/{transactionId}
 
 **Path params:**
 
-| Param | Type | Bắt buộc | Mô tả |
-|-------|------|----------|------|
-| transactionId | UUID | ✅ | ID transaction |
+| Param         | Type | Bắt buộc | Mô tả          |
+| ------------- | ---- | -------- | -------------- |
+| transactionId | UUID | ✅       | ID transaction |
 
 ### Response — 200 OK
 
@@ -252,10 +252,10 @@ GET /admin/transactions/export
 
 **Query params:**
 
-| Param  | Type   | Bắt buộc | Mô tả |
-|--------|--------|----------|------|
-| status | string | ❌ | `completed` \| `pending` \| `failed` |
-| search | string | ❌ | Cùng logic search với list |
+| Param  | Type   | Bắt buộc | Mô tả                                |
+| ------ | ------ | -------- | ------------------------------------ |
+| status | string | ❌       | `completed` \| `pending` \| `failed` |
+| search | string | ❌       | Cùng logic search với list           |
 
 ### Response — 200 OK
 
@@ -304,13 +304,13 @@ id,userId,userName,userEmail,planName,amount,status,paymentMethod,orderCode,crea
 
 ## Danh sách thay đổi so với đề xuất của FE
 
-| Feature | Thay đổi | Lý do |
-|--------|----------|------|
-| Tất cả endpoint | Dùng `/admin/...` thay vì `/api/admin/...` | Project không cấu hình prefix `/api` |
-| List response | Wrapper hiện tại dùng `code` + `result` thay vì `success` + `data` | Chuẩn response thống nhất toàn hệ thống hiện tại |
-| Transaction list item | Có thêm `planId` (null), bổ sung `userEmail`, `orderCode` | Tương thích DTO cũ + đáp ứng FE hiển thị |
-| Status filter | `pending` map sang 2 trạng thái DB (`PENDING`, `PROCESSING`) | Khớp domain enum hiện tại |
-| Stats endpoint | Tách riêng endpoint `/admin/transactions/stats` | Dễ cache/tối ưu và rõ responsibility |
+| Feature               | Thay đổi                                                           | Lý do                                            |
+| --------------------- | ------------------------------------------------------------------ | ------------------------------------------------ |
+| Tất cả endpoint       | Dùng `/admin/...` thay vì `/api/admin/...`                         | Project không cấu hình prefix `/api`             |
+| List response         | Wrapper hiện tại dùng `code` + `result` thay vì `success` + `data` | Chuẩn response thống nhất toàn hệ thống hiện tại |
+| Transaction list item | Có thêm `planId` (null), bổ sung `userEmail`, `orderCode`          | Tương thích DTO cũ + đáp ứng FE hiển thị         |
+| Status filter         | `pending` map sang 2 trạng thái DB (`PENDING`, `PROCESSING`)       | Khớp domain enum hiện tại                        |
+| Stats endpoint        | Tách riêng endpoint `/admin/transactions/stats`                    | Dễ cache/tối ưu và rõ responsibility             |
 
 ---
 

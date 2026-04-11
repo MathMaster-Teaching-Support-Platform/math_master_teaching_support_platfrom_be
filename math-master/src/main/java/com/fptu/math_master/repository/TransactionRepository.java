@@ -1,5 +1,6 @@
 package com.fptu.math_master.repository;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -14,8 +15,6 @@ import org.springframework.stereotype.Repository;
 
 import com.fptu.math_master.entity.Transaction;
 import com.fptu.math_master.enums.TransactionStatus;
-
-import java.math.BigDecimal;
 
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
