@@ -57,6 +57,11 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
   List<Question> findByTemplateIdAndNotDeleted(@Param("templateId") UUID templateId);
 
   @Query(
+      "SELECT q FROM Question q WHERE q.canonicalQuestionId = :canonicalQuestionId AND q.deletedAt IS NULL ORDER BY q.createdAt DESC")
+  Page<Question> findByCanonicalQuestionIdAndNotDeleted(
+      @Param("canonicalQuestionId") UUID canonicalQuestionId, Pageable pageable);
+
+  @Query(
       "SELECT q FROM Question q "
           + "WHERE q.templateId = :templateId "
           + "AND q.questionStatus = 'APPROVED' "

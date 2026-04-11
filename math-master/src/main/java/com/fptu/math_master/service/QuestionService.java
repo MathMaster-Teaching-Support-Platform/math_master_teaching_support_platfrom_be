@@ -38,6 +38,11 @@ public interface QuestionService {
   List<QuestionResponse> getQuestionsByTemplate(UUID templateId);
 
   /**
+   * Get questions by canonical question
+   */
+  Page<QuestionResponse> getQuestionsByCanonicalQuestion(UUID canonicalQuestionId, Pageable pageable);
+
+  /**
    * Update question
    */
   QuestionResponse updateQuestion(UUID id, UpdateQuestionRequest request);

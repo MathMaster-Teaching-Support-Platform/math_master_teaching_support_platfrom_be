@@ -179,6 +179,15 @@ public class QuestionServiceImpl implements QuestionService {
   }
 
   @Override
+  public Page<QuestionResponse> getQuestionsByCanonicalQuestion(
+      UUID canonicalQuestionId, Pageable pageable) {
+    log.info("Fetching questions for canonical question: {}", canonicalQuestionId);
+    return questionRepository
+        .findByCanonicalQuestionIdAndNotDeleted(canonicalQuestionId, pageable)
+        .map(this::mapToResponse);
+  }
+
+  @Override
   public QuestionResponse updateQuestion(UUID id, UpdateQuestionRequest request) {
     Question question =
         questionRepository

@@ -5,6 +5,7 @@ import com.fptu.math_master.dto.request.GenerateCanonicalQuestionsRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.CanonicalQuestionResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionsBatchResponse;
+import com.fptu.math_master.dto.response.QuestionResponse;
 import com.fptu.math_master.service.CanonicalQuestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -19,9 +20,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -56,6 +59,47 @@ public class CanonicalQuestionController {
         .result(canonicalQuestionService.getCanonicalQuestionById(id))
         .build();
   }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(summary = "Update canonical question", description = "Update canonical question owned by current teacher.")
+    public ApiResponse<CanonicalQuestionResponse> updateCanonicalQuestion(
+            @PathVariable UUID id, @Valid @RequestBody CanonicalQuestionRequest request) {
+        return ApiResponse.<CanonicalQuestionResponse>builder()
+                .message("Canonical question updated successfully")
+                .result(canonicalQuestionService.updateCanonicalQuestion(id, request))
+                .build();
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(summary = "Delete canonical question", description = "Soft delete canonical question owned by current teacher.")
+    public ApiResponse<Void> deleteCanonicalQuestion(@PathVariable UUID id) {
+        canonicalQuestionService.deleteCanonicalQuestion(id);
+        return ApiResponse.<Void>builder().message("Canonical question deleted successfully").build();
+    }
+
+    @GetMapping("/{id}/questions")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(summary = "Get questions by canonical question", description = "Get paginated questions linked to a canonical question.")
+    public ApiResponse<Page<QuestionResponse>> getQuestionsByCanonicalQuestion(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDirection) {
+
+        Sort sort =
+                sortDirection.equalsIgnoreCase("ASC")
+                        ? Sort.by(sortBy).ascending()
+                        : Sort.by(sortBy).descending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        return ApiResponse.<Page<QuestionResponse>>builder()
+                .result(canonicalQuestionService.getQuestionsByCanonicalQuestion(id, pageable))
+                .build();
+    }
 
   @GetMapping("/my")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
