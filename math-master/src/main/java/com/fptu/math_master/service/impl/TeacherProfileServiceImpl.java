@@ -71,6 +71,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     TeacherProfile profile =
         TeacherProfile.builder()
             .user(user)
+            .fullName(request.getFullName()) // Use fullName from request for OCR verification
             .schoolName(request.getSchoolName())
             .schoolAddress(request.getSchoolAddress())
             .schoolWebsite(request.getSchoolWebsite())
@@ -79,8 +80,6 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
             .verificationDocumentPath(documentUrl)
             .description(request.getDescription())
             .status(ProfileStatus.PENDING)
-            // Copy personal info from User account (from Google registration)
-            .fullName(user.getFullName())
             .build();
 
     profile = teacherProfileRepository.save(profile);
@@ -105,6 +104,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     }
 
     // Update profile fields
+    profile.setFullName(request.getFullName()); // Update fullName for OCR verification
     profile.setSchoolName(request.getSchoolName());
     profile.setSchoolAddress(request.getSchoolAddress());
     profile.setSchoolWebsite(request.getSchoolWebsite());
@@ -278,7 +278,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
             .id(profile.getId())
             .userId(profile.getUser().getId())
             .userName(profile.getUser().getUserName())
-            .fullName(profile.getUser().getFullName())
+            .fullName(profile.getFullName()) // Use fullName from profile (for OCR verification)
             .schoolName(profile.getSchoolName())
             .schoolAddress(profile.getSchoolAddress())
             .schoolWebsite(profile.getSchoolWebsite())

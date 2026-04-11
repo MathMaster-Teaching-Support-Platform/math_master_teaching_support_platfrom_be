@@ -13,6 +13,7 @@ import com.fptu.math_master.dto.response.LessonSlideGeneratedContentResponse;
 import com.fptu.math_master.dto.response.LessonSlideJsonItemResponse;
 import com.fptu.math_master.dto.response.SlideTemplateResponse;
 import com.fptu.math_master.enums.LessonSlideOutputFormat;
+import com.fptu.math_master.enums.LessonStatus;
 import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.SchoolGrade;
@@ -208,6 +209,21 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
     Lesson saved = lessonRepository.save(lesson);
     return toLessonResponse(saved);
+  }
+
+  @Override
+  public LessonResponse getPublishedLessonSlide(UUID lessonId) {
+    Lesson lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(lessonId)
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    // Only return published lessons
+    if (lesson.getStatus() != LessonStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.LESSON_NOT_FOUND); // Use existing error code
+    }
+
+    return toLessonResponse(lesson);
   }
 
   @Override

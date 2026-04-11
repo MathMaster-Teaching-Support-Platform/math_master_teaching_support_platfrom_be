@@ -64,36 +64,28 @@ public class OcrComparisonResult {
     }
     
     /**
-     * OCR extracted data
+     * OCR extracted data - Only 3 mandatory fields for Math teacher verification
      */
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
     public static class OcrExtractedData {
-        private String fullName;
-        private String idNumber;
-        private String dateOfBirth;
-        private String placeOfBirth;
-        private String address;
-        private String position;      // Teacher position (Giáo viên, etc.)
-        private String schoolName;    // School name from card
-        private String issueDate;
-        private String expiryDate;
+        private String fullName;      // Họ và tên
+        private String position;      // Chức danh + Chuyên môn (must contain Giáo viên/Giảng viên + Toán)
+        private String schoolName;    // Tên trường/Cơ sở giáo dục
     }
     
     /**
-     * Profile data for comparison
+     * Profile data for comparison - Only 3 mandatory fields
      */
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ProfileData {
-        private String fullName;
-        private String idNumber;
-        private String dateOfBirth;
-        private String placeOfBirth;
-        private String address;
+        private String fullName;      // Họ và tên từ profile
+        private String position;      // Chức danh từ profile
+        private String schoolName;    // Tên trường từ profile
     }
 }

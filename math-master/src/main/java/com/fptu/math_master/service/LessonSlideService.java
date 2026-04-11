@@ -18,6 +18,8 @@ public interface LessonSlideService {
 
   LessonResponse confirmLessonContent(UUID lessonId, LessonSlideConfirmContentRequest request);
 
+  LessonResponse getPublishedLessonSlide(UUID lessonId);
+
   SlideTemplateResponse uploadTemplate(
       String name, String description, MultipartFile file, MultipartFile previewImage);
 
