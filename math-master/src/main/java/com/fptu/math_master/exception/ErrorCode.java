@@ -255,7 +255,14 @@ public enum ErrorCode {
   COURSE_LESSON_NOT_FOUND(1151, "Course lesson not found", HttpStatus.NOT_FOUND),
     COURSE_NOT_PUBLISHED(1152, "Course is not published", HttpStatus.BAD_REQUEST),
     QUESTION_TEMPLATE_NOT_IN_BANK(
-            1153, "Question template does not belong to this question bank", HttpStatus.BAD_REQUEST);
+            1153, "Question template does not belong to this question bank", HttpStatus.BAD_REQUEST),
+  SUBSCRIPTION_PLAN_NOT_FOUND(1154, "Subscription plan not found", HttpStatus.NOT_FOUND),
+  SUBSCRIPTION_PLAN_SLUG_EXISTS(1155, "A plan with this slug already exists", HttpStatus.BAD_REQUEST),
+  SUBSCRIPTION_PLAN_HAS_ACTIVE_USERS(
+      1156,
+      "Cannot delete a plan that has active subscribers. Deactivate the plan instead.",
+      HttpStatus.BAD_REQUEST),
+  USER_SUBSCRIPTION_NOT_FOUND(1157, "User subscription not found", HttpStatus.NOT_FOUND);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
