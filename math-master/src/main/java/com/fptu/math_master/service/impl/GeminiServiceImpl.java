@@ -158,7 +158,7 @@ public class GeminiServiceImpl implements GeminiService {
                                   Part.builder().text(prompt).build(),
                                   Part.builder()
                                       .inlineData(
-                                          Part.InlineData.builder()
+                                          GeminiRequest.InlineData.builder()
                                               .mimeType("image/jpeg")
                                               .data(base64Image)
                                               .build())
