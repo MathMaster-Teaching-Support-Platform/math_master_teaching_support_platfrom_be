@@ -45,6 +45,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   MinioProperties minioProperties;
   com.fptu.math_master.service.EmailService emailService;
   StreamPublisher streamPublisher;
+  com.fptu.math_master.service.async.OcrJobProducer ocrJobProducer; // Add OCR job producer
 
   @Override
   @Transactional
@@ -85,6 +86,15 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     profile = teacherProfileRepository.save(profile);
     log.info("Teacher profile submitted successfully for user {} with document: {}", userId, documentUrl);
 
+    // AUTO-TRIGGER OCR verification job
+    try {
+      String jobId = ocrJobProducer.createOcrJob(profile.getId(), userId);
+      log.info("Auto-triggered OCR verification job {} for profile {}", jobId, profile.getId());
+    } catch (Exception e) {
+      log.error("Failed to auto-trigger OCR job for profile {}", profile.getId(), e);
+      // Don't fail the submission if OCR job creation fails
+    }
+
     return mapToResponse(profile);
   }
 
@@ -121,6 +131,16 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
     profile = teacherProfileRepository.save(profile);
     log.info("Teacher profile updated successfully for user {}", userId);
+
+    // AUTO-TRIGGER OCR verification job if profile was rejected and now updated
+    if (profile.getStatus() == ProfileStatus.PENDING && !profile.getOcrVerified()) {
+      try {
+        String jobId = ocrJobProducer.createOcrJob(profile.getId(), userId);
+        log.info("Auto-triggered OCR verification job {} for updated profile {}", jobId, profile.getId());
+      } catch (Exception e) {
+        log.error("Failed to auto-trigger OCR job for updated profile {}", profile.getId(), e);
+      }
+    }
 
     return mapToResponse(profile);
   }
