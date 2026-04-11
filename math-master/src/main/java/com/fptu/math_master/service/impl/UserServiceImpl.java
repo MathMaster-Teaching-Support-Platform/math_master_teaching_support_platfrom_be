@@ -374,6 +374,13 @@ public class UserServiceImpl implements UserService {
     log.info("Password changed successfully for user: {}", userId);
   }
 
+  @Override
+  @Transactional(readOnly = true)
+  public Page<UserResponse> getRecentUsers(Pageable pageable) {
+    log.info("Getting recent users, page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
+    return userRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::mapToUserResponse);
+  }
+
   private UserResponse mapToUserResponse(User user) {
     Set<String> roles = null;
     if (user.getRoles() != null) {

@@ -40,4 +40,7 @@ public interface LessonPlanRepository extends JpaRepository<LessonPlan, UUID> {
   @Query("SELECT lp FROM LessonPlan lp WHERE lp.teacherId = :teacherId AND lp.lessonId = :lessonId AND lp.deletedAt IS NULL")
   Optional<LessonPlan> findByTeacherIdAndLessonIdAndNotDeleted(
       @Param("teacherId") UUID teacherId, @Param("lessonId") UUID lessonId);
+
+  @Query("SELECT COUNT(lp) FROM LessonPlan lp WHERE lp.deletedAt IS NULL")
+  long countAllNotDeleted();
 }

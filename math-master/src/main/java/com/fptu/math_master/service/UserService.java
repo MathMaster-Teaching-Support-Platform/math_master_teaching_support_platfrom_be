@@ -42,4 +42,6 @@ public interface UserService {
 
   // Password management
   void changePassword(ChangePasswordRequest request);
+
+  Page<UserResponse> getRecentUsers(Pageable pageable);
 }

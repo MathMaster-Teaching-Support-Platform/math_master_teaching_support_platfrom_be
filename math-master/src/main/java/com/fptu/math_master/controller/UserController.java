@@ -206,4 +206,19 @@ public class UserController {
     userService.changePassword(request);
     return ApiResponse.<Void>builder().message("Password changed successfully").build();
   }
+
+  @GetMapping("/admin/recent")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(
+      summary = "Get recent users",
+      description = "Returns the most recently registered users, sorted by registration date descending. Only accessible by ADMIN role.")
+  public ApiResponse<Page<UserResponse>> getRecentUsers(
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size) {
+    log.info("REST request to get recent users, page={}, size={}", page, size);
+    Pageable pageable = PageRequest.of(page, size);
+    return ApiResponse.<Page<UserResponse>>builder()
+        .result(userService.getRecentUsers(pageable))
+        .build();
+  }
 }

@@ -71,7 +71,7 @@ public class NotificationController {
         UUID userId = UUID.fromString(jwt.getSubject());
 
         long count = notificationService.getUnreadCount(userId);
-        return ResponseEntity.ok(Map.of("count", count));
+        return ResponseEntity.ok(Map.of("unreadCount", count));
     }
 
     @PostMapping("/send")

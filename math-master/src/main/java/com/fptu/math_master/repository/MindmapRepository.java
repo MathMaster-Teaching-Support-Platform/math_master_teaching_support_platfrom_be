@@ -77,4 +77,7 @@ public interface MindmapRepository
 
   @Query("SELECT COUNT(m) FROM Mindmap m WHERE m.teacherId = :teacherId AND m.deletedAt IS NULL")
   long countByTeacherId(@Param("teacherId") UUID teacherId);
+
+  @Query("SELECT COUNT(m) FROM Mindmap m WHERE m.deletedAt IS NULL")
+  long countAllNotDeleted();
 }

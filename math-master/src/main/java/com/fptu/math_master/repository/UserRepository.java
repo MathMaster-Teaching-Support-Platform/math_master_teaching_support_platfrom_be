@@ -39,4 +39,10 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
   List<User> findByStatus(Status status);
 
   Page<User> findByStatus(Status status, Pageable pageable);
+
+  long countByCreatedAtBetween(java.time.Instant from, java.time.Instant to);
+
+  long countByStatus(Status status);
+
+  Page<User> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

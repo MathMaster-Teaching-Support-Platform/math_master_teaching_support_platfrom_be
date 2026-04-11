@@ -28,4 +28,9 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
       "SELECT COUNT(e) FROM Enrollment e "
           + "WHERE e.courseId = :courseId AND e.status = 'ACTIVE' AND e.deletedAt IS NULL")
   long countActiveEnrollmentsByCourseId(@Param("courseId") UUID courseId);
+
+  long countByStatusAndDeletedAtIsNull(EnrollmentStatus status);
+
+  long countByStatusAndDeletedAtIsNullAndCreatedAtBetween(
+      EnrollmentStatus status, java.time.Instant from, java.time.Instant to);
 }
