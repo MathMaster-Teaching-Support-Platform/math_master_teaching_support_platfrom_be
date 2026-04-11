@@ -101,4 +101,64 @@ public class TeacherProfile extends BaseEntity {
    */
   @Column(name = "reviewed_at")
   private LocalDateTime reviewedAt;
+
+  /**
+   * full_name (for OCR comparison)
+   */
+  @Column(name = "full_name")
+  private String fullName;
+
+  /**
+   * id_number (for OCR comparison)
+   */
+  @Column(name = "id_number")
+  private String idNumber;
+
+  /**
+   * date_of_birth (for OCR comparison)
+   */
+  @Column(name = "date_of_birth")
+  private LocalDateTime dateOfBirth;
+
+  /**
+   * place_of_birth (for OCR comparison)
+   */
+  @Column(name = "place_of_birth")
+  private String placeOfBirth;
+
+  /**
+   * address (for OCR comparison)
+   */
+  @Column(name = "address", columnDefinition = "TEXT")
+  private String address;
+
+  /**
+   * verification_document_path (MinIO path)
+   */
+  @Column(name = "verification_document_path")
+  private String verificationDocumentPath;
+
+  /**
+   * ocr_verified (whether OCR verification was performed)
+   */
+  @Column(name = "ocr_verified")
+  private Boolean ocrVerified;
+
+  /**
+   * ocr_match_score (OCR match percentage)
+   */
+  @Column(name = "ocr_match_score")
+  private Double ocrMatchScore;
+
+  /**
+   * ocr_verification_data (JSON data from OCR)
+   */
+  @Column(name = "ocr_verification_data", columnDefinition = "TEXT")
+  private String ocrVerificationData;
+
+  /**
+   * ocr_verified_at (when OCR was performed)
+   */
+  @Column(name = "ocr_verified_at")
+  private LocalDateTime ocrVerifiedAt;
 }

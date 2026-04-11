@@ -193,4 +193,21 @@ minio:
   verification-bucket: ${MINIO_VERIFICATION_BUCKET:teacher-verifications}
   course-videos-bucket: ${MINIO_COURSE_VIDEOS_BUCKET:course-videos}
 
+# ================================
+# OCR Async Processing Configuration
+# ================================
+ocr:
+  async:
+    enabled: true
+    stream-name: ocr:jobs
+    consumer-group: ocr-workers
+    consumer-name: ${HOSTNAME:worker-1}
+    batch-size: 10
+    poll-timeout: 5000
+    max-retries: 3
+    retry-delay: 5000
+    job-ttl: 86400
+    concurrency: 5
+    test-mode: false
+
 # = [REMOVED DUPLICATE SPRING BLOCK]

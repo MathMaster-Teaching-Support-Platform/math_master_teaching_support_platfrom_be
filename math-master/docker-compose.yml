@@ -139,7 +139,11 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       MINIO_TEMPLATE_BUCKET: ${MINIO_TEMPLATE_BUCKET:-slide-templates}
+      MINIO_VERIFICATION_BUCKET: ${MINIO_VERIFICATION_BUCKET:-teacher-verifications}
       MINIO_COURSE_VIDEOS_BUCKET: ${MINIO_COURSE_VIDEOS_BUCKET:-course-videos}
+
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
     depends_on:
       redis:
         condition: service_healthy

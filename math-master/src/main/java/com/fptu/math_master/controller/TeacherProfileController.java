@@ -3,9 +3,16 @@ package com.fptu.math_master.controller;
 import com.fptu.math_master.dto.request.ProfileReviewRequest;
 import com.fptu.math_master.dto.request.TeacherProfileRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.OcrComparisonResult;
+import com.fptu.math_master.dto.response.OcrJobResponse;
 import com.fptu.math_master.dto.response.TeacherProfileResponse;
+import com.fptu.math_master.dto.ocr.OcrJobResult;
 import com.fptu.math_master.enums.ProfileStatus;
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.service.TeacherProfileService;
+import com.fptu.math_master.service.async.OcrJobProducer;
+import com.fptu.math_master.service.async.OcrJobStatusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,6 +41,8 @@ import org.springframework.web.multipart.MultipartFile;
 public class TeacherProfileController {
 
   TeacherProfileService teacherProfileService;
+  OcrJobProducer ocrJobProducer;
+  OcrJobStatusService ocrJobStatusService;
 
   @Operation(
       summary = "Submit teacher profile",
@@ -132,6 +141,63 @@ public class TeacherProfileController {
   @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<String> getDownloadUrl(@PathVariable UUID profileId) {
     return ApiResponse.<String>builder().result(teacherProfileService.getDownloadUrl(profileId)).build();
+  }
+
+  @Operation(
+      summary = "Verify profile with OCR (Async)",
+      description = "Admin triggers async OCR verification for teacher profile")
+  @PostMapping("/{profileId}/ocr-verify")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<OcrJobResponse> verifyProfileWithOcr(@PathVariable UUID profileId) {
+    UUID adminId = getCurrentUserId();
+    
+    // Create async OCR job
+    String jobId = ocrJobProducer.createOcrJob(profileId, adminId);
+    
+    return ApiResponse.<OcrJobResponse>builder()
+        .result(OcrJobResponse.builder()
+            .jobId(jobId)
+            .status(com.fptu.math_master.enums.OcrJobStatus.PENDING)
+            .message("OCR verification started. Use job ID to check status.")
+            .statusUrl("/api/teacher-profiles/ocr-jobs/" + jobId + "/status")
+            .build())
+        .build();
+  }
+
+  @Operation(
+      summary = "Get OCR job status",
+      description = "Check the status of an OCR verification job")
+  @GetMapping("/ocr-jobs/{jobId}/status")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<OcrJobResult> getOcrJobStatus(@PathVariable String jobId) {
+    OcrJobResult result = ocrJobStatusService.getJobResult(jobId)
+        .orElseThrow(() -> new AppException(ErrorCode.OCR_JOB_NOT_FOUND));
+    
+    return ApiResponse.<OcrJobResult>builder()
+        .result(result)
+        .build();
+  }
+
+  @Operation(
+      summary = "Get OCR job result",
+      description = "Get the final result of a completed OCR verification job")
+  @GetMapping("/ocr-jobs/{jobId}/result")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<OcrComparisonResult> getOcrJobResult(@PathVariable String jobId) {
+    OcrJobResult jobResult = ocrJobStatusService.getJobResult(jobId)
+        .orElseThrow(() -> new AppException(ErrorCode.OCR_JOB_NOT_FOUND));
+    
+    if (!jobResult.isTerminal()) {
+      throw new AppException(ErrorCode.OCR_JOB_NOT_COMPLETED);
+    }
+    
+    if (jobResult.getStatus() == com.fptu.math_master.enums.OcrJobStatus.FAILED) {
+      throw new AppException(ErrorCode.OCR_JOB_FAILED);
+    }
+    
+    return ApiResponse.<OcrComparisonResult>builder()
+        .result(jobResult.getResult())
+        .build();
   }
 
   private UUID getCurrentUserId() {

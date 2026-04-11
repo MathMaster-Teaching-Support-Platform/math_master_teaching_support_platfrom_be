@@ -262,7 +262,10 @@ public enum ErrorCode {
       1156,
       "Cannot delete a plan that has active subscribers. Deactivate the plan instead.",
       HttpStatus.BAD_REQUEST),
-  USER_SUBSCRIPTION_NOT_FOUND(1157, "User subscription not found", HttpStatus.NOT_FOUND);
+  USER_SUBSCRIPTION_NOT_FOUND(1157, "User subscription not found", HttpStatus.NOT_FOUND),
+  OCR_JOB_NOT_FOUND(1158, "OCR job not found", HttpStatus.NOT_FOUND),
+  OCR_JOB_NOT_COMPLETED(1159, "OCR job not completed yet", HttpStatus.BAD_REQUEST),
+  OCR_JOB_FAILED(1160, "OCR job failed", HttpStatus.INTERNAL_SERVER_ERROR);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

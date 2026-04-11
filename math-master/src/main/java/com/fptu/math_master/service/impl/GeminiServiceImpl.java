@@ -136,4 +136,106 @@ public class GeminiServiceImpl implements GeminiService {
       return false;
     }
   }
+
+  @Override
+  public String analyzeImageWithPrompt(byte[] imageBytes, String prompt) {
+    log.info("Analyzing image with Gemini API (model: {})", geminiProperties.getModel());
+    long startTime = System.currentTimeMillis();
+
+    try {
+      // Convert image bytes to base64
+      String base64Image = java.util.Base64.getEncoder().encodeToString(imageBytes);
+
+      // Create request with image and text
+      GeminiRequest request =
+          GeminiRequest.builder()
+              .contents(
+                  Collections.singletonList(
+                      Content.builder()
+                          .role("user")
+                          .parts(
+                              Arrays.asList(
+                                  Part.builder().text(prompt).build(),
+                                  Part.builder()
+                                      .inlineData(
+                                          Part.InlineData.builder()
+                                              .mimeType("image/jpeg")
+                                              .data(base64Image)
+                                              .build())
+                                      .build()))
+                          .build()))
+              .generationConfig(
+                  GeminiRequest.GenerationConfig.builder()
+                      .temperature(0.4)
+                      .maxOutputTokens(8192)
+                      .build())
+              .safetySettings(
+                  Arrays.asList(
+                      SafetySetting.builder()
+                          .category("HARM_CATEGORY_HARASSMENT")
+                          .threshold("BLOCK_NONE")
+                          .build(),
+                      SafetySetting.builder()
+                          .category("HARM_CATEGORY_HATE_SPEECH")
+                          .threshold("BLOCK_NONE")
+                          .build(),
+                      SafetySetting.builder()
+                          .category("HARM_CATEGORY_SEXUALLY_EXPLICIT")
+                          .threshold("BLOCK_NONE")
+                          .build(),
+                      SafetySetting.builder()
+                          .category("HARM_CATEGORY_DANGEROUS_CONTENT")
+                          .threshold("BLOCK_NONE")
+                          .build()))
+              .build();
+
+      String uri =
+          "/v1beta/models/"
+              + geminiProperties.getModel()
+              + ":generateContent?key="
+              + geminiProperties.getApiKey();
+
+      String raw =
+          geminiRestClient
+              .post()
+              .uri(uri)
+              .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+              .body(request)
+              .exchange(
+                  (req, resp) -> {
+                    java.io.InputStream inputStream = resp.getBody();
+                    String body =
+                        new String(
+                            inputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                    int statusCode = resp.getStatusCode().value();
+                    if (statusCode != 200) {
+                      throw new RuntimeException(
+                          "Gemini API returned HTTP " + statusCode + ": " + body);
+                    }
+                    return body;
+                  });
+
+      long duration = System.currentTimeMillis() - startTime;
+      log.info("Gemini API image analysis completed in {} ms", duration);
+
+      if (raw == null || raw.isBlank()) {
+        throw new RuntimeException("Empty response from Gemini API");
+      }
+
+      GeminiResponse response = objectMapper.readValue(raw, GeminiResponse.class);
+      String content = response.getTextContent();
+
+      if (content == null || content.isBlank()) {
+        log.error("Gemini returned no text content. Full response: {}", raw);
+        throw new RuntimeException("Gemini returned no text content");
+      }
+
+      return content;
+
+    } catch (Exception e) {
+      long duration = System.currentTimeMillis() - startTime;
+      log.error("Error analyzing image with Gemini API after {} ms: {}", duration, e.getMessage(), e);
+      throw new RuntimeException("Failed to analyze image with Gemini API: " + e.getMessage(), e);
+    }
+  }
 }

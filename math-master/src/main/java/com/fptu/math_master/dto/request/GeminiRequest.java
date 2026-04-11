@@ -36,6 +36,17 @@ public class GeminiRequest {
   @FieldDefaults(level = AccessLevel.PRIVATE)
   public static class Part {
     String text;
+    InlineData inlineData;
+  }
+
+  @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
+  @Builder
+  @FieldDefaults(level = AccessLevel.PRIVATE)
+  public static class InlineData {
+    String mimeType;
+    String data; // base64 encoded image
   }
 
   @Data
