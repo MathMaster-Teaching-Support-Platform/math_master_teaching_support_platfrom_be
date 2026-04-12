@@ -98,7 +98,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
 
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://ep-green-mouse-ahwgiq0a-pooler.c-3.us-east-1.aws.neon.tech:5432/neondb?sslmode=require&prepareThreshold=0}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-neondb_owner}
@@ -110,8 +110,6 @@ services:
       SPRING_DATA_REDIS_DATABASE: ${SPRING_DATA_REDIS_DATABASE:-0}
 
       SERVER_PORT: 8080
-      FRONTEND_URL: ${FRONTEND_URL:-https://sep.nhducminhqt.name.vn}
-      BACKEND_URL: ${BACKEND_URL:-https://nhducminhqt.name.vn/api}
       APP_INIT_ENABLED: ${APP_INIT_ENABLED:-false}
 
       MAIL_USERNAME: ${MAIL_USERNAME:-nsn15102004@gmail.com}
