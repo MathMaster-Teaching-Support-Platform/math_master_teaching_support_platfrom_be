@@ -4,9 +4,9 @@ spring:
       on-profile: prod
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-green-mouse-ahwgiq0a-pooler.c-3.us-east-1.aws.neon.tech:5432/neondb?sslmode=require&prepareThreshold=0}
+    username: ${SPRING_DATASOURCE_USERNAME:neondb_owner}
+    password: ${SPRING_DATASOURCE_PASSWORD:npg_ZuSN4IPnBd7o}
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -31,17 +31,17 @@ spring:
 
   data:
     redis:
-      host: ${SPRING_DATA_REDIS_HOST}
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
-      password: ${SPRING_DATA_REDIS_PASSWORD:${REDIS_PASSWORD}}
+      password: ${SPRING_DATA_REDIS_PASSWORD:${REDIS_PASSWORD:12345}}
       database: ${SPRING_DATA_REDIS_DATABASE:0}
       timeout: 5000ms
 
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
+    username: ${MAIL_USERNAME:nsn15102004@gmail.com}
+    password: ${MAIL_PASSWORD:avpq ilzm egtk uhdh}
     properties:
       mail:
         smtp:
@@ -59,59 +59,59 @@ server:
       remote-ip-header: x-forwarded-for
 
 jwt:
-  signerKey: ${JWT_SIGNERKEY}
+  signerKey: ${JWT_SIGNERKEY:1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij}
   valid-duration: ${JWT_VALID_DURATION:3600}
   refreshable-duration: ${JWT_REFRESHABLE_DURATION:36000}
 
 app:
-  frontend-url: ${FRONTEND_URL}
-  backend-url: ${BACKEND_URL}
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  backend-url: ${BACKEND_URL:http://localhost:8080}
   init:
     enabled: ${APP_INIT_ENABLED:false}
 
     admin:
       username: ${ADMIN_USERNAME:admin}
-      password: ${ADMIN_PASSWORD}
+      password: ${ADMIN_PASSWORD:Admin@123456}
       email: ${ADMIN_GMAIL:admin@mathmaster.com}
       fullname: ${ADMIN_FULLNAME:System Administrator}
 
     student:
       username: ${STUDENT_USERNAME:student}
-      password: ${STUDENT_PASSWORD}
+      password: ${STUDENT_PASSWORD:Student@123456}
       email: ${STUDENT_GMAIL:student@mathmaster.com}
       fullname: ${STUDENT_FULLNAME:Student User}
 
     teacher:
       username: ${TEACHER_USERNAME:teacher}
-      password: ${TEACHER_PASSWORD}
+      password: ${TEACHER_PASSWORD:Teacher@123456}
       email: ${TEACHER_GMAIL:teacher@mathmaster.com}
       fullname: ${TEACHER_FULLNAME:Teacher User}
 
 payos:
-  client-id: ${PAYOS_CLIENT_ID}
-  api-key: ${PAYOS_API_KEY}
-  checksum-key: ${PAYOS_CHECKSUM_KEY}
-  return-url: ${PAYOS_RETURN_URL}
-  cancel-url: ${PAYOS_CANCEL_URL}
+  client-id: ${PAYOS_CLIENT_ID:3af710f4-e502-4ddb-b99d-72ffa68f8423}
+  api-key: ${PAYOS_API_KEY:b5087001-a7a7-4f60-af06-c941f374e5aa}
+  checksum-key: ${PAYOS_CHECKSUM_KEY:7a6fd4e43ca930c32838b42f7976dd13c746ccc236a678b95585b68da743a5a4}
+  return-url: ${PAYOS_RETURN_URL:http://localhost:3000/payment/success}
+  cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/payment/cancel}
 
 centrifugo:
   api-url: ${CENTRIFUGO_API_URL:http://localhost:8000/api}
-  api-key: ${CENTRIFUGO_API_KEY}
-  token-hmac-secret: ${CENTRIFUGO_TOKEN_SECRET}
-  ws-url: ${CENTRIFUGO_WS_URL}
+  api-key: ${CENTRIFUGO_API_KEY:a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6}
+  token-hmac-secret: ${CENTRIFUGO_TOKEN_SECRET:7b8f9e2d1c4a5b6c8d9e0f1a2b3c4d5e}
+  ws-url: ${CENTRIFUGO_WS_URL:ws://localhost:8000/connection/websocket}
   token-ttl-hours: ${CENTRIFUGO_TOKEN_TTL_HOURS:1}
 
 gemini:
-  api-key: ${GEMINI_API_KEY}
+  api-key: ${GEMINI_API_KEY:AIzaSyC80Q3fDX-n3-XmcT04KbWI5B72RZwiWWc}
   model: ${GEMINI_MODEL:gemini-2.5-flash}
   base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
   timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:60}
 
 minio:
-  endpoint: ${MINIO_ENDPOINT}
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
   public-endpoint: ${MINIO_PUBLIC_ENDPOINT:${MINIO_ENDPOINT}}
-  access-key: ${MINIO_ACCESS_KEY}
-  secret-key: ${MINIO_SECRET_KEY}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
   template-bucket: ${MINIO_TEMPLATE_BUCKET:slide-templates}
   verification-bucket: ${MINIO_VERIFICATION_BUCKET:teacher-verifications}
   course-videos-bucket: ${MINIO_COURSE_VIDEOS_BUCKET:course-videos}
