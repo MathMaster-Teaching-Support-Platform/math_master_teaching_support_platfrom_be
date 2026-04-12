@@ -1,0 +1,123 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      pool-name: HikariPoolProd
+      auto-commit: false
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:30000}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME_MS:1800000}
+      connection-test-query: SELECT 1
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+    show-sql: false
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:${REDIS_PASSWORD}}
+      database: ${SPRING_DATA_REDIS_DATABASE:0}
+      timeout: 5000ms
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  tomcat:
+    uri-encoding: UTF-8
+    remoteip:
+      protocol-header: x-forwarded-proto
+      remote-ip-header: x-forwarded-for
+
+jwt:
+  signerKey: ${JWT_SIGNERKEY}
+  valid-duration: ${JWT_VALID_DURATION:3600}
+  refreshable-duration: ${JWT_REFRESHABLE_DURATION:36000}
+
+app:
+  frontend-url: ${FRONTEND_URL}
+  backend-url: ${BACKEND_URL}
+  init:
+    enabled: ${APP_INIT_ENABLED:false}
+
+    admin:
+      username: ${ADMIN_USERNAME:admin}
+      password: ${ADMIN_PASSWORD}
+      email: ${ADMIN_GMAIL:admin@mathmaster.com}
+      fullname: ${ADMIN_FULLNAME:System Administrator}
+
+    student:
+      username: ${STUDENT_USERNAME:student}
+      password: ${STUDENT_PASSWORD}
+      email: ${STUDENT_GMAIL:student@mathmaster.com}
+      fullname: ${STUDENT_FULLNAME:Student User}
+
+    teacher:
+      username: ${TEACHER_USERNAME:teacher}
+      password: ${TEACHER_PASSWORD}
+      email: ${TEACHER_GMAIL:teacher@mathmaster.com}
+      fullname: ${TEACHER_FULLNAME:Teacher User}
+
+payos:
+  client-id: ${PAYOS_CLIENT_ID}
+  api-key: ${PAYOS_API_KEY}
+  checksum-key: ${PAYOS_CHECKSUM_KEY}
+  return-url: ${PAYOS_RETURN_URL}
+  cancel-url: ${PAYOS_CANCEL_URL}
+
+centrifugo:
+  api-url: ${CENTRIFUGO_API_URL:http://localhost:8000/api}
+  api-key: ${CENTRIFUGO_API_KEY}
+  token-hmac-secret: ${CENTRIFUGO_TOKEN_SECRET}
+  ws-url: ${CENTRIFUGO_WS_URL}
+  token-ttl-hours: ${CENTRIFUGO_TOKEN_TTL_HOURS:1}
+
+gemini:
+  api-key: ${GEMINI_API_KEY}
+  model: ${GEMINI_MODEL:gemini-2.5-flash}
+  base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+  timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:60}
+
+minio:
+  endpoint: ${MINIO_ENDPOINT}
+  public-endpoint: ${MINIO_PUBLIC_ENDPOINT:${MINIO_ENDPOINT}}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
+  template-bucket: ${MINIO_TEMPLATE_BUCKET:slide-templates}
+  verification-bucket: ${MINIO_VERIFICATION_BUCKET:teacher-verifications}
+  course-videos-bucket: ${MINIO_COURSE_VIDEOS_BUCKET:course-videos}
+
+logging:
+  level:
+    org.springframework: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql: WARN

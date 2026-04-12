@@ -15,6 +15,7 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.TransactionRepository;
 import com.fptu.math_master.repository.WalletRepository;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -30,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 @Service
@@ -52,6 +54,8 @@ public class PaymentService {
     log.info("Creating deposit payment for user: {}, amount: {}", userId, request.getAmount());
 
     try {
+      validateDepositAmount(request.getAmount());
+
       // Get or create wallet
       Wallet wallet =
           walletRepository
@@ -83,16 +87,18 @@ public class PaymentService {
       transaction = transactionRepository.save(transaction);
       log.info("Transaction created with orderCode: {}", orderCode);
 
+      String payOSDescription = toPayOSDescription(transaction.getDescription(), orderCode);
+
       // Create payment request for PayOS API
       Map<String, Object> item = new HashMap<>();
-      item.put("name", "Nạp tiền vào ví");
+      item.put("name", "Nap tien vao vi");
       item.put("quantity", 1);
       item.put("price", request.getAmount().intValue());
 
       Map<String, Object> paymentData = new HashMap<>();
       paymentData.put("orderCode", orderCode);
       paymentData.put("amount", request.getAmount().intValue());
-      paymentData.put("description", transaction.getDescription());
+      paymentData.put("description", payOSDescription);
       paymentData.put("returnUrl", payOSProperties.getReturnUrl());
       paymentData.put("cancelUrl", payOSProperties.getCancelUrl());
       paymentData.put("items", List.of(item));
@@ -114,7 +120,20 @@ public class PaymentService {
               PAYOS_API_URL, HttpMethod.POST, entity, PayOSCreatePaymentResponse.class);
 
       if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-        PayOSCreatePaymentResponse.PaymentData data = response.getBody().getData();
+        PayOSCreatePaymentResponse body = response.getBody();
+        PayOSCreatePaymentResponse.PaymentData data = body.getData();
+
+        if (!"00".equals(body.getCode()) || data == null) {
+          log.error(
+              "PayOS rejected payment creation. code={}, desc={}, dataIsNull={}, orderCode={}, amount={}, description={}",
+              body.getCode(),
+              body.getDesc(),
+              data == null,
+              orderCode,
+              request.getAmount(),
+              payOSDescription);
+          throw new AppException(ErrorCode.PAYMENT_CREATION_FAILED);
+        }
 
         // Update transaction with payment link info
         transaction.setPaymentLinkId(data.getPaymentLinkId());
@@ -132,6 +151,13 @@ public class PaymentService {
         throw new AppException(ErrorCode.PAYMENT_CREATION_FAILED);
       }
 
+    } catch (HttpStatusCodeException e) {
+      log.error(
+          "PayOS HTTP error when creating payment link. status={}, responseBody={}",
+          e.getStatusCode(),
+          e.getResponseBodyAsString(),
+          e);
+      throw new AppException(ErrorCode.PAYMENT_CREATION_FAILED);
     } catch (AppException e) {
       throw e;
     } catch (Exception e) {
@@ -304,6 +330,45 @@ public class PaymentService {
       log.error("Error creating payment signature", e);
       throw new AppException(ErrorCode.PAYMENT_CREATION_FAILED);
     }
+  }
+
+  private void validateDepositAmount(java.math.BigDecimal amount) {
+    if (amount == null || amount.signum() <= 0) {
+      throw new AppException(ErrorCode.INVALID_AMOUNT);
+    }
+
+    // PayOS accepts integer VND amounts only.
+    if (amount.stripTrailingZeros().scale() > 0) {
+      throw new AppException(ErrorCode.INVALID_AMOUNT);
+    }
+
+    if (amount.intValueExact() < 10000) {
+      throw new AppException(ErrorCode.INVALID_AMOUNT);
+    }
+  }
+
+  private String toPayOSDescription(String description, long orderCode) {
+    String raw =
+        (description == null || description.isBlank())
+            ? "Nap tien vi " + (orderCode % 100000)
+            : description;
+
+    String normalized =
+        Normalizer.normalize(raw, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}+", "")
+            .replaceAll("[^A-Za-z0-9 ]", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+
+    if (normalized.isBlank()) {
+      normalized = "Nap tien vi";
+    }
+
+    if (normalized.length() > 25) {
+      return normalized.substring(0, 25).trim();
+    }
+
+    return normalized;
   }
 
   private boolean verifyWebhookSignature(PayOSWebhookRequest webhookRequest) {
