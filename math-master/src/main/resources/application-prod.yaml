@@ -65,7 +65,7 @@ jwt:
 
 app:
   frontend-url: ${FRONTEND_URL:https://sep.nhducminhqt.name.vn}
-  backend-url: ${BACKEND_URL:https://nhducminhqt.name.vn/api}
+  backend-url: ${BACKEND_URL:https://nhducminhqt.name.vn}
   init:
     enabled: ${APP_INIT_ENABLED:false}
 
