@@ -64,8 +64,8 @@ jwt:
   refreshable-duration: ${JWT_REFRESHABLE_DURATION:36000}
 
 app:
-  frontend-url: ${FRONTEND_URL:http://localhost:3000}
-  backend-url: ${BACKEND_URL:http://localhost:8080}
+  frontend-url: ${FRONTEND_URL:https://sep.nhducminhqt.name.vn}
+  backend-url: ${BACKEND_URL:https://nhducminhqt.name.vn/api}
   init:
     enabled: ${APP_INIT_ENABLED:false}
 

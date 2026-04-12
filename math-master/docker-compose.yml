@@ -110,8 +110,8 @@ services:
       SPRING_DATA_REDIS_DATABASE: ${SPRING_DATA_REDIS_DATABASE:-0}
 
       SERVER_PORT: 8080
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      BACKEND_URL: ${BACKEND_URL:-http://localhost:8080}
+      FRONTEND_URL: ${FRONTEND_URL:-https://sep.nhducminhqt.name.vn}
+      BACKEND_URL: ${BACKEND_URL:-https://nhducminhqt.name.vn/api}
       APP_INIT_ENABLED: ${APP_INIT_ENABLED:-false}
 
       MAIL_USERNAME: ${MAIL_USERNAME:-nsn15102004@gmail.com}
