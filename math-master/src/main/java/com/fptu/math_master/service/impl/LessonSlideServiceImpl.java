@@ -90,6 +90,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private static final double LATEX_MIN_IMAGE_HEIGHT = 20d;
   private static final double LATEX_ESTIMATED_CHAR_WIDTH = 7d;
   private static final double LATEX_ESTIMATED_LINE_HEIGHT = 22d;
+  private static final String LATEX_INLINE_PLACEHOLDER = "            ";
   private static final List<String> TAGGED_SECTIONS =
       List.of(
           "LESSON_SUMMARY",
@@ -616,7 +617,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     String normalizedContent = normalizeLatexInput(content);
     List<LatexToken> latexTokens = new ArrayList<>();
     String contentWithMarkers = replaceLatexWithMarkers(normalizedContent, latexTokens);
-    String displayText = sanitizeDisplayText(contentWithMarkers.replaceAll("\\[\\[LATEX_\\d+\\]\\]", " "));
+    String displayText =
+      sanitizeDisplayText(
+        contentWithMarkers.replaceAll("\\[\\[LATEX_\\d+\\]\\]", LATEX_INLINE_PLACEHOLDER));
 
     textShape.clearText();
     textShape.setText(displayText);
@@ -687,17 +690,19 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         }
 
         double widthScale = remainingWidth / width;
-        double heightScale = LATEX_MAX_IMAGE_HEIGHT / height;
+        double inlineMaxHeight = Math.max(12d, LATEX_ESTIMATED_LINE_HEIGHT * 0.9);
+        double heightScale = Math.min(LATEX_MAX_IMAGE_HEIGHT, inlineMaxHeight) / height;
         double scale = Math.min(1d, Math.min(widthScale, heightScale));
 
-        double renderWidth = Math.max(40d, width * scale);
-        double renderHeight = Math.max(LATEX_MIN_IMAGE_HEIGHT, height * scale);
+        double renderWidth = Math.max(16d, width * scale);
+        double renderHeight = Math.max(12d, Math.min(inlineMaxHeight, height * scale));
+        double yOffset = Math.max(0d, (LATEX_ESTIMATED_LINE_HEIGHT - renderHeight) / 2d);
 
         XSLFPictureData pictureData = slideshow.addPicture(imageBytes, PictureData.PictureType.PNG);
         XSLFPictureShape pictureShape = slide.createPicture(pictureData);
-        pictureShape.setAnchor(new Rectangle2D.Double(x, y, renderWidth, renderHeight));
+        pictureShape.setAnchor(new Rectangle2D.Double(x, y + yOffset, renderWidth, renderHeight));
 
-        col += Math.max(1, (int) Math.ceil(renderWidth / LATEX_ESTIMATED_CHAR_WIDTH));
+        col += LATEX_INLINE_PLACEHOLDER.length();
       } catch (Exception ex) {
         log.warn("Failed to append LaTeX image for expression: {}", token.expression(), ex);
       }
