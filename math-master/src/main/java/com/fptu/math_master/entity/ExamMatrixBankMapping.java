@@ -57,14 +57,16 @@ public class ExamMatrixBankMapping extends BaseEntity {
   @Column(name = "matrix_row_id")
   private UUID matrixRowId;
 
+  // Nullable for percentage-based matrices (questions determined by matrix-level percentages)
   @Type(JsonBinaryType.class)
-  @Column(name = "difficulty_distribution", nullable = false, columnDefinition = "jsonb")
+  @Column(name = "difficulty_distribution", columnDefinition = "jsonb")
   private Map<QuestionDifficulty, Integer> difficultyDistribution;
 
   @Column(name = "points_per_question", precision = 7, scale = 2)
   private BigDecimal pointsPerQuestion;
 
-  @Column(name = "cognitive_level", nullable = false)
+  // Nullable for percentage-based matrices (cognitive level determined by matrix-level percentages)
+  @Column(name = "cognitive_level")
   @Enumerated(EnumType.STRING)
   private CognitiveLevel cognitiveLevel;
 

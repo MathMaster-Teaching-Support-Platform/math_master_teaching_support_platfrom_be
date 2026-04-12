@@ -31,6 +31,7 @@ import com.fptu.math_master.dto.request.FinalizePreviewRequest;
 import com.fptu.math_master.dto.request.GeneratePreviewRequest;
 import com.fptu.math_master.dto.request.MatrixCellRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
+import com.fptu.math_master.dto.request.UpdateMatrixPercentagesRequest;
 import com.fptu.math_master.dto.response.BatchTemplateMappingsResponse;
 import com.fptu.math_master.dto.response.BankMappingResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
@@ -212,6 +213,63 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     log.info("Exam matrix soft-deleted: {}", matrixId);
   }
 
+  // ── Percentage-Based Matrix Configuration ───────────────────────────────
+
+  @Override
+  @Transactional
+  public ExamMatrixResponse updateMatrixPercentages(
+      UUID matrixId, UpdateMatrixPercentagesRequest request) {
+    log.info(
+        "Updating matrix percentages: matrixId={}, totalQuestions={}",
+        matrixId,
+        request.getTotalQuestionsTarget());
+
+    // 1. Load matrix and validate permissions
+    ExamMatrix matrix = loadMatrixOrThrow(matrixId);
+    validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
+    validateNotApprovedOrLocked(matrix);
+
+    // 2. Validate percentages sum to 100
+    double totalPercentage =
+        request.getCognitiveLevelPercentages().values().stream()
+            .mapToDouble(Double::doubleValue)
+            .sum();
+    if (Math.abs(totalPercentage - 100.0) > 0.01) {
+      log.error(
+          "Percentage validation failed: total={}, expected=100.0",
+          totalPercentage);
+      throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
+    }
+
+    // 3. Validate each percentage is between 0 and 100
+    for (Map.Entry<CognitiveLevel, Double> entry :
+        request.getCognitiveLevelPercentages().entrySet()) {
+      Double percentage = entry.getValue();
+      if (percentage < 0 || percentage > 100) {
+        log.error(
+            "Invalid percentage for {}: {}",
+            entry.getKey(),
+            percentage);
+        throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
+      }
+    }
+
+    // 4. Update matrix with percentages
+    matrix.setTotalQuestionsTarget(request.getTotalQuestionsTarget());
+    matrix.setCognitiveLevelPercentages(request.getCognitiveLevelPercentages());
+    matrix = examMatrixRepository.save(matrix);
+
+    log.info(
+        "Matrix percentages updated successfully: matrixId={}, percentages={}",
+        matrixId,
+        request.getCognitiveLevelPercentages());
+
+    // 5. Return response with bank mappings
+    List<ExamMatrixTemplateMapping> mappings =
+        templateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
+    return buildMatrixResponse(matrix, mappings);
+  }
+
   // ── Template Mappings ───────────────────────────────────────────────────
 
   @Override
@@ -352,6 +410,17 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     List<String> errors = new ArrayList<>();
     List<String> warnings = new ArrayList<>();
 
+    // Check if this is a percentage-based matrix
+    boolean isPercentageBased = matrix.getCognitiveLevelPercentages() != null 
+        && !matrix.getCognitiveLevelPercentages().isEmpty();
+
+    if (isPercentageBased) {
+      log.info("Validating percentage-based matrix: {}", matrixId);
+      // For percentage-based matrices, validate differently
+      return validatePercentageBasedMatrix(matrix, bankMappings);
+    }
+
+    // Traditional validation for template/fixed-count matrices
     if (mappings.isEmpty() && bankMappings.isEmpty()) {
       errors.add("Matrix has no mappings. Add at least one bank mapping.");
     }
@@ -1211,7 +1280,112 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
   }
 
-    private ExamMatrixResponse buildMatrixResponse(
+  /**
+   * Validate percentage-based matrix.
+   * Checks if question banks have sufficient questions for the percentage distribution.
+   */
+  private MatrixValidationReport validatePercentageBasedMatrix(
+      ExamMatrix matrix, List<ExamMatrixBankMapping> bankMappings) {
+    
+    List<String> errors = new ArrayList<>();
+    List<String> warnings = new ArrayList<>();
+
+    // Check if matrix has question banks
+    if (bankMappings.isEmpty()) {
+      errors.add("Percentage-based matrix must have at least one question bank.");
+    }
+
+    // Check if percentages are set
+    Map<CognitiveLevel, Double> percentages = matrix.getCognitiveLevelPercentages();
+    if (percentages == null || percentages.isEmpty()) {
+      errors.add("Percentage-based matrix must have cognitive level percentages configured.");
+    }
+
+    // Check if total questions target is set
+    Integer totalQuestionsTarget = matrix.getTotalQuestionsTarget();
+    if (totalQuestionsTarget == null || totalQuestionsTarget <= 0) {
+      errors.add("Percentage-based matrix must have total questions target set.");
+    }
+
+    // If basic validation fails, return early
+    if (!errors.isEmpty()) {
+      return MatrixValidationReport.builder()
+          .canApprove(false)
+          .errors(errors)
+          .warnings(warnings)
+          .totalBankMappings(bankMappings.size())
+          .totalQuestions(0)
+          .totalPoints(BigDecimal.ZERO)
+          .totalQuestionsTarget(totalQuestionsTarget)
+          .build();
+    }
+
+    // Get all bank IDs
+    List<UUID> bankIds = bankMappings.stream()
+        .map(ExamMatrixBankMapping::getQuestionBankId)
+        .distinct()
+        .collect(Collectors.toList());
+
+    // Check availability for each cognitive level
+    Map<String, Integer> cognitiveLevelCoverage = new LinkedHashMap<>();
+    Map<String, Integer> availabilityMap = new LinkedHashMap<>();
+    int totalCalculatedQuestions = 0;
+
+    for (Map.Entry<CognitiveLevel, Double> entry : percentages.entrySet()) {
+      CognitiveLevel level = entry.getKey();
+      Double percentage = entry.getValue();
+
+      // Calculate required count
+      int requiredCount = (int) Math.round((percentage / 100.0) * totalQuestionsTarget);
+      totalCalculatedQuestions += requiredCount;
+      cognitiveLevelCoverage.put(level.name(), requiredCount);
+
+      // Check availability
+      long availableCount = questionRepository.countApprovedByBanksAndCognitiveLevel(
+          bankIds, level.name());
+      availabilityMap.put(level.name(), (int) availableCount);
+
+      if (availableCount < requiredCount) {
+        warnings.add(
+            String.format(
+                "%s: Only %d questions available, but %d required (%.1f%%)",
+                level.name(), availableCount, requiredCount, percentage));
+      }
+    }
+
+    // Check if percentages sum to 100
+    double totalPercentage = percentages.values().stream()
+        .mapToDouble(Double::doubleValue)
+        .sum();
+    if (Math.abs(totalPercentage - 100.0) > 0.01) {
+      errors.add(
+          String.format(
+              "Cognitive level percentages must sum to 100%%. Current total: %.2f%%",
+              totalPercentage));
+    }
+
+    // Estimate total points (assuming 1 point per question)
+    BigDecimal estimatedPoints = BigDecimal.valueOf(totalCalculatedQuestions);
+
+    boolean canApprove = errors.isEmpty();
+
+    return MatrixValidationReport.builder()
+        .canApprove(canApprove)
+        .errors(errors)
+        .warnings(warnings)
+        .totalBankMappings(bankMappings.size())
+        .totalQuestions(totalCalculatedQuestions)
+        .totalPoints(estimatedPoints)
+        .totalQuestionsTarget(totalQuestionsTarget)
+        .totalPointsTarget(matrix.getTotalPointsTarget())
+        .cognitiveLevelCoverage(cognitiveLevelCoverage)
+        .questionsMatchTarget(totalCalculatedQuestions == totalQuestionsTarget)
+        .pointsMatchTarget(true) // Not applicable for percentage-based
+        .allCognitiveLevelsCovered(cognitiveLevelCoverage.size() >= 3)
+        .build();
+  }
+
+  private ExamMatrixResponse buildMatrixResponse(
       ExamMatrix matrix, List<ExamMatrixTemplateMapping> mappings) {
 
     String teacherName =

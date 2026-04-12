@@ -1,37 +1,18 @@
 package com.fptu.math_master.service.impl;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Instant;
-import java.time.format.DateTimeFormatter;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
+import com.fptu.math_master.dto.response.CognitiveLevelDistributionResponse;
+import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.AssessmentQuestion;
@@ -42,28 +23,34 @@ import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
+import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.MatrixStatus;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
-import com.fptu.math_master.repository.AssessmentLessonRepository;
-import com.fptu.math_master.repository.AssessmentQuestionRepository;
-import com.fptu.math_master.repository.AssessmentRepository;
-import com.fptu.math_master.repository.ExamMatrixBankMappingRepository;
-import com.fptu.math_master.repository.ExamMatrixRepository;
-import com.fptu.math_master.repository.ExamMatrixRowRepository;
-import com.fptu.math_master.repository.LessonRepository;
-import com.fptu.math_master.repository.QuestionRepository;
-import com.fptu.math_master.repository.UserRepository;
+import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.AssessmentService;
 import com.fptu.math_master.service.ExamMatrixService;
 import com.fptu.math_master.service.QuestionSelectionService;
-import com.fptu.math_master.util.SecurityUtils;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
 
+import com.fptu.math_master.util.SecurityUtils;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -1098,17 +1085,216 @@ public class AssessmentServiceImpl implements AssessmentService {
   }
 
   @Override
+  @Transactional
+  public PercentageBasedGenerationResponse generateAssessmentByPercentage(
+      GenerateAssessmentByPercentageRequest request) {
+    log.info(
+        "Generating assessment by percentage from matrix: {}, total questions: {}",
+        request.getExamMatrixId(),
+        request.getTotalQuestions());
+
+    UUID currentUserId = getCurrentUserId();
+    validateTeacherRole(currentUserId);
+
+    // Validate percentages sum to 100
+    double totalPercentage =
+        request.getCognitiveLevelPercentages().values().stream()
+            .mapToDouble(Double::doubleValue)
+            .sum();
+    if (Math.abs(totalPercentage - 100.0) > 0.01) {
+      throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
+    }
+
+    // Load and validate matrix
+    ExamMatrix matrix =
+        examMatrixRepository
+            .findByIdAndNotDeleted(request.getExamMatrixId())
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+
+    // Matrix does NOT need to be APPROVED for percentage-based generation
+    // This allows creating multiple assessments from the same matrix
+
+    // Get all question banks from the matrix
+    List<ExamMatrixBankMapping> bankMappings =
+        examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
+
+    if (bankMappings.isEmpty()) {
+      throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
+    }
+
+    // Extract unique bank IDs
+    List<UUID> bankIds =
+        bankMappings.stream()
+            .map(ExamMatrixBankMapping::getQuestionBankId)
+            .distinct()
+            .collect(Collectors.toList());
+
+    log.info("Found {} question banks in matrix {}", bankIds.size(), matrix.getId());
+
+    // Calculate question count for each cognitive level
+    Map<CognitiveLevel, Integer> questionCounts = new HashMap<>();
+    List<CognitiveLevelDistributionResponse> distributionResponses = new ArrayList<>();
+    List<String> warnings = new ArrayList<>();
+
+    for (Map.Entry<CognitiveLevel, Double> entry :
+        request.getCognitiveLevelPercentages().entrySet()) {
+      CognitiveLevel level = entry.getKey();
+      Double percentage = entry.getValue();
+
+      // Calculate required count (round to nearest integer)
+      int requiredCount = (int) Math.round((percentage / 100.0) * request.getTotalQuestions());
+      questionCounts.put(level, requiredCount);
+
+      // Check availability in question banks
+      long availableCount =
+          questionRepository.countApprovedByBanksAndCognitiveLevel(bankIds, level.name());
+
+      CognitiveLevelDistributionResponse distResponse =
+          CognitiveLevelDistributionResponse.builder()
+              .cognitiveLevel(level)
+              .requestedPercentage(percentage)
+              .requestedCount(requiredCount)
+              .availableInBank((int) availableCount)
+              .build();
+
+      if (availableCount < requiredCount) {
+        distResponse.setActualCount((int) availableCount);
+        distResponse.setStatus("INSUFFICIENT");
+        distResponse.setMessage(
+            String.format(
+                "Only %d questions available, but %d required", availableCount, requiredCount));
+        warnings.add(
+            String.format(
+                "%s: Only %d/%d questions available",
+                level.name(), availableCount, requiredCount));
+      } else {
+        distResponse.setActualCount(requiredCount);
+        distResponse.setStatus("SUCCESS");
+        distResponse.setMessage("Sufficient questions available");
+      }
+
+      distributionResponses.add(distResponse);
+    }
+
+    // Create assessment
+    String assessmentTitle =
+        request.getAssessmentTitle() != null && !request.getAssessmentTitle().isBlank()
+            ? request.getAssessmentTitle()
+            : matrix.getName() + " - " + DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").format(Instant.now());
+
+    Assessment assessment =
+        Assessment.builder()
+            .teacherId(currentUserId)
+            .title(assessmentTitle)
+            .description(
+                request.getAssessmentDescription() != null
+                    ? request.getAssessmentDescription()
+                    : "Generated from exam matrix: " + matrix.getName())
+            .assessmentType(com.fptu.math_master.enums.AssessmentType.QUIZ)
+            .status(AssessmentStatus.DRAFT)
+            .randomizeQuestions(
+                request.getRandomizeQuestions() != null ? request.getRandomizeQuestions() : false)
+            .showCorrectAnswers(false)
+            .assessmentMode(com.fptu.math_master.enums.AssessmentMode.MATRIX_BASED)
+            .allowMultipleAttempts(false)
+            .showScoreImmediately(true)
+            .examMatrixId(matrix.getId())
+            .timeLimitMinutes(request.getTimeLimitMinutes())
+            .passingScore(
+                request.getPassingScore() != null
+                    ? BigDecimal.valueOf(request.getPassingScore())
+                    : null)
+            .build();
+
+    Assessment savedAssessment = assessmentRepository.save(assessment);
+    log.info("Created assessment {} from matrix {}", savedAssessment.getId(), matrix.getId());
+
+    // Generate questions for each cognitive level
+    List<AssessmentQuestion> assessmentQuestions = new ArrayList<>();
+    int orderIndex = 0;
+    int totalGenerated = 0;
+    BigDecimal totalPoints = BigDecimal.ZERO;
+
+    for (Map.Entry<CognitiveLevel, Integer> entry : questionCounts.entrySet()) {
+      CognitiveLevel level = entry.getKey();
+      int count = entry.getValue();
+
+      if (count == 0) continue;
+
+      // Find random questions for this cognitive level
+      List<Question> questions =
+          questionRepository.findRandomApprovedByBanksAndCognitiveLevel(
+              bankIds, level.name(), count);
+
+      log.info(
+          "Selected {} questions for cognitive level {} (requested: {})",
+          questions.size(),
+          level.name(),
+          count);
+
+      // Create assessment questions
+      for (Question question : questions) {
+        BigDecimal points =
+            question.getPoints() != null ? question.getPoints() : BigDecimal.valueOf(1.0);
+
+        AssessmentQuestion aq =
+            AssessmentQuestion.builder()
+                .assessmentId(savedAssessment.getId())
+                .questionId(question.getId())
+                .orderIndex(orderIndex++)
+                .pointsOverride(points)
+                .build();
+
+        assessmentQuestions.add(aq);
+        totalPoints = totalPoints.add(points);
+        totalGenerated++;
+      }
+    }
+
+    // Save all assessment questions
+    if (!assessmentQuestions.isEmpty()) {
+      assessmentQuestionRepository.saveAll(assessmentQuestions);
+    }
+
+    log.info(
+        "Generated {} questions for assessment {} with {} total points",
+        totalGenerated,
+        savedAssessment.getId(),
+        totalPoints);
+
+    // Build response
+    return PercentageBasedGenerationResponse.builder()
+        .assessmentId(savedAssessment.getId())
+        .assessmentTitle(savedAssessment.getTitle())
+        .totalQuestionsRequested(request.getTotalQuestions())
+        .totalQuestionsGenerated(totalGenerated)
+        .totalPoints(totalPoints.intValue())
+        .distribution(distributionResponses)
+        .warnings(warnings.isEmpty() ? null : warnings)
+        .message(
+            totalGenerated == request.getTotalQuestions()
+                ? String.format(
+                    "Successfully generated %d questions from %d question banks",
+                    totalGenerated, bankIds.size())
+                : String.format(
+                    "Generated %d/%d questions. Some cognitive levels had insufficient questions.",
+                    totalGenerated, request.getTotalQuestions()))
+        .success(totalGenerated > 0)
+        .build();
+  }
+
+  @Override
   public List<AssessmentResponse> getAssessmentsByLessonId(UUID lessonId) {
     // Get all assessment IDs linked to this lesson
     List<UUID> assessmentIds = assessmentLessonRepository.findAssessmentIdsByLessonId(lessonId);
-    
+
     if (assessmentIds.isEmpty()) {
       return List.of();
     }
 
     // Get all assessments
     List<Assessment> assessments = assessmentRepository.findByIdInAndNotDeleted(assessmentIds);
-    
+
     // Map to response
     return assessments.stream()
         .map(this::mapToResponse)
@@ -1119,27 +1305,27 @@ public class AssessmentServiceImpl implements AssessmentService {
   @Transactional
   public void linkAssessmentToLesson(UUID assessmentId, UUID lessonId) {
     UUID currentUserId = SecurityUtils.getCurrentUserId();
-    
+
     // Verify assessment exists and belongs to current user
     Assessment assessment = assessmentRepository.findByIdAndNotDeleted(assessmentId)
         .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-    
+
     if (!assessment.getTeacherId().equals(currentUserId)) {
       throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
     }
-    
+
     // Check if already linked
     List<UUID> existingLessonIds = assessmentLessonRepository.findLessonIdsByAssessmentId(assessmentId);
     if (existingLessonIds.contains(lessonId)) {
       return; // Already linked, do nothing
     }
-    
+
     // Create link
     AssessmentLesson assessmentLesson = AssessmentLesson.builder()
         .assessmentId(assessmentId)
         .lessonId(lessonId)
         .build();
-    
+
     assessmentLessonRepository.save(assessmentLesson);
     log.info("Linked assessment {} to lesson {} by user {}", assessmentId, lessonId, currentUserId);
   }
@@ -1148,20 +1334,20 @@ public class AssessmentServiceImpl implements AssessmentService {
   @Transactional
   public void unlinkAssessmentFromLesson(UUID assessmentId, UUID lessonId) {
     UUID currentUserId = SecurityUtils.getCurrentUserId();
-    
+
     // Verify assessment exists and belongs to current user
     Assessment assessment = assessmentRepository.findByIdAndNotDeleted(assessmentId)
         .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-    
+
     if (!assessment.getTeacherId().equals(currentUserId)) {
       throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
     }
-    
+
     // Find and delete the link
     assessmentLessonRepository.findByAssessmentIdOrderByCreatedAt(assessmentId).stream()
         .filter(al -> al.getLessonId().equals(lessonId))
         .forEach(assessmentLessonRepository::delete);
-    
+
     log.info("Unlinked assessment {} from lesson {} by user {}", assessmentId, lessonId, currentUserId);
   }
 }

@@ -3,12 +3,14 @@ package com.fptu.math_master.service;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
+import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
 import com.fptu.math_master.enums.AssessmentStatus;
 import java.util.List;
 import java.util.UUID;
@@ -74,6 +76,17 @@ public interface AssessmentService {
    * @return Created assessment with generated questions
    */
   AssessmentResponse generateAssessmentFromMatrix(GenerateAssessmentQuestionsRequest request);
+
+  /**
+   * Generate assessment from exam matrix using percentage-based cognitive level distribution.
+   * This allows creating multiple assessments from the same matrix without locking it.
+   * Questions are randomly selected from the question bank based on cognitive level percentages.
+   * 
+   * @param request Contains matrix ID, total questions, and percentage distribution by cognitive level
+   * @return Response with generated assessment details and distribution breakdown
+   */
+  PercentageBasedGenerationResponse generateAssessmentByPercentage(
+      GenerateAssessmentByPercentageRequest request);
 
   /**
    * Get all assessments linked to a specific lesson.
