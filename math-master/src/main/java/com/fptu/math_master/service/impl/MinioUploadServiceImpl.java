@@ -19,6 +19,7 @@ import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -28,6 +29,8 @@ import org.springframework.web.multipart.MultipartFile;
 public class MinioUploadServiceImpl implements UploadService {
 
   private final MinioClient minioClient;
+  @Qualifier("publicMinioClient")
+  private final MinioClient publicMinioClient;
   private final MinioProperties minioProperties;
 
   @Override
@@ -117,7 +120,7 @@ public class MinioUploadServiceImpl implements UploadService {
   @Override
   public String getPresignedUrl(String key, String bucketName) {
     try {
-      return minioClient.getPresignedObjectUrl(
+      return publicMinioClient.getPresignedObjectUrl(
           io.minio.GetPresignedObjectUrlArgs.builder()
               .method(io.minio.http.Method.GET)
               .bucket(bucketName)

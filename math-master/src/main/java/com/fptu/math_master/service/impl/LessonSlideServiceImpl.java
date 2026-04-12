@@ -88,6 +88,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private static final double LATEX_VERTICAL_PADDING = 6d;
   private static final double LATEX_MAX_IMAGE_HEIGHT = 120d;
   private static final double LATEX_MIN_IMAGE_HEIGHT = 20d;
+  private static final double LATEX_ESTIMATED_CHAR_WIDTH = 7d;
+  private static final double LATEX_ESTIMATED_LINE_HEIGHT = 22d;
   private static final List<String> TAGGED_SECTIONS =
       List.of(
           "LESSON_SUMMARY",
@@ -613,7 +615,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       XMLSlideShow slideshow, XSLFSlide slide, XSLFTextShape textShape, String content) {
     String normalizedContent = normalizeLatexInput(content);
     List<LatexToken> latexTokens = new ArrayList<>();
-    String displayText = sanitizeDisplayText(replaceLatexWithMarkers(normalizedContent, latexTokens));
+    String contentWithMarkers = replaceLatexWithMarkers(normalizedContent, latexTokens);
+    String displayText = sanitizeDisplayText(contentWithMarkers.replaceAll("\\[\\[LATEX_\\d+\\]\\]", " "));
 
     textShape.clearText();
     textShape.setText(displayText);
@@ -628,29 +631,62 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       return;
     }
 
-    double x = anchor.getX() + LATEX_HORIZONTAL_PADDING;
-    double y = anchor.getY() + anchor.getHeight() + LATEX_VERTICAL_PADDING;
-    double maxWidth = Math.max(40d, anchor.getWidth() - LATEX_HORIZONTAL_PADDING * 2);
+    Matcher markerMatcher = Pattern.compile("\\[\\[LATEX_(\\d+)\\]\\]").matcher(contentWithMarkers);
+    int pointer = 0;
+    int line = 0;
+    int col = 0;
 
-    for (LatexToken token : latexTokens) {
+    while (markerMatcher.find()) {
+      String segment = contentWithMarkers.substring(pointer, markerMatcher.start());
+      for (int i = 0; i < segment.length(); i++) {
+        if (segment.charAt(i) == '\n') {
+          line++;
+          col = 0;
+        } else {
+          col++;
+        }
+      }
+
+      int tokenIndex = Integer.parseInt(markerMatcher.group(1));
+      if (tokenIndex < 0 || tokenIndex >= latexTokens.size()) {
+        pointer = markerMatcher.end();
+        continue;
+      }
+
+      LatexToken token = latexTokens.get(tokenIndex);
       byte[] imageBytes = renderLatexToPng(token.expression());
       if (imageBytes.length == 0) {
+        pointer = markerMatcher.end();
         continue;
       }
 
       try (ByteArrayInputStream imageInput = new ByteArrayInputStream(imageBytes)) {
         BufferedImage sourceImage = ImageIO.read(imageInput);
         if (sourceImage == null) {
+          pointer = markerMatcher.end();
           continue;
         }
 
         double width = sourceImage.getWidth();
         double height = sourceImage.getHeight();
         if (width <= 0 || height <= 0) {
+          pointer = markerMatcher.end();
           continue;
         }
 
-        double widthScale = maxWidth / width;
+        double x = anchor.getX() + LATEX_HORIZONTAL_PADDING + col * LATEX_ESTIMATED_CHAR_WIDTH;
+        double y = anchor.getY() + LATEX_VERTICAL_PADDING + line * LATEX_ESTIMATED_LINE_HEIGHT;
+        double remainingWidth = anchor.getX() + anchor.getWidth() - LATEX_HORIZONTAL_PADDING - x;
+
+        if (remainingWidth < 40d) {
+          line++;
+          col = 0;
+          x = anchor.getX() + LATEX_HORIZONTAL_PADDING;
+          y = anchor.getY() + LATEX_VERTICAL_PADDING + line * LATEX_ESTIMATED_LINE_HEIGHT;
+          remainingWidth = Math.max(40d, anchor.getWidth() - LATEX_HORIZONTAL_PADDING * 2);
+        }
+
+        double widthScale = remainingWidth / width;
         double heightScale = LATEX_MAX_IMAGE_HEIGHT / height;
         double scale = Math.min(1d, Math.min(widthScale, heightScale));
 
@@ -660,10 +696,13 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         XSLFPictureData pictureData = slideshow.addPicture(imageBytes, PictureData.PictureType.PNG);
         XSLFPictureShape pictureShape = slide.createPicture(pictureData);
         pictureShape.setAnchor(new Rectangle2D.Double(x, y, renderWidth, renderHeight));
-        y += renderHeight + LATEX_VERTICAL_PADDING;
+
+        col += Math.max(1, (int) Math.ceil(renderWidth / LATEX_ESTIMATED_CHAR_WIDTH));
       } catch (Exception ex) {
         log.warn("Failed to append LaTeX image for expression: {}", token.expression(), ex);
       }
+
+      pointer = markerMatcher.end();
     }
   }
 
@@ -680,7 +719,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
       LatexToken token = new LatexToken(expression.trim());
       latexTokens.add(token);
-      matcher.appendReplacement(out, Matcher.quoteReplacement(" "));
+      matcher.appendReplacement(
+          out, Matcher.quoteReplacement("[[LATEX_" + (latexTokens.size() - 1) + "]]"));
     }
     matcher.appendTail(out);
 
