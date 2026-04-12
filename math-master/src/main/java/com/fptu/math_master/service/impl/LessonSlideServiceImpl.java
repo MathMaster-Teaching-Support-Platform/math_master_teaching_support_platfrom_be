@@ -802,16 +802,23 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     String heading = safe(item.getHeading());
     String content = safe(item.getContent());
 
-    values.put("{{SLIDE_HEADING}}", heading);
+    // Fill all common placeholders with a sensible default body so non-10-slide flows
+    // can still inject correctly into 10-slide templates.
+    String titleValue = heading.isBlank() ? safe(lesson.getTitle()) : heading;
+
+    values.put("{{SLIDE_HEADING}}", titleValue);
     values.put("{{SLIDE_CONTENT}}", content);
-    values.put("{{LESSON_TITLE}}", safe(lesson.getTitle()));
-    values.put("{{LESSON_SUMMARY}}", safe(lesson.getSummary()));
-    values.put("{{LEARNING_OBJECTIVES}}", safe(lesson.getLearningObjectives()));
-    values.put("{{ADDITIONAL_PROMPT}}", "");
+    values.put("{{LESSON_TITLE}}", titleValue);
+    values.put("{{LESSON_SUMMARY}}", content);
+    values.put("{{LEARNING_OBJECTIVES}}", content);
+    values.put("{{ADDITIONAL_PROMPT}}", content);
     values.put("{{LESSON_CONTENT}}", content);
 
     switch (slideType) {
-      case "COVER" -> values.put("{{LESSON_SUMMARY}}", content);
+      case "COVER" -> {
+        values.put("{{LESSON_TITLE}}", safe(lesson.getTitle()));
+        values.put("{{LESSON_SUMMARY}}", content);
+      }
       case "OBJECTIVES" -> values.put("{{LEARNING_OBJECTIVES}}", content);
       case "OPENING" -> values.put("{{ADDITIONAL_PROMPT}}", content);
       case "SUMMARY" -> values.put("{{LESSON_SUMMARY}}", content);
@@ -1100,6 +1107,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
         YÊU CẦU:
         - Viết bằng tiếng Việt có dấu.
+        - Nội dung phải NGẮN GỌN cho đúng phạm vi 1 slide nhưng vẫn TOÀN VẸN ý chính.
+        - Mỗi phần (opening/mainPart/example/practice/closing) chỉ 3-5 ý chính.
+        - Mỗi ý tối đa khoảng 12-16 từ, ưu tiên câu ngắn và rõ nghĩa.
+        - Tránh văn xuôi dài; ưu tiên gạch đầu dòng hoặc câu ngắn tách dòng.
+        - Tổng độ dài mỗi phần nên trong khoảng 60-90 từ, không lan man.
         - Nội dung phải cụ thể, không lặp lại cùng một câu giữa các phần.
         - Mỗi mục mainPart1/mainPart2/mainPart3/examplePart/practicePart cần có nhiều ý (dạng gạch đầu dòng ngắn, tách dòng bằng ký tự xuống dòng \n).
         - closingSummary phải tóm tắt được kiến thức trọng tâm và nhấn mạnh cách áp dụng.
@@ -1158,6 +1170,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
         YÊU CẦU:
         - Viết tiếng Việt có dấu, nội dung cụ thể, không lặp lại giữa các phần.
+        - Nội dung phải NGẮN GỌN theo chuẩn 1 slide nhưng vẫn đầy đủ ý cốt lõi.
+        - Mỗi phần chỉ 3-5 ý chính, mỗi ý tối đa khoảng 12-16 từ.
+        - Ưu tiên gạch đầu dòng/câu ngắn, tránh đoạn văn dài.
+        - Tổng độ dài mỗi phần nên trong khoảng 60-90 từ.
         - Mỗi phần mainPart1/mainPart2/mainPart3/examplePart/practicePart có nhiều ý và xuống dòng rõ ràng.
         - outputFormat: %s
         %s
