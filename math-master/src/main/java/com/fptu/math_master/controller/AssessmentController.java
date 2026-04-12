@@ -393,4 +393,40 @@ public class AssessmentController {
         .result(assessmentService.generateQuestionsFromMatrix(assessmentId, request))
         .build();
   }
+
+  @GetMapping("/lessons/{lessonId}/assessments")
+  public ApiResponse<List<AssessmentResponse>> getAssessmentsByLesson(
+      @PathVariable UUID lessonId) {
+    log.info("GET /api/v1/assessments/lessons/{}/assessments", lessonId);
+    List<AssessmentResponse> assessments = assessmentService.getAssessmentsByLessonId(lessonId);
+    return ApiResponse.<List<AssessmentResponse>>builder()
+        .code(1000)
+        .message("Get assessments by lesson successfully")
+        .result(assessments)
+        .build();
+  }
+
+  @PostMapping("/{assessmentId}/lessons/{lessonId}")
+  public ApiResponse<Void> linkAssessmentToLesson(
+      @PathVariable UUID assessmentId,
+      @PathVariable UUID lessonId) {
+    log.info("POST /api/v1/assessments/{}/lessons/{}", assessmentId, lessonId);
+    assessmentService.linkAssessmentToLesson(assessmentId, lessonId);
+    return ApiResponse.<Void>builder()
+        .code(1000)
+        .message("Linked assessment to lesson successfully")
+        .build();
+  }
+
+  @DeleteMapping("/{assessmentId}/lessons/{lessonId}")
+  public ApiResponse<Void> unlinkAssessmentFromLesson(
+      @PathVariable UUID assessmentId,
+      @PathVariable UUID lessonId) {
+    log.info("DELETE /api/v1/assessments/{}/lessons/{}", assessmentId, lessonId);
+    assessmentService.unlinkAssessmentFromLesson(assessmentId, lessonId);
+    return ApiResponse.<Void>builder()
+        .code(1000)
+        .message("Unlinked assessment from lesson successfully")
+        .build();
+  }
 }

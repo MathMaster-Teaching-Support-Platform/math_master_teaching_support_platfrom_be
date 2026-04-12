@@ -910,6 +910,18 @@ public class AssessmentServiceImpl implements AssessmentService {
     List<String> lessonTitles =
       lessonIds.stream().map(id -> lessonTitleById.getOrDefault(id, UNKNOWN_NAME)).toList();
 
+    // Get ExamMatrix info if exists
+    String examMatrixName = null;
+    Integer examMatrixGradeLevel = null;
+    if (assessment.getExamMatrixId() != null) {
+      examMatrixRepository.findByIdAndNotDeleted(assessment.getExamMatrixId())
+          .ifPresent(matrix -> {});
+      examMatrixName = examMatrixRepository.findByIdAndNotDeleted(assessment.getExamMatrixId())
+          .map(ExamMatrix::getName).orElse(null);
+      examMatrixGradeLevel = examMatrixRepository.findByIdAndNotDeleted(assessment.getExamMatrixId())
+          .map(ExamMatrix::getGradeLevel).orElse(null);
+    }
+
     return AssessmentResponse.builder()
         .id(assessment.getId())
         .teacherId(assessment.getTeacherId())
@@ -927,6 +939,8 @@ public class AssessmentServiceImpl implements AssessmentService {
         .showCorrectAnswers(assessment.getShowCorrectAnswers())
         .assessmentMode(assessment.getAssessmentMode())
         .examMatrixId(assessment.getExamMatrixId())
+        .examMatrixName(examMatrixName)
+        .examMatrixGradeLevel(examMatrixGradeLevel)
         .allowMultipleAttempts(assessment.getAllowMultipleAttempts())
         .maxAttempts(assessment.getMaxAttempts())
         .attemptScoringPolicy(assessment.getAttemptScoringPolicy())
@@ -1062,5 +1076,73 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     // Return the created assessment with its questions
     return mapToResponse(savedAssessment);
+  }
+
+  @Override
+  public List<AssessmentResponse> getAssessmentsByLessonId(UUID lessonId) {
+    // Get all assessment IDs linked to this lesson
+    List<UUID> assessmentIds = assessmentLessonRepository.findAssessmentIdsByLessonId(lessonId);
+    
+    if (assessmentIds.isEmpty()) {
+      return List.of();
+    }
+
+    // Get all assessments
+    List<Assessment> assessments = assessmentRepository.findByIdInAndNotDeleted(assessmentIds);
+    
+    // Map to response
+    return assessments.stream()
+        .map(this::mapToResponse)
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  @Transactional
+  public void linkAssessmentToLesson(UUID assessmentId, UUID lessonId) {
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    
+    // Verify assessment exists and belongs to current user
+    Assessment assessment = assessmentRepository.findByIdAndNotDeleted(assessmentId)
+        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    
+    if (!assessment.getTeacherId().equals(currentUserId)) {
+      throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
+    }
+    
+    // Check if already linked
+    List<UUID> existingLessonIds = assessmentLessonRepository.findLessonIdsByAssessmentId(assessmentId);
+    if (existingLessonIds.contains(lessonId)) {
+      return; // Already linked, do nothing
+    }
+    
+    // Create link
+    AssessmentLesson assessmentLesson = AssessmentLesson.builder()
+        .assessmentId(assessmentId)
+        .lessonId(lessonId)
+        .build();
+    
+    assessmentLessonRepository.save(assessmentLesson);
+    log.info("Linked assessment {} to lesson {} by user {}", assessmentId, lessonId, currentUserId);
+  }
+
+  @Override
+  @Transactional
+  public void unlinkAssessmentFromLesson(UUID assessmentId, UUID lessonId) {
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    
+    // Verify assessment exists and belongs to current user
+    Assessment assessment = assessmentRepository.findByIdAndNotDeleted(assessmentId)
+        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    
+    if (!assessment.getTeacherId().equals(currentUserId)) {
+      throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
+    }
+    
+    // Find and delete the link
+    assessmentLessonRepository.findByAssessmentIdOrderByCreatedAt(assessmentId).stream()
+        .filter(al -> al.getLessonId().equals(lessonId))
+        .forEach(assessmentLessonRepository::delete);
+    
+    log.info("Unlinked assessment {} from lesson {} by user {}", assessmentId, lessonId, currentUserId);
   }
 }

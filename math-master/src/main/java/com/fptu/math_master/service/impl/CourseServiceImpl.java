@@ -1,10 +1,15 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
 import com.fptu.math_master.dto.request.CreateCourseRequest;
+import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
 import com.fptu.math_master.dto.request.UpdateCourseRequest;
+import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
+import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.Course;
+import com.fptu.math_master.entity.CourseAssessment;
 import com.fptu.math_master.entity.Enrollment;
 import com.fptu.math_master.entity.SchoolGrade;
 import com.fptu.math_master.entity.Subject;
@@ -12,6 +17,8 @@ import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.EnrollmentStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.AssessmentRepository;
+import com.fptu.math_master.repository.CourseAssessmentRepository;
 import com.fptu.math_master.repository.CourseLessonRepository;
 import com.fptu.math_master.repository.CourseRepository;
 import com.fptu.math_master.repository.EnrollmentRepository;
@@ -48,6 +55,8 @@ public class CourseServiceImpl implements CourseService {
   CourseLessonRepository courseLessonRepository;
   LessonProgressRepository lessonProgressRepository;
   UserRepository userRepository;
+  CourseAssessmentRepository courseAssessmentRepository;
+  AssessmentRepository assessmentRepository;
 
   @Override
   public CourseResponse createCourse(CreateCourseRequest request) {
@@ -224,5 +233,149 @@ public class CourseServiceImpl implements CourseService {
     Subject subject = subjectRepository.findById(course.getSubjectId()).orElse(null);
     SchoolGrade schoolGrade = schoolGradeRepository.findById(course.getSchoolGradeId()).orElse(null);
     return mapToResponse(course, subject, schoolGrade);
+  }
+
+  // ─── Course Assessment Management ─────────────────────────────────────────
+
+  @Override
+  public CourseAssessmentResponse addAssessmentToCourse(
+      UUID courseId, AddAssessmentToCourseRequest request) {
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    Course course = findCourseOrThrow(courseId);
+    verifyOwnership(course, currentUserId);
+
+    Assessment assessment =
+        assessmentRepository
+            .findByIdAndNotDeleted(request.getAssessmentId())
+            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
+    // Verify assessment belongs to the same teacher
+    if (!assessment.getTeacherId().equals(currentUserId)) {
+      throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
+    }
+
+    // Check if assessment is already added to this course
+    if (courseAssessmentRepository.existsByCourseIdAndAssessmentIdAndNotDeleted(
+        courseId, request.getAssessmentId())) {
+      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_IN_COURSE);
+    }
+
+    CourseAssessment courseAssessment =
+        CourseAssessment.builder()
+            .courseId(courseId)
+            .assessmentId(request.getAssessmentId())
+            .orderIndex(request.getOrderIndex())
+            .isRequired(request.getIsRequired() != null ? request.getIsRequired() : true)
+            .build();
+
+    courseAssessment = courseAssessmentRepository.save(courseAssessment);
+    log.info(
+        "Assessment {} added to course {} by teacher {}",
+        request.getAssessmentId(),
+        courseId,
+        currentUserId);
+
+    return mapToCourseAssessmentResponse(courseAssessment, assessment);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<CourseAssessmentResponse> getCourseAssessments(UUID courseId) {
+    Course course = findCourseOrThrow(courseId);
+    List<CourseAssessment> courseAssessments =
+        courseAssessmentRepository.findByCourseIdAndNotDeleted(courseId);
+
+    return courseAssessments.stream()
+        .map(
+            ca -> {
+              Assessment assessment =
+                  assessmentRepository
+                      .findByIdAndNotDeleted(ca.getAssessmentId())
+                      .orElse(null);
+              return mapToCourseAssessmentResponse(ca, assessment);
+            })
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  public CourseAssessmentResponse updateCourseAssessment(
+      UUID courseId, UUID assessmentId, UpdateCourseAssessmentRequest request) {
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    Course course = findCourseOrThrow(courseId);
+    verifyOwnership(course, currentUserId);
+
+    CourseAssessment courseAssessment =
+        courseAssessmentRepository
+            .findByCourseIdAndAssessmentIdAndNotDeleted(courseId, assessmentId)
+            .orElseThrow(() -> new AppException(ErrorCode.COURSE_ASSESSMENT_NOT_FOUND));
+
+    if (request.getOrderIndex() != null) {
+      courseAssessment.setOrderIndex(request.getOrderIndex());
+    }
+    if (request.getIsRequired() != null) {
+      courseAssessment.setRequired(request.getIsRequired());
+    }
+
+    courseAssessment = courseAssessmentRepository.save(courseAssessment);
+    log.info("Course assessment {} updated in course {}", assessmentId, courseId);
+
+    Assessment assessment =
+        assessmentRepository.findByIdAndNotDeleted(assessmentId).orElse(null);
+    return mapToCourseAssessmentResponse(courseAssessment, assessment);
+  }
+
+  @Override
+  public void removeAssessmentFromCourse(UUID courseId, UUID assessmentId) {
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    Course course = findCourseOrThrow(courseId);
+    verifyOwnership(course, currentUserId);
+
+    CourseAssessment courseAssessment =
+        courseAssessmentRepository
+            .findByCourseIdAndAssessmentIdAndNotDeleted(courseId, assessmentId)
+            .orElseThrow(() -> new AppException(ErrorCode.COURSE_ASSESSMENT_NOT_FOUND));
+
+    courseAssessment.setDeletedAt(Instant.now());
+    courseAssessment.setDeletedBy(currentUserId);
+    courseAssessmentRepository.save(courseAssessment);
+
+    log.info("Assessment {} removed from course {} by teacher {}", assessmentId, courseId, currentUserId);
+  }
+
+  private CourseAssessmentResponse mapToCourseAssessmentResponse(
+      CourseAssessment ca, Assessment assessment) {
+    CourseAssessmentResponse.CourseAssessmentResponseBuilder builder =
+        CourseAssessmentResponse.builder()
+            .id(ca.getId())
+            .courseId(ca.getCourseId())
+            .assessmentId(ca.getAssessmentId())
+            .orderIndex(ca.getOrderIndex())
+            .isRequired(ca.isRequired())
+            .createdAt(ca.getCreatedAt())
+            .updatedAt(ca.getUpdatedAt());
+
+    if (assessment != null) {
+      Long totalQuestions = assessmentRepository.countQuestionsByAssessmentId(assessment.getId());
+      Double totalPointsDouble = assessmentRepository.calculateTotalPoints(assessment.getId());
+      Long submissionCount = assessmentRepository.countSubmissionsByAssessmentId(assessment.getId());
+
+      builder
+          .assessmentTitle(assessment.getTitle())
+          .assessmentDescription(assessment.getDescription())
+          .assessmentType(assessment.getAssessmentType())
+          .assessmentStatus(assessment.getStatus())
+          .timeLimitMinutes(assessment.getTimeLimitMinutes())
+          .passingScore(assessment.getPassingScore())
+          .startDate(assessment.getStartDate())
+          .endDate(assessment.getEndDate())
+          .totalQuestions(totalQuestions)
+          .totalPoints(
+              totalPointsDouble != null
+                  ? java.math.BigDecimal.valueOf(totalPointsDouble)
+                  : java.math.BigDecimal.ZERO)
+          .submissionCount(submissionCount);
+    }
+
+    return builder.build();
   }
 }

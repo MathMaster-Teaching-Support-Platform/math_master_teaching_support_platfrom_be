@@ -1,9 +1,12 @@
 package com.fptu.math_master.controller;
 
+import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
 import com.fptu.math_master.dto.request.CreateCourseRequest;
 import com.fptu.math_master.dto.request.PublishCourseRequest;
+import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
 import com.fptu.math_master.dto.request.UpdateCourseRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
 import com.fptu.math_master.service.CourseService;
@@ -131,6 +134,58 @@ public class CourseController {
     var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
     return ApiResponse.<Page<CourseResponse>>builder()
         .result(courseService.getPublicCourses(schoolGradeId, subjectId, keyword, pageable))
+        .build();
+  }
+
+  // ─── Course Assessment Management ─────────────────────────────────────────
+
+  @Operation(summary = "Add assessment to course")
+  @PostMapping("/{courseId}/assessments")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseAssessmentResponse> addAssessmentToCourse(
+      @PathVariable UUID courseId, @Valid @RequestBody AddAssessmentToCourseRequest request) {
+    log.info("POST /courses/{}/assessments – assessmentId={}", courseId, request.getAssessmentId());
+    return ApiResponse.<CourseAssessmentResponse>builder()
+        .message("Assessment added to course successfully")
+        .result(courseService.addAssessmentToCourse(courseId, request))
+        .build();
+  }
+
+  @Operation(summary = "Get all assessments in a course")
+  @GetMapping("/{courseId}/assessments")
+  public ApiResponse<List<CourseAssessmentResponse>> getCourseAssessments(
+      @PathVariable UUID courseId) {
+    return ApiResponse.<List<CourseAssessmentResponse>>builder()
+        .result(courseService.getCourseAssessments(courseId))
+        .build();
+  }
+
+  @Operation(summary = "Update course assessment settings")
+  @PatchMapping("/{courseId}/assessments/{assessmentId}")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseAssessmentResponse> updateCourseAssessment(
+      @PathVariable UUID courseId,
+      @PathVariable UUID assessmentId,
+      @Valid @RequestBody UpdateCourseAssessmentRequest request) {
+    log.info("PATCH /courses/{}/assessments/{}", courseId, assessmentId);
+    return ApiResponse.<CourseAssessmentResponse>builder()
+        .message("Course assessment updated successfully")
+        .result(courseService.updateCourseAssessment(courseId, assessmentId, request))
+        .build();
+  }
+
+  @Operation(summary = "Remove assessment from course")
+  @DeleteMapping("/{courseId}/assessments/{assessmentId}")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<Void> removeAssessmentFromCourse(
+      @PathVariable UUID courseId, @PathVariable UUID assessmentId) {
+    log.info("DELETE /courses/{}/assessments/{}", courseId, assessmentId);
+    courseService.removeAssessmentFromCourse(courseId, assessmentId);
+    return ApiResponse.<Void>builder()
+        .message("Assessment removed from course successfully")
         .build();
   }
 }
