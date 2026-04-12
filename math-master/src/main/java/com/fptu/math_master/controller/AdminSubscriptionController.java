@@ -38,7 +38,6 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/admin/subscription-plans")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Admin — Subscription Plans", description = "CRUD and statistics for subscription plans")
 public class AdminSubscriptionController {
@@ -46,6 +45,7 @@ public class AdminSubscriptionController {
   private final SubscriptionPlanService subscriptionPlanService;
 
   @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
   @Operation(
       summary = "List all subscription plans",
       description = "Returns all non-deleted plans with live stats (activeUsers, revenueThisMonth, growthPercent).")
@@ -56,6 +56,7 @@ public class AdminSubscriptionController {
   }
 
   @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
   @ResponseStatus(HttpStatus.CREATED)
   @Operation(
       summary = "Create a new subscription plan",
@@ -68,6 +69,7 @@ public class AdminSubscriptionController {
   }
 
   @PutMapping("/{planId}")
+    @PreAuthorize("hasRole('ADMIN')")
   @Operation(
       summary = "Update a subscription plan",
       description = "Partial update — only provided fields are changed. If name changes, slug is regenerated.")
@@ -80,6 +82,7 @@ public class AdminSubscriptionController {
   }
 
   @DeleteMapping("/{planId}")
+    @PreAuthorize("hasRole('ADMIN')")
   @Operation(
       summary = "Delete a subscription plan",
       description = "Soft-deletes the plan. Returns 400 if the plan has active subscribers — deactivate it first via PUT status=INACTIVE.")
@@ -91,6 +94,7 @@ public class AdminSubscriptionController {
   }
 
   @GetMapping("/stats")
+    @PreAuthorize("hasRole('ADMIN')")
   @Operation(
       summary = "Overall subscription revenue statistics",
       description = "Returns total revenue, paid users, avg revenue/user, and conversion rate for the given month vs previous month.")
@@ -102,6 +106,7 @@ public class AdminSubscriptionController {
   }
 
   @GetMapping("/subscriptions")
+    @PreAuthorize("hasRole('ADMIN')")
   @Operation(
       summary = "List recent user subscriptions",
       description = "Paginated list filterable by status and planId. Default sorted by createdAt DESC.")
