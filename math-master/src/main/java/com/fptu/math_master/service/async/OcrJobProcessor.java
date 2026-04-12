@@ -77,6 +77,7 @@ public class OcrJobProcessor {
 
     /**
      * Update teacher profile with OCR results
+     * AUTO-REJECT if OCR verification fails
      */
     private void updateProfileWithOcrResults(TeacherProfile profile, OcrComparisonResult result) {
         try {
@@ -84,6 +85,19 @@ public class OcrJobProcessor {
             profile.setOcrMatchScore(result.getMatchScore());
             profile.setOcrVerificationData(objectMapper.writeValueAsString(result));
             profile.setOcrVerifiedAt(LocalDateTime.now());
+            
+            // AUTO-REJECT if OCR verification failed (3 mandatory fields not matched)
+            if (!result.getIsMatch()) {
+                profile.setStatus(com.fptu.math_master.enums.ProfileStatus.REJECTED);
+                profile.setAdminComment("❌ TỰ ĐỘNG TỪ CHỐI: Xác minh OCR thất bại. " + result.getSummary());
+                profile.setReviewedAt(LocalDateTime.now());
+                
+                log.warn("Profile {} AUTO-REJECTED due to OCR verification failure: {}", 
+                        profile.getId(), result.getSummary());
+            } else {
+                log.info("Profile {} OCR verification passed. Keeping PENDING status for admin review.", 
+                        profile.getId());
+            }
             
             teacherProfileRepository.save(profile);
             
@@ -97,6 +111,7 @@ public class OcrJobProcessor {
 
     /**
      * Handle job failure with retry logic
+     * AUTO-REJECT profile if job fails after all retries
      */
     private void handleJobFailure(OcrJob job, Exception error) {
         String jobId = job.getJobId();
@@ -117,6 +132,26 @@ public class OcrJobProcessor {
                     jobId, job.getMaxRetries(), errorMessage);
             
             jobStatusService.failJob(jobId, errorMessage);
+            
+            // AUTO-REJECT profile if OCR job failed completely
+            try {
+                TeacherProfile profile = teacherProfileRepository.findById(job.getProfileId())
+                        .orElse(null);
+                
+                if (profile != null && profile.getStatus() == com.fptu.math_master.enums.ProfileStatus.PENDING) {
+                    profile.setStatus(com.fptu.math_master.enums.ProfileStatus.REJECTED);
+                    profile.setAdminComment("❌ TỰ ĐỘNG TỪ CHỐI: Không thể xác minh OCR. Lỗi: " + errorMessage);
+                    profile.setReviewedAt(LocalDateTime.now());
+                    profile.setOcrVerified(false);
+                    
+                    teacherProfileRepository.save(profile);
+                    
+                    log.warn("Profile {} AUTO-REJECTED due to OCR job failure after {} retries", 
+                            profile.getId(), job.getMaxRetries());
+                }
+            } catch (Exception e) {
+                log.error("Failed to auto-reject profile after OCR job failure", e);
+            }
         }
     }
 }

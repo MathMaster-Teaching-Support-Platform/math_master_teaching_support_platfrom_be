@@ -87,4 +87,7 @@ public interface AssessmentRepository
           + "AND a.endDate < :now "
           + "AND a.deletedAt IS NULL")
   List<Assessment> findPublishedAssessmentsWithExpiredEndDate(@Param("now") Instant now);
+
+  @Query("SELECT a FROM Assessment a WHERE a.id IN :ids AND a.deletedAt IS NULL")
+  List<Assessment> findByIdInAndNotDeleted(@Param("ids") Collection<UUID> ids);
 }

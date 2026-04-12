@@ -25,6 +25,11 @@ public class OcrJobResult {
     private String jobId;
     
     /**
+     * Profile ID (for reference)
+     */
+    private String profileId;
+    
+    /**
      * Current job status
      */
     private OcrJobStatus status;
@@ -49,6 +54,11 @@ public class OcrJobResult {
      * When job was created
      */
     private Instant createdAt;
+    
+    /**
+     * When job was last updated
+     */
+    private Instant updatedAt;
     
     /**
      * When job started processing

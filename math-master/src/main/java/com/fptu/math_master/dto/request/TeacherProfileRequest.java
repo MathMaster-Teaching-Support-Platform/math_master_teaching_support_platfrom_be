@@ -12,6 +12,10 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class TeacherProfileRequest {
 
+  @NotBlank(message = "Full name is required")
+  @Size(max = 100, message = "Full name must not exceed 100 characters")
+  String fullName;
+
   @NotBlank(message = "School name is required")
   String schoolName;
 

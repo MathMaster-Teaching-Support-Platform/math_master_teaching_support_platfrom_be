@@ -34,12 +34,46 @@ public class OcrJobStatusService {
     public Optional<OcrJobResult> getJobResult(String jobId) {
         try {
             String key = getJobResultKey(jobId);
+            log.debug("Fetching job result with key: {}", key);
+            
             Object result = ocrRedisTemplate.opsForValue().get(key);
             
+            if (result == null) {
+                log.warn("Job result not found in Redis for jobId: {} (key: {})", jobId, key);
+                return Optional.empty();
+            }
+            
+            log.debug("Found result in Redis: type={}", result.getClass().getName());
+            
             if (result instanceof OcrJobResult) {
+                log.info("Successfully retrieved job result for jobId: {}", jobId);
                 return Optional.of((OcrJobResult) result);
             }
             
+            // Handle LinkedHashMap deserialization issue
+            if (result instanceof java.util.Map) {
+                log.warn("Result is Map (LinkedHashMap), attempting to convert to OcrJobResult for jobId: {}", jobId);
+                try {
+                    // Convert Map to OcrJobResult using ObjectMapper
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+                    mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+                    
+                    OcrJobResult converted = mapper.convertValue(result, OcrJobResult.class);
+                    log.info("Successfully converted Map to OcrJobResult for jobId: {}", jobId);
+                    
+                    // Re-save with correct type
+                    saveJobResult(converted);
+                    log.debug("Re-saved job result with correct type for jobId: {}", jobId);
+                    
+                    return Optional.of(converted);
+                } catch (Exception e) {
+                    log.error("Failed to convert Map to OcrJobResult for jobId: {}", jobId, e);
+                    return Optional.empty();
+                }
+            }
+            
+            log.error("Result found but wrong type: expected OcrJobResult, got {}", result.getClass().getName());
             return Optional.empty();
             
         } catch (Exception e) {
@@ -57,6 +91,7 @@ public class OcrJobStatusService {
     public void updateJobStatus(String jobId, OcrJobStatus status) {
         getJobResult(jobId).ifPresent(result -> {
             result.setStatus(status);
+            result.setUpdatedAt(Instant.now());
             
             if (status == OcrJobStatus.PROCESSING && result.getStartedAt() == null) {
                 result.setStartedAt(Instant.now());
@@ -76,6 +111,7 @@ public class OcrJobStatusService {
     public void updateJobProgress(String jobId, Integer progress) {
         getJobResult(jobId).ifPresent(result -> {
             result.setProgress(Math.min(100, Math.max(0, progress)));
+            result.setUpdatedAt(Instant.now());
             saveJobResult(result);
             log.debug("Updated job {} progress to: {}%", jobId, progress);
         });
@@ -89,10 +125,12 @@ public class OcrJobStatusService {
      */
     public void completeJob(String jobId, OcrComparisonResult ocrResult) {
         getJobResult(jobId).ifPresent(result -> {
+            Instant now = Instant.now();
             result.setStatus(OcrJobStatus.COMPLETED);
             result.setResult(ocrResult);
             result.setProgress(100);
-            result.setCompletedAt(Instant.now());
+            result.setCompletedAt(now);
+            result.setUpdatedAt(now);
             
             // Calculate processing time
             if (result.getStartedAt() != null) {
@@ -117,9 +155,11 @@ public class OcrJobStatusService {
      */
     public void failJob(String jobId, String errorMessage) {
         getJobResult(jobId).ifPresent(result -> {
+            Instant now = Instant.now();
             result.setStatus(OcrJobStatus.FAILED);
             result.setErrorMessage(errorMessage);
-            result.setCompletedAt(Instant.now());
+            result.setCompletedAt(now);
+            result.setUpdatedAt(now);
             
             saveJobResult(result);
             log.error("Failed job {}: {}", jobId, errorMessage);
@@ -135,6 +175,7 @@ public class OcrJobStatusService {
         getJobResult(jobId).ifPresent(result -> {
             result.setRetryCount(result.getRetryCount() + 1);
             result.setStatus(OcrJobStatus.PENDING); // Reset to pending for retry
+            result.setUpdatedAt(Instant.now());
             
             saveJobResult(result);
             log.debug("Incremented retry count for job {} to: {}", 
@@ -149,8 +190,10 @@ public class OcrJobStatusService {
      */
     public void cancelJob(String jobId) {
         getJobResult(jobId).ifPresent(result -> {
+            Instant now = Instant.now();
             result.setStatus(OcrJobStatus.CANCELLED);
-            result.setCompletedAt(Instant.now());
+            result.setCompletedAt(now);
+            result.setUpdatedAt(now);
             
             saveJobResult(result);
             log.info("Cancelled job: {}", jobId);
@@ -163,11 +206,22 @@ public class OcrJobStatusService {
     private void saveJobResult(OcrJobResult result) {
         try {
             String key = getJobResultKey(result.getJobId());
+            log.debug("Saving job result to Redis: key={}, status={}, progress={}", 
+                    key, result.getStatus(), result.getProgress());
+            
             ocrRedisTemplate.opsForValue().set(
                     key,
                     result,
                     Duration.ofSeconds(ocrAsyncProperties.getJobTtl())
             );
+            
+            // Verify save
+            Object saved = ocrRedisTemplate.opsForValue().get(key);
+            if (saved != null) {
+                log.info("Job result saved successfully to Redis: jobId={}, key={}", result.getJobId(), key);
+            } else {
+                log.error("Job result save verification failed: jobId={}, key={}", result.getJobId(), key);
+            }
         } catch (Exception e) {
             log.error("Failed to save job result for: {}", result.getJobId(), e);
         }

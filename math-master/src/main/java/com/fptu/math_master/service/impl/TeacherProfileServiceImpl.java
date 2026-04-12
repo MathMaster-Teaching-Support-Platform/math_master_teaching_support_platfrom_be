@@ -45,6 +45,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   MinioProperties minioProperties;
   com.fptu.math_master.service.EmailService emailService;
   StreamPublisher streamPublisher;
+  com.fptu.math_master.service.async.OcrJobProducer ocrJobProducer; // Add OCR job producer
 
   @Override
   @Transactional
@@ -71,17 +72,28 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     TeacherProfile profile =
         TeacherProfile.builder()
             .user(user)
+            .fullName(request.getFullName()) // Use fullName from request for OCR verification
             .schoolName(request.getSchoolName())
             .schoolAddress(request.getSchoolAddress())
             .schoolWebsite(request.getSchoolWebsite())
             .position(request.getPosition())
             .verificationDocumentKey(documentUrl)
+            .verificationDocumentPath(documentUrl)
             .description(request.getDescription())
             .status(ProfileStatus.PENDING)
             .build();
 
     profile = teacherProfileRepository.save(profile);
     log.info("Teacher profile submitted successfully for user {} with document: {}", userId, documentUrl);
+
+    // AUTO-TRIGGER OCR verification job
+    try {
+      String jobId = ocrJobProducer.createOcrJob(profile.getId(), userId);
+      log.info("Auto-triggered OCR verification job {} for profile {}", jobId, profile.getId());
+    } catch (Exception e) {
+      log.error("Failed to auto-trigger OCR job for profile {}", profile.getId(), e);
+      // Don't fail the submission if OCR job creation fails
+    }
 
     return mapToResponse(profile);
   }
@@ -102,6 +114,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     }
 
     // Update profile fields
+    profile.setFullName(request.getFullName()); // Update fullName for OCR verification
     profile.setSchoolName(request.getSchoolName());
     profile.setSchoolAddress(request.getSchoolAddress());
     profile.setSchoolWebsite(request.getSchoolWebsite());
@@ -118,6 +131,16 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
     profile = teacherProfileRepository.save(profile);
     log.info("Teacher profile updated successfully for user {}", userId);
+
+    // AUTO-TRIGGER OCR verification job if profile was rejected and now updated
+    if (profile.getStatus() == ProfileStatus.PENDING && !profile.getOcrVerified()) {
+      try {
+        String jobId = ocrJobProducer.createOcrJob(profile.getId(), userId);
+        log.info("Auto-triggered OCR verification job {} for updated profile {}", jobId, profile.getId());
+      } catch (Exception e) {
+        log.error("Failed to auto-trigger OCR job for updated profile {}", profile.getId(), e);
+      }
+    }
 
     return mapToResponse(profile);
   }
@@ -275,7 +298,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
             .id(profile.getId())
             .userId(profile.getUser().getId())
             .userName(profile.getUser().getUserName())
-            .fullName(profile.getUser().getFullName())
+            .fullName(profile.getFullName()) // Use fullName from profile (for OCR verification)
             .schoolName(profile.getSchoolName())
             .schoolAddress(profile.getSchoolAddress())
             .schoolWebsite(profile.getSchoolWebsite())

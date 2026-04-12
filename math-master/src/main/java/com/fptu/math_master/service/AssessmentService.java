@@ -74,4 +74,28 @@ public interface AssessmentService {
    * @return Created assessment with generated questions
    */
   AssessmentResponse generateAssessmentFromMatrix(GenerateAssessmentQuestionsRequest request);
+
+  /**
+   * Get all assessments linked to a specific lesson.
+   *
+   * @param lessonId Lesson ID
+   * @return List of assessments for this lesson
+   */
+  List<AssessmentResponse> getAssessmentsByLessonId(UUID lessonId);
+
+  /**
+   * Link an existing assessment to a lesson.
+   *
+   * @param assessmentId Assessment ID
+   * @param lessonId Lesson ID
+   */
+  void linkAssessmentToLesson(UUID assessmentId, UUID lessonId);
+
+  /**
+   * Unlink an assessment from a lesson.
+   *
+   * @param assessmentId Assessment ID
+   * @param lessonId Lesson ID
+   */
+  void unlinkAssessmentFromLesson(UUID assessmentId, UUID lessonId);
 }
