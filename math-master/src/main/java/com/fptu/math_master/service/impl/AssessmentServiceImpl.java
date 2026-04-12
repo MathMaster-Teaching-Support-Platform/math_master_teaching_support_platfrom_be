@@ -1,5 +1,27 @@
 package com.fptu.math_master.service.impl;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
@@ -24,28 +46,24 @@ import com.fptu.math_master.enums.MatrixStatus;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
-import com.fptu.math_master.repository.*;
+import com.fptu.math_master.repository.AssessmentLessonRepository;
+import com.fptu.math_master.repository.AssessmentQuestionRepository;
+import com.fptu.math_master.repository.AssessmentRepository;
+import com.fptu.math_master.repository.ExamMatrixBankMappingRepository;
+import com.fptu.math_master.repository.ExamMatrixRepository;
+import com.fptu.math_master.repository.ExamMatrixRowRepository;
+import com.fptu.math_master.repository.LessonRepository;
+import com.fptu.math_master.repository.QuestionRepository;
+import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.AssessmentService;
 import com.fptu.math_master.service.ExamMatrixService;
 import com.fptu.math_master.service.QuestionSelectionService;
 import com.fptu.math_master.util.SecurityUtils;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Instant;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.stream.Collectors;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
