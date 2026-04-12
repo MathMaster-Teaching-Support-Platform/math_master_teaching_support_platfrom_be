@@ -264,6 +264,8 @@ public class SubscriptionPlanServiceImpl implements SubscriptionPlanService {
           .endDate(sub.getEndDate())
           .amount(sub.getAmount())
           .currency(sub.getCurrency())
+          .tokenQuota(sub.getTokenQuota())
+          .tokenRemaining(sub.getTokenRemaining())
           .status(sub.getStatus())
           .paymentMethod(sub.getPaymentMethod())
           .createdAt(sub.getCreatedAt())
