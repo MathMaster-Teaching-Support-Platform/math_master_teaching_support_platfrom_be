@@ -118,7 +118,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   ObjectMapper objectMapper;
 
   @Override
-  @Transactional(readOnly = true)
+  @Transactional
   public LessonSlideGeneratedContentResponse generateLessonContentDraft(
       LessonSlideGenerateContentRequest request) {
     validateTeacherRole();
