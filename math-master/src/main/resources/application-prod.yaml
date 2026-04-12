@@ -91,8 +91,8 @@ payos:
   client-id: ${PAYOS_CLIENT_ID:3af710f4-e502-4ddb-b99d-72ffa68f8423}
   api-key: ${PAYOS_API_KEY:b5087001-a7a7-4f60-af06-c941f374e5aa}
   checksum-key: ${PAYOS_CHECKSUM_KEY:7a6fd4e43ca930c32838b42f7976dd13c746ccc236a678b95585b68da743a5a4}
-  return-url: ${PAYOS_RETURN_URL:http://localhost:3000/payment/success}
-  cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/payment/cancel}
+  return-url: ${PAYOS_RETURN_URL:https://sep.nhducminhqt.name.vn/student/wallet}
+  cancel-url: ${PAYOS_CANCEL_URL:https://sep.nhducminhqt.name.vn/student/wallet}
 
 centrifugo:
   api-url: ${CENTRIFUGO_API_URL:http://localhost:8000/api}
