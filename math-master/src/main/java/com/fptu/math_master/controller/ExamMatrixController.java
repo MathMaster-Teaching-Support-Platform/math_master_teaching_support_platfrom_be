@@ -3,6 +3,7 @@ package com.fptu.math_master.controller;
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
 import com.fptu.math_master.dto.request.ExamMatrixRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
+import com.fptu.math_master.dto.request.UpdateMatrixPercentagesRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
 import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
@@ -77,6 +78,18 @@ public class ExamMatrixController {
         .build();
   }
 
+  @GetMapping("/available")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Get available exam matrices",
+      description = "Get all available exam matrices that can be used for assessment generation.")
+  public ApiResponse<List<ExamMatrixResponse>> getAvailableExamMatrices() {
+    log.info("REST request to get available exam matrices");
+    return ApiResponse.<List<ExamMatrixResponse>>builder()
+        .result(examMatrixService.getMyExamMatrices())
+        .build();
+  }
+
   @GetMapping("/{matrixId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
@@ -125,6 +138,26 @@ public class ExamMatrixController {
     return ApiResponse.<Void>builder().message("Exam matrix deleted successfully.").build();
   }
 
+  // ── Percentage-Based Matrix Configuration ───────────────────────────────
+
+  @PutMapping("/{matrixId}/percentages")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Update matrix percentage configuration",
+      description =
+          "Set total questions and percentage distribution for percentage-based matrix. "
+              + "Used when matrix has question banks added but no fixed question counts. "
+              + "Percentages must sum to 100%. "
+              + "Example: totalQuestions=40, NHAN_BIET=25%, THONG_HIEU=35%, VAN_DUNG=30%, VAN_DUNG_CAO=10%")
+  public ApiResponse<ExamMatrixResponse> updateMatrixPercentages(
+      @PathVariable UUID matrixId,
+      @Valid @RequestBody UpdateMatrixPercentagesRequest request) {
+    log.info("REST request to update matrix percentages: {}", matrixId);
+    return ApiResponse.<ExamMatrixResponse>builder()
+        .message("Matrix percentages updated successfully")
+        .result(examMatrixService.updateMatrixPercentages(matrixId, request))
+        .build();
+  }
 
   // ── Validation & Lifecycle ──────────────────────────────────────────────
 

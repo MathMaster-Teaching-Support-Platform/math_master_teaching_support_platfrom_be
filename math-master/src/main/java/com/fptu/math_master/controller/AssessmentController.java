@@ -3,6 +3,7 @@ package com.fptu.math_master.controller;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -10,6 +11,7 @@ import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
+import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.service.AssessmentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -370,6 +372,28 @@ public class AssessmentController {
     return ApiResponse.<AssessmentResponse>builder()
         .message("Assessment generated successfully from exam matrix with all questions.")
         .result(assessmentService.generateAssessmentFromMatrix(request))
+        .build();
+  }
+
+  @PostMapping("/generate-by-percentage")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Generate assessment using percentage-based cognitive level distribution",
+      description =
+          "Create assessment from exam matrix using percentage distribution for cognitive levels. "
+              + "Specify total questions and percentage for each level (NHAN_BIET, THONG_HIEU, VAN_DUNG, VAN_DUNG_CAO). "
+              + "Questions are randomly selected from all question banks in the matrix. "
+              + "Matrix is NOT locked, allowing multiple assessments from the same matrix. "
+              + "Example: 40 questions with 25% NHAN_BIET (10q), 35% THONG_HIEU (14q), 30% VAN_DUNG (12q), 10% VAN_DUNG_CAO (4q).")
+  public ApiResponse<PercentageBasedGenerationResponse> generateAssessmentByPercentage(
+      @Valid @RequestBody GenerateAssessmentByPercentageRequest request) {
+    log.info(
+        "REST request to generate assessment by percentage from matrix: {}, total questions: {}",
+        request.getExamMatrixId(),
+        request.getTotalQuestions());
+    return ApiResponse.<PercentageBasedGenerationResponse>builder()
+        .message("Assessment generated successfully using percentage-based distribution.")
+        .result(assessmentService.generateAssessmentByPercentage(request))
         .build();
   }
 

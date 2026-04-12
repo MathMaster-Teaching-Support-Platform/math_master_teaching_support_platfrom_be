@@ -191,4 +191,38 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       @Param("difficulty") String difficulty,
       @Param("cognitiveLevel") String cognitiveLevel,
       @Param("limit") int limit);
+
+  /**
+   * Find random approved questions from multiple banks by cognitive level.
+   * Used for percentage-based assessment generation from exam matrix.
+   */
+  @Query(
+      value =
+          "SELECT * FROM questions q "
+              + "WHERE q.question_bank_id IN (:bankIds) "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "ORDER BY random() LIMIT :limit",
+      nativeQuery = true)
+  List<Question> findRandomApprovedByBanksAndCognitiveLevel(
+      @Param("bankIds") List<UUID> bankIds,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("limit") int limit);
+
+  /**
+   * Count approved questions from multiple banks by cognitive level.
+   * Used to check availability before generating percentage-based assessments.
+   */
+  @Query(
+      value =
+          "SELECT COUNT(*) FROM questions q "
+              + "WHERE q.question_bank_id IN (:bankIds) "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text)",
+      nativeQuery = true)
+  long countApprovedByBanksAndCognitiveLevel(
+      @Param("bankIds") List<UUID> bankIds,
+      @Param("cognitiveLevel") String cognitiveLevel);
 }

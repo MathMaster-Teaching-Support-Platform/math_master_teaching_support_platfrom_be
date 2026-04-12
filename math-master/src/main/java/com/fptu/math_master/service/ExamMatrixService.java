@@ -7,6 +7,7 @@ import com.fptu.math_master.dto.request.ExamMatrixRequest;
 import com.fptu.math_master.dto.request.FinalizePreviewRequest;
 import com.fptu.math_master.dto.request.GeneratePreviewRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
+import com.fptu.math_master.dto.request.UpdateMatrixPercentagesRequest;
 import com.fptu.math_master.dto.response.BatchTemplateMappingsResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
 import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
@@ -33,6 +34,19 @@ public interface ExamMatrixService {
   List<ExamMatrixResponse> getMyExamMatrices();
 
   void deleteExamMatrix(UUID matrixId);
+
+  // ── Percentage-Based Matrix Configuration ───────────────────────────────
+
+  /**
+   * Update matrix with percentage-based configuration.
+   * Sets total questions target and cognitive level percentage distribution.
+   * Used for percentage-based matrices where question banks are added without fixed counts.
+   *
+   * @param matrixId The matrix ID
+   * @param request Request containing total questions and percentage distribution
+   * @return Updated matrix response with availability information
+   */
+  ExamMatrixResponse updateMatrixPercentages(UUID matrixId, UpdateMatrixPercentagesRequest request);
 
   // ── Structured Matrix Builder ───────────────────────────────────────────
 
