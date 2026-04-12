@@ -100,7 +100,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
   @Override
   @Transactional
-  public TeacherProfileResponse updateProfile(TeacherProfileRequest request, UUID userId) {
+  public TeacherProfileResponse updateProfile(TeacherProfileRequest request, java.util.List<MultipartFile> files, UUID userId) {
     log.info("User {} updating teacher profile", userId);
 
     TeacherProfile profile =
@@ -111,6 +111,13 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     // Only PENDING or REJECTED profiles can be updated
     if (profile.getStatus() == ProfileStatus.APPROVED) {
       throw new AppException(ErrorCode.PROFILE_CANNOT_BE_MODIFIED);
+    }
+
+    if (files != null && !files.isEmpty()) {
+      // Save physical files as a zip
+      String documentUrl = uploadService.uploadFilesAsZip(files, "verification", "verification_docs");
+      profile.setVerificationDocumentKey(documentUrl);
+      profile.setVerificationDocumentPath(documentUrl);
     }
 
     // Update profile fields
@@ -127,6 +134,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
       profile.setAdminComment(null);
       profile.setReviewedBy(null);
       profile.setReviewedAt(null);
+      profile.setOcrVerified(false); // Reset OCR status to force re-scan
     }
 
     profile = teacherProfileRepository.save(profile);

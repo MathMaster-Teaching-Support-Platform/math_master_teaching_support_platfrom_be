@@ -28,10 +28,11 @@ public interface TeacherProfileService {
    * Update pending teacher profile
    *
    * @param request Updated profile information
+   * @param files Verification document files (optional for update)
    * @param userId Current user ID
    * @return Updated profile response
    */
-  TeacherProfileResponse updateProfile(TeacherProfileRequest request, UUID userId);
+  TeacherProfileResponse updateProfile(TeacherProfileRequest request, List<MultipartFile> files, UUID userId);
 
   /**
    * Get user's teacher profile

@@ -61,13 +61,14 @@ public class TeacherProfileController {
   @Operation(
       summary = "Update my profile",
       description = "Update pending or rejected teacher profile")
-  @PutMapping("/my-profile")
+  @PutMapping(value = "/my-profile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @PreAuthorize("hasRole('STUDENT')")
   public ApiResponse<TeacherProfileResponse> updateMyProfile(
-      @Valid @RequestBody TeacherProfileRequest request) {
+      @Valid @RequestPart("request") TeacherProfileRequest request,
+      @RequestPart(value = "files", required = false) java.util.List<MultipartFile> files) {
     UUID userId = getCurrentUserId();
     return ApiResponse.<TeacherProfileResponse>builder()
-        .result(teacherProfileService.updateProfile(request, userId))
+        .result(teacherProfileService.updateProfile(request, files, userId))
         .build();
   }
 
