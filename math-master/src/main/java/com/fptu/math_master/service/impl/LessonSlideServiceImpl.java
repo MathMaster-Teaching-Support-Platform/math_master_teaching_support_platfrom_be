@@ -163,10 +163,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       throw new AppException(ErrorCode.CHAPTER_NOT_IN_LESSON);
     }
 
-    int slideCount = request.getSlideCount() == null ? 10 : request.getSlideCount();
-  LessonSlideOutputFormat outputFormat = resolveOutputFormat(request.getOutputFormat());
-  DeckSections deckSections =
-    buildDeckSectionsWithAi(lesson, request.getAdditionalPrompt(), outputFormat);
+    int slideCount = normalizeRequestedSlideCount(request.getSlideCount());
+    LessonSlideOutputFormat outputFormat = resolveOutputFormat(request.getOutputFormat());
+    DeckSections deckSections =
+        buildDeckSectionsWithAi(lesson, request.getAdditionalPrompt(), outputFormat, slideCount);
     List<LessonSlideJsonItemResponse> slides = buildPreviewSlides(deckSections, slideCount);
 
     return LessonSlideGeneratedContentResponse.builder()
@@ -175,10 +175,17 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         .lessonId(lesson.getId())
         .lessonTitle(lesson.getTitle())
         .slideCount(slideCount)
-    .outputFormat(outputFormat)
+        .outputFormat(outputFormat)
         .slides(slides)
         .additionalPrompt(request.getAdditionalPrompt())
         .build();
+  }
+
+  private int normalizeRequestedSlideCount(Integer requestedSlideCount) {
+    if (requestedSlideCount == null) {
+      return 10;
+    }
+    return Math.max(5, Math.min(15, requestedSlideCount));
   }
 
   private SchoolGrade resolveRequestedGrade(LessonSlideGenerateContentRequest request) {
@@ -579,7 +586,22 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     try (XMLSlideShow slideshow = new XMLSlideShow(new ByteArrayInputStream(templateBytes));
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
 
-      int applyCount = Math.min(slideshow.getSlides().size(), slides.size());
+      int templateSlideCount = slideshow.getSlides().size();
+      int requestedSlideCount = slides == null ? 0 : slides.size();
+
+      if (requestedSlideCount == 0) {
+        throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+      }
+
+      if (requestedSlideCount > templateSlideCount) {
+        log.warn(
+            "Template slide count is insufficient. templateSlides={}, requestedSlides={}",
+            templateSlideCount,
+            requestedSlideCount);
+        throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+      }
+
+      int applyCount = requestedSlideCount;
       for (int i = 0; i < applyCount; i++) {
         XSLFSlide slide = slideshow.getSlides().get(i);
         LessonSlideJsonItemRequest item = slides.get(i);
@@ -597,6 +619,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             }
           }
         }
+      }
+
+      // Keep output deck size aligned with requested slide count when template has more slides.
+      for (int i = templateSlideCount - 1; i >= requestedSlideCount; i--) {
+        slideshow.removeSlide(i);
       }
 
       slideshow.write(outputStream);
@@ -921,16 +948,22 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         lessonContent);
   }
 
-  private DeckSections buildDeckSectionsWithAi(
-      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
+    private DeckSections buildDeckSectionsWithAi(
+      Lesson lesson,
+      String additionalPrompt,
+      LessonSlideOutputFormat outputFormat,
+      int requestedSlideCount) {
     DeckSections fallback = buildDeckSections(lesson, additionalPrompt);
 
     try {
-      String prompt = buildSlideDeckPrompt(lesson, additionalPrompt, outputFormat);
+        String prompt =
+          buildSlideDeckPrompt(lesson, additionalPrompt, outputFormat, requestedSlideCount);
       String aiResponse = geminiService.sendMessage(prompt);
       AiDeckSections aiDeck = parseAiDeckSections(aiResponse);
       if (aiDeck == null || !hasEnoughAiContent(aiDeck)) {
-        String taggedPrompt = buildSlideDeckTaggedPrompt(lesson, additionalPrompt, outputFormat);
+        String taggedPrompt =
+          buildSlideDeckTaggedPrompt(
+            lesson, additionalPrompt, outputFormat, requestedSlideCount);
         String taggedResponse = geminiService.sendMessage(taggedPrompt);
         AiDeckSections taggedDeck = parseTaggedDeckSections(taggedResponse);
         if (taggedDeck != null && hasEnoughAiContent(taggedDeck)) {
@@ -1041,8 +1074,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
   }
 
-  private String buildSlideDeckPrompt(
-      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
+    private String buildSlideDeckPrompt(
+      Lesson lesson,
+      String additionalPrompt,
+      LessonSlideOutputFormat outputFormat,
+      int requestedSlideCount) {
     String lessonTitle = safe(lesson.getTitle());
     String lessonContent = safe(lesson.getLessonContent());
     String lessonSummary = safe(lesson.getSummary());
@@ -1052,7 +1088,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
     return """
         Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
-        Hãy soạn nội dung trình chiếu đầy đủ cho bài học theo cấu trúc 10 slide.
+        Hãy soạn nội dung trình chiếu đầy đủ cho bài học theo cấu trúc %d slide.
 
         THÔNG TIN ĐẦU VÀO:
         - lessonTitle: %s
@@ -1086,6 +1122,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         }
         """
         .formatted(
+          requestedSlideCount,
             lessonTitle,
             lessonSummary,
             learningObjectives,
@@ -1096,7 +1133,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   }
 
   private String buildSlideDeckTaggedPrompt(
-      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
+        Lesson lesson,
+        String additionalPrompt,
+        LessonSlideOutputFormat outputFormat,
+        int requestedSlideCount) {
     String lessonTitle = safe(lesson.getTitle());
     String lessonContent = safe(lesson.getLessonContent());
     String lessonSummary = safe(lesson.getSummary());
@@ -1106,7 +1146,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
     return """
         Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
-        Hãy soạn nội dung đầy đủ cho bài trình chiếu 10 slide.
+        Hãy soạn nội dung đầy đủ cho bài trình chiếu %d slide.
 
         THÔNG TIN ĐẦU VÀO:
         - lessonTitle: %s
@@ -1145,6 +1185,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         ...
         """
         .formatted(
+          requestedSlideCount,
           lessonTitle,
           lessonSummary,
           learningObjectives,
