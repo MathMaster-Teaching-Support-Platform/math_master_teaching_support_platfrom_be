@@ -89,4 +89,18 @@ public class UserSubscription extends BaseEntity {
    */
   @Column(name = "payment_method", length = 50)
   private String paymentMethod;
+
+  /**
+   * token_quota — tokens granted at purchase time.
+   */
+  @Builder.Default
+  @Column(name = "token_quota", nullable = false)
+  private Integer tokenQuota = 0;
+
+  /**
+   * token_remaining — remaining tokens user can spend on AI features.
+   */
+  @Builder.Default
+  @Column(name = "token_remaining", nullable = false)
+  private Integer tokenRemaining = 0;
 }

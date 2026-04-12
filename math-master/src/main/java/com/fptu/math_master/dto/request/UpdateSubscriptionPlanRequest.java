@@ -35,6 +35,9 @@ public class UpdateSubscriptionPlanRequest {
 
   private List<@NotBlank String> features;
 
+  @Min(value = 0, message = "Token quota must be >= 0")
+  private Integer tokenQuota;
+
   private Boolean featured;
 
   @JsonProperty("isPublic")

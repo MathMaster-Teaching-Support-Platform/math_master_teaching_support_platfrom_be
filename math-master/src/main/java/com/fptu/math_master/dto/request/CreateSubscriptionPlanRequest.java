@@ -38,6 +38,10 @@ public class CreateSubscriptionPlanRequest {
   @NotEmpty(message = "At least one feature is required")
   private List<@NotBlank String> features;
 
+  @Min(value = 0, message = "Token quota must be >= 0")
+  @Builder.Default
+  private Integer tokenQuota = 0;
+
   @Builder.Default
   private boolean featured = false;
 

@@ -28,6 +28,7 @@ import com.fptu.math_master.repository.SlideTemplateRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.LessonSlideService;
+import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.SecurityUtils;
 import io.minio.BucketExistsArgs;
 import io.minio.GetObjectArgs;
@@ -113,6 +114,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   MinioClient minioClient;
   MinioProperties minioProperties;
   GeminiService geminiService;
+  UserSubscriptionService userSubscriptionService;
   ObjectMapper objectMapper;
 
   @Override
@@ -120,6 +122,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   public LessonSlideGeneratedContentResponse generateLessonContentDraft(
       LessonSlideGenerateContentRequest request) {
     validateTeacherRole();
+    userSubscriptionService.consumeMyTokens(3, "SLIDE");
 
     SchoolGrade requestedGrade = resolveRequestedGrade(request);
 

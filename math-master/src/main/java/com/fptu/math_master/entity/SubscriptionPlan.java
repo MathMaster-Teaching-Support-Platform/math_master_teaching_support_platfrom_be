@@ -104,4 +104,11 @@ public class SubscriptionPlan extends BaseEntity {
   @Type(JsonBinaryType.class)
   @Column(name = "features", columnDefinition = "jsonb")
   private List<String> features;
+
+  /**
+   * token_quota — number of AI tokens granted when user purchases this plan.
+   */
+  @Builder.Default
+  @Column(name = "token_quota", nullable = false)
+  private Integer tokenQuota = 0;
 }

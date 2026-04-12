@@ -87,6 +87,7 @@ public class SubscriptionPlanServiceImpl implements SubscriptionPlanService {
         .featured(request.isFeatured())
         .publicVisible(request.isPublic())
         .features(request.getFeatures())
+      .tokenQuota(request.getTokenQuota() == null ? 0 : request.getTokenQuota())
         .build();
 
     plan.setCreatedAt(Instant.now());
@@ -122,6 +123,9 @@ public class SubscriptionPlanServiceImpl implements SubscriptionPlanService {
     }
     if (request.getFeatures() != null && !request.getFeatures().isEmpty()) {
       plan.setFeatures(request.getFeatures());
+    }
+    if (request.getTokenQuota() != null) {
+      plan.setTokenQuota(request.getTokenQuota());
     }
     if (request.getFeatured() != null) {
       plan.setFeatured(request.getFeatured());
@@ -283,6 +287,7 @@ public class SubscriptionPlanServiceImpl implements SubscriptionPlanService {
         .isPublic(plan.isPublicVisible())
         .status(plan.getStatus())
         .features(plan.getFeatures())
+        .tokenQuota(plan.getTokenQuota())
         .stats(SubscriptionPlanResponse.PlanStats.builder()
             .activeUsers(activeUsers)
             .revenueThisMonth(revenueThisMonth)

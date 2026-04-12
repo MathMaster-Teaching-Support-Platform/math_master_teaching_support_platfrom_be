@@ -14,6 +14,7 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.MindmapService;
+import com.fptu.math_master.service.UserSubscriptionService;
 import java.time.Instant;
 import java.util.*;
 import java.util.Comparator;
@@ -39,6 +40,7 @@ public class MindmapServiceImpl implements MindmapService {
   UserRepository userRepository;
   LessonRepository lessonRepository;
   GeminiService geminiService;
+  UserSubscriptionService userSubscriptionService;
   ObjectMapper objectMapper;
 
   @Override
@@ -78,6 +80,7 @@ public class MindmapServiceImpl implements MindmapService {
 
     UUID currentUserId = getCurrentUserId();
     validateTeacherRole(currentUserId);
+    userSubscriptionService.consumeMyTokens(2, "MINDMAP");
 
     // Build the AI prompt with levels
     Integer levels = request.getLevels() != null ? request.getLevels() : 3;

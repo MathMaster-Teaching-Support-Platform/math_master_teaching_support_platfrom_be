@@ -267,7 +267,10 @@ public enum ErrorCode {
   OCR_JOB_NOT_COMPLETED(1159, "OCR job not completed yet", HttpStatus.BAD_REQUEST),
   OCR_JOB_FAILED(1160, "OCR job failed", HttpStatus.INTERNAL_SERVER_ERROR),
   ASSESSMENT_ALREADY_IN_COURSE(1161, "Assessment is already added to this course", HttpStatus.BAD_REQUEST),
-  COURSE_ASSESSMENT_NOT_FOUND(1162, "Course assessment not found", HttpStatus.NOT_FOUND);
+    COURSE_ASSESSMENT_NOT_FOUND(1162, "Course assessment not found", HttpStatus.NOT_FOUND),
+    SUBSCRIPTION_PLAN_NOT_PURCHASABLE(1163, "Subscription plan is not purchasable", HttpStatus.BAD_REQUEST),
+    NO_ACTIVE_SUBSCRIPTION(1164, "No active subscription found", HttpStatus.BAD_REQUEST),
+    INSUFFICIENT_SUBSCRIPTION_TOKENS(1165, "Not enough subscription tokens", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;
