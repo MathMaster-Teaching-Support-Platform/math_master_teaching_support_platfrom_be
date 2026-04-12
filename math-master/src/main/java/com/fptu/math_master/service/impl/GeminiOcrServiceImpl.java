@@ -10,13 +10,15 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.TeacherProfileRepository;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.OcrService;
+import io.minio.GetObjectArgs;
+import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.net.URL;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -33,7 +35,7 @@ import java.util.zip.ZipInputStream;
 public class GeminiOcrServiceImpl implements OcrService {
 
     private final TeacherProfileRepository teacherProfileRepository;
-    private final MinioUploadServiceImpl minioUploadService;
+    private final MinioClient minioClient;
     private final MinioProperties minioProperties;
     private final GeminiService geminiService;
     private final ObjectMapper objectMapper;
@@ -52,14 +54,12 @@ public class GeminiOcrServiceImpl implements OcrService {
             throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
         }
 
-        // Generate pre-signed URL for document
-        String documentUrl = minioUploadService.getPresignedUrl(
-                documentPath,
-                minioProperties.getVerificationBucket()
-        );
+        // Read verification document directly from MinIO to avoid nginx/presigned-url mismatch.
+        String objectKey = normalizeObjectKey(documentPath, minioProperties.getVerificationBucket());
+        byte[] fileBytes = readObjectFromMinio(objectKey);
 
-        // Extract data from image using Gemini
-        OcrComparisonResult.OcrExtractedData extractedData = extractDataFromImageUrl(documentUrl);
+        // Extract data from image/zip using Gemini
+        OcrComparisonResult.OcrExtractedData extractedData = extractDataFromFileBytes(objectKey, fileBytes);
 
         // Build profile data for comparison
         OcrComparisonResult.ProfileData profileData = buildProfileData(profile);
@@ -69,20 +69,20 @@ public class GeminiOcrServiceImpl implements OcrService {
     }
 
     /**
-     * Extract data from image URL using Gemini AI
+     * Extract data from file bytes using Gemini AI
      */
-    private OcrComparisonResult.OcrExtractedData extractDataFromImageUrl(String imageUrl) {
-        log.info("Extracting data from image URL using Gemini: {}", imageUrl);
+    private OcrComparisonResult.OcrExtractedData extractDataFromFileBytes(String fileNameOrKey, byte[] fileBytes) {
+        log.info("Extracting OCR data from object: {}", fileNameOrKey);
 
         try {
             // Check if file is a ZIP
-            if (isZipFile(imageUrl)) {
+            if (isZipFile(fileNameOrKey)) {
                 log.info("Detected ZIP file, extracting images...");
-                return extractDataFromZip(imageUrl);
+                return extractDataFromZipBytes(fileBytes);
             }
 
             // Direct image processing
-            return extractDataFromImage(imageUrl);
+            return extractDataFromImageBytes(fileBytes);
 
         } catch (Exception e) {
             log.error("Failed to extract data from image", e);
@@ -98,14 +98,10 @@ public class GeminiOcrServiceImpl implements OcrService {
     }
 
     /**
-     * Extract data from ZIP file (download, extract first image, process)
+     * Extract data from ZIP bytes (extract first image, process)
      */
-    private OcrComparisonResult.OcrExtractedData extractDataFromZip(String zipUrl) {
+    private OcrComparisonResult.OcrExtractedData extractDataFromZipBytes(byte[] zipBytes) {
         try {
-            // Download ZIP file
-            URL url = new URL(zipUrl);
-            byte[] zipBytes = url.openStream().readAllBytes();
-
             // Extract first image from ZIP
             try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
                 ZipEntry entry;
@@ -133,25 +129,51 @@ public class GeminiOcrServiceImpl implements OcrService {
 
         } catch (Exception e) {
             log.error("Failed to extract data from ZIP", e);
-            throw new RuntimeException("Failed to process ZIP file: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to process ZIP file from object bytes: " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Extract data from image URL (direct image)
-     */
-    private OcrComparisonResult.OcrExtractedData extractDataFromImage(String imageUrl) {
-        try {
-            // Download image
-            URL url = new URL(imageUrl);
-            byte[] imageBytes = url.openStream().readAllBytes();
-
-            return extractDataFromImageBytes(imageBytes);
-
+    private byte[] readObjectFromMinio(String objectKey) {
+        try (InputStream in = minioClient.getObject(
+                GetObjectArgs.builder()
+                    .bucket(minioProperties.getVerificationBucket())
+                    .object(objectKey)
+                    .build())) {
+            return in.readAllBytes();
         } catch (Exception e) {
-            log.error("Failed to download and process image", e);
-            throw new RuntimeException("Failed to process image: " + e.getMessage(), e);
+            log.error("Failed to read verification document from MinIO. bucket={}, objectKey={}",
+                    minioProperties.getVerificationBucket(), objectKey, e);
+            throw new RuntimeException("Failed to read verification document from MinIO", e);
         }
+    }
+
+    private String normalizeObjectKey(String rawPath, String bucket) {
+        if (rawPath == null) {
+            return null;
+        }
+
+        String value = rawPath.trim();
+
+        // Support historical format where full URL was stored in DB.
+        if (value.startsWith("http://") || value.startsWith("https://")) {
+            try {
+                String path = URI.create(value).getPath();
+                value = path == null ? value : path;
+            } catch (Exception ignored) {
+                // Keep original value if URI parsing fails.
+            }
+        }
+
+        while (value.startsWith("/")) {
+            value = value.substring(1);
+        }
+
+        String bucketPrefix = bucket + "/";
+        if (value.startsWith(bucketPrefix)) {
+            value = value.substring(bucketPrefix.length());
+        }
+
+        return value;
     }
 
     /**
