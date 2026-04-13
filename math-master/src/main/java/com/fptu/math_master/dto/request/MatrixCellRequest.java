@@ -24,7 +24,7 @@ public class MatrixCellRequest {
   private CognitiveLevel cognitiveLevel;
 
   @NotNull(message = "questionCount is required")
-  @Min(value = 1, message = "questionCount must be at least 1")
+  @Min(value = 0, message = "questionCount must be at least 0")
   private Integer questionCount;
 
   @DecimalMin(value = "0.01", message = "pointsPerQuestion must be > 0")

@@ -1,17 +1,13 @@
 package com.fptu.math_master.entity;
 
 import java.math.BigDecimal;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 import org.hibernate.annotations.Nationalized;
-import org.hibernate.annotations.Type;
 
-import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.MatrixStatus;
 
-import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -91,15 +87,6 @@ public class ExamMatrix extends BaseEntity {
   @Column(name = "status")
   @Enumerated(EnumType.STRING)
   private MatrixStatus status;
-
-  /**
-   * Percentage distribution for cognitive levels (for percentage-based matrices).
-   * Stored as JSON: {"NHAN_BIET": 25.0, "THONG_HIEU": 35.0, "VAN_DUNG": 30.0, "VAN_DUNG_CAO": 10.0}
-   * Only used when matrix type is percentage-based.
-   */
-  @Type(JsonBinaryType.class)
-  @Column(name = "cognitive_level_percentages", columnDefinition = "jsonb")
-  private Map<CognitiveLevel, Double> cognitiveLevelPercentages;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)

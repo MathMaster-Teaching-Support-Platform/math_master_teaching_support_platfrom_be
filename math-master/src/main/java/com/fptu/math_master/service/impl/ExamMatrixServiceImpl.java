@@ -25,13 +25,13 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
 import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
+import com.fptu.math_master.dto.request.BatchUpsertMatrixRowCellsRequest;
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
 import com.fptu.math_master.dto.request.ExamMatrixRequest;
 import com.fptu.math_master.dto.request.FinalizePreviewRequest;
 import com.fptu.math_master.dto.request.GeneratePreviewRequest;
 import com.fptu.math_master.dto.request.MatrixCellRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
-import com.fptu.math_master.dto.request.UpdateMatrixPercentagesRequest;
 import com.fptu.math_master.dto.response.BatchTemplateMappingsResponse;
 import com.fptu.math_master.dto.response.BankMappingResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
@@ -213,62 +213,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     log.info("Exam matrix soft-deleted: {}", matrixId);
   }
 
-  // ── Percentage-Based Matrix Configuration ───────────────────────────────
 
-  @Override
-  @Transactional
-  public ExamMatrixResponse updateMatrixPercentages(
-      UUID matrixId, UpdateMatrixPercentagesRequest request) {
-    log.info(
-        "Updating matrix percentages: matrixId={}, totalQuestions={}",
-        matrixId,
-        request.getTotalQuestionsTarget());
-
-    // 1. Load matrix and validate permissions
-    ExamMatrix matrix = loadMatrixOrThrow(matrixId);
-    validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
-    validateNotApprovedOrLocked(matrix);
-
-    // 2. Validate percentages sum to 100
-    double totalPercentage =
-        request.getCognitiveLevelPercentages().values().stream()
-            .mapToDouble(Double::doubleValue)
-            .sum();
-    if (Math.abs(totalPercentage - 100.0) > 0.01) {
-      log.error(
-          "Percentage validation failed: total={}, expected=100.0",
-          totalPercentage);
-      throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
-    }
-
-    // 3. Validate each percentage is between 0 and 100
-    for (Map.Entry<CognitiveLevel, Double> entry :
-        request.getCognitiveLevelPercentages().entrySet()) {
-      Double percentage = entry.getValue();
-      if (percentage < 0 || percentage > 100) {
-        log.error(
-            "Invalid percentage for {}: {}",
-            entry.getKey(),
-            percentage);
-        throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
-      }
-    }
-
-    // 4. Update matrix with percentages
-    matrix.setTotalQuestionsTarget(request.getTotalQuestionsTarget());
-    matrix.setCognitiveLevelPercentages(request.getCognitiveLevelPercentages());
-    matrix = examMatrixRepository.save(matrix);
-
-    log.info(
-        "Matrix percentages updated successfully: matrixId={}, percentages={}",
-        matrixId,
-        request.getCognitiveLevelPercentages());
-
-    // 5. Return response with bank mappings
-    List<ExamMatrixTemplateMapping> mappings =
-        templateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
-    return buildMatrixResponse(matrix, mappings);
-  }
 
   // ── Template Mappings ───────────────────────────────────────────────────
 
@@ -410,15 +355,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     List<String> errors = new ArrayList<>();
     List<String> warnings = new ArrayList<>();
 
-    // Check if this is a percentage-based matrix
-    boolean isPercentageBased = matrix.getCognitiveLevelPercentages() != null 
-        && !matrix.getCognitiveLevelPercentages().isEmpty();
 
-    if (isPercentageBased) {
-      log.info("Validating percentage-based matrix: {}", matrixId);
-      // For percentage-based matrices, validate differently
-      return validatePercentageBasedMatrix(matrix, bankMappings);
-    }
+
 
     // Traditional validation for template/fixed-count matrices
     if (mappings.isEmpty() && bankMappings.isEmpty()) {
@@ -429,13 +367,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     int templateQuestions = mappings.stream().mapToInt(ExamMatrixTemplateMapping::getQuestionCount).sum();
     int bankQuestions =
       bankMappings.stream()
-        .mapToInt(
-          m ->
-            m.getDifficultyDistribution() == null
-              ? 0
-              : m.getDifficultyDistribution().values().stream()
-                .mapToInt(Integer::intValue)
-                .sum())
+        .mapToInt(this::getQuestionCountFromBankMapping)
         .sum();
     int totalQuestions = templateQuestions + bankQuestions;
     BigDecimal templateTotalPoints =
@@ -452,12 +384,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       bankMappings.stream()
         .map(
           m -> {
-            int count =
-              m.getDifficultyDistribution() == null
-                ? 0
-                : m.getDifficultyDistribution().values().stream()
-                  .mapToInt(Integer::intValue)
-                  .sum();
+            int count = getQuestionCountFromBankMapping(m);
             BigDecimal pointsPerQuestion =
               m.getPointsPerQuestion() != null ? m.getPointsPerQuestion() : BigDecimal.ONE;
             return pointsPerQuestion.multiply(BigDecimal.valueOf(count));
@@ -470,39 +397,37 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     boolean aiFallbackLikely = false;
 
     for (ExamMatrixBankMapping bankMapping : bankMappings) {
-      Map<QuestionDifficulty, Integer> distribution =
-          normalizeDifficultyDistribution(bankMapping.getDifficultyDistribution());
-      for (Map.Entry<QuestionDifficulty, Integer> entry : distribution.entrySet()) {
-        QuestionDifficulty difficulty = entry.getKey();
-        Integer required = entry.getValue();
-        if (required == null || required < 0) {
-          errors.add("Bank mapping has invalid difficulty distribution value.");
-          continue;
-        }
-        if (required == 0) {
-          continue;
-        }
+      int required = getQuestionCountFromBankMapping(bankMapping);
+      if (required < 0) {
+        errors.add("Bank mapping has invalid questionCount value.");
+        continue;
+      }
+      if (required == 0) {
+        continue;
+      }
 
-        bankCoverageByDifficulty.merge(
-          difficulty.name(),
+      String coverageKey =
+          bankMapping.getCognitiveLevel() != null
+              ? bankMapping.getCognitiveLevel().name()
+              : "UNSPECIFIED";
+      bankCoverageByDifficulty.merge(
+          coverageKey,
           required,
           (left, right) -> (left == null ? 0 : left) + (right == null ? 0 : right));
 
-        long approvedAvailable =
-            questionRepository.countApprovedByBankAndDifficultyAndCognitive(
-                bankMapping.getQuestionBankId(), difficulty, bankMapping.getCognitiveLevel());
+      long approvedAvailable =
+          questionRepository.countApprovedByBankAndDifficultyAndCognitive(
+              bankMapping.getQuestionBankId(), null, bankMapping.getCognitiveLevel());
 
-        if (approvedAvailable < required) {
-          aiFallbackLikely = true;
-          warnings.add(
-              String.format(
-                  "Bank mapping %s has insufficient APPROVED questions for %s/%s: required=%d, available=%d.",
-                  bankMapping.getId(),
-                  difficulty.name(),
-                  bankMapping.getCognitiveLevel().name(),
-                  required,
-                  approvedAvailable));
-        }
+      if (approvedAvailable < required) {
+        aiFallbackLikely = true;
+        warnings.add(
+            String.format(
+                "Bank mapping %s has insufficient APPROVED questions for %s: required=%d, available=%d.",
+                bankMapping.getId(),
+                coverageKey,
+                required,
+                approvedAvailable));
       }
     }
 
@@ -563,12 +488,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
           (left, right) -> (left == null ? 0 : left) + (right == null ? 0 : right)));
     bankMappings.forEach(
       m -> {
-        int count =
-          normalizeDifficultyDistribution(m.getDifficultyDistribution())
-            .values()
-            .stream()
-            .mapToInt(Integer::intValue)
-            .sum();
+        int count = getQuestionCountFromBankMapping(m);
           cognitiveLevelCoverage.merge(
               m.getCognitiveLevel().name(),
               count,
@@ -1222,6 +1142,51 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     return buildTableResponse(matrix);
   }
 
+  @Override
+  @Transactional
+  public ExamMatrixTableResponse upsertMatrixRowCells(
+      UUID matrixId, UUID rowId, List<MatrixCellRequest> cells) {
+    log.info("Upserting cells for row {} in matrix {}", rowId, matrixId);
+
+    ExamMatrix matrix = loadMatrixOrThrow(matrixId);
+    validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
+    validateNotApprovedOrLocked(matrix);
+
+    ExamMatrixRow row =
+        examMatrixRowRepository
+            .findById(rowId)
+            .filter(r -> r.getExamMatrixId().equals(matrixId))
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_ROW_NOT_FOUND));
+
+    upsertRowCells(matrixId, row, cells, null);
+    return buildTableResponse(matrix);
+  }
+
+  @Override
+  @Transactional
+  public ExamMatrixTableResponse batchUpsertMatrixRowCells(
+      UUID matrixId, BatchUpsertMatrixRowCellsRequest request) {
+    log.info("Batch upserting row cells in matrix {} with {} rows", matrixId, request.getRows().size());
+
+    ExamMatrix matrix = loadMatrixOrThrow(matrixId);
+    validateOwnerOrAdmin(matrix.getTeacherId(), getCurrentUserId());
+    validateNotApprovedOrLocked(matrix);
+
+    Map<UUID, ExamMatrixRow> rowsById =
+        examMatrixRowRepository.findByExamMatrixIdOrderByOrderIndex(matrixId).stream()
+            .collect(Collectors.toMap(ExamMatrixRow::getId, r -> r));
+
+    for (BatchUpsertMatrixRowCellsRequest.RowCellsItem item : request.getRows()) {
+      ExamMatrixRow row = rowsById.get(item.getRowId());
+      if (row == null) {
+        throw new AppException(ErrorCode.EXAM_MATRIX_ROW_NOT_FOUND);
+      }
+      upsertRowCells(matrixId, row, item.getCells(), null);
+    }
+
+    return buildTableResponse(matrix);
+  }
+
   // ── Private helpers ─────────────────────────────────────────────────────
 
   private UUID getCurrentUserId() {
@@ -1280,110 +1245,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
   }
 
-  /**
-   * Validate percentage-based matrix.
-   * Checks if question banks have sufficient questions for the percentage distribution.
-   */
-  private MatrixValidationReport validatePercentageBasedMatrix(
-      ExamMatrix matrix, List<ExamMatrixBankMapping> bankMappings) {
-    
-    List<String> errors = new ArrayList<>();
-    List<String> warnings = new ArrayList<>();
 
-    // Check if matrix has question banks
-    if (bankMappings.isEmpty()) {
-      errors.add("Percentage-based matrix must have at least one question bank.");
-    }
-
-    // Check if percentages are set
-    Map<CognitiveLevel, Double> percentages = matrix.getCognitiveLevelPercentages();
-    if (percentages == null || percentages.isEmpty()) {
-      errors.add("Percentage-based matrix must have cognitive level percentages configured.");
-    }
-
-    // Check if total questions target is set
-    Integer totalQuestionsTarget = matrix.getTotalQuestionsTarget();
-    if (totalQuestionsTarget == null || totalQuestionsTarget <= 0) {
-      errors.add("Percentage-based matrix must have total questions target set.");
-    }
-
-    // If basic validation fails, return early
-    if (!errors.isEmpty()) {
-      return MatrixValidationReport.builder()
-          .canApprove(false)
-          .errors(errors)
-          .warnings(warnings)
-          .totalBankMappings(bankMappings.size())
-          .totalQuestions(0)
-          .totalPoints(BigDecimal.ZERO)
-          .totalQuestionsTarget(totalQuestionsTarget)
-          .build();
-    }
-
-    // Get all bank IDs
-    List<UUID> bankIds = bankMappings.stream()
-        .map(ExamMatrixBankMapping::getQuestionBankId)
-        .distinct()
-        .collect(Collectors.toList());
-
-    // Check availability for each cognitive level
-    Map<String, Integer> cognitiveLevelCoverage = new LinkedHashMap<>();
-    Map<String, Integer> availabilityMap = new LinkedHashMap<>();
-    int totalCalculatedQuestions = 0;
-
-    for (Map.Entry<CognitiveLevel, Double> entry : percentages.entrySet()) {
-      CognitiveLevel level = entry.getKey();
-      Double percentage = entry.getValue();
-
-      // Calculate required count
-      int requiredCount = (int) Math.round((percentage / 100.0) * totalQuestionsTarget);
-      totalCalculatedQuestions += requiredCount;
-      cognitiveLevelCoverage.put(level.name(), requiredCount);
-
-      // Check availability
-      long availableCount = questionRepository.countApprovedByBanksAndCognitiveLevel(
-          bankIds, level.name());
-      availabilityMap.put(level.name(), (int) availableCount);
-
-      if (availableCount < requiredCount) {
-        warnings.add(
-            String.format(
-                "%s: Only %d questions available, but %d required (%.1f%%)",
-                level.name(), availableCount, requiredCount, percentage));
-      }
-    }
-
-    // Check if percentages sum to 100
-    double totalPercentage = percentages.values().stream()
-        .mapToDouble(Double::doubleValue)
-        .sum();
-    if (Math.abs(totalPercentage - 100.0) > 0.01) {
-      errors.add(
-          String.format(
-              "Cognitive level percentages must sum to 100%%. Current total: %.2f%%",
-              totalPercentage));
-    }
-
-    // Estimate total points (assuming 1 point per question)
-    BigDecimal estimatedPoints = BigDecimal.valueOf(totalCalculatedQuestions);
-
-    boolean canApprove = errors.isEmpty();
-
-    return MatrixValidationReport.builder()
-        .canApprove(canApprove)
-        .errors(errors)
-        .warnings(warnings)
-        .totalBankMappings(bankMappings.size())
-        .totalQuestions(totalCalculatedQuestions)
-        .totalPoints(estimatedPoints)
-        .totalQuestionsTarget(totalQuestionsTarget)
-        .totalPointsTarget(matrix.getTotalPointsTarget())
-        .cognitiveLevelCoverage(cognitiveLevelCoverage)
-        .questionsMatchTarget(totalCalculatedQuestions == totalQuestionsTarget)
-        .pointsMatchTarget(true) // Not applicable for percentage-based
-        .allCognitiveLevelsCovered(cognitiveLevelCoverage.size() >= 3)
-        .build();
-  }
 
   private ExamMatrixResponse buildMatrixResponse(
       ExamMatrix matrix, List<ExamMatrixTemplateMapping> mappings) {
@@ -1424,7 +1286,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .questionBankId(mapping.getQuestionBankId())
         .questionBankName(bankName)
       .matrixRowId(mapping.getMatrixRowId())
-        .difficultyDistribution(normalizeDifficultyDistribution(mapping.getDifficultyDistribution()))
+      .questionCount(getQuestionCountFromBankMapping(mapping))
         .cognitiveLevel(mapping.getCognitiveLevel())
       .pointsPerQuestion(mapping.getPointsPerQuestion() != null ? mapping.getPointsPerQuestion() : BigDecimal.ONE)
         .createdAt(mapping.getCreatedAt())
@@ -1432,20 +1294,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .build();
   }
 
-  private Map<QuestionDifficulty, Integer> normalizeDifficultyDistribution(
-      Map<QuestionDifficulty, Integer> source) {
-    Map<QuestionDifficulty, Integer> normalized = new LinkedHashMap<>();
-    if (source == null) {
-      normalized.put(QuestionDifficulty.EASY, 0);
-      normalized.put(QuestionDifficulty.MEDIUM, 0);
-      normalized.put(QuestionDifficulty.HARD, 0);
-      return normalized;
-    }
-
-    normalized.put(QuestionDifficulty.EASY, Math.max(0, source.getOrDefault(QuestionDifficulty.EASY, 0)));
-    normalized.put(QuestionDifficulty.MEDIUM, Math.max(0, source.getOrDefault(QuestionDifficulty.MEDIUM, 0)));
-    normalized.put(QuestionDifficulty.HARD, Math.max(0, source.getOrDefault(QuestionDifficulty.HARD, 0)));
-    return normalized;
+  private int getQuestionCountFromBankMapping(ExamMatrixBankMapping mapping) {
+    return mapping.getQuestionCount() != null ? Math.max(0, mapping.getQuestionCount()) : 0;
   }
 
   private TemplateMappingResponse buildMappingResponse(
@@ -1574,24 +1424,41 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .build();
 
     row = examMatrixRowRepository.save(row);
-    final UUID rowId = row.getId();
+    if (rowSpec.getCells() != null && !rowSpec.getCells().isEmpty()) {
+      upsertRowCells(matrixId, row, rowSpec.getCells(), null);
+    }
+  }
 
-    for (MatrixCellRequest cell : rowSpec.getCells()) {
-      Map<QuestionDifficulty, Integer> distribution = new LinkedHashMap<>();
-      distribution.put(QuestionDifficulty.EASY, 0);
-      distribution.put(QuestionDifficulty.MEDIUM, 0);
-      distribution.put(QuestionDifficulty.HARD, 0);
-      distribution.put(rowSpec.getQuestionDifficulty(), cell.getQuestionCount());
+  private void upsertRowCells(
+      UUID matrixId,
+      ExamMatrixRow row,
+      List<MatrixCellRequest> cells,
+      BigDecimal defaultPointsPerQuestion) {
+    if (cells == null || cells.isEmpty()) {
+      return;
+    }
+
+    bankMappingRepository.deleteByExamMatrixIdAndMatrixRowId(matrixId, row.getId());
+
+    for (MatrixCellRequest cell : cells) {
+      int questionCount = cell.getQuestionCount() != null ? Math.max(0, cell.getQuestionCount()) : 0;
+      if (questionCount == 0) {
+        continue;
+      }
+
+      BigDecimal pointsPerQuestion =
+          cell.getPointsPerQuestion() != null
+              ? cell.getPointsPerQuestion()
+              : (defaultPointsPerQuestion != null ? defaultPointsPerQuestion : BigDecimal.ONE);
 
       ExamMatrixBankMapping mapping =
           ExamMatrixBankMapping.builder()
               .examMatrixId(matrixId)
-              .questionBankId(rowSpec.getQuestionBankId())
-              .matrixRowId(rowId)
-              .difficultyDistribution(distribution)
+              .questionBankId(row.getQuestionBankId())
+              .matrixRowId(row.getId())
+              .questionCount(questionCount)
               .cognitiveLevel(cell.getCognitiveLevel())
-              .pointsPerQuestion(
-                  cell.getPointsPerQuestion() != null ? cell.getPointsPerQuestion() : BigDecimal.ONE)
+              .pointsPerQuestion(pointsPerQuestion)
               .build();
       bankMappingRepository.save(mapping);
     }
@@ -1669,12 +1536,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
         for (ExamMatrixBankMapping cell : templateCells) {
           String label = cognitiveLevelLabel(cell.getCognitiveLevel());
-          int count =
-              normalizeDifficultyDistribution(cell.getDifficultyDistribution())
-                  .values()
-                  .stream()
-                  .mapToInt(Integer::intValue)
-                  .sum();
+            int count = getQuestionCountFromBankMapping(cell);
           BigDecimal pointsPerQuestion =
             cell.getPointsPerQuestion() != null ? cell.getPointsPerQuestion() : BigDecimal.ONE;
           BigDecimal pts = pointsPerQuestion.multiply(BigDecimal.valueOf(count));

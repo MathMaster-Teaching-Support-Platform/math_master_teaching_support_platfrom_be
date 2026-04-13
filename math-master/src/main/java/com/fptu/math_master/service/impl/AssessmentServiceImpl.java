@@ -25,12 +25,10 @@ import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.MatrixStatus;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.AssessmentService;
-import com.fptu.math_master.service.ExamMatrixService;
 import com.fptu.math_master.service.QuestionSelectionService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -68,7 +66,6 @@ public class AssessmentServiceImpl implements AssessmentService {
   ExamMatrixBankMappingRepository examMatrixBankMappingRepository;
   ExamMatrixRowRepository examMatrixRowRepository;
   LessonRepository lessonRepository;
-  ExamMatrixService examMatrixService;
   QuestionSelectionService questionSelectionService;
   QuestionRepository questionRepository;
 
@@ -706,8 +703,8 @@ public class AssessmentServiceImpl implements AssessmentService {
             .findByIdAndNotDeleted(request.getExamMatrixId())
             .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
 
-    // Verify matrix is approved
-    if (matrix.getStatus() != MatrixStatus.APPROVED) {
+    // Allow generation from both APPROVED and LOCKED matrices for reuse.
+    if (!isMatrixReusableForGeneration(matrix)) {
       throw new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND);
     }
 
@@ -748,19 +745,9 @@ public class AssessmentServiceImpl implements AssessmentService {
       .build();
   }
 
-  private Map<QuestionDifficulty, Integer> normalizeDifficultyDistribution(
-      Map<QuestionDifficulty, Integer> source) {
-    Map<QuestionDifficulty, Integer> normalized = new LinkedHashMap<>();
-    normalized.put(
-        QuestionDifficulty.EASY,
-        source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.EASY, 0)) : 0);
-    normalized.put(
-        QuestionDifficulty.MEDIUM,
-        source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.MEDIUM, 0)) : 0);
-    normalized.put(
-        QuestionDifficulty.HARD,
-        source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.HARD, 0)) : 0);
-    return normalized;
+  private boolean isMatrixReusableForGeneration(ExamMatrix matrix) {
+    return matrix.getStatus() == MatrixStatus.APPROVED
+        || matrix.getStatus() == MatrixStatus.LOCKED;
   }
 
   private Assessment loadAssessmentOrThrow(UUID id) {
@@ -838,9 +825,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     }
 
     for (ExamMatrixBankMapping mapping : mappings) {
-      Map<QuestionDifficulty, Integer> distribution =
-          normalizeDifficultyDistribution(mapping.getDifficultyDistribution());
-      long requiredCount = distribution.values().stream().mapToLong(Integer::longValue).sum();
+      long requiredCount = mapping.getQuestionCount() != null ? Math.max(0, mapping.getQuestionCount()) : 0;
 
       long actualCount =
           assessmentQuestionRepository.countByAssessmentIdAndMatrixBankMappingId(
@@ -851,7 +836,9 @@ public class AssessmentServiceImpl implements AssessmentService {
       }
     }
 
-    examMatrixService.lockMatrix(matrix.getId());
+    log.debug(
+      "Matrix {} passed publish coverage validation and remains reusable",
+      matrix.getId());
   }
 
   /**
@@ -1005,7 +992,7 @@ public class AssessmentServiceImpl implements AssessmentService {
             .findByIdAndNotDeleted(matrixId)
             .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
 
-    if (matrix.getStatus() != MatrixStatus.APPROVED) {
+    if (!isMatrixReusableForGeneration(matrix)) {
       return;
     }
 
@@ -1054,7 +1041,7 @@ public class AssessmentServiceImpl implements AssessmentService {
             .findByIdAndNotDeleted(request.getExamMatrixId())
             .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
 
-    if (matrix.getStatus() != MatrixStatus.APPROVED) {
+    if (!isMatrixReusableForGeneration(matrix)) {
       throw new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND);
     }
 

@@ -1,11 +1,10 @@
 package com.fptu.math_master.dto.request;
 
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
-import java.util.Map;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,8 +20,9 @@ public class AddBankMappingRequest {
   @NotNull(message = "questionBankId is required")
   private UUID questionBankId;
 
-  @NotNull(message = "difficultyDistribution is required")
-  private Map<QuestionDifficulty, Integer> difficultyDistribution;
+  @NotNull(message = "questionCount is required")
+  @Min(value = 0, message = "questionCount must be at least 0")
+  private Integer questionCount;
 
   @NotNull(message = "cognitiveLevel is required")
   private CognitiveLevel cognitiveLevel;
