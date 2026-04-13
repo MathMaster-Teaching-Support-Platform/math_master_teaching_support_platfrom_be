@@ -8,6 +8,7 @@ import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.LessonResponse;
 import com.fptu.math_master.dto.response.LessonSlideGeneratedContentResponse;
 import com.fptu.math_master.dto.response.SlideTemplateResponse;
+import com.fptu.math_master.enums.LessonStatus;
 import com.fptu.math_master.service.LessonSlideService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -25,6 +26,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -65,6 +67,41 @@ public class LessonSlideController {
     return ApiResponse.<LessonResponse>builder()
         .message("Lesson content confirmed")
         .result(lessonSlideService.confirmLessonContent(lessonId, request))
+        .build();
+  }
+
+  @GetMapping("/lessons/{lessonId}")
+  @Operation(summary = "Get lesson slide draft/detail for teacher")
+  public ApiResponse<LessonResponse> getLessonSlide(@PathVariable UUID lessonId) {
+    return ApiResponse.<LessonResponse>builder()
+        .result(lessonSlideService.getLessonSlide(lessonId))
+        .build();
+  }
+
+  @GetMapping("/lessons")
+  @Operation(summary = "List lesson slides by status")
+  public ApiResponse<List<LessonResponse>> getLessonSlides(
+      @RequestParam(value = "status", defaultValue = "DRAFT") LessonStatus status) {
+    return ApiResponse.<List<LessonResponse>>builder()
+        .result(lessonSlideService.getLessonSlides(status))
+        .build();
+  }
+
+  @PatchMapping("/lessons/{lessonId}/publish")
+  @Operation(summary = "Publish lesson slide")
+  public ApiResponse<LessonResponse> publishLessonSlide(@PathVariable UUID lessonId) {
+    return ApiResponse.<LessonResponse>builder()
+        .message("Lesson slide published successfully")
+        .result(lessonSlideService.publishLessonSlide(lessonId))
+        .build();
+  }
+
+  @PatchMapping("/lessons/{lessonId}/unpublish")
+  @Operation(summary = "Unpublish lesson slide")
+  public ApiResponse<LessonResponse> unpublishLessonSlide(@PathVariable UUID lessonId) {
+    return ApiResponse.<LessonResponse>builder()
+        .message("Lesson slide moved back to draft")
+        .result(lessonSlideService.unpublishLessonSlide(lessonId))
         .build();
   }
 

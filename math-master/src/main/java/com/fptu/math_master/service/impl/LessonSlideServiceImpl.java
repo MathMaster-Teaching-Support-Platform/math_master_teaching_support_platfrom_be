@@ -225,6 +225,58 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public LessonResponse getLessonSlide(UUID lessonId) {
+    validateTeacherRole();
+
+    Lesson lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(lessonId)
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    return toLessonResponse(lesson);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<LessonResponse> getLessonSlides(LessonStatus status) {
+    validateTeacherRole();
+
+    LessonStatus targetStatus = status == null ? LessonStatus.DRAFT : status;
+    return lessonRepository.findByStatusAndNotDeleted(targetStatus).stream()
+        .map(this::toLessonResponse)
+        .toList();
+  }
+
+  @Override
+  @Transactional
+  public LessonResponse publishLessonSlide(UUID lessonId) {
+    validateTeacherRole();
+
+    Lesson lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(lessonId)
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    lesson.setStatus(LessonStatus.PUBLISHED);
+    return toLessonResponse(lessonRepository.save(lesson));
+  }
+
+  @Override
+  @Transactional
+  public LessonResponse unpublishLessonSlide(UUID lessonId) {
+    validateTeacherRole();
+
+    Lesson lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(lessonId)
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    lesson.setStatus(LessonStatus.DRAFT);
+    return toLessonResponse(lessonRepository.save(lesson));
+  }
+
+  @Override
   public LessonResponse getPublishedLessonSlide(UUID lessonId) {
     Lesson lesson =
         lessonRepository

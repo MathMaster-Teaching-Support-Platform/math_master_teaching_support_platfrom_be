@@ -328,8 +328,15 @@ public class MindmapServiceImpl implements MindmapService {
         .findById(lessonId)
         .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
-    Page<Mindmap> mindmaps =
-        mindmapRepository.findByLessonIdWithDetailsAndNotDeleted(lessonId, pageable);
+    UUID currentUserId = getCurrentUserId();
+    Page<Mindmap> mindmaps;
+    if (isStudent(currentUserId)) {
+      mindmaps =
+          mindmapRepository.findByLessonIdAndStatusWithDetailsAndNotDeleted(
+              lessonId, MindmapStatus.PUBLISHED, pageable);
+    } else {
+      mindmaps = mindmapRepository.findByLessonIdWithDetailsAndNotDeleted(lessonId, pageable);
+    }
 
     List<Mindmap> content = mindmaps.getContent();
     long loadedMindmapsAt = System.currentTimeMillis();
@@ -463,7 +470,14 @@ public class MindmapServiceImpl implements MindmapService {
             .findByIdAndNotDeleted(mindmapId)
             .orElseThrow(() -> new AppException(ErrorCode.MINDMAP_NOT_FOUND));
 
-    validateOwnerOrAdmin(mindmap.getTeacherId(), getCurrentUserId());
+    UUID currentUserId = getCurrentUserId();
+    if (isStudent(currentUserId)) {
+      if (mindmap.getStatus() != MindmapStatus.PUBLISHED) {
+        throw new AppException(ErrorCode.MINDMAP_ACCESS_DENIED);
+      }
+    } else {
+      validateOwnerOrAdmin(mindmap.getTeacherId(), currentUserId);
+    }
 
     List<MindmapNode> allNodes = getSortedNodesByMindmapId(mindmapId);
     return buildNodeHierarchy(allNodes);
@@ -869,6 +883,15 @@ public class MindmapServiceImpl implements MindmapService {
     if (!isAdmin) {
       throw new AppException(ErrorCode.MINDMAP_ACCESS_DENIED);
     }
+  }
+
+  private boolean isStudent(UUID userId) {
+    User user =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+    return user.getRoles().stream().anyMatch(role -> role.getName().equals("STUDENT"));
   }
 
   /**

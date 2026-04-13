@@ -7,6 +7,7 @@ import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
 import com.fptu.math_master.dto.response.LessonResponse;
 import com.fptu.math_master.dto.response.LessonSlideGeneratedContentResponse;
 import com.fptu.math_master.dto.response.SlideTemplateResponse;
+import com.fptu.math_master.enums.LessonStatus;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.multipart.MultipartFile;
@@ -17,6 +18,14 @@ public interface LessonSlideService {
       LessonSlideGenerateContentRequest request);
 
   LessonResponse confirmLessonContent(UUID lessonId, LessonSlideConfirmContentRequest request);
+
+  LessonResponse getLessonSlide(UUID lessonId);
+
+  List<LessonResponse> getLessonSlides(LessonStatus status);
+
+  LessonResponse publishLessonSlide(UUID lessonId);
+
+  LessonResponse unpublishLessonSlide(UUID lessonId);
 
   LessonResponse getPublishedLessonSlide(UUID lessonId);
 
