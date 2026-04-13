@@ -300,6 +300,21 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
         profile.getVerificationDocumentKey(), minioProperties.getVerificationBucket());
   }
 
+  @Override
+  public byte[] downloadVerificationDocument(UUID profileId) {
+    TeacherProfile profile =
+        teacherProfileRepository
+            .findById(profileId)
+            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+
+    if (profile.getVerificationDocumentKey() == null) {
+      throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
+    }
+
+    return uploadService.downloadFile(
+        profile.getVerificationDocumentKey(), minioProperties.getVerificationBucket());
+  }
+
   private TeacherProfileResponse mapToResponse(TeacherProfile profile) {
     TeacherProfileResponse response =
         TeacherProfileResponse.builder()

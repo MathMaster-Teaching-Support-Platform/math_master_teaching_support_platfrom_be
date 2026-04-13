@@ -85,6 +85,14 @@ public interface TeacherProfileService {
   String getDownloadUrl(UUID profileId);
 
   /**
+   * Download verification document bytes (admin only)
+   *
+   * @param profileId Profile ID
+   * @return Verification document content
+   */
+  byte[] downloadVerificationDocument(UUID profileId);
+
+  /**
    * Delete profile (only if PENDING or REJECTED)
    *
    * @param userId Current user ID

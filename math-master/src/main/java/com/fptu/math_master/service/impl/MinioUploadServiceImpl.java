@@ -5,12 +5,14 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.service.UploadService;
 import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -130,6 +132,18 @@ public class MinioUploadServiceImpl implements UploadService {
     } catch (Exception e) {
       log.error("Error generating pre-signed URL for Minio: {}/{}", bucketName, key, e);
       throw new RuntimeException("Could not generate download URL", e);
+    }
+  }
+
+  @Override
+  public byte[] downloadFile(String key, String bucketName) {
+    try (InputStream inputStream =
+        minioClient.getObject(
+            GetObjectArgs.builder().bucket(bucketName).object(key).build())) {
+      return inputStream.readAllBytes();
+    } catch (Exception e) {
+      log.error("Error downloading file from Minio: {}/{}", bucketName, key, e);
+      throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
     }
   }
 
