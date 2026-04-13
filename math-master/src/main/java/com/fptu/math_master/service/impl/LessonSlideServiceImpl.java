@@ -204,6 +204,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   public LessonResponse confirmLessonContent(
       UUID lessonId, LessonSlideConfirmContentRequest request) {
     validateTeacherRole();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
     Lesson lesson =
         lessonRepository
@@ -219,6 +220,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     if (request.getLearningObjectives() != null && !request.getLearningObjectives().isBlank()) {
       lesson.setLearningObjectives(request.getLearningObjectives());
     }
+    if (lesson.getCreatedBy() == null) {
+      lesson.setCreatedBy(currentUserId);
+    }
+    lesson.setUpdatedBy(currentUserId);
 
     Lesson saved = lessonRepository.save(lesson);
     return toLessonResponse(saved);
@@ -241,9 +246,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   @Transactional(readOnly = true)
   public List<LessonResponse> getLessonSlides(LessonStatus status) {
     validateTeacherRole();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
     LessonStatus targetStatus = status == null ? LessonStatus.DRAFT : status;
-    return lessonRepository.findByStatusAndNotDeleted(targetStatus).stream()
+    return lessonRepository.findTeacherSlideLessonsByStatus(currentUserId, targetStatus).stream()
         .map(this::toLessonResponse)
         .toList();
   }
@@ -252,12 +258,17 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   @Transactional
   public LessonResponse publishLessonSlide(UUID lessonId) {
     validateTeacherRole();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
     Lesson lesson =
         lessonRepository
             .findByIdAndNotDeleted(lessonId)
             .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
 
+    if (lesson.getCreatedBy() == null) {
+      lesson.setCreatedBy(currentUserId);
+    }
+    lesson.setUpdatedBy(currentUserId);
     lesson.setStatus(LessonStatus.PUBLISHED);
     return toLessonResponse(lessonRepository.save(lesson));
   }
@@ -266,12 +277,17 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   @Transactional
   public LessonResponse unpublishLessonSlide(UUID lessonId) {
     validateTeacherRole();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
     Lesson lesson =
         lessonRepository
             .findByIdAndNotDeleted(lessonId)
             .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
 
+    if (lesson.getCreatedBy() == null) {
+      lesson.setCreatedBy(currentUserId);
+    }
+    lesson.setUpdatedBy(currentUserId);
     lesson.setStatus(LessonStatus.DRAFT);
     return toLessonResponse(lessonRepository.save(lesson));
   }
