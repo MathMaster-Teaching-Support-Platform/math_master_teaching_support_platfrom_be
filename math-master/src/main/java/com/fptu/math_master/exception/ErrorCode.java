@@ -270,7 +270,11 @@ public enum ErrorCode {
     COURSE_ASSESSMENT_NOT_FOUND(1162, "Course assessment not found", HttpStatus.NOT_FOUND),
     SUBSCRIPTION_PLAN_NOT_PURCHASABLE(1163, "Subscription plan is not purchasable", HttpStatus.BAD_REQUEST),
     NO_ACTIVE_SUBSCRIPTION(1164, "No active subscription found", HttpStatus.BAD_REQUEST),
-    INSUFFICIENT_SUBSCRIPTION_TOKENS(1165, "Not enough subscription tokens", HttpStatus.BAD_REQUEST);
+        INSUFFICIENT_SUBSCRIPTION_TOKENS(1165, "Not enough subscription tokens", HttpStatus.BAD_REQUEST),
+        GENERATED_SLIDE_NOT_FOUND(1166, "Generated slide file not found", HttpStatus.NOT_FOUND),
+        GENERATED_SLIDE_ACCESS_DENIED(
+                1167, "You do not have permission to access this generated slide", HttpStatus.FORBIDDEN),
+        GENERATED_SLIDE_NOT_PUBLIC(1168, "Generated slide is not public", HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

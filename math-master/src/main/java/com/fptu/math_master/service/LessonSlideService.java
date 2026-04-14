@@ -4,6 +4,7 @@ import com.fptu.math_master.dto.request.LessonSlideConfirmContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
+import com.fptu.math_master.dto.response.LessonSlideGeneratedFileResponse;
 import com.fptu.math_master.dto.response.LessonResponse;
 import com.fptu.math_master.dto.response.LessonSlideGeneratedContentResponse;
 import com.fptu.math_master.dto.response.SlideTemplateResponse;
@@ -49,6 +50,18 @@ public interface LessonSlideService {
   BinaryFileData generatePptx(LessonSlideGeneratePptxRequest request);
 
   BinaryFileData generatePptxFromJson(LessonSlideGeneratePptxFromJsonRequest request);
+
+    List<LessonSlideGeneratedFileResponse> getMyGeneratedSlides(UUID lessonId);
+
+    BinaryFileData downloadGeneratedSlide(UUID generatedFileId);
+
+    LessonSlideGeneratedFileResponse publishGeneratedSlide(UUID generatedFileId);
+
+    LessonSlideGeneratedFileResponse unpublishGeneratedSlide(UUID generatedFileId);
+
+    List<LessonSlideGeneratedFileResponse> getPublicGeneratedSlidesByLesson(UUID lessonId);
+
+    BinaryFileData downloadPublicGeneratedSlide(UUID generatedFileId);
 
   record BinaryFileData(byte[] content, String fileName, String contentType) {}
 }

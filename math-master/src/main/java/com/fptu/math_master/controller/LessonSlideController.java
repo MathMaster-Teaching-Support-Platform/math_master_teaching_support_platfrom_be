@@ -5,6 +5,7 @@ import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.LessonSlideGeneratedFileResponse;
 import com.fptu.math_master.dto.response.LessonResponse;
 import com.fptu.math_master.dto.response.LessonSlideGeneratedContentResponse;
 import com.fptu.math_master.dto.response.SlideTemplateResponse;
@@ -184,6 +185,46 @@ public class LessonSlideController {
         .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(fileData.fileName()))
         .contentType(MediaType.parseMediaType(fileData.contentType()))
         .body(fileData.content());
+  }
+
+  @GetMapping("/generated")
+  @Operation(summary = "List generated slide files of current teacher")
+  public ApiResponse<List<LessonSlideGeneratedFileResponse>> getGeneratedSlides(
+      @RequestParam(value = "lessonId", required = false) UUID lessonId) {
+    return ApiResponse.<List<LessonSlideGeneratedFileResponse>>builder()
+        .result(lessonSlideService.getMyGeneratedSlides(lessonId))
+        .build();
+  }
+
+  @GetMapping("/generated/{generatedFileId}/download")
+  @Operation(summary = "Download a previously generated slide file")
+  public ResponseEntity<byte[]> downloadGeneratedSlide(@PathVariable UUID generatedFileId) {
+    LessonSlideService.BinaryFileData fileData =
+        lessonSlideService.downloadGeneratedSlide(generatedFileId);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(fileData.fileName()))
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+  }
+
+  @PatchMapping("/generated/{generatedFileId}/publish")
+  @Operation(summary = "Publish a generated slide file for student access")
+  public ApiResponse<LessonSlideGeneratedFileResponse> publishGeneratedSlide(
+      @PathVariable UUID generatedFileId) {
+    return ApiResponse.<LessonSlideGeneratedFileResponse>builder()
+        .message("Generated slide published successfully")
+        .result(lessonSlideService.publishGeneratedSlide(generatedFileId))
+        .build();
+  }
+
+  @PatchMapping("/generated/{generatedFileId}/unpublish")
+  @Operation(summary = "Unpublish a generated slide file")
+  public ApiResponse<LessonSlideGeneratedFileResponse> unpublishGeneratedSlide(
+      @PathVariable UUID generatedFileId) {
+    return ApiResponse.<LessonSlideGeneratedFileResponse>builder()
+        .message("Generated slide moved back to private")
+        .result(lessonSlideService.unpublishGeneratedSlide(generatedFileId))
+        .build();
   }
 
   private String contentDisposition(String fileName) {
