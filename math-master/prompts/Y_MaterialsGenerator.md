@@ -1,12 +1,117 @@
 # API Contract — MaterialsGenerator (Tạo Tài Liệu với AI)
 
 **Ngày tạo:** 2026-04-15  
+**Cập nhật:** 2026-04-15 (Vòng 2 — phản hồi Issues từ FE round 1)  
 **Người tạo:** BE Team  
-**Phản hồi cho:** X_MaterialsGenerator.md (FE spec request)  
-**Trạng thái:** Chờ FE confirm
+**Phản hồi cho:** X_MaterialsGenerator.md (FE spec round 2)  
+**Trạng thái:** Chờ FE confirm vòng 2
+
+---
+
+## Response — Issues Vòng 1
+
+### ✅ Issue #1 — Notification unread count field name
+
+**Xác nhận:** Field chính thức là **`unreadCount`** (không phải `count`).
+
+Từ source code `NotificationController.java`:
+
+```java
+return ResponseEntity.ok(Map.of("unreadCount", count));
+```
+
+FE cần fix `notification.service.ts` để đọc `response.data.unreadCount`. Workaround hiện tại của FE (đọc cả 2 field) có thể bỏ.
+
+---
+
+### 🔴 Issue #2 — Hình Vẽ Toán Học (Math Drawing)
+
+**Quyết định tech stack:**
+
+| Câu hỏi         | Quyết định                                                                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Thư viện render | **Gemini AI (text → image description) + Matplotlib (Python microservice)** — BE sẽ gọi Python service qua internal HTTP, tương tự cách Gemini được gọi cho slide/mindmap |
+| Output format   | **PNG** — FE render bằng `<img src={imageUrl} />`                                                                                                                         |
+| Sync/Async      | **Async** (job queue) — render ảnh có thể mất 5–15s. FE cần polling `GET /math-drawings/{id}`                                                                             |
+| Lưu file        | **MinIO** — cùng infra với slide PPTX                                                                                                                                     |
+
+**Endpoint đã được confirm (sẽ implement trong sprint tới):**
+
+```
+POST /math-drawings/generate      → tạo job, trả status "processing"
+GET  /math-drawings/my-drawings   → danh sách (paginated, 0-indexed)
+GET  /math-drawings/{id}          → lấy trạng thái + imageUrl khi done
+```
+
+ETA: **Sprint tới** (~1 tuần). FE giữ nút disabled + tooltip đến khi BE báo deployed.
+
+---
+
+### 🔴 Issue #3 — Phiếu Bài Tập (Worksheet)
+
+**Quyết định approach:**
+
+| Câu hỏi       | Quyết định                                                                                          |
+| ------------- | --------------------------------------------------------------------------------------------------- |
+| Nguồn câu hỏi | **AI generate mới** (Gemini) — không lấy từ question bank (question bank dùng cho assessment riêng) |
+| PDF library   | **iText 7** (Java) — render PDF server-side, không cần microservice                                 |
+| Sync/Async    | **Async** — PDF generation + AI có thể mất 10–30s. FE polling `GET /worksheets/{id}`                |
+| Lưu PDF       | **MinIO**                                                                                           |
+
+**Endpoint đã được confirm (sẽ implement trong sprint tới):**
+
+```
+POST /worksheets/generate          → tạo job, trả status "processing"
+GET  /worksheets/my-worksheets     → danh sách (paginated, 0-indexed)
+GET  /worksheets/{id}              → polling trạng thái + pdfUrl khi done
+GET  /worksheets/{id}/download     → tải PDF trực tiếp
+```
+
+ETA: **Sprint tới** (~1 tuần, cùng với math-drawing).
+
+---
+
+### 🟡 Issue #4 — Slide list phân trang/tìm kiếm server-side
+
+**Quyết định:** BE **sẽ thêm pagination + search** cho `GET /lesson-slides/generated`.
+
+Hiện tại service method `getMyGeneratedSlides(UUID lessonId)` trả `List<>` — không có pagination. BE sẽ update trong sprint này.
+
+**Endpoint mới (sau khi update):**
+
+```
+GET /lesson-slides/generated
+```
+
+Query params bổ sung (sau update):
+
+| Param    | Type               | Default | Mô tả                                  |
+| -------- | ------------------ | ------- | -------------------------------------- |
+| lessonId | UUID               | —       | Filter theo bài học (đã có)            |
+| search   | string             | —       | Tìm theo `fileName` (case-insensitive) |
+| page     | number (0-indexed) | 0       | Trang                                  |
+| size     | number             | 20      | Items/trang                            |
+
+> ⚠️ **FE lưu ý:** Khi BE deploy update này, response sẽ đổi từ `List` sang `Page` (wrapped). FE cần handle cả 2 format hoặc đợi BE báo deplyed trước khi chuyển từ client-side filter.  
+> BE sẽ báo trước ít nhất 1 ngày qua Slack trước khi deploy.
+
+---
 
 > **Base URL:** `http://localhost:8080` (dev) — không có prefix `/api`  
 > **Auth:** Tất cả endpoint (trừ ghi chú riêng) đều yêu cầu `Authorization: Bearer <JWT>`
+
+---
+
+## Tracking — Trạng thái xử lý từ BE (Vòng 2)
+
+| Feature                                     | Trạng thái BE                   | Ghi chú                                             |
+| ------------------------------------------- | ------------------------------- | --------------------------------------------------- |
+| Slide list (`GET /lesson-slides/generated`) | ✅ Đã có, sẽ thêm pagination    | ETA: cuối sprint này, BE báo trước khi deploy       |
+| Mindmap list (`GET /mindmaps/my-mindmaps`)  | ✅ Đã có                        | Đang dùng ổn                                        |
+| Notification unread count                   | ✅ Field confirm: `unreadCount` | FE fix `notification.service.ts`                    |
+| User info (`GET /users/my-info`)            | ✅ Đã có                        | Đang dùng ổn                                        |
+| Hình Vẽ Toán Học                            | 🔴 Chưa có, sẽ implement        | ETA: sprint tới (~1 tuần). PNG output, async, MinIO |
+| Phiếu Bài Tập                               | 🔴 Chưa có, sẽ implement        | ETA: sprint tới (~1 tuần). Async, iText PDF, MinIO  |
 
 ---
 
@@ -498,20 +603,27 @@ GET /v1/notifications/unread-count
 
 ## Checklist trước khi FE integrate
 
-- [x] `GET /lesson-slides/generated` — có thể test ngay
+- [x] `GET /lesson-slides/generated` — có thể test ngay (chưa có pagination)
 - [x] `GET /mindmaps/my-mindmaps` — có thể test ngay
 - [x] `GET /users/my-info` — có thể test ngay
-- [x] `GET /v1/notifications/unread-count` — có thể test ngay
-- [ ] Math drawing — chờ confirm tech stack và implement
-- [ ] Worksheet — chờ confirm approach và implement
-- [ ] Swagger cập nhật: `http://localhost:8080/swagger-ui.html`
-- [ ] Thống nhất với FE về việc FE xử lý mapping `MindmapStatus` → badge màu
+- [x] `GET /v1/notifications/unread-count` — field `unreadCount` ✅ confirmed
+- [ ] `GET /lesson-slides/generated` + pagination/search — BE update cuối sprint này, FE chờ thông báo
+- [ ] Math drawing (`POST /math-drawings/generate`, `GET /math-drawings/my-drawings`, `GET /math-drawings/{id}`) — ETA sprint tới
+- [ ] Worksheet (`POST /worksheets/generate`, `GET /worksheets/my-worksheets`, `GET /worksheets/{id}`) — ETA sprint tới
+- [ ] Swagger cập nhật khi math-drawing + worksheet ready: `http://localhost:8080/swagger-ui.html`
+- [ ] FE fix `notification.service.ts`: đổi field `count` → `unreadCount`
 
 ---
 
-## Câu hỏi cần họp để quyết định
+## Quyết định đã chốt (Vòng 2)
 
-1. **Math Drawing:** Dùng thư viện render nào? Output PNG hay SVG? Sync hay async?
-2. **Worksheet:** AI generate hay lấy từ question bank? PDF library nào? Sync hay async?
-3. **Slide list:** FE có cần `search` và phân trang server-side không? Nếu có, BE cần update `GET /lesson-slides/generated` để hỗ trợ.
-4. **Unified history:** FE có muốn BE tạo thêm `GET /teacher/materials/history` hợp nhất không? Chỉ khả thi sau khi worksheet và math-drawing được implement.
+| Câu hỏi                    | Quyết định                                     |
+| -------------------------- | ---------------------------------------------- |
+| Math Drawing tech stack    | Gemini AI + Python/Matplotlib microservice     |
+| Math Drawing output format | PNG                                            |
+| Math Drawing sync/async    | Async + polling                                |
+| Worksheet source           | AI generate (Gemini), không dùng question bank |
+| Worksheet PDF library      | iText 7                                        |
+| Worksheet sync/async       | Async + polling                                |
+| Slide list pagination      | BE sẽ thêm trong sprint này                    |
+| Unified history endpoint   | Chưa làm — chờ math-drawing + worksheet xong   |
