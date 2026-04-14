@@ -17,13 +17,21 @@ import org.springframework.stereotype.Repository;
 public interface SubmissionRepository extends JpaRepository<Submission, UUID> {
 
   @Query(
-      "SELECT s FROM Submission s WHERE s.assessmentId = :assessmentId AND s.studentId = :studentId")
+      value =
+          "SELECT * FROM submissions s "
+              + "WHERE s.assessment_id = :assessmentId AND s.student_id = :studentId "
+              + "ORDER BY s.created_at DESC LIMIT 1",
+      nativeQuery = true)
   Optional<Submission> findByAssessmentIdAndStudentId(
       @Param("assessmentId") UUID assessmentId, @Param("studentId") UUID studentId);
 
   @Query(
-      "SELECT s FROM Submission s WHERE s.assessmentId = :assessmentId AND s.studentId = :studentId "
-          + "AND s.status = :status")
+      value =
+          "SELECT * FROM submissions s "
+              + "WHERE s.assessment_id = :assessmentId AND s.student_id = :studentId "
+              + "AND s.status = CAST(:status AS VARCHAR) "
+              + "ORDER BY s.created_at DESC LIMIT 1",
+      nativeQuery = true)
   Optional<Submission> findByAssessmentIdAndStudentIdAndStatus(
       @Param("assessmentId") UUID assessmentId,
       @Param("studentId") UUID studentId,
