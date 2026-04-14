@@ -366,6 +366,26 @@ public class MindmapServiceImpl implements MindmapService {
                 m, nodeCounts.getOrDefault(m.getId(), 0L).intValue(), teacherNames, lessonTitles));
   }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<MindmapResponse> getPublicMindmaps(UUID lessonId, String name, Pageable pageable) {
+      String normalizedName = name == null ? null : name.trim();
+      Page<Mindmap> mindmaps =
+          mindmapRepository.findPublicWithFilters(
+              MindmapStatus.PUBLISHED, lessonId, normalizedName, pageable);
+
+    List<Mindmap> content = mindmaps.getContent();
+    List<UUID> mindmapIds = content.stream().map(Mindmap::getId).toList();
+    Map<UUID, Long> nodeCounts = getNodeCountsForMindmaps(mindmapIds);
+    Map<UUID, String> teacherNames = getTeacherNamesForMindmaps(content);
+    Map<UUID, String> lessonTitles = getLessonTitlesForMindmaps(content);
+
+    return mindmaps.map(
+      m ->
+        mapToResponseWithNodeCount(
+          m, nodeCounts.getOrDefault(m.getId(), 0L).intValue(), teacherNames, lessonTitles));
+    }
+
   @Override
   @Transactional
   public MindmapNodeResponse createNode(MindmapNodeRequest request) {

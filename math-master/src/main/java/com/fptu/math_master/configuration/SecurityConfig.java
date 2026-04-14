@@ -51,6 +51,8 @@ public class SecurityConfig {
     "/actuator/mappings",
     "/api/ai/test",
     "/api/lessons/**",
+    "/api/lesson-slides/public/**",
+    "/api/mindmaps/public/**",
     "/api/auth/confirm-email",
     "/api/courses",
     "/api/courses/{id}",

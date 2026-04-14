@@ -88,6 +88,14 @@ public interface MindmapService {
   Page<MindmapResponse> getMindmapsByLesson(UUID lessonId, Pageable pageable);
 
   /**
+   * Get all public (published) mindmaps.
+   *
+   * @param pageable pagination
+   * @return page of public mindmaps
+   */
+  Page<MindmapResponse> getPublicMindmaps(UUID lessonId, String name, Pageable pageable);
+
+  /**
    * Create a node in mindmap
    *
    * @param request node creation request

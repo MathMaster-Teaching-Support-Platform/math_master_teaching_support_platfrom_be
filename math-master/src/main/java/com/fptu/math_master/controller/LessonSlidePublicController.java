@@ -13,11 +13,16 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,14 +47,43 @@ public class LessonSlidePublicController {
         .build();
   }
 
+    @GetMapping("/generated")
+    @Operation(
+            summary = "List all public generated slides",
+            description = "Public endpoint for students to browse all published generated slides.")
+      public ApiResponse<Page<LessonSlideGeneratedFileResponse>> listAllPublicGeneratedSlides(
+        @RequestParam(required = false) UUID lessonId,
+        @RequestParam(required = false) String keyword,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size,
+        @RequestParam(defaultValue = "createdAt") String sortBy,
+        @RequestParam(defaultValue = "DESC") String direction) {
+      Sort.Direction sortDirection =
+        direction.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
+      Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
+
+      return ApiResponse.<Page<LessonSlideGeneratedFileResponse>>builder()
+        .result(lessonSlideService.getAllPublicGeneratedSlides(lessonId, keyword, pageable))
+                .build();
+    }
+
   @GetMapping("/lessons/{lessonId}/generated")
   @Operation(
       summary = "List published generated slides by lesson",
       description = "Public endpoint for students to browse downloadable generated slides.")
   public ApiResponse<List<LessonSlideGeneratedFileResponse>> listPublicGeneratedSlides(
-      @PathVariable UUID lessonId) {
-    return ApiResponse.<List<LessonSlideGeneratedFileResponse>>builder()
-        .result(lessonSlideService.getPublicGeneratedSlidesByLesson(lessonId))
+      @PathVariable UUID lessonId,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size,
+      @RequestParam(defaultValue = "createdAt") String sortBy,
+      @RequestParam(defaultValue = "DESC") String direction) {
+    Sort.Direction sortDirection =
+      direction.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
+    Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
+
+    return ApiResponse.<Page<LessonSlideGeneratedFileResponse>>builder()
+      .result(lessonSlideService.getPublicGeneratedSlidesByLesson(lessonId, keyword, pageable))
         .build();
   }
 

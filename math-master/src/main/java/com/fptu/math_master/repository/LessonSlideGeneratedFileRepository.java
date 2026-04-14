@@ -4,6 +4,8 @@ import com.fptu.math_master.entity.LessonSlideGeneratedFile;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -38,4 +40,19 @@ public interface LessonSlideGeneratedFileRepository extends JpaRepository<Lesson
           + "WHERE f.lessonId = :lessonId AND f.isPublic = true AND f.deletedAt IS NULL "
           + "ORDER BY f.createdAt DESC")
   List<LessonSlideGeneratedFile> findPublicByLesson(@Param("lessonId") UUID lessonId);
+
+    @Query(
+            "SELECT f FROM LessonSlideGeneratedFile f "
+                    + "WHERE f.isPublic = true AND f.deletedAt IS NULL "
+                    + "ORDER BY f.createdAt DESC")
+    List<LessonSlideGeneratedFile> findAllPublic();
+
+      @Query(
+          "SELECT f FROM LessonSlideGeneratedFile f "
+              + "WHERE f.isPublic = true AND f.deletedAt IS NULL "
+              + "AND (:lessonId IS NULL OR f.lessonId = :lessonId) "
+              + "AND (:keyword IS NULL OR :keyword = '' "
+              + "     OR LOWER(f.fileName) LIKE LOWER(CONCAT('%', :keyword, '%'))) ")
+      Page<LessonSlideGeneratedFile> findAllPublicWithFilters(
+          @Param("lessonId") UUID lessonId, @Param("keyword") String keyword, Pageable pageable);
 }

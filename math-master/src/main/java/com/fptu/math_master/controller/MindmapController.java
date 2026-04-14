@@ -197,6 +197,26 @@ public class MindmapController {
         .build();
   }
 
+  @GetMapping("/public")
+  @Operation(
+      summary = "List all public mindmaps",
+      description = "Public endpoint for students to browse all published mindmaps.")
+  public ApiResponse<Page<MindmapResponse>> getPublicMindmaps(
+      @RequestParam(required = false) UUID lessonId,
+      @RequestParam(required = false) String name,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size,
+      @RequestParam(defaultValue = "createdAt") String sortBy,
+      @RequestParam(defaultValue = "DESC") String direction) {
+    Sort.Direction sortDirection =
+        direction.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
+    Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
+
+    return ApiResponse.<Page<MindmapResponse>>builder()
+        .result(mindmapService.getPublicMindmaps(lessonId, name, pageable))
+        .build();
+  }
+
   // Node management endpoints
 
   @PostMapping("/nodes")

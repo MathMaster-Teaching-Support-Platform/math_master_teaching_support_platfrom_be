@@ -73,6 +73,8 @@ import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.scilab.forge.jlatexmath.TeXConstants;
 import org.scilab.forge.jlatexmath.TeXFormula;
 import org.scilab.forge.jlatexmath.TeXIcon;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -606,7 +608,18 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   @Override
   @Transactional(readOnly = true)
-  public List<LessonSlideGeneratedFileResponse> getPublicGeneratedSlidesByLesson(UUID lessonId) {
+  public Page<LessonSlideGeneratedFileResponse> getAllPublicGeneratedSlides(
+      UUID lessonId, String keyword, Pageable pageable) {
+    String normalizedKeyword = keyword == null ? null : keyword.trim();
+    return lessonSlideGeneratedFileRepository
+        .findAllPublicWithFilters(lessonId, normalizedKeyword, pageable)
+        .map(this::toGeneratedFileResponse);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<LessonSlideGeneratedFileResponse> getPublicGeneratedSlidesByLesson(
+      UUID lessonId, String keyword, Pageable pageable) {
     Lesson lesson =
         lessonRepository
             .findByIdAndNotDeleted(lessonId)
@@ -616,9 +629,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       throw new AppException(ErrorCode.LESSON_NOT_FOUND);
     }
 
-    return lessonSlideGeneratedFileRepository.findPublicByLesson(lessonId).stream()
-        .map(this::toGeneratedFileResponse)
-        .toList();
+    String normalizedKeyword = keyword == null ? null : keyword.trim();
+    return lessonSlideGeneratedFileRepository
+        .findAllPublicWithFilters(lessonId, normalizedKeyword, pageable)
+        .map(this::toGeneratedFileResponse);
   }
 
   @Override

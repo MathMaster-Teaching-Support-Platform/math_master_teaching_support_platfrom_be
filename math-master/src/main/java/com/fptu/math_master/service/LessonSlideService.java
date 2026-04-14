@@ -11,6 +11,8 @@ import com.fptu.math_master.dto.response.SlideTemplateResponse;
 import com.fptu.math_master.enums.LessonStatus;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface LessonSlideService {
@@ -59,7 +61,11 @@ public interface LessonSlideService {
 
     LessonSlideGeneratedFileResponse unpublishGeneratedSlide(UUID generatedFileId);
 
-    List<LessonSlideGeneratedFileResponse> getPublicGeneratedSlidesByLesson(UUID lessonId);
+    Page<LessonSlideGeneratedFileResponse> getAllPublicGeneratedSlides(
+      UUID lessonId, String keyword, Pageable pageable);
+
+    Page<LessonSlideGeneratedFileResponse> getPublicGeneratedSlidesByLesson(
+      UUID lessonId, String keyword, Pageable pageable);
 
     BinaryFileData downloadPublicGeneratedSlide(UUID generatedFileId);
 
