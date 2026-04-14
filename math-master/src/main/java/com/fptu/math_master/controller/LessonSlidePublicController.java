@@ -7,7 +7,6 @@ import com.fptu.math_master.service.LessonSlideService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -71,7 +70,7 @@ public class LessonSlidePublicController {
   @Operation(
       summary = "List published generated slides by lesson",
       description = "Public endpoint for students to browse downloadable generated slides.")
-  public ApiResponse<List<LessonSlideGeneratedFileResponse>> listPublicGeneratedSlides(
+  public ApiResponse<Page<LessonSlideGeneratedFileResponse>> listPublicGeneratedSlides(
       @PathVariable UUID lessonId,
       @RequestParam(required = false) String keyword,
       @RequestParam(defaultValue = "0") int page,
