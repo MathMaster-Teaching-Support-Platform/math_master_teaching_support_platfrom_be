@@ -3,6 +3,8 @@
   <CORSRule>
     <AllowedOrigin>http://localhost:3000</AllowedOrigin>
     <AllowedOrigin>http://localhost:5173</AllowedOrigin>
+    <AllowedOrigin>https://sep.nhducminhqt.name.vn</AllowedOrigin>
+    <AllowedOrigin>http://sep.nhducminhqt.name.vn</AllowedOrigin>
     <AllowedMethod>GET</AllowedMethod>
     <AllowedMethod>PUT</AllowedMethod>
     <AllowedMethod>POST</AllowedMethod>
