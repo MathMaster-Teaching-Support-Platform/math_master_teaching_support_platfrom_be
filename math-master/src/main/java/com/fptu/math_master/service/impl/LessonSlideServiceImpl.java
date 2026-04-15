@@ -31,6 +31,7 @@ import com.fptu.math_master.repository.SlideTemplateRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.LessonSlideService;
+import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.SecurityUtils;
 import io.minio.BucketExistsArgs;
@@ -125,6 +126,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   MinioProperties minioProperties;
   GeminiService geminiService;
   UserSubscriptionService userSubscriptionService;
+  UploadService uploadService;
   ObjectMapper objectMapper;
 
   @Override
@@ -577,6 +579,19 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public String getGeneratedSlidePreviewUrl(UUID generatedFileId) {
+    validateTeacherRole();
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+    return uploadService.getPresignedUrl(generatedFile.getObjectKey(), generatedFile.getBucketName());
+  }
+
+  @Override
   @Transactional
   public LessonSlideGeneratedFileResponse publishGeneratedSlide(UUID generatedFileId) {
     validateTeacherRole();
@@ -654,6 +669,26 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
     byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getObjectKey());
     return new BinaryFileData(content, generatedFile.getFileName(), generatedFile.getContentType());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public String getPublicGeneratedSlidePreviewUrl(UUID generatedFileId) {
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findPublicById(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    Lesson lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(generatedFile.getLessonId())
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    if (lesson.getStatus() != LessonStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.GENERATED_SLIDE_NOT_PUBLIC);
+    }
+
+    return uploadService.getPresignedUrl(generatedFile.getObjectKey(), generatedFile.getBucketName());
   }
 
   private byte[] injectTemplate(byte[] templateBytes, DeckSections deckSections) {

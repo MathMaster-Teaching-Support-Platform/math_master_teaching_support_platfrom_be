@@ -99,6 +99,16 @@ public class LessonSlidePublicController {
         .body(fileData.content());
   }
 
+  @GetMapping("/generated/{generatedFileId}/preview-url")
+  @Operation(
+      summary = "Get pre-signed preview URL for a published generated slide",
+      description = "Public endpoint for students to preview a published PPTX file via viewer.")
+  public ApiResponse<String> getPublicGeneratedSlidePreviewUrl(@PathVariable UUID generatedFileId) {
+    return ApiResponse.<String>builder()
+        .result(lessonSlideService.getPublicGeneratedSlidePreviewUrl(generatedFileId))
+        .build();
+  }
+
   private String contentDisposition(String fileName) {
     return "attachment; filename*=UTF-8''"
         + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");

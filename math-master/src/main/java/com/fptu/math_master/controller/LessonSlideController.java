@@ -207,6 +207,14 @@ public class LessonSlideController {
         .body(fileData.content());
   }
 
+        @GetMapping("/generated/{generatedFileId}/preview-url")
+        @Operation(summary = "Get pre-signed preview URL for a generated slide")
+        public ApiResponse<String> getGeneratedSlidePreviewUrl(@PathVariable UUID generatedFileId) {
+          return ApiResponse.<String>builder()
+          .result(lessonSlideService.getGeneratedSlidePreviewUrl(generatedFileId))
+          .build();
+        }
+
   @PatchMapping("/generated/{generatedFileId}/publish")
   @Operation(summary = "Publish a generated slide file for student access")
   public ApiResponse<LessonSlideGeneratedFileResponse> publishGeneratedSlide(
