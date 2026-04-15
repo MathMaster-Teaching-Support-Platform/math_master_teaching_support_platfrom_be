@@ -23,9 +23,11 @@ import org.springframework.util.CollectionUtils;
 import com.fptu.math_master.configuration.properties.InitProperties;
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AuthenticationRequest;
+import com.fptu.math_master.dto.request.ForgotPasswordRequest;
 import com.fptu.math_master.dto.request.IntrospectRequest;
 import com.fptu.math_master.dto.request.LogoutRequest;
 import com.fptu.math_master.dto.request.RefreshRequest;
+import com.fptu.math_master.dto.request.ResetPasswordRequest;
 import com.fptu.math_master.dto.request.RoleSelectionRequest;
 import com.fptu.math_master.dto.request.UserRegistrationRequest;
 import com.fptu.math_master.dto.response.AuthenticationResponse;
@@ -527,6 +529,77 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         .token(token)
         .expiryTime(new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
         .build();
+  }
+
+  @Override
+  @Transactional
+  public void forgotPassword(ForgotPasswordRequest request) {
+    // Always return 200 OK regardless of whether the email exists (anti-enumeration)
+    userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
+      String resetToken = generatePasswordResetToken(user);
+      String resetUrl = FRONTEND_URL + "/reset-password?token=" + resetToken;
+      emailService.sendPasswordResetEmail(user.getEmail(), user.getUserName(), resetUrl);
+      log.info("Password reset email sent to user id: {}", user.getId());
+    });
+  }
+
+  @Override
+  @Transactional
+  public void resetPassword(ResetPasswordRequest request) {
+    try {
+      JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes());
+      SignedJWT signedJWT = SignedJWT.parse(request.getToken());
+
+      boolean verified = signedJWT.verify(verifier);
+      Date expiryTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+
+      if (!verified || !expiryTime.after(new Date())) {
+        throw new AppException(ErrorCode.UNAUTHENTICATED);
+      }
+
+      String purpose = signedJWT.getJWTClaimsSet().getStringClaim("purpose");
+      if (!"password-reset".equals(purpose)) {
+        throw new AppException(ErrorCode.UNAUTHENTICATED);
+      }
+
+      String userId = signedJWT.getJWTClaimsSet().getSubject();
+      User user =
+          userRepository
+              .findById(UUID.fromString(userId))
+              .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+      PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
+      user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+      userRepository.save(user);
+      log.info("Password reset successfully for user id: {}", userId);
+    } catch (JOSEException | ParseException e) {
+      throw new AppException(ErrorCode.UNAUTHENTICATED);
+    }
+  }
+
+  private String generatePasswordResetToken(User user) {
+    JWSHeader header = new JWSHeader(JWSAlgorithm.HS256);
+
+    JWTClaimsSet jwtClaimsSet =
+        new JWTClaimsSet.Builder()
+            .subject(user.getId().toString())
+            .issuer("school.edu")
+            .issueTime(new Date())
+            .expirationTime(new Date(Instant.now().plus(15, ChronoUnit.MINUTES).toEpochMilli()))
+            .jwtID(UUID.randomUUID().toString())
+            .claim("purpose", "password-reset")
+            .build();
+
+    Payload payload = new Payload(jwtClaimsSet.toJSONObject());
+    JWSObject jwsObject = new JWSObject(header, payload);
+
+    try {
+      jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
+      return jwsObject.serialize();
+    } catch (JOSEException e) {
+      log.error("Cannot create password reset token", e);
+      throw new RuntimeException(e);
+    }
   }
 
   private UserRegisterResponse mapToUserRegisterResponse(User user) {

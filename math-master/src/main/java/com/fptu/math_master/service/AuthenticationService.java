@@ -5,10 +5,12 @@ import java.security.GeneralSecurityException;
 import java.text.ParseException;
 
 import com.fptu.math_master.dto.request.AuthenticationRequest;
+import com.fptu.math_master.dto.request.ForgotPasswordRequest;
 import com.fptu.math_master.dto.request.GoogleAuthRequest;
 import com.fptu.math_master.dto.request.IntrospectRequest;
 import com.fptu.math_master.dto.request.LogoutRequest;
 import com.fptu.math_master.dto.request.RefreshRequest;
+import com.fptu.math_master.dto.request.ResetPasswordRequest;
 import com.fptu.math_master.dto.request.RoleSelectionRequest;
 import com.fptu.math_master.dto.request.UserRegistrationRequest;
 import com.fptu.math_master.dto.response.AuthenticationResponse;
@@ -33,4 +35,8 @@ public interface AuthenticationService {
   void confirmEmail(String token);
 
   AuthenticationResponse selectRole(RoleSelectionRequest request);
+
+  void forgotPassword(ForgotPasswordRequest request);
+
+  void resetPassword(ResetPasswordRequest request);
 }
