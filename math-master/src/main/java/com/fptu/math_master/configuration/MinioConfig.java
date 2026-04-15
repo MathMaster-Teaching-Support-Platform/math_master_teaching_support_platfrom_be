@@ -2,6 +2,7 @@ package com.fptu.math_master.configuration;
 
 import com.fptu.math_master.configuration.properties.MinioProperties;
 import io.minio.MinioClient;
+import java.net.URI;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,6 +48,8 @@ public class MinioConfig {
       System.out.println("ERROR: Public endpoint is null/blank! Using internal as fallback.");
       publicEndpoint = internalEndpoint;
     }
+
+    publicEndpoint = normalizeEndpoint(publicEndpoint);
     
     System.out.println("Using endpoint for publicMinioClient: " + publicEndpoint);
     System.out.println("========================");
@@ -58,5 +61,16 @@ public class MinioConfig {
         .endpoint(publicEndpoint)
         .credentials(minioProperties.getAccessKey(), minioProperties.getSecretKey())
         .build();
+  }
+
+  private String normalizeEndpoint(String endpoint) {
+    URI uri = URI.create(endpoint);
+    if (uri.getPath() == null || uri.getPath().isBlank() || "/".equals(uri.getPath())) {
+      return endpoint;
+    }
+
+    String normalized = uri.getScheme() + "://" + uri.getAuthority();
+    System.out.println("WARN: Stripping path from MinIO public endpoint: " + endpoint + " -> " + normalized);
+    return normalized;
   }
 }

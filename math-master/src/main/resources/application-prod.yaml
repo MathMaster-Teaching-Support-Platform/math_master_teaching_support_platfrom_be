@@ -108,8 +108,11 @@ gemini:
   timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:60}
 
 minio:
-  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
-  public-endpoint: ${MINIO_PUBLIC_ENDPOINT:${MINIO_ENDPOINT}}
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://nginx-minio:9000}
+  # MinIO SDK does not allow a path segment here.
+  # Use the browser-accessible root domain, and let nginx proxy to MinIO at the edge.
+  public-endpoint: ${MINIO_PUBLIC_ENDPOINT:https://nhducminhqt.name.vn}
   access-key: ${MINIO_ACCESS_KEY:minioadmin}
   secret-key: ${MINIO_SECRET_KEY:minioadmin}
   template-bucket: ${MINIO_TEMPLATE_BUCKET:slide-templates}
