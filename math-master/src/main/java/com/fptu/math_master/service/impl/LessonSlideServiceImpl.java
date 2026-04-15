@@ -656,14 +656,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   @Transactional(readOnly = true)
   public Page<LessonSlideGeneratedFileResponse> getPublicGeneratedSlidesByLesson(
       UUID lessonId, String keyword, Pageable pageable) {
-    Lesson lesson =
-        lessonRepository
-            .findByIdAndNotDeleted(lessonId)
-            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
-
-    if (lesson.getStatus() != LessonStatus.PUBLISHED) {
-      throw new AppException(ErrorCode.LESSON_NOT_FOUND);
-    }
+    lessonRepository
+        .findByIdAndNotDeleted(lessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
 
     String normalizedKeyword = keyword == null ? null : keyword.trim();
     return lessonSlideGeneratedFileRepository
@@ -679,14 +674,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             .findPublicById(generatedFileId)
             .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
 
-    Lesson lesson =
-        lessonRepository
-            .findByIdAndNotDeleted(generatedFile.getLessonId())
-            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
-
-    if (lesson.getStatus() != LessonStatus.PUBLISHED) {
-      throw new AppException(ErrorCode.GENERATED_SLIDE_NOT_PUBLIC);
-    }
+    lessonRepository
+        .findByIdAndNotDeleted(generatedFile.getLessonId())
+        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
 
     byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getObjectKey());
     return new BinaryFileData(content, generatedFile.getFileName(), generatedFile.getContentType());
@@ -700,14 +690,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             .findPublicById(generatedFileId)
             .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
 
-    Lesson lesson =
-        lessonRepository
-            .findByIdAndNotDeleted(generatedFile.getLessonId())
-            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
-
-    if (lesson.getStatus() != LessonStatus.PUBLISHED) {
-      throw new AppException(ErrorCode.GENERATED_SLIDE_NOT_PUBLIC);
-    }
+    lessonRepository
+        .findByIdAndNotDeleted(generatedFile.getLessonId())
+        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
 
     byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getObjectKey());
     return convertPptxToPdf(content, generatedFile.getFileName());
@@ -721,14 +706,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             .findPublicById(generatedFileId)
             .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
 
-    Lesson lesson =
-        lessonRepository
-            .findByIdAndNotDeleted(generatedFile.getLessonId())
-            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
-
-    if (lesson.getStatus() != LessonStatus.PUBLISHED) {
-      throw new AppException(ErrorCode.GENERATED_SLIDE_NOT_PUBLIC);
-    }
+    lessonRepository
+        .findByIdAndNotDeleted(generatedFile.getLessonId())
+        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
 
     return uploadService.getPresignedUrl(generatedFile.getObjectKey(), generatedFile.getBucketName());
   }
