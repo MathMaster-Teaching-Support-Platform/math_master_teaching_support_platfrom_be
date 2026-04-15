@@ -12,10 +12,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fptu.math_master.dto.request.AuthenticationRequest;
+import com.fptu.math_master.dto.request.ForgotPasswordRequest;
 import com.fptu.math_master.dto.request.GoogleAuthRequest;
 import com.fptu.math_master.dto.request.IntrospectRequest;
 import com.fptu.math_master.dto.request.LogoutRequest;
 import com.fptu.math_master.dto.request.RefreshRequest;
+import com.fptu.math_master.dto.request.ResetPasswordRequest;
 import com.fptu.math_master.dto.request.RoleSelectionRequest;
 import com.fptu.math_master.dto.request.UserRegistrationRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -123,6 +125,25 @@ public class AuthenticationController {
       description = "Activate a registered account by verifying the confirmation token sent via email.")
   ApiResponse<Void> confirmEmail(@RequestParam String token) {
     authenticationService.confirmEmail(token);
+    return ApiResponse.<Void>builder().build();
+  }
+
+  @PostMapping("/forgot-password")
+  @Operation(
+      summary = "Forgot password",
+      description =
+          "Send a password reset email to the given address. Always returns 200 OK regardless of whether the email exists to prevent user enumeration.")
+  ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+    authenticationService.forgotPassword(request);
+    return ApiResponse.<Void>builder().build();
+  }
+
+  @PostMapping("/reset-password")
+  @Operation(
+      summary = "Reset password",
+      description = "Reset the account password using the token received via email.")
+  ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+    authenticationService.resetPassword(request);
     return ApiResponse.<Void>builder().build();
   }
 }

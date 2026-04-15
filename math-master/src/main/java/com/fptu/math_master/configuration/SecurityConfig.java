@@ -39,6 +39,8 @@ public class SecurityConfig {
     "/api/auth/introspect",
     "/api/auth/logout",
     "/api/auth/refresh",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
     "/api/payment/webhook",
     "/api/ai/chat",
     "/api/question-templates/import-from-file",

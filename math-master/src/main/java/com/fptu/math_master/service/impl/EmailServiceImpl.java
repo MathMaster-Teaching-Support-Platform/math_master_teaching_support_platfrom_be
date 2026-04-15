@@ -92,4 +92,13 @@ public class EmailServiceImpl implements EmailService {
 
     sendEmail(to, "Xác nhận tài khoản MathMaster của bạn", "email-confirmation", variables);
   }
+
+  @Override
+  public void sendPasswordResetEmail(String to, String userName, String resetUrl) {
+    Map<String, Object> variables = new HashMap<>();
+    variables.put("userName", userName);
+    variables.put("resetUrl", resetUrl);
+
+    sendEmail(to, "Đặt lại mật khẩu MathMaster của bạn", "password-reset", variables);
+  }
 }

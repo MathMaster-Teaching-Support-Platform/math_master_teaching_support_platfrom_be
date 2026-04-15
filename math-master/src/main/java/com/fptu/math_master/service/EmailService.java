@@ -12,4 +12,6 @@ public interface EmailService {
   void sendTeacherRejectionEmail(String to, String teacherName, String reason);
 
   void sendEmailConfirmation(String to, String userName, String confirmationUrl);
+
+  void sendPasswordResetEmail(String to, String userName, String resetUrl);
 }
