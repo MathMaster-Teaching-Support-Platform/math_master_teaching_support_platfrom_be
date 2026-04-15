@@ -99,6 +99,19 @@ public class LessonSlidePublicController {
         .body(fileData.content());
   }
 
+      @GetMapping("/generated/{generatedFileId}/preview-pdf")
+      @Operation(
+        summary = "Convert published generated PPTX to PDF and preview inline",
+        description = "Public endpoint for students to preview generated slide as PDF in browser.")
+      public ResponseEntity<byte[]> previewPublicGeneratedSlidePdf(@PathVariable UUID generatedFileId) {
+      LessonSlideService.BinaryFileData fileData =
+        lessonSlideService.getPublicGeneratedSlidePreviewPdf(generatedFileId);
+      return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, inlineDisposition(fileData.fileName()))
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+      }
+
   @GetMapping("/generated/{generatedFileId}/preview-url")
   @Operation(
       summary = "Get pre-signed preview URL for a published generated slide",
@@ -111,6 +124,11 @@ public class LessonSlidePublicController {
 
   private String contentDisposition(String fileName) {
     return "attachment; filename*=UTF-8''"
+        + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+  }
+
+  private String inlineDisposition(String fileName) {
+    return "inline; filename*=UTF-8''"
         + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
   }
 }

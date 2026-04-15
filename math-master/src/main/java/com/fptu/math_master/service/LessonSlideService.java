@@ -57,6 +57,8 @@ public interface LessonSlideService {
 
     BinaryFileData downloadGeneratedSlide(UUID generatedFileId);
 
+    BinaryFileData getGeneratedSlidePreviewPdf(UUID generatedFileId);
+
     String getGeneratedSlidePreviewUrl(UUID generatedFileId);
 
     LessonSlideGeneratedFileResponse publishGeneratedSlide(UUID generatedFileId);
@@ -70,6 +72,8 @@ public interface LessonSlideService {
       UUID lessonId, String keyword, Pageable pageable);
 
     BinaryFileData downloadPublicGeneratedSlide(UUID generatedFileId);
+
+    BinaryFileData getPublicGeneratedSlidePreviewPdf(UUID generatedFileId);
 
     String getPublicGeneratedSlidePreviewUrl(UUID generatedFileId);
 

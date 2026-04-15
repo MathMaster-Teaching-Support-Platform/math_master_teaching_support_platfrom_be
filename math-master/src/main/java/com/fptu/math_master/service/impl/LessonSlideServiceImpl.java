@@ -40,6 +40,7 @@ import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.StatObjectArgs;
+import java.awt.Dimension;
 import java.time.Instant;
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -71,6 +72,12 @@ import org.apache.poi.xslf.usermodel.XSLFPictureShape;
 import org.apache.poi.xslf.usermodel.XSLFShape;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.scilab.forge.jlatexmath.TeXConstants;
 import org.scilab.forge.jlatexmath.TeXFormula;
 import org.scilab.forge.jlatexmath.TeXIcon;
@@ -580,6 +587,20 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   @Override
   @Transactional(readOnly = true)
+  public BinaryFileData getGeneratedSlidePreviewPdf(UUID generatedFileId) {
+    validateTeacherRole();
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+    byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getObjectKey());
+    return convertPptxToPdf(content, generatedFile.getFileName());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public String getGeneratedSlidePreviewUrl(UUID generatedFileId) {
     validateTeacherRole();
     LessonSlideGeneratedFile generatedFile =
@@ -673,6 +694,27 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   @Override
   @Transactional(readOnly = true)
+  public BinaryFileData getPublicGeneratedSlidePreviewPdf(UUID generatedFileId) {
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findPublicById(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    Lesson lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(generatedFile.getLessonId())
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    if (lesson.getStatus() != LessonStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.GENERATED_SLIDE_NOT_PUBLIC);
+    }
+
+    byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getObjectKey());
+    return convertPptxToPdf(content, generatedFile.getFileName());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public String getPublicGeneratedSlidePreviewUrl(UUID generatedFileId) {
     LessonSlideGeneratedFile generatedFile =
         lessonSlideGeneratedFileRepository
@@ -727,6 +769,57 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       replaced = replaced.replace(entry.getKey(), entry.getValue());
     }
     return normalizeEscapedLineBreaks(replaced);
+  }
+
+  private BinaryFileData convertPptxToPdf(byte[] pptxContent, String fileName) {
+    final float renderScale = 2.0f;
+    try (XMLSlideShow slideShow = new XMLSlideShow(new ByteArrayInputStream(pptxContent));
+        PDDocument document = new PDDocument();
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+      Dimension pageSize = slideShow.getPageSize();
+      float slideWidth = (float) pageSize.getWidth();
+      float slideHeight = (float) pageSize.getHeight();
+      int imageWidth = Math.max(1, Math.round(slideWidth * renderScale));
+      int imageHeight = Math.max(1, Math.round(slideHeight * renderScale));
+
+      for (XSLFSlide slide : slideShow.getSlides()) {
+        BufferedImage image = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = image.createGraphics();
+        graphics.setPaint(Color.WHITE);
+        graphics.fill(new Rectangle2D.Float(0, 0, imageWidth, imageHeight));
+        graphics.scale(renderScale, renderScale);
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        graphics.setRenderingHint(
+            RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        slide.draw(graphics);
+        graphics.dispose();
+
+        PDPage page = new PDPage(new PDRectangle(slideWidth, slideHeight));
+        document.addPage(page);
+        PDImageXObject pdImage = LosslessFactory.createFromImage(document, image);
+        try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+          contentStream.drawImage(pdImage, 0, 0, slideWidth, slideHeight);
+        }
+      }
+
+      document.save(outputStream);
+      return new BinaryFileData(outputStream.toByteArray(), toPdfFileName(fileName), "application/pdf");
+    } catch (Exception ex) {
+      log.error("Failed to convert generated slide to PDF: {}", fileName, ex);
+      throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+    }
+  }
+
+  private String toPdfFileName(String fileName) {
+    if (fileName == null || fileName.isBlank()) {
+      return "slide-preview.pdf";
+    }
+    int dot = fileName.lastIndexOf('.');
+    if (dot <= 0) {
+      return fileName + ".pdf";
+    }
+    return fileName.substring(0, dot) + ".pdf";
   }
 
   private String normalizeEscapedLineBreaks(String value) {
