@@ -4,32 +4,46 @@ import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
 import com.fptu.math_master.dto.request.CreateCourseRequest;
 import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
 import com.fptu.math_master.dto.request.UpdateCourseRequest;
+import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
 import com.fptu.math_master.entity.Assessment;
+import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.Course;
 import com.fptu.math_master.entity.CourseAssessment;
 import com.fptu.math_master.entity.Enrollment;
+import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.SchoolGrade;
 import com.fptu.math_master.entity.Subject;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.EnrollmentStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.AssessmentLessonRepository;
 import com.fptu.math_master.repository.AssessmentRepository;
 import com.fptu.math_master.repository.CourseAssessmentRepository;
 import com.fptu.math_master.repository.CourseLessonRepository;
 import com.fptu.math_master.repository.CourseRepository;
 import com.fptu.math_master.repository.EnrollmentRepository;
+import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.LessonProgressRepository;
 import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.CourseService;
 import com.fptu.math_master.util.SecurityUtils;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
@@ -57,6 +71,8 @@ public class CourseServiceImpl implements CourseService {
   UserRepository userRepository;
   CourseAssessmentRepository courseAssessmentRepository;
   AssessmentRepository assessmentRepository;
+  AssessmentLessonRepository assessmentLessonRepository;
+  LessonRepository lessonRepository;
 
   @Override
   public CourseResponse createCourse(CreateCourseRequest request) {
@@ -271,6 +287,13 @@ public class CourseServiceImpl implements CourseService {
       throw new AppException(ErrorCode.ASSESSMENT_NO_QUESTIONS);
     }
 
+    Set<UUID> courseLessonIds = getCourseLessonIds(courseId);
+    List<UUID> matchedLessonIds = getMatchedLessonIds(request.getAssessmentId(), courseLessonIds);
+    boolean allowOutOfCourseLessons = Boolean.TRUE.equals(request.getAllowOutOfCourseLessons());
+    if (!allowOutOfCourseLessons && matchedLessonIds.isEmpty()) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_MATCH_COURSE_LESSONS);
+    }
+
     CourseAssessment courseAssessment =
         CourseAssessment.builder()
             .courseId(courseId)
@@ -286,7 +309,12 @@ public class CourseServiceImpl implements CourseService {
         courseId,
         currentUserId);
 
-    return mapToCourseAssessmentResponse(courseAssessment, assessment);
+    Map<UUID, String> lessonTitleById = getLessonTitleById(courseLessonIds);
+    List<String> matchedLessonTitles =
+      matchedLessonIds.stream()
+        .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
+        .toList();
+    return mapToCourseAssessmentResponse(courseAssessment, assessment, matchedLessonTitles);
   }
 
   @Override
@@ -296,6 +324,13 @@ public class CourseServiceImpl implements CourseService {
     List<CourseAssessment> courseAssessments =
         courseAssessmentRepository.findByCourseIdAndNotDeleted(courseId);
 
+    Set<UUID> courseLessonIds = getCourseLessonIds(courseId);
+    Map<UUID, String> lessonTitleById = getLessonTitleById(courseLessonIds);
+    Set<UUID> assessmentIds =
+      courseAssessments.stream().map(CourseAssessment::getAssessmentId).collect(Collectors.toSet());
+    Map<UUID, List<String>> matchedLessonTitlesByAssessmentId =
+      buildMatchedLessonTitlesByAssessmentId(assessmentIds, courseLessonIds, lessonTitleById);
+
     return courseAssessments.stream()
         .map(
             ca -> {
@@ -303,7 +338,9 @@ public class CourseServiceImpl implements CourseService {
                   assessmentRepository
                       .findByIdAndNotDeleted(ca.getAssessmentId())
                       .orElse(null);
-              return mapToCourseAssessmentResponse(ca, assessment);
+          List<String> matchedTitles =
+            matchedLessonTitlesByAssessmentId.getOrDefault(ca.getAssessmentId(), List.of());
+          return mapToCourseAssessmentResponse(ca, assessment, matchedTitles);
             })
         .filter(response -> {
           // Apply filters
@@ -343,6 +380,94 @@ public class CourseServiceImpl implements CourseService {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public List<AvailableCourseAssessmentResponse> getAvailableAssessmentsForCourse(
+      UUID courseId, boolean includeOutOfCourseLessons) {
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    Course course = findCourseOrThrow(courseId);
+    verifyOwnership(course, currentUserId);
+
+    Set<UUID> courseLessonIds = getCourseLessonIds(courseId);
+    if (courseLessonIds.isEmpty() && !includeOutOfCourseLessons) {
+      return List.of();
+    }
+
+    List<Assessment> assessments;
+    if (includeOutOfCourseLessons) {
+      assessments =
+          assessmentRepository
+              .findByTeacherIdAndStatusAndNotDeleted(
+                  currentUserId, com.fptu.math_master.enums.AssessmentStatus.PUBLISHED)
+              .stream()
+              .sorted(Comparator.comparing(Assessment::getCreatedAt).reversed())
+              .toList();
+    } else {
+      List<UUID> candidateAssessmentIds =
+          assessmentLessonRepository.findAssessmentIdsByLessonIds(courseLessonIds);
+      if (candidateAssessmentIds.isEmpty()) {
+        return List.of();
+      }
+
+      assessments =
+          assessmentRepository.findByIdInAndNotDeleted(candidateAssessmentIds).stream()
+              .filter(a -> a.getTeacherId().equals(currentUserId))
+              .filter(a -> a.getStatus() == com.fptu.math_master.enums.AssessmentStatus.PUBLISHED)
+              .sorted(Comparator.comparing(Assessment::getCreatedAt).reversed())
+              .toList();
+    }
+
+    if (assessments.isEmpty()) {
+      return List.of();
+    }
+
+    Set<UUID> assessmentIds = assessments.stream().map(Assessment::getId).collect(Collectors.toSet());
+    Map<UUID, String> lessonTitleById = getLessonTitleById(courseLessonIds);
+    Map<UUID, List<UUID>> matchedLessonIdsByAssessmentId =
+        buildMatchedLessonIdsByAssessmentId(assessmentIds, courseLessonIds);
+
+    Map<UUID, long[]> summaryMap = new HashMap<>();
+    for (Object[] row : assessmentRepository.findBulkSummaryByIds(assessmentIds)) {
+      UUID aid = (UUID) row[0];
+      long questionCount = row[1] == null ? 0L : ((Number) row[1]).longValue();
+      long pointsCents =
+          row[2] == null
+              ? 0L
+              : new BigDecimal(row[2].toString()).multiply(BigDecimal.valueOf(100)).longValue();
+      summaryMap.put(aid, new long[] {questionCount, pointsCents});
+    }
+
+    List<AvailableCourseAssessmentResponse> result = new ArrayList<>();
+    for (Assessment assessment : assessments) {
+      List<UUID> matchedLessonIds =
+          matchedLessonIdsByAssessmentId.getOrDefault(assessment.getId(), List.of());
+      List<String> matchedLessonTitles =
+          matchedLessonIds.stream()
+              .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
+              .toList();
+      long[] summary = summaryMap.getOrDefault(assessment.getId(), new long[] {0L, 0L});
+
+      result.add(
+          AvailableCourseAssessmentResponse.builder()
+              .assessmentId(assessment.getId())
+              .title(assessment.getTitle())
+              .description(assessment.getDescription())
+              .assessmentType(assessment.getAssessmentType())
+              .status(assessment.getStatus())
+              .timeLimitMinutes(assessment.getTimeLimitMinutes())
+              .totalQuestions(summary[0])
+              .totalPoints(
+                  BigDecimal.valueOf(summary[1])
+                      .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP))
+              .matchedLessonCount(matchedLessonIds.size())
+              .matchedLessonIds(matchedLessonIds)
+              .matchedLessonTitles(matchedLessonTitles)
+              .build());
+    }
+
+    return result;
+  }
+
+  @Override
   public CourseAssessmentResponse updateCourseAssessment(
       UUID courseId, UUID assessmentId, UpdateCourseAssessmentRequest request) {
     UUID currentUserId = SecurityUtils.getCurrentUserId();
@@ -366,7 +491,13 @@ public class CourseServiceImpl implements CourseService {
 
     Assessment assessment =
         assessmentRepository.findByIdAndNotDeleted(assessmentId).orElse(null);
-    return mapToCourseAssessmentResponse(courseAssessment, assessment);
+    Set<UUID> courseLessonIds = getCourseLessonIds(courseId);
+    Map<UUID, String> lessonTitleById = getLessonTitleById(courseLessonIds);
+    List<String> matchedLessonTitles =
+      getMatchedLessonIds(assessmentId, courseLessonIds).stream()
+        .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
+        .toList();
+    return mapToCourseAssessmentResponse(courseAssessment, assessment, matchedLessonTitles);
   }
 
   @Override
@@ -399,7 +530,7 @@ public class CourseServiceImpl implements CourseService {
   }
 
   private CourseAssessmentResponse mapToCourseAssessmentResponse(
-      CourseAssessment ca, Assessment assessment) {
+      CourseAssessment ca, Assessment assessment, List<String> matchedLessonTitles) {
     CourseAssessmentResponse.CourseAssessmentResponseBuilder builder =
         CourseAssessmentResponse.builder()
             .id(ca.getId())
@@ -407,6 +538,9 @@ public class CourseServiceImpl implements CourseService {
             .assessmentId(ca.getAssessmentId())
             .orderIndex(ca.getOrderIndex())
             .isRequired(ca.isRequired())
+        .matchedLessonCount(matchedLessonTitles.size())
+        .matchedLessonTitles(matchedLessonTitles)
+        .lessonMatched(!matchedLessonTitles.isEmpty())
             .createdAt(ca.getCreatedAt())
             .updatedAt(ca.getUpdatedAt());
 
@@ -433,5 +567,65 @@ public class CourseServiceImpl implements CourseService {
     }
 
     return builder.build();
+  }
+
+  private Set<UUID> getCourseLessonIds(UUID courseId) {
+    return courseLessonRepository.findByCourseIdAndNotDeleted(courseId).stream()
+        .map(cl -> cl.getLessonId())
+        .collect(Collectors.toCollection(HashSet::new));
+  }
+
+  private Map<UUID, String> getLessonTitleById(Set<UUID> lessonIds) {
+    if (lessonIds.isEmpty()) {
+      return Map.of();
+    }
+    return lessonRepository.findByIdInAndNotDeleted(lessonIds).stream()
+        .collect(Collectors.toMap(Lesson::getId, Lesson::getTitle));
+  }
+
+  private List<UUID> getMatchedLessonIds(UUID assessmentId, Set<UUID> courseLessonIds) {
+    if (courseLessonIds.isEmpty()) {
+      return List.of();
+    }
+    return assessmentLessonRepository.findLessonIdsByAssessmentId(assessmentId).stream()
+        .filter(courseLessonIds::contains)
+        .distinct()
+        .toList();
+  }
+
+  private Map<UUID, List<UUID>> buildMatchedLessonIdsByAssessmentId(
+      Collection<UUID> assessmentIds, Set<UUID> courseLessonIds) {
+    if (assessmentIds.isEmpty() || courseLessonIds.isEmpty()) {
+      return Map.of();
+    }
+
+    Map<UUID, List<UUID>> map = new HashMap<>();
+    List<AssessmentLesson> links = assessmentLessonRepository.findByAssessmentIdIn(assessmentIds);
+    for (AssessmentLesson link : links) {
+      if (!courseLessonIds.contains(link.getLessonId())) {
+        continue;
+      }
+      map.computeIfAbsent(link.getAssessmentId(), ignored -> new ArrayList<>()).add(link.getLessonId());
+    }
+    return map;
+  }
+
+  private Map<UUID, List<String>> buildMatchedLessonTitlesByAssessmentId(
+      Collection<UUID> assessmentIds,
+      Set<UUID> courseLessonIds,
+      Map<UUID, String> lessonTitleById) {
+    Map<UUID, List<UUID>> lessonIdsByAssessmentId =
+        buildMatchedLessonIdsByAssessmentId(assessmentIds, courseLessonIds);
+
+    Map<UUID, List<String>> result = new HashMap<>();
+    for (Map.Entry<UUID, List<UUID>> entry : lessonIdsByAssessmentId.entrySet()) {
+      List<String> titles =
+          entry.getValue().stream()
+              .distinct()
+              .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
+              .toList();
+      result.put(entry.getKey(), titles);
+    }
+    return result;
   }
 }

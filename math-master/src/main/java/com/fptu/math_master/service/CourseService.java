@@ -4,6 +4,7 @@ import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
 import com.fptu.math_master.dto.request.CreateCourseRequest;
 import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
 import com.fptu.math_master.dto.request.UpdateCourseRequest;
+import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
@@ -50,6 +51,13 @@ public interface CourseService {
    * @return List of assessments ordered by orderIndex
    */
   List<CourseAssessmentResponse> getCourseAssessments(UUID courseId, String status, String type, Boolean isRequired);
+
+  /**
+   * Get published assessments from the same teacher whose assessment lessons intersect
+   * with lessons already attached to this course.
+   */
+  List<AvailableCourseAssessmentResponse> getAvailableAssessmentsForCourse(
+      UUID courseId, boolean includeOutOfCourseLessons);
 
   /**
    * Update course assessment settings (order, required flag)

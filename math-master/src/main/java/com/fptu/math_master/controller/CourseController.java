@@ -6,6 +6,7 @@ import com.fptu.math_master.dto.request.PublishCourseRequest;
 import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
 import com.fptu.math_master.dto.request.UpdateCourseRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
@@ -161,6 +162,18 @@ public class CourseController {
       @RequestParam(required = false) Boolean isRequired) {
     return ApiResponse.<List<CourseAssessmentResponse>>builder()
         .result(courseService.getCourseAssessments(courseId, status, type, isRequired))
+        .build();
+  }
+
+  @Operation(summary = "Get available assessments matched by course lessons")
+  @GetMapping("/{courseId}/assessments/available")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<List<AvailableCourseAssessmentResponse>> getAvailableAssessmentsForCourse(
+    @PathVariable UUID courseId,
+    @RequestParam(defaultValue = "false") boolean includeOutOfCourseLessons) {
+    return ApiResponse.<List<AvailableCourseAssessmentResponse>>builder()
+      .result(courseService.getAvailableAssessmentsForCourse(courseId, includeOutOfCourseLessons))
         .build();
   }
 
