@@ -1,6 +1,7 @@
 package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.CourseAssessment;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,6 +25,11 @@ public interface CourseAssessmentRepository extends JpaRepository<CourseAssessme
       "SELECT ca FROM CourseAssessment ca "
           + "WHERE ca.assessmentId = :assessmentId AND ca.deletedAt IS NULL")
   List<CourseAssessment> findByAssessmentIdAndNotDeleted(@Param("assessmentId") UUID assessmentId);
+
+  @Query(
+      "SELECT ca FROM CourseAssessment ca "
+          + "WHERE ca.courseId IN :courseIds AND ca.deletedAt IS NULL")
+  List<CourseAssessment> findByCourseIdInAndNotDeleted(@Param("courseIds") Collection<UUID> courseIds);
 
   @Query(
       "SELECT COUNT(ca) FROM CourseAssessment ca "

@@ -42,6 +42,8 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
   AssessmentDraftService draftService;
   CentrifugoService centrifugoService;
   GradingService gradingService;
+  EnrollmentRepository enrollmentRepository;
+  CourseAssessmentRepository courseAssessmentRepository;
 
   @Override
   @Transactional(readOnly = true)
@@ -51,15 +53,20 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
 
     log.info("Getting assessments for student: {}, filter: {}", studentId, statusFilter);
 
+    Set<UUID> accessibleAssessmentIds = getAccessibleAssessmentIds(studentId, null);
+    if (accessibleAssessmentIds.isEmpty()) {
+      return new PageImpl<>(List.of(), pageable, 0);
+    }
+
     List<Assessment> allAssessments =
-        assessmentRepository.findAll().stream()
+        assessmentRepository.findByIdInAndNotDeleted(accessibleAssessmentIds).stream()
             .filter(a -> a.getStatus() == AssessmentStatus.PUBLISHED)
             .filter(a -> isAssessmentAvailable(a, now))
             .collect(Collectors.toList());
 
     List<StudentAssessmentResponse> responses =
         allAssessments.stream()
-            .map(assessment -> mapToStudentResponse(assessment, studentId, now))
+          .map(assessment -> mapToStudentResponse(assessment, studentId, now, null, null))
             .filter(response -> matchesStatusFilter(response, statusFilter))
             .sorted(
                 Comparator.comparing(
@@ -70,6 +77,71 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     int start = (int) pageable.getOffset();
     int end = Math.min((start + pageable.getPageSize()), responses.size());
 
+    if (start >= responses.size()) {
+      return new PageImpl<>(List.of(), pageable, responses.size());
+    }
+
+    return new PageImpl<>(responses.subList(start, end), pageable, responses.size());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<StudentAssessmentResponse> getMyAssessmentsByCourse(
+      UUID courseId, String statusFilter, Pageable pageable) {
+    UUID studentId = getCurrentUserId();
+    Instant now = Instant.now();
+
+    Optional<Enrollment> enrollmentOpt =
+        enrollmentRepository.findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, courseId);
+    if (enrollmentOpt.isEmpty()
+        || enrollmentOpt.get().getStatus() != com.fptu.math_master.enums.EnrollmentStatus.ACTIVE) {
+      return new PageImpl<>(List.of(), pageable, 0);
+    }
+
+    List<CourseAssessment> courseAssessments =
+        courseAssessmentRepository.findByCourseIdAndNotDeleted(courseId);
+    if (courseAssessments.isEmpty()) {
+      return new PageImpl<>(List.of(), pageable, 0);
+    }
+
+    Map<UUID, CourseAssessment> courseAssessmentByAssessmentId =
+        courseAssessments.stream()
+            .collect(Collectors.toMap(CourseAssessment::getAssessmentId, ca -> ca, (left, right) -> left));
+
+    List<Assessment> assessments =
+        assessmentRepository.findByIdInAndNotDeleted(courseAssessmentByAssessmentId.keySet()).stream()
+            .filter(a -> a.getStatus() == AssessmentStatus.PUBLISHED)
+            .filter(a -> isAssessmentAvailable(a, now))
+            .collect(Collectors.toList());
+
+    List<StudentAssessmentResponse> responses =
+        assessments.stream()
+            .map(
+                assessment -> {
+                  CourseAssessment ca = courseAssessmentByAssessmentId.get(assessment.getId());
+                  return mapToStudentResponse(
+                      assessment,
+                      studentId,
+                      now,
+                      ca != null ? ca.isRequired() : null,
+                      ca != null ? ca.getOrderIndex() : null);
+                })
+            .filter(response -> matchesStatusFilter(response, statusFilter))
+            .sorted(
+                Comparator.comparing(
+                        StudentAssessmentResponse::getCourseOrderIndex,
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(
+                        StudentAssessmentResponse::getDueDate,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+            .collect(Collectors.toList());
+
+    int start = (int) pageable.getOffset();
+    int end = Math.min((start + pageable.getPageSize()), responses.size());
+    if (start >= responses.size()) {
+      return new PageImpl<>(List.of(), pageable, responses.size());
+    }
+
     return new PageImpl<>(responses.subList(start, end), pageable, responses.size());
   }
 
@@ -78,6 +150,10 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
   public StudentAssessmentResponse getAssessmentDetails(UUID assessmentId) {
     UUID studentId = getCurrentUserId();
     Instant now = Instant.now();
+
+    if (!getAccessibleAssessmentIds(studentId, null).contains(assessmentId)) {
+      throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
+    }
 
     Assessment assessment =
         assessmentRepository
@@ -88,7 +164,7 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_PUBLISHED);
     }
 
-    return mapToStudentResponse(assessment, studentId, now);
+    return mapToStudentResponse(assessment, studentId, now, null, null);
   }
 
   @Override
@@ -99,6 +175,10 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     Instant now = Instant.now();
 
     log.info("Student {} starting assessment {}", studentId, assessmentId);
+
+    if (!getAccessibleAssessmentIds(studentId, null).contains(assessmentId)) {
+      throw new AppException(ErrorCode.ASSESSMENT_ACCESS_DENIED);
+    }
 
     Assessment assessment =
         assessmentRepository
@@ -348,8 +428,38 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     return true;
   }
 
+  private Set<UUID> getAccessibleAssessmentIds(UUID studentId, UUID courseId) {
+    List<Enrollment> activeEnrollments;
+    if (courseId != null) {
+      activeEnrollments =
+          enrollmentRepository
+              .findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, courseId)
+              .filter(e -> e.getStatus() == com.fptu.math_master.enums.EnrollmentStatus.ACTIVE)
+              .map(List::of)
+              .orElseGet(List::of);
+    } else {
+      activeEnrollments =
+          enrollmentRepository.findByStudentIdAndStatusAndDeletedAtIsNullOrderByEnrolledAtDesc(
+              studentId, com.fptu.math_master.enums.EnrollmentStatus.ACTIVE);
+    }
+
+    if (activeEnrollments.isEmpty()) {
+      return Set.of();
+    }
+
+    Set<UUID> courseIds = activeEnrollments.stream().map(Enrollment::getCourseId).collect(Collectors.toSet());
+    List<CourseAssessment> courseAssessments =
+        courseAssessmentRepository.findByCourseIdInAndNotDeleted(courseIds);
+
+    return courseAssessments.stream().map(CourseAssessment::getAssessmentId).collect(Collectors.toSet());
+  }
+
   private StudentAssessmentResponse mapToStudentResponse(
-      Assessment assessment, UUID studentId, Instant now) {
+      Assessment assessment,
+      UUID studentId,
+      Instant now,
+      Boolean isRequired,
+      Integer courseOrderIndex) {
     Long totalQuestions =
         (long)
             assessmentQuestionRepository
@@ -408,6 +518,8 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
         .allowMultipleAttempts(assessment.getAllowMultipleAttempts())
         .canStart(canStart)
         .cannotStartReason(cannotStartReason)
+          .isRequired(isRequired)
+          .courseOrderIndex(courseOrderIndex)
         .build();
   }
 

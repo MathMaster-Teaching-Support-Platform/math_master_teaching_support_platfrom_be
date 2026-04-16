@@ -4,6 +4,7 @@ import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
 import com.fptu.math_master.dto.request.CreateCourseRequest;
 import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
 import com.fptu.math_master.dto.request.UpdateCourseRequest;
+import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
@@ -11,12 +12,13 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface CourseService {
 
-  CourseResponse createCourse(CreateCourseRequest request);
+  CourseResponse createCourse(CreateCourseRequest request, MultipartFile thumbnailFile);
 
-  CourseResponse updateCourse(UUID courseId, UpdateCourseRequest request);
+  CourseResponse updateCourse(UUID courseId, UpdateCourseRequest request, MultipartFile thumbnailFile);
 
   void deleteCourse(UUID courseId);
 
@@ -50,6 +52,13 @@ public interface CourseService {
    * @return List of assessments ordered by orderIndex
    */
   List<CourseAssessmentResponse> getCourseAssessments(UUID courseId, String status, String type, Boolean isRequired);
+
+  /**
+   * Get published assessments from the same teacher whose assessment lessons intersect
+   * with lessons already attached to this course.
+   */
+  List<AvailableCourseAssessmentResponse> getAvailableAssessmentsForCourse(
+      UUID courseId, boolean includeOutOfCourseLessons);
 
   /**
    * Update course assessment settings (order, required flag)
