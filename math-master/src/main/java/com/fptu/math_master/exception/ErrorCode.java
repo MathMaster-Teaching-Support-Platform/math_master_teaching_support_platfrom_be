@@ -274,7 +274,11 @@ public enum ErrorCode {
         GENERATED_SLIDE_NOT_FOUND(1166, "Generated slide file not found", HttpStatus.NOT_FOUND),
         GENERATED_SLIDE_ACCESS_DENIED(
                 1167, "You do not have permission to access this generated slide", HttpStatus.FORBIDDEN),
-        GENERATED_SLIDE_NOT_PUBLIC(1168, "Generated slide is not public", HttpStatus.BAD_REQUEST);
+        GENERATED_SLIDE_NOT_PUBLIC(1168, "Generated slide is not public", HttpStatus.BAD_REQUEST),
+      ASSESSMENT_NOT_MATCH_COURSE_LESSONS(
+          1169,
+          "Assessment lessons do not match any lessons in this course",
+          HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

@@ -23,6 +23,9 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
 
   List<Enrollment> findByStudentIdAndDeletedAtIsNullOrderByEnrolledAtDesc(UUID studentId);
 
+    List<Enrollment> findByStudentIdAndStatusAndDeletedAtIsNullOrderByEnrolledAtDesc(
+            UUID studentId, EnrollmentStatus status);
+
   Page<Enrollment> findByCourseIdAndStatusAndDeletedAtIsNull(
       UUID courseId, EnrollmentStatus status, Pageable pageable);
 

@@ -4,6 +4,7 @@ import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AssessmentType;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,4 +38,9 @@ public class CourseAssessmentResponse {
   private Long totalQuestions;
   private BigDecimal totalPoints;
   private Long submissionCount;
+
+  // Lesson matching metadata for this course context
+  private Integer matchedLessonCount;
+  private List<String> matchedLessonTitles;
+  private boolean lessonMatched;
 }

@@ -20,4 +20,11 @@ public class AddAssessmentToCourseRequest {
 
   @Builder.Default
   private Boolean isRequired = true;
+
+  /**
+   * Optional override for final-exam use cases where assessment lessons do not
+   * intersect with course lessons.
+   */
+  @Builder.Default
+  private Boolean allowOutOfCourseLessons = false;
 }

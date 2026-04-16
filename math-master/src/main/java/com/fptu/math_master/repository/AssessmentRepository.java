@@ -82,6 +82,15 @@ public interface AssessmentRepository
 
   @Query(
       "SELECT a FROM Assessment a "
+          + "WHERE a.deletedAt IS NULL "
+          + "AND a.teacherId = :teacherId "
+          + "AND (:status IS NULL OR a.status = :status) ")
+  List<Assessment> findByTeacherIdAndStatusAndNotDeleted(
+      @Param("teacherId") UUID teacherId,
+      @Param("status") AssessmentStatus status);
+
+  @Query(
+      "SELECT a FROM Assessment a "
           + "WHERE a.status = 'PUBLISHED' "
           + "AND a.endDate IS NOT NULL "
           + "AND a.endDate < :now "
