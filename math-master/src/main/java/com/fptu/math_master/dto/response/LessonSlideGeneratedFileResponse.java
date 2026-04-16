@@ -15,6 +15,8 @@ public class LessonSlideGeneratedFileResponse {
   private UUID id;
   private UUID lessonId;
   private UUID templateId;
+  private String name;
+  private String thumbnail;
   private String fileName;
   private String contentType;
   private Long fileSizeBytes;

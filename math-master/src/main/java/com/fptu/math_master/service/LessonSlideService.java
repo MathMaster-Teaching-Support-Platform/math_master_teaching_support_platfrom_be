@@ -2,6 +2,7 @@ package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.LessonSlideConfirmContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
+import com.fptu.math_master.dto.request.LessonSlideGeneratedFileMetadataUpdateRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
 import com.fptu.math_master.dto.response.LessonSlideGeneratedFileResponse;
@@ -64,6 +65,9 @@ public interface LessonSlideService {
     LessonSlideGeneratedFileResponse publishGeneratedSlide(UUID generatedFileId);
 
     LessonSlideGeneratedFileResponse unpublishGeneratedSlide(UUID generatedFileId);
+
+    LessonSlideGeneratedFileResponse updateGeneratedSlideMetadata(
+      UUID generatedFileId, LessonSlideGeneratedFileMetadataUpdateRequest request);
 
     Page<LessonSlideGeneratedFileResponse> getAllPublicGeneratedSlides(
       UUID lessonId, String keyword, Pageable pageable);

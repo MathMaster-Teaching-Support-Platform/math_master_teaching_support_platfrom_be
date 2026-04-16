@@ -48,6 +48,12 @@ public class LessonSlideGeneratedFile extends BaseEntity {
   @Column(name = "file_name", nullable = false, length = 255)
   private String fileName;
 
+  @Column(name = "slide_name", length = 255)
+  private String name;
+
+  @Column(name = "thumbnail_url", columnDefinition = "TEXT")
+  private String thumbnail;
+
   @Column(name = "content_type", nullable = false, length = 255)
   private String contentType;
 
