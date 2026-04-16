@@ -1,7 +1,7 @@
 # Math Master — Project Structure
 
 > **Auto-maintained:** Agent phải cập nhật file này mỗi khi thêm/xóa/rename file trong src.  
-> **Cập nhật lần cuối:** 2026-04-15  
+> **Cập nhật lần cuối:** 2026-04-17  
 > **Hướng dẫn cập nhật:** Xem [AGENT_STRUCTURE_GUIDE.md](AGENT_STRUCTURE_GUIDE.md)
 
 ---
@@ -679,6 +679,7 @@ PayOSProperties.java
 ### component/ — Spring Components (Redis Stream)
 
 ```
+PendingTransactionCancelScheduler.java   — Auto-cancel PENDING txs after 15 min (runs every 60s)
 StreamConsumerListener.java
 StreamInitializer.java
 StreamPublisher.java
