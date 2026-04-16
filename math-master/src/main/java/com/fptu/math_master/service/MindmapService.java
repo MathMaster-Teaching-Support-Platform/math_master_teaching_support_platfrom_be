@@ -37,6 +37,8 @@ public interface MindmapService {
    */
   MindmapDetailResponse getMindmapById(UUID id);
 
+  MindmapDetailResponse getPublicMindmapById(UUID id);
+
   /**
    * Update mindmap
    *
@@ -130,6 +132,8 @@ public interface MindmapService {
    * @return list of nodes with hierarchical structure
    */
   List<MindmapNodeResponse> getNodesByMindmap(UUID mindmapId);
+
+  List<MindmapNodeResponse> getPublicNodesByMindmap(UUID mindmapId);
 
   record BinaryFileData(byte[] content, String fileName, String contentType) {}
 }

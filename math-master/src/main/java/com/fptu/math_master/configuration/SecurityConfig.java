@@ -54,7 +54,6 @@ public class SecurityConfig {
     "/api/ai/test",
     "/api/lessons/**",
     "/api/lesson-slides/public/**",
-    "/api/mindmaps/public/**",
     "/api/auth/confirm-email",
     "/api/courses",
     "/api/courses/{id}",
@@ -80,6 +79,8 @@ public class SecurityConfig {
                 request
                     .requestMatchers("/api/payment/webhook/**")
                     .permitAll()
+                  .requestMatchers(HttpMethod.GET, "/api/mindmaps/public/**")
+                  .hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                     .requestMatchers(SWAGGER_WHITELIST)
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS)

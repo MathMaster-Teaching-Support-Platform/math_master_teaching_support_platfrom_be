@@ -204,6 +204,27 @@ public class MindmapServiceImpl implements MindmapService {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public MindmapDetailResponse getPublicMindmapById(UUID id) {
+    log.info("Getting public mindmap by id: {}", id);
+
+    Mindmap mindmap =
+        mindmapRepository
+            .findByIdWithDetailsAndNotDeleted(id)
+            .orElseThrow(() -> new AppException(ErrorCode.MINDMAP_NOT_FOUND));
+
+    if (mindmap.getStatus() != MindmapStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.MINDMAP_ACCESS_DENIED);
+    }
+
+    List<MindmapNode> allNodes = getSortedNodesByMindmapId(mindmap.getId());
+    List<MindmapNodeResponse> nodes = buildNodeHierarchy(allNodes);
+    MindmapResponse mindmapResponse = mapToResponseWithNodeCount(mindmap, allNodes.size());
+
+    return MindmapDetailResponse.builder().mindmap(mindmapResponse).nodes(nodes).build();
+  }
+
+  @Override
   @Transactional
   public MindmapResponse updateMindmap(UUID id, MindmapRequest request) {
     log.info("Updating mindmap: {}", id);
@@ -541,6 +562,24 @@ public class MindmapServiceImpl implements MindmapService {
       }
     } else {
       validateOwnerOrAdmin(mindmap.getTeacherId(), currentUserId);
+    }
+
+    List<MindmapNode> allNodes = getSortedNodesByMindmapId(mindmapId);
+    return buildNodeHierarchy(allNodes);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<MindmapNodeResponse> getPublicNodesByMindmap(UUID mindmapId) {
+    log.info("Getting public nodes for mindmap: {}", mindmapId);
+
+    Mindmap mindmap =
+        mindmapRepository
+            .findByIdAndNotDeleted(mindmapId)
+            .orElseThrow(() -> new AppException(ErrorCode.MINDMAP_NOT_FOUND));
+
+    if (mindmap.getStatus() != MindmapStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.MINDMAP_ACCESS_DENIED);
     }
 
     List<MindmapNode> allNodes = getSortedNodesByMindmapId(mindmapId);

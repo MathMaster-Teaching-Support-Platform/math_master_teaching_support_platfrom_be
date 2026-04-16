@@ -221,6 +221,17 @@ public class MindmapController {
         .build();
   }
 
+    @GetMapping("/public/{id}")
+    @Operation(
+            summary = "Get published mindmap detail",
+            description = "Public endpoint for students to view published mindmap detail and node tree.")
+    public ApiResponse<MindmapDetailResponse> getPublicMindmapById(@PathVariable UUID id) {
+        log.info("REST request to get public mindmap: {}", id);
+        return ApiResponse.<MindmapDetailResponse>builder()
+                .result(mindmapService.getPublicMindmapById(id))
+                .build();
+    }
+
   @GetMapping("/{id}/export")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
@@ -305,6 +316,17 @@ public class MindmapController {
         .result(mindmapService.getNodesByMindmap(mindmapId))
         .build();
   }
+
+    @GetMapping("/public/{mindmapId}/nodes")
+    @Operation(
+            summary = "Get all nodes of a published mindmap",
+            description = "Public endpoint for students to view published mindmap nodes only.")
+    public ApiResponse<List<MindmapNodeResponse>> getPublicNodesByMindmap(@PathVariable UUID mindmapId) {
+        log.info("REST request to get public nodes for mindmap: {}", mindmapId);
+        return ApiResponse.<List<MindmapNodeResponse>>builder()
+                .result(mindmapService.getPublicNodesByMindmap(mindmapId))
+                .build();
+    }
 
     private String contentDisposition(String fileName) {
         return "attachment; filename*=UTF-8''"
