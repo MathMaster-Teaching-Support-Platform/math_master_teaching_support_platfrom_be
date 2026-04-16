@@ -15,14 +15,28 @@ import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.MindmapService;
 import com.fptu.math_master.service.UserSubscriptionService;
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.time.Instant;
 import java.util.*;
 import java.util.Comparator;
 import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -34,6 +48,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MindmapServiceImpl implements MindmapService {
+
+  private static final String EXPORT_FORMAT_PDF = "pdf";
+  private static final String EXPORT_FORMAT_PNG = "png";
 
   MindmapRepository mindmapRepository;
   MindmapNodeRepository mindmapNodeRepository;
@@ -385,6 +402,33 @@ public class MindmapServiceImpl implements MindmapService {
         mapToResponseWithNodeCount(
           m, nodeCounts.getOrDefault(m.getId(), 0L).intValue(), teacherNames, lessonTitles));
     }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BinaryFileData exportMindmap(UUID id, String format) {
+    Mindmap mindmap =
+        mindmapRepository
+            .findByIdAndNotDeleted(id)
+            .orElseThrow(() -> new AppException(ErrorCode.MINDMAP_NOT_FOUND));
+
+    validateOwnerOrAdmin(mindmap.getTeacherId(), getCurrentUserId());
+    return exportMindmapFile(mindmap, normalizeExportFormat(format));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BinaryFileData exportPublicMindmap(UUID id, String format) {
+    Mindmap mindmap =
+        mindmapRepository
+            .findByIdAndNotDeleted(id)
+            .orElseThrow(() -> new AppException(ErrorCode.MINDMAP_NOT_FOUND));
+
+    if (mindmap.getStatus() != MindmapStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.MINDMAP_ACCESS_DENIED);
+    }
+
+    return exportMindmapFile(mindmap, normalizeExportFormat(format));
+  }
 
   @Override
   @Transactional
@@ -795,6 +839,172 @@ public class MindmapServiceImpl implements MindmapService {
     return rootNodes;
   }
 
+  private BinaryFileData exportMindmapFile(Mindmap mindmap, String format) {
+    List<MindmapNode> allNodes = getSortedNodesByMindmapId(mindmap.getId());
+    List<ExportNodeLine> lines = buildExportLines(allNodes);
+    BufferedImage image = renderMindmapImage(mindmap.getTitle(), lines);
+
+    String baseName = sanitizeFileName(mindmap.getTitle() == null ? "mindmap" : mindmap.getTitle());
+    if (EXPORT_FORMAT_PNG.equals(format)) {
+      return new BinaryFileData(toPngBytes(image), baseName + ".png", "image/png");
+    }
+
+    return new BinaryFileData(toPdfBytes(image), baseName + ".pdf", "application/pdf");
+  }
+
+  private String normalizeExportFormat(String format) {
+    if (format == null || format.isBlank()) {
+      return EXPORT_FORMAT_PDF;
+    }
+    String normalized = format.trim().toLowerCase(Locale.ROOT);
+    if (!EXPORT_FORMAT_PDF.equals(normalized) && !EXPORT_FORMAT_PNG.equals(normalized)) {
+      throw new AppException(ErrorCode.INVALID_FILE_FORMAT);
+    }
+    return normalized;
+  }
+
+  private List<ExportNodeLine> buildExportLines(List<MindmapNode> allNodes) {
+    Map<UUID, List<MindmapNode>> childrenMap = new HashMap<>();
+    List<MindmapNode> roots = new ArrayList<>();
+
+    Set<UUID> existingNodeIds = allNodes.stream().map(MindmapNode::getId).collect(Collectors.toSet());
+
+    for (MindmapNode node : allNodes) {
+      UUID parentId = node.getParentId();
+      if (parentId == null || !existingNodeIds.contains(parentId)) {
+        roots.add(node);
+      } else {
+        childrenMap.computeIfAbsent(parentId, k -> new ArrayList<>()).add(node);
+      }
+    }
+
+    roots.sort(Comparator.comparing(MindmapNode::getDisplayOrder, Comparator.nullsLast(Integer::compareTo)));
+    childrenMap.values().forEach(
+        list -> list.sort(Comparator.comparing(MindmapNode::getDisplayOrder, Comparator.nullsLast(Integer::compareTo))));
+
+    List<ExportNodeLine> lines = new ArrayList<>();
+    for (MindmapNode root : roots) {
+      appendExportLines(root, 0, childrenMap, lines);
+    }
+    return lines;
+  }
+
+  private void appendExportLines(
+      MindmapNode node,
+      int depth,
+      Map<UUID, List<MindmapNode>> childrenMap,
+      List<ExportNodeLine> lines) {
+    lines.add(new ExportNodeLine(depth, safeText(node.getContent()), node.getColor()));
+    for (MindmapNode child : childrenMap.getOrDefault(node.getId(), Collections.emptyList())) {
+      appendExportLines(child, depth + 1, childrenMap, lines);
+    }
+  }
+
+  private BufferedImage renderMindmapImage(String title, List<ExportNodeLine> lines) {
+    final int leftPadding = 40;
+    final int topPadding = 40;
+    final int headerHeight = 52;
+    final int rowHeight = 42;
+    final int indentWidth = 54;
+    final int contentMaxChars = 90;
+
+    int maxDepth = lines.stream().mapToInt(ExportNodeLine::depth).max().orElse(0);
+    int width = Math.max(1280, 900 + maxDepth * indentWidth);
+    int height = Math.max(720, topPadding + headerHeight + Math.max(1, lines.size()) * rowHeight + 40);
+
+    BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+    Graphics2D g = image.createGraphics();
+    try {
+      g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+      g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+      g.setColor(Color.WHITE);
+      g.fillRect(0, 0, width, height);
+
+      g.setColor(new Color(23, 43, 77));
+      g.setFont(new Font("SansSerif", Font.BOLD, 28));
+      g.drawString(safeText(title), leftPadding, topPadding);
+
+      int y = topPadding + headerHeight;
+      for (ExportNodeLine line : lines) {
+        int x = leftPadding + line.depth() * indentWidth;
+
+        Color nodeColor = parseColor(line.color());
+        g.setColor(nodeColor);
+        g.fillRoundRect(x, y - 24, 18, 18, 6, 6);
+
+        g.setColor(new Color(220, 228, 240));
+        g.setStroke(new BasicStroke(1f));
+        g.drawRoundRect(x + 24, y - 28, Math.max(220, width - x - 80), 28, 8, 8);
+
+        g.setColor(new Color(34, 41, 57));
+        g.setFont(new Font("SansSerif", Font.PLAIN, 16));
+        String content = line.content();
+        if (content.length() > contentMaxChars) {
+          content = content.substring(0, contentMaxChars - 3) + "...";
+        }
+        g.drawString(content, x + 32, y - 8);
+
+        y += rowHeight;
+      }
+    } finally {
+      g.dispose();
+    }
+    return image;
+  }
+
+  private byte[] toPngBytes(BufferedImage image) {
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      ImageIO.write(image, "png", out);
+      return out.toByteArray();
+    } catch (Exception ex) {
+      log.error("Failed to export mindmap PNG", ex);
+      throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+    }
+  }
+
+  private byte[] toPdfBytes(BufferedImage image) {
+    try (PDDocument document = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      float width = image.getWidth();
+      float height = image.getHeight();
+      PDPage page = new PDPage(new PDRectangle(width, height));
+      document.addPage(page);
+
+      PDImageXObject pdImage = LosslessFactory.createFromImage(document, image);
+      try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+        contentStream.drawImage(pdImage, 0, 0, width, height);
+      }
+
+      document.save(out);
+      return out.toByteArray();
+    } catch (Exception ex) {
+      log.error("Failed to export mindmap PDF", ex);
+      throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+    }
+  }
+
+  private Color parseColor(String colorHex) {
+    if (colorHex == null || colorHex.isBlank()) {
+      return new Color(76, 110, 245);
+    }
+    try {
+      return Color.decode(colorHex.trim());
+    } catch (Exception ex) {
+      return new Color(76, 110, 245);
+    }
+  }
+
+  private String sanitizeFileName(String raw) {
+    return raw.replaceAll("[^a-zA-Z0-9._-]", "_");
+  }
+
+  private String safeText(String text) {
+    if (text == null || text.isBlank()) {
+      return "(empty)";
+    }
+    return text.replaceAll("\\s+", " ").trim();
+  }
+
   /**
    * Detect all nodes that belong to parent-pointer cycles in O(n).
    */
@@ -1011,4 +1221,6 @@ public class MindmapServiceImpl implements MindmapService {
     private Integer displayOrder;
     private List<NodeStructure> children;
   }
+
+  private record ExportNodeLine(int depth, String content, String color) {}
 }

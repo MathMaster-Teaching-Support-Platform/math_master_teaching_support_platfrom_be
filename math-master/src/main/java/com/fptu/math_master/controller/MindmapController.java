@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -22,6 +23,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -217,6 +221,35 @@ public class MindmapController {
         .build();
   }
 
+  @GetMapping("/{id}/export")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Export mindmap as image or PDF",
+      description = "Teacher exports own mindmap in PNG or PDF format for download.")
+  public ResponseEntity<byte[]> exportMindmap(
+      @PathVariable UUID id,
+      @RequestParam(defaultValue = "pdf") String format) {
+    MindmapService.BinaryFileData fileData = mindmapService.exportMindmap(id, format);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(fileData.fileName()))
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+  }
+
+  @GetMapping("/public/{id}/export")
+  @Operation(
+      summary = "Export published mindmap as image or PDF",
+      description = "Public endpoint for students to download published mindmaps in PNG or PDF.")
+  public ResponseEntity<byte[]> exportPublicMindmap(
+      @PathVariable UUID id,
+      @RequestParam(defaultValue = "pdf") String format) {
+    MindmapService.BinaryFileData fileData = mindmapService.exportPublicMindmap(id, format);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(fileData.fileName()))
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+  }
+
   // Node management endpoints
 
   @PostMapping("/nodes")
@@ -272,4 +305,9 @@ public class MindmapController {
         .result(mindmapService.getNodesByMindmap(mindmapId))
         .build();
   }
+
+    private String contentDisposition(String fileName) {
+        return "attachment; filename*=UTF-8''"
+                + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+    }
 }

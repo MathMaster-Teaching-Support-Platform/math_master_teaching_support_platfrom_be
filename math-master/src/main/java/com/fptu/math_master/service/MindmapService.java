@@ -95,6 +95,10 @@ public interface MindmapService {
    */
   Page<MindmapResponse> getPublicMindmaps(UUID lessonId, String name, Pageable pageable);
 
+  BinaryFileData exportMindmap(UUID id, String format);
+
+  BinaryFileData exportPublicMindmap(UUID id, String format);
+
   /**
    * Create a node in mindmap
    *
@@ -126,4 +130,6 @@ public interface MindmapService {
    * @return list of nodes with hierarchical structure
    */
   List<MindmapNodeResponse> getNodesByMindmap(UUID mindmapId);
+
+  record BinaryFileData(byte[] content, String fileName, String contentType) {}
 }
