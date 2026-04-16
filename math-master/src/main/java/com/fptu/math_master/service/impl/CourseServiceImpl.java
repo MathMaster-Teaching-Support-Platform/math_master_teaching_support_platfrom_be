@@ -8,6 +8,7 @@ import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.Course;
@@ -32,6 +33,7 @@ import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.CourseService;
+import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -54,6 +56,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -73,9 +77,11 @@ public class CourseServiceImpl implements CourseService {
   AssessmentRepository assessmentRepository;
   AssessmentLessonRepository assessmentLessonRepository;
   LessonRepository lessonRepository;
+  UploadService uploadService;
+  MinioProperties minioProperties;
 
   @Override
-  public CourseResponse createCourse(CreateCourseRequest request) {
+  public CourseResponse createCourse(CreateCourseRequest request, MultipartFile thumbnailFile) {
     UUID teacherId = SecurityUtils.getCurrentUserId();
 
     Subject subject =
@@ -88,6 +94,8 @@ public class CourseServiceImpl implements CourseService {
             .findById(request.getSchoolGradeId())
             .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
 
+    String thumbnailUrl = resolveThumbnailForWrite(thumbnailFile);
+
     Course course =
         Course.builder()
             .teacherId(teacherId)
@@ -95,7 +103,7 @@ public class CourseServiceImpl implements CourseService {
             .schoolGradeId(request.getSchoolGradeId())
             .title(request.getTitle())
             .description(request.getDescription())
-            .thumbnailUrl(request.getThumbnailUrl())
+          .thumbnailUrl(thumbnailUrl)
             .build();
 
     course = courseRepository.save(course);
@@ -104,14 +112,18 @@ public class CourseServiceImpl implements CourseService {
   }
 
   @Override
-  public CourseResponse updateCourse(UUID courseId, UpdateCourseRequest request) {
+  public CourseResponse updateCourse(
+      UUID courseId, UpdateCourseRequest request, MultipartFile thumbnailFile) {
     UUID currentUserId = SecurityUtils.getCurrentUserId();
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
     if (request.getTitle() != null) course.setTitle(request.getTitle());
     if (request.getDescription() != null) course.setDescription(request.getDescription());
-    if (request.getThumbnailUrl() != null) course.setThumbnailUrl(request.getThumbnailUrl());
+
+    if (thumbnailFile != null && !thumbnailFile.isEmpty()) {
+      course.setThumbnailUrl(resolveThumbnailForWrite(thumbnailFile));
+    }
 
     course = courseRepository.save(course);
     return mapToResponse(course);
@@ -234,7 +246,7 @@ public class CourseServiceImpl implements CourseService {
         .gradeLevel(schoolGrade != null ? schoolGrade.getGradeLevel() : null)
         .title(course.getTitle())
         .description(course.getDescription())
-        .thumbnailUrl(course.getThumbnailUrl())
+        .thumbnailUrl(resolveThumbnailForRead(course.getThumbnailUrl()))
         .isPublished(course.isPublished())
         .rating(course.getRating())
         .studentsCount(studentsCount)
@@ -249,6 +261,30 @@ public class CourseServiceImpl implements CourseService {
     Subject subject = subjectRepository.findById(course.getSubjectId()).orElse(null);
     SchoolGrade schoolGrade = schoolGradeRepository.findById(course.getSchoolGradeId()).orElse(null);
     return mapToResponse(course, subject, schoolGrade);
+  }
+
+  private String resolveThumbnailForWrite(MultipartFile thumbnailFile) {
+    if (thumbnailFile == null || thumbnailFile.isEmpty()) {
+      return null;
+    }
+    return uploadService.uploadFile(thumbnailFile, "course-thumbnails");
+  }
+
+  private String resolveThumbnailForRead(String thumbnailUrl) {
+    if (!StringUtils.hasText(thumbnailUrl)) {
+      return null;
+    }
+
+    if (thumbnailUrl.startsWith("http://") || thumbnailUrl.startsWith("https://")) {
+      return thumbnailUrl;
+    }
+
+    try {
+      return uploadService.getPresignedUrl(thumbnailUrl, minioProperties.getTemplateBucket());
+    } catch (Exception ex) {
+      log.warn("Failed to build presigned thumbnail URL for key={}", thumbnailUrl, ex);
+      return thumbnailUrl;
+    }
   }
 
   // ─── Course Assessment Management ─────────────────────────────────────────

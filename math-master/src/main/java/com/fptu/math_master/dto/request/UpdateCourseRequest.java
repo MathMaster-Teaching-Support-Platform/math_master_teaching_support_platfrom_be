@@ -16,6 +16,4 @@ public class UpdateCourseRequest {
   private String title;
 
   private String description;
-
-  private String thumbnailUrl;
 }

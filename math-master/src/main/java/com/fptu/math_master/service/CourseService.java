@@ -12,12 +12,13 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface CourseService {
 
-  CourseResponse createCourse(CreateCourseRequest request);
+  CourseResponse createCourse(CreateCourseRequest request, MultipartFile thumbnailFile);
 
-  CourseResponse updateCourse(UUID courseId, UpdateCourseRequest request);
+  CourseResponse updateCourse(UUID courseId, UpdateCourseRequest request, MultipartFile thumbnailFile);
 
   void deleteCourse(UUID courseId);
 

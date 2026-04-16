@@ -37,6 +37,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/courses")
@@ -49,13 +52,27 @@ public class CourseController {
   CourseService courseService;
 
   @Operation(summary = "Create a new course")
-  @PostMapping
+  @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasRole('TEACHER')")
   @SecurityRequirement(name = "bearerAuth")
   public ApiResponse<CourseResponse> createCourse(@Valid @RequestBody CreateCourseRequest request) {
     log.info("POST /courses – title={}", request.getTitle());
-    return ApiResponse.<CourseResponse>builder().result(courseService.createCourse(request)).build();
+    return ApiResponse.<CourseResponse>builder().result(courseService.createCourse(request, null)).build();
+  }
+
+  @Operation(summary = "Create a new course with optional thumbnail upload")
+  @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> createCourseMultipart(
+      @Valid @RequestPart("request") CreateCourseRequest request,
+      @RequestPart(value = "thumbnail", required = false) MultipartFile thumbnailFile) {
+    log.info("POST /courses (multipart) – title={}", request.getTitle());
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.createCourse(request, thumbnailFile))
+        .build();
   }
 
   @Operation(summary = "Get my courses (teacher)")
@@ -77,14 +94,28 @@ public class CourseController {
   }
 
   @Operation(summary = "Update course")
-  @PutMapping("/{courseId}")
+  @PutMapping(value = "/{courseId}", consumes = MediaType.APPLICATION_JSON_VALUE)
   @PreAuthorize("hasRole('TEACHER')")
   @SecurityRequirement(name = "bearerAuth")
   public ApiResponse<CourseResponse> updateCourse(
       @PathVariable UUID courseId, @Valid @RequestBody UpdateCourseRequest request) {
     log.info("PUT /courses/{}", courseId);
     return ApiResponse.<CourseResponse>builder()
-        .result(courseService.updateCourse(courseId, request))
+        .result(courseService.updateCourse(courseId, request, null))
+        .build();
+  }
+
+  @Operation(summary = "Update course with optional thumbnail upload")
+  @PutMapping(value = "/{courseId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> updateCourseMultipart(
+      @PathVariable UUID courseId,
+      @Valid @RequestPart("request") UpdateCourseRequest request,
+      @RequestPart(value = "thumbnail", required = false) MultipartFile thumbnailFile) {
+    log.info("PUT /courses/{} (multipart)", courseId);
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.updateCourse(courseId, request, thumbnailFile))
         .build();
   }
 
