@@ -5,6 +5,7 @@ import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.LessonSlideConfirmContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
+import com.fptu.math_master.dto.request.LessonSlideGeneratedFileMetadataUpdateRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
 import com.fptu.math_master.dto.request.LessonSlideJsonItemRequest;
@@ -639,6 +640,31 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     validateGeneratedFileOwnerOrAdmin(generatedFile);
     generatedFile.setIsPublic(Boolean.FALSE);
     generatedFile.setPublishedAt(null);
+    return toGeneratedFileResponse(lessonSlideGeneratedFileRepository.save(generatedFile));
+  }
+
+  @Override
+  @Transactional
+  public LessonSlideGeneratedFileResponse updateGeneratedSlideMetadata(
+      UUID generatedFileId, LessonSlideGeneratedFileMetadataUpdateRequest request) {
+    validateTeacherRole();
+
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+
+    if (request.getName() != null) {
+      String normalizedName = request.getName().trim();
+      generatedFile.setName(normalizedName.isEmpty() ? null : normalizedName);
+    }
+    if (request.getThumbnail() != null) {
+      String normalizedThumbnail = request.getThumbnail().trim();
+      generatedFile.setThumbnail(normalizedThumbnail.isEmpty() ? null : normalizedThumbnail);
+    }
+
     return toGeneratedFileResponse(lessonSlideGeneratedFileRepository.save(generatedFile));
   }
 
@@ -1813,6 +1839,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             .bucketName(minioProperties.getTemplateBucket())
             .objectKey(objectKey)
             .fileName(outputName)
+        .name(lesson.getTitle())
             .contentType(PPTX_MIME)
             .fileSizeBytes((long) content.length)
             .isPublic(Boolean.FALSE)
@@ -1869,6 +1896,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
           .id(file.getId())
           .lessonId(file.getLessonId())
           .templateId(file.getTemplateId())
+          .name(file.getName())
+          .thumbnail(file.getThumbnail())
           .fileName(file.getFileName())
           .contentType(file.getContentType())
           .fileSizeBytes(file.getFileSizeBytes())

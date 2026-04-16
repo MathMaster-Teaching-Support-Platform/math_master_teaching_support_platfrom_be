@@ -2,6 +2,7 @@ package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.LessonSlideConfirmContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
+import com.fptu.math_master.dto.request.LessonSlideGeneratedFileMetadataUpdateRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -243,6 +244,17 @@ public class LessonSlideController {
     return ApiResponse.<LessonSlideGeneratedFileResponse>builder()
         .message("Generated slide moved back to private")
         .result(lessonSlideService.unpublishGeneratedSlide(generatedFileId))
+        .build();
+  }
+
+  @PatchMapping("/generated/{generatedFileId}/metadata")
+  @Operation(summary = "Update generated slide metadata (name, thumbnail)")
+  public ApiResponse<LessonSlideGeneratedFileResponse> updateGeneratedSlideMetadata(
+      @PathVariable UUID generatedFileId,
+      @Valid @RequestBody LessonSlideGeneratedFileMetadataUpdateRequest request) {
+    return ApiResponse.<LessonSlideGeneratedFileResponse>builder()
+        .message("Generated slide metadata updated successfully")
+        .result(lessonSlideService.updateGeneratedSlideMetadata(generatedFileId, request))
         .build();
   }
 

@@ -52,7 +52,8 @@ public interface LessonSlideGeneratedFileRepository extends JpaRepository<Lesson
               + "WHERE f.isPublic = true AND f.deletedAt IS NULL "
               + "AND (:lessonId IS NULL OR f.lessonId = :lessonId) "
               + "AND (:keyword IS NULL OR :keyword = '' "
-              + "     OR LOWER(f.fileName) LIKE LOWER(CONCAT('%', :keyword, '%'))) ")
+              + "     OR LOWER(f.fileName) LIKE LOWER(CONCAT('%', :keyword, '%')) "
+              + "     OR LOWER(COALESCE(f.name, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))")
       Page<LessonSlideGeneratedFile> findAllPublicWithFilters(
           @Param("lessonId") UUID lessonId, @Param("keyword") String keyword, Pageable pageable);
 }
