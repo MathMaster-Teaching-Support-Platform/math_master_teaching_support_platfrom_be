@@ -45,7 +45,7 @@ public class UserSubscriptionServiceImpl implements UserSubscriptionService {
     UUID userId = SecurityUtils.getCurrentUserId();
     UserSubscription subscription = findLatestActiveSubscription(userId, false);
     if (subscription == null) {
-      throw new AppException(ErrorCode.NO_ACTIVE_SUBSCRIPTION);
+      return null;
     }
     return toResponse(subscription);
   }
