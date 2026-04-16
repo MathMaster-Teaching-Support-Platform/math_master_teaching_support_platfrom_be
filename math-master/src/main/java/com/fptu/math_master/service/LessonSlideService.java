@@ -2,7 +2,6 @@ package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.LessonSlideConfirmContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
-import com.fptu.math_master.dto.request.LessonSlideGeneratedFileMetadataUpdateRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
 import com.fptu.math_master.dto.response.LessonSlideGeneratedFileResponse;
@@ -67,7 +66,9 @@ public interface LessonSlideService {
     LessonSlideGeneratedFileResponse unpublishGeneratedSlide(UUID generatedFileId);
 
     LessonSlideGeneratedFileResponse updateGeneratedSlideMetadata(
-      UUID generatedFileId, LessonSlideGeneratedFileMetadataUpdateRequest request);
+      UUID generatedFileId, String name, MultipartFile thumbnailFile);
+
+    BinaryFileData getGeneratedSlideThumbnailImage(UUID generatedFileId);
 
     Page<LessonSlideGeneratedFileResponse> getAllPublicGeneratedSlides(
       UUID lessonId, String keyword, Pageable pageable);
@@ -80,6 +81,8 @@ public interface LessonSlideService {
     BinaryFileData getPublicGeneratedSlidePreviewPdf(UUID generatedFileId);
 
     String getPublicGeneratedSlidePreviewUrl(UUID generatedFileId);
+
+    BinaryFileData getPublicGeneratedSlideThumbnailImage(UUID generatedFileId);
 
   record BinaryFileData(byte[] content, String fileName, String contentType) {}
 }

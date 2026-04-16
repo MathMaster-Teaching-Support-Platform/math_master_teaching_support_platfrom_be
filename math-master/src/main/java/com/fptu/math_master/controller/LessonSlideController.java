@@ -2,7 +2,6 @@ package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.LessonSlideConfirmContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
-import com.fptu.math_master.dto.request.LessonSlideGeneratedFileMetadataUpdateRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -247,15 +246,26 @@ public class LessonSlideController {
         .build();
   }
 
-  @PatchMapping("/generated/{generatedFileId}/metadata")
-  @Operation(summary = "Update generated slide metadata (name, thumbnail)")
+  @PatchMapping(value = "/generated/{generatedFileId}/metadata", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @Operation(summary = "Update generated slide metadata (name, thumbnail file)")
   public ApiResponse<LessonSlideGeneratedFileResponse> updateGeneratedSlideMetadata(
       @PathVariable UUID generatedFileId,
-      @Valid @RequestBody LessonSlideGeneratedFileMetadataUpdateRequest request) {
+      @RequestParam(value = "name", required = false) String name,
+      @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail) {
     return ApiResponse.<LessonSlideGeneratedFileResponse>builder()
         .message("Generated slide metadata updated successfully")
-        .result(lessonSlideService.updateGeneratedSlideMetadata(generatedFileId, request))
+        .result(lessonSlideService.updateGeneratedSlideMetadata(generatedFileId, name, thumbnail))
         .build();
+  }
+
+  @GetMapping("/generated/{generatedFileId}/thumbnail-image")
+  @Operation(summary = "Get generated slide thumbnail image")
+  public ResponseEntity<byte[]> getGeneratedSlideThumbnailImage(@PathVariable UUID generatedFileId) {
+    LessonSlideService.BinaryFileData fileData =
+        lessonSlideService.getGeneratedSlideThumbnailImage(generatedFileId);
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
   }
 
   private String contentDisposition(String fileName) {

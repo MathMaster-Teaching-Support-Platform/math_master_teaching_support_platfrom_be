@@ -122,6 +122,18 @@ public class LessonSlidePublicController {
         .build();
   }
 
+  @GetMapping("/generated/{generatedFileId}/thumbnail-image")
+  @Operation(
+      summary = "Get thumbnail image of a published generated slide",
+      description = "Public endpoint for students to view generated slide thumbnail image.")
+  public ResponseEntity<byte[]> getPublicGeneratedSlideThumbnailImage(@PathVariable UUID generatedFileId) {
+    LessonSlideService.BinaryFileData fileData =
+        lessonSlideService.getPublicGeneratedSlideThumbnailImage(generatedFileId);
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+  }
+
   private String contentDisposition(String fileName) {
     return "attachment; filename*=UTF-8''"
         + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");

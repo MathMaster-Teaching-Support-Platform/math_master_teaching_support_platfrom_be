@@ -5,7 +5,6 @@ import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.LessonSlideConfirmContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
-import com.fptu.math_master.dto.request.LessonSlideGeneratedFileMetadataUpdateRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
 import com.fptu.math_master.dto.request.LessonSlideJsonItemRequest;
@@ -646,7 +645,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   @Override
   @Transactional
   public LessonSlideGeneratedFileResponse updateGeneratedSlideMetadata(
-      UUID generatedFileId, LessonSlideGeneratedFileMetadataUpdateRequest request) {
+      UUID generatedFileId, String name, MultipartFile thumbnailFile) {
     validateTeacherRole();
 
     LessonSlideGeneratedFile generatedFile =
@@ -656,16 +655,55 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
     validateGeneratedFileOwnerOrAdmin(generatedFile);
 
-    if (request.getName() != null) {
-      String normalizedName = request.getName().trim();
+    if (name != null) {
+      String normalizedName = name.trim();
       generatedFile.setName(normalizedName.isEmpty() ? null : normalizedName);
     }
-    if (request.getThumbnail() != null) {
-      String normalizedThumbnail = request.getThumbnail().trim();
-      generatedFile.setThumbnail(normalizedThumbnail.isEmpty() ? null : normalizedThumbnail);
+    if (thumbnailFile != null && !thumbnailFile.isEmpty()) {
+      validatePreviewImage(thumbnailFile);
+      ensureTemplateBucketExists();
+
+      String thumbnailObjectKey = buildGeneratedSlideThumbnailObjectKey(thumbnailFile.getOriginalFilename());
+      String thumbnailContentType = resolvePreviewImageContentType(thumbnailFile);
+
+      try {
+        minioClient.putObject(
+            PutObjectArgs.builder()
+                .bucket(minioProperties.getTemplateBucket())
+                .object(thumbnailObjectKey)
+                .contentType(thumbnailContentType)
+                .stream(thumbnailFile.getInputStream(), thumbnailFile.getSize(), -1)
+                .build());
+      } catch (Exception ex) {
+        log.error("Failed to upload generated slide thumbnail", ex);
+        throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+      }
+
+      generatedFile.setThumbnail(thumbnailObjectKey);
     }
 
     return toGeneratedFileResponse(lessonSlideGeneratedFileRepository.save(generatedFile));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BinaryFileData getGeneratedSlideThumbnailImage(UUID generatedFileId) {
+    validateTeacherRole();
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+    if (generatedFile.getThumbnail() == null || generatedFile.getThumbnail().isBlank()) {
+      throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+    }
+
+    byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getThumbnail());
+    return new BinaryFileData(
+        content,
+        "generated-slide-thumbnail",
+        resolveImageContentTypeFromObjectKey(generatedFile.getThumbnail()));
   }
 
   @Override
@@ -737,6 +775,29 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
 
     return uploadService.getPresignedUrl(generatedFile.getObjectKey(), generatedFile.getBucketName());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BinaryFileData getPublicGeneratedSlideThumbnailImage(UUID generatedFileId) {
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findPublicById(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    lessonRepository
+        .findByIdAndNotDeleted(generatedFile.getLessonId())
+        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    if (generatedFile.getThumbnail() == null || generatedFile.getThumbnail().isBlank()) {
+      throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+    }
+
+    byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getThumbnail());
+    return new BinaryFileData(
+        content,
+        "generated-slide-thumbnail",
+        resolveImageContentTypeFromObjectKey(generatedFile.getThumbnail()));
   }
 
   private byte[] injectTemplate(byte[] templateBytes, DeckSections deckSections) {
@@ -1806,6 +1867,34 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     return sanitized + "-slides.pptx";
   }
 
+  private String buildGeneratedSlideThumbnailObjectKey(String originalFileName) {
+    String normalized =
+        originalFileName == null
+            ? "thumbnail.png"
+            : Normalizer.normalize(originalFileName, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+    String sanitized = NON_ALNUM.matcher(normalized).replaceAll("_");
+    return "generated-slide-thumbnails/"
+        + UUID.randomUUID()
+        + "/"
+        + System.currentTimeMillis()
+        + "-"
+        + sanitized;
+  }
+
+  private String resolveImageContentTypeFromObjectKey(String objectKey) {
+    if (objectKey == null) {
+      return PNG_MIME;
+    }
+    String lower = objectKey.toLowerCase();
+    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+      return JPG_MIME;
+    }
+    if (lower.endsWith(".webp")) {
+      return WEBP_MIME;
+    }
+    return PNG_MIME;
+  }
+
   private void persistGeneratedSlideFile(
       Lesson lesson, SlideTemplate template, byte[] content, String outputName) {
     ensureTemplateBucketExists();
@@ -1897,7 +1986,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
           .lessonId(file.getLessonId())
           .templateId(file.getTemplateId())
           .name(file.getName())
-          .thumbnail(file.getThumbnail())
+          .thumbnail(buildGeneratedSlideThumbnailPath(file))
           .fileName(file.getFileName())
           .contentType(file.getContentType())
           .fileSizeBytes(file.getFileSizeBytes())
@@ -1907,6 +1996,16 @@ public class LessonSlideServiceImpl implements LessonSlideService {
           .updatedAt(file.getUpdatedAt())
           .build();
         }
+
+  private String buildGeneratedSlideThumbnailPath(LessonSlideGeneratedFile file) {
+    if (file.getThumbnail() == null || file.getThumbnail().isBlank()) {
+      return null;
+    }
+    if (Boolean.TRUE.equals(file.getIsPublic())) {
+      return "/lesson-slides/public/generated/" + file.getId() + "/thumbnail-image";
+    }
+    return "/lesson-slides/generated/" + file.getId() + "/thumbnail-image";
+  }
 
   private String buildPreviewImagePath(SlideTemplate template) {
     if (template.getPreviewImageObjectKey() == null || template.getPreviewImageObjectKey().isBlank()) {
