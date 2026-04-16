@@ -333,7 +333,7 @@ public class CourseServiceImpl implements CourseService {
             }
           }
           
-          if (isRequired != null && response.getIsRequired() != isRequired) {
+          if (isRequired != null && response.isRequired() != isRequired) {
             return false;
           }
           
