@@ -9,12 +9,14 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.fptu.math_master.entity.Transaction;
 import com.fptu.math_master.enums.TransactionStatus;
+import com.fptu.math_master.enums.TransactionType;
 
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
@@ -77,4 +79,18 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
   List<Object[]> sumRevenueByMonth(@Param("year") int year);
 
   long countByCreatedAtBetween(Instant from, Instant to);
+
+  /** Total deposited (SUCCESS deposits) for a wallet */
+  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t WHERE t.wallet.id = :walletId AND t.type = :type AND t.status = :status")
+  BigDecimal sumByWalletIdAndTypeAndStatus(
+      @Param("walletId") UUID walletId,
+      @Param("type") TransactionType type,
+      @Param("status") TransactionStatus status);
+
+  /** Total transaction count for a wallet */
+  long countByWalletId(UUID walletId);
+
+  /** Find PENDING transactions whose expiresAt is in the past */
+  @Query("SELECT t FROM Transaction t WHERE t.status = 'PENDING' AND t.expiresAt IS NOT NULL AND t.expiresAt < :now")
+  List<Transaction> findExpiredPendingTransactions(@Param("now") Instant now);
 }

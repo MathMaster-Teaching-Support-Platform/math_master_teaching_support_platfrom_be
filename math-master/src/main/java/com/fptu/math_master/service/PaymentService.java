@@ -1,11 +1,37 @@
 package com.fptu.math_master.service;
 
+import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestTemplate;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.configuration.properties.PayOSProperties;
 import com.fptu.math_master.dto.request.DepositRequest;
 import com.fptu.math_master.dto.request.PayOSWebhookRequest;
 import com.fptu.math_master.dto.response.PayOSCreatePaymentResponse;
 import com.fptu.math_master.dto.response.PaymentLinkResponse;
+import com.fptu.math_master.dto.response.TransactionResponse;
 import com.fptu.math_master.entity.Transaction;
 import com.fptu.math_master.entity.Wallet;
 import com.fptu.math_master.enums.TransactionStatus;
@@ -14,25 +40,11 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.TransactionRepository;
 import com.fptu.math_master.repository.WalletRepository;
-import java.nio.charset.StandardCharsets;
-import java.text.Normalizer;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.UUID;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.*;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.HttpStatusCodeException;
-import org.springframework.web.client.RestTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -82,6 +94,7 @@ public class PaymentService {
               .status(TransactionStatus.PENDING)
               .description(
                   request.getDescription() != null ? request.getDescription() : "Nạp tiền vào ví")
+              .expiresAt(Instant.now().plusSeconds(15 * 60))
               .build();
 
       transaction = transactionRepository.save(transaction);
@@ -369,6 +382,40 @@ public class PaymentService {
     }
 
     return normalized;
+  }
+
+  public TransactionResponse getOrderStatus(Long orderCode, UUID userId) {
+    log.info("Getting order status for orderCode: {}, userId: {}", orderCode, userId);
+
+    Transaction transaction =
+        transactionRepository
+            .findByOrderCode(orderCode)
+            .orElseThrow(() -> new AppException(ErrorCode.TRANSACTION_NOT_FOUND));
+
+    // Ensure the transaction belongs to the requesting user
+    if (!transaction.getWallet().getUser().getId().equals(userId)) {
+      throw new AppException(ErrorCode.UNAUTHORIZED);
+    }
+
+    return mapToTransactionResponse(transaction);
+  }
+
+  private TransactionResponse mapToTransactionResponse(Transaction transaction) {
+    return com.fptu.math_master.dto.response.TransactionResponse.builder()
+        .transactionId(transaction.getId())
+        .walletId(transaction.getWallet().getId())
+        .orderCode(transaction.getOrderCode())
+        .amount(transaction.getAmount())
+        .type(transaction.getType())
+        .status(transaction.getStatus())
+        .description(transaction.getDescription())
+        .paymentLinkId(transaction.getPaymentLinkId())
+        .referenceCode(transaction.getReferenceCode())
+        .transactionDate(transaction.getTransactionDate())
+        .expiresAt(transaction.getExpiresAt())
+        .createdAt(transaction.getCreatedAt())
+        .updatedAt(transaction.getUpdatedAt())
+        .build();
   }
 
   private boolean verifyWebhookSignature(PayOSWebhookRequest webhookRequest) {
