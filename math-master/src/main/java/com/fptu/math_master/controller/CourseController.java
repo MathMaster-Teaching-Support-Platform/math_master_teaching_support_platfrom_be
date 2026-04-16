@@ -152,12 +152,15 @@ public class CourseController {
         .build();
   }
 
-  @Operation(summary = "Get all assessments in a course")
+  @Operation(summary = "Get all assessments in a course with optional filtering")
   @GetMapping("/{courseId}/assessments")
   public ApiResponse<List<CourseAssessmentResponse>> getCourseAssessments(
-      @PathVariable UUID courseId) {
+      @PathVariable UUID courseId,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String type,
+      @RequestParam(required = false) Boolean isRequired) {
     return ApiResponse.<List<CourseAssessmentResponse>>builder()
-        .result(courseService.getCourseAssessments(courseId))
+        .result(courseService.getCourseAssessments(courseId, status, type, isRequired))
         .build();
   }
 
