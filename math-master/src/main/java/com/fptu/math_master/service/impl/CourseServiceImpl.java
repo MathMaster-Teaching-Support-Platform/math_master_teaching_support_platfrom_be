@@ -260,6 +260,17 @@ public class CourseServiceImpl implements CourseService {
       throw new AppException(ErrorCode.ASSESSMENT_ALREADY_IN_COURSE);
     }
 
+    // Validate assessment status - only PUBLISHED assessments can be added to courses
+    if (assessment.getStatus() != com.fptu.math_master.enums.AssessmentStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_PUBLISHED);
+    }
+
+    // Validate assessment has questions
+    Long questionCount = assessmentRepository.countQuestionsByAssessmentId(assessment.getId());
+    if (questionCount == null || questionCount == 0) {
+      throw new AppException(ErrorCode.ASSESSMENT_NO_QUESTIONS);
+    }
+
     CourseAssessment courseAssessment =
         CourseAssessment.builder()
             .courseId(courseId)
@@ -280,7 +291,7 @@ public class CourseServiceImpl implements CourseService {
 
   @Override
   @Transactional(readOnly = true)
-  public List<CourseAssessmentResponse> getCourseAssessments(UUID courseId) {
+  public List<CourseAssessmentResponse> getCourseAssessments(UUID courseId, String status, String type, Boolean isRequired) {
     Course course = findCourseOrThrow(courseId);
     List<CourseAssessment> courseAssessments =
         courseAssessmentRepository.findByCourseIdAndNotDeleted(courseId);
@@ -294,6 +305,40 @@ public class CourseServiceImpl implements CourseService {
                       .orElse(null);
               return mapToCourseAssessmentResponse(ca, assessment);
             })
+        .filter(response -> {
+          // Apply filters
+          if (status != null && response.getAssessmentStatus() != null) {
+            try {
+              com.fptu.math_master.enums.AssessmentStatus statusEnum = 
+                  com.fptu.math_master.enums.AssessmentStatus.valueOf(status.toUpperCase());
+              if (!response.getAssessmentStatus().equals(statusEnum)) {
+                return false;
+              }
+            } catch (IllegalArgumentException e) {
+              // Invalid status, skip this filter
+              log.warn("Invalid assessment status filter: {}", status);
+            }
+          }
+          
+          if (type != null && response.getAssessmentType() != null) {
+            try {
+              com.fptu.math_master.enums.AssessmentType typeEnum = 
+                  com.fptu.math_master.enums.AssessmentType.valueOf(type.toUpperCase());
+              if (!response.getAssessmentType().equals(typeEnum)) {
+                return false;
+              }
+            } catch (IllegalArgumentException e) {
+              // Invalid type, skip this filter
+              log.warn("Invalid assessment type filter: {}", type);
+            }
+          }
+          
+          if (isRequired != null && response.isRequired() != isRequired) {
+            return false;
+          }
+          
+          return true;
+        })
         .collect(Collectors.toList());
   }
 
@@ -334,6 +379,17 @@ public class CourseServiceImpl implements CourseService {
         courseAssessmentRepository
             .findByCourseIdAndAssessmentIdAndNotDeleted(courseId, assessmentId)
             .orElseThrow(() -> new AppException(ErrorCode.COURSE_ASSESSMENT_NOT_FOUND));
+
+    // Check if assessment has submissions from students
+    Long submissionCount = assessmentRepository.countSubmissionsByAssessmentId(assessmentId);
+    if (submissionCount != null && submissionCount > 0) {
+      log.warn(
+          "Attempting to remove assessment {} with {} submissions from course {}",
+          assessmentId,
+          submissionCount,
+          courseId);
+      throw new AppException(ErrorCode.ASSESSMENT_HAS_SUBMISSIONS);
+    }
 
     courseAssessment.setDeletedAt(Instant.now());
     courseAssessment.setDeletedBy(currentUserId);

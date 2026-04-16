@@ -42,11 +42,14 @@ public interface CourseService {
   CourseAssessmentResponse addAssessmentToCourse(UUID courseId, AddAssessmentToCourseRequest request);
 
   /**
-   * Get all assessments in a course
+   * Get all assessments in a course with optional filtering
    * @param courseId Course ID
+   * @param status Filter by assessment status (DRAFT, PUBLISHED, CLOSED)
+   * @param type Filter by assessment type (QUIZ, TEST, EXAM, HOMEWORK)
+   * @param isRequired Filter by required flag
    * @return List of assessments ordered by orderIndex
    */
-  List<CourseAssessmentResponse> getCourseAssessments(UUID courseId);
+  List<CourseAssessmentResponse> getCourseAssessments(UUID courseId, String status, String type, Boolean isRequired);
 
   /**
    * Update course assessment settings (order, required flag)
