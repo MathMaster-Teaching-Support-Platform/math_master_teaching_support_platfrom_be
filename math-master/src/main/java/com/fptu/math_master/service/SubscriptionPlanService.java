@@ -15,6 +15,8 @@ import com.fptu.math_master.enums.UserSubscriptionStatus;
 
 public interface SubscriptionPlanService {
 
+  List<SubscriptionPlanResponse> getPublicPurchasablePlans();
+
   List<SubscriptionPlanResponse> getAllPlans();
 
   SubscriptionPlanResponse createPlan(CreateSubscriptionPlanRequest request);

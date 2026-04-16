@@ -47,6 +47,14 @@ public class SubscriptionPlanServiceImpl implements SubscriptionPlanService {
 
   @Override
   @Transactional(readOnly = true)
+  public List<SubscriptionPlanResponse> getPublicPurchasablePlans() {
+    return planRepository.findPublicPurchasablePlans().stream()
+        .map(plan -> toResponse(plan, 0L, 0L, 0.0))
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<SubscriptionPlanResponse> getAllPlans() {
     List<SubscriptionPlan> plans = planRepository.findAllActive();
     YearMonth current = YearMonth.now(ZoneOffset.UTC);

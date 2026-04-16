@@ -2,13 +2,16 @@ package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.service.GeminiService;
+import com.fptu.math_master.service.UserSubscriptionService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.security.PermitAll;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 public class GeminiController {
 
   GeminiService geminiService;
+  UserSubscriptionService userSubscriptionService;
 
   @GetMapping("/test")
   @PermitAll
@@ -44,6 +48,8 @@ public class GeminiController {
   }
 
   @PostMapping("/chat")
+  @SecurityRequirement(name = "bearerAuth")
+  @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
   @Operation(
       summary = "Send message to Gemini",
       description = "Send a text prompt to Gemini and get a response")
@@ -51,6 +57,7 @@ public class GeminiController {
     log.info("Received chat request");
 
     try {
+      userSubscriptionService.consumeMyTokens(1, "CHAT");
       String response = geminiService.sendMessage(request.getMessage());
       return ApiResponse.<String>builder().result(response).build();
     } catch (Exception e) {

@@ -42,7 +42,6 @@ public class SecurityConfig {
     "/api/auth/forgot-password",
     "/api/auth/reset-password",
     "/api/payment/webhook",
-    "/api/ai/chat",
     "/api/question-templates/import-from-file",
   };
 

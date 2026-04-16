@@ -2,10 +2,13 @@ package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.MySubscriptionResponse;
+import com.fptu.math_master.dto.response.SubscriptionPlanResponse;
+import com.fptu.math_master.service.SubscriptionPlanService;
 import com.fptu.math_master.service.UserSubscriptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,6 +26,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class SubscriptionController {
 
   private final UserSubscriptionService userSubscriptionService;
+  private final SubscriptionPlanService subscriptionPlanService;
+
+  @GetMapping("/plans")
+  @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
+  @Operation(summary = "Get public purchasable plans")
+  public ApiResponse<List<SubscriptionPlanResponse>> getPublicPurchasablePlans() {
+    return ApiResponse.<List<SubscriptionPlanResponse>>builder()
+        .result(subscriptionPlanService.getPublicPurchasablePlans())
+        .build();
+  }
 
   @GetMapping("/me")
   @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
