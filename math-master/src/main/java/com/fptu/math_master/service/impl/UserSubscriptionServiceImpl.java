@@ -1,5 +1,14 @@
 package com.fptu.math_master.service.impl;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fptu.math_master.dto.response.MySubscriptionResponse;
 import com.fptu.math_master.entity.SubscriptionPlan;
 import com.fptu.math_master.entity.Transaction;
@@ -18,15 +27,9 @@ import com.fptu.math_master.repository.WalletRepository;
 import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.service.WalletService;
 import com.fptu.math_master.util.SecurityUtils;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.UUID;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -45,7 +48,7 @@ public class UserSubscriptionServiceImpl implements UserSubscriptionService {
     UUID userId = SecurityUtils.getCurrentUserId();
     UserSubscription subscription = findLatestActiveSubscription(userId, false);
     if (subscription == null) {
-      throw new AppException(ErrorCode.NO_ACTIVE_SUBSCRIPTION);
+      return null;
     }
     return toResponse(subscription);
   }
