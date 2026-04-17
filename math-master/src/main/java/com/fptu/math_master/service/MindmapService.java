@@ -37,6 +37,8 @@ public interface MindmapService {
    */
   MindmapDetailResponse getMindmapById(UUID id);
 
+  MindmapDetailResponse getPublicMindmapById(UUID id);
+
   /**
    * Update mindmap
    *
@@ -88,6 +90,18 @@ public interface MindmapService {
   Page<MindmapResponse> getMindmapsByLesson(UUID lessonId, Pageable pageable);
 
   /**
+   * Get all public (published) mindmaps.
+   *
+   * @param pageable pagination
+   * @return page of public mindmaps
+   */
+  Page<MindmapResponse> getPublicMindmaps(UUID lessonId, String name, Pageable pageable);
+
+  BinaryFileData exportMindmap(UUID id, String format);
+
+  BinaryFileData exportPublicMindmap(UUID id, String format);
+
+  /**
    * Create a node in mindmap
    *
    * @param request node creation request
@@ -118,4 +132,8 @@ public interface MindmapService {
    * @return list of nodes with hierarchical structure
    */
   List<MindmapNodeResponse> getNodesByMindmap(UUID mindmapId);
+
+  List<MindmapNodeResponse> getPublicNodesByMindmap(UUID mindmapId);
+
+  record BinaryFileData(byte[] content, String fileName, String contentType) {}
 }

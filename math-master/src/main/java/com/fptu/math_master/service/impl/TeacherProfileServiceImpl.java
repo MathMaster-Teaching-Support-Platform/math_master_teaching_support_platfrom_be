@@ -45,6 +45,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   MinioProperties minioProperties;
   com.fptu.math_master.service.EmailService emailService;
   StreamPublisher streamPublisher;
+  com.fptu.math_master.service.async.OcrJobProducer ocrJobProducer; // Add OCR job producer
 
   @Override
   @Transactional
@@ -71,6 +72,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     TeacherProfile profile =
         TeacherProfile.builder()
             .user(user)
+            .fullName(request.getFullName()) // Use fullName from request for OCR verification
             .schoolName(request.getSchoolName())
             .schoolAddress(request.getSchoolAddress())
             .schoolWebsite(request.getSchoolWebsite())
@@ -79,19 +81,26 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
             .verificationDocumentPath(documentUrl)
             .description(request.getDescription())
             .status(ProfileStatus.PENDING)
-            // Copy personal info from User account (from Google registration)
-            .fullName(user.getFullName())
             .build();
 
     profile = teacherProfileRepository.save(profile);
     log.info("Teacher profile submitted successfully for user {} with document: {}", userId, documentUrl);
+
+    // AUTO-TRIGGER OCR verification job
+    try {
+      String jobId = ocrJobProducer.createOcrJob(profile.getId(), userId);
+      log.info("Auto-triggered OCR verification job {} for profile {}", jobId, profile.getId());
+    } catch (Exception e) {
+      log.error("Failed to auto-trigger OCR job for profile {}", profile.getId(), e);
+      // Don't fail the submission if OCR job creation fails
+    }
 
     return mapToResponse(profile);
   }
 
   @Override
   @Transactional
-  public TeacherProfileResponse updateProfile(TeacherProfileRequest request, UUID userId) {
+  public TeacherProfileResponse updateProfile(TeacherProfileRequest request, java.util.List<MultipartFile> files, UUID userId) {
     log.info("User {} updating teacher profile", userId);
 
     TeacherProfile profile =
@@ -104,7 +113,15 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
       throw new AppException(ErrorCode.PROFILE_CANNOT_BE_MODIFIED);
     }
 
+    if (files != null && !files.isEmpty()) {
+      // Save physical files as a zip
+      String documentUrl = uploadService.uploadFilesAsZip(files, "verification", "verification_docs");
+      profile.setVerificationDocumentKey(documentUrl);
+      profile.setVerificationDocumentPath(documentUrl);
+    }
+
     // Update profile fields
+    profile.setFullName(request.getFullName()); // Update fullName for OCR verification
     profile.setSchoolName(request.getSchoolName());
     profile.setSchoolAddress(request.getSchoolAddress());
     profile.setSchoolWebsite(request.getSchoolWebsite());
@@ -117,10 +134,21 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
       profile.setAdminComment(null);
       profile.setReviewedBy(null);
       profile.setReviewedAt(null);
+      profile.setOcrVerified(false); // Reset OCR status to force re-scan
     }
 
     profile = teacherProfileRepository.save(profile);
     log.info("Teacher profile updated successfully for user {}", userId);
+
+    // AUTO-TRIGGER OCR verification job if profile was rejected and now updated
+    if (profile.getStatus() == ProfileStatus.PENDING && !profile.getOcrVerified()) {
+      try {
+        String jobId = ocrJobProducer.createOcrJob(profile.getId(), userId);
+        log.info("Auto-triggered OCR verification job {} for updated profile {}", jobId, profile.getId());
+      } catch (Exception e) {
+        log.error("Failed to auto-trigger OCR job for updated profile {}", profile.getId(), e);
+      }
+    }
 
     return mapToResponse(profile);
   }
@@ -272,13 +300,28 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
         profile.getVerificationDocumentKey(), minioProperties.getVerificationBucket());
   }
 
+  @Override
+  public byte[] downloadVerificationDocument(UUID profileId) {
+    TeacherProfile profile =
+        teacherProfileRepository
+            .findById(profileId)
+            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+
+    if (profile.getVerificationDocumentKey() == null) {
+      throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
+    }
+
+    return uploadService.downloadFile(
+        profile.getVerificationDocumentKey(), minioProperties.getVerificationBucket());
+  }
+
   private TeacherProfileResponse mapToResponse(TeacherProfile profile) {
     TeacherProfileResponse response =
         TeacherProfileResponse.builder()
             .id(profile.getId())
             .userId(profile.getUser().getId())
             .userName(profile.getUser().getUserName())
-            .fullName(profile.getUser().getFullName())
+            .fullName(profile.getFullName()) // Use fullName from profile (for OCR verification)
             .schoolName(profile.getSchoolName())
             .schoolAddress(profile.getSchoolAddress())
             .schoolWebsite(profile.getSchoolWebsite())

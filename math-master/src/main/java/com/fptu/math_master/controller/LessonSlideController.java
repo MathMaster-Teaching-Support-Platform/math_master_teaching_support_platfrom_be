@@ -5,9 +5,11 @@ import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.LessonSlideGeneratedFileResponse;
 import com.fptu.math_master.dto.response.LessonResponse;
 import com.fptu.math_master.dto.response.LessonSlideGeneratedContentResponse;
 import com.fptu.math_master.dto.response.SlideTemplateResponse;
+import com.fptu.math_master.enums.LessonStatus;
 import com.fptu.math_master.service.LessonSlideService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -25,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -65,6 +68,41 @@ public class LessonSlideController {
     return ApiResponse.<LessonResponse>builder()
         .message("Lesson content confirmed")
         .result(lessonSlideService.confirmLessonContent(lessonId, request))
+        .build();
+  }
+
+  @GetMapping("/lessons/{lessonId}")
+  @Operation(summary = "Get lesson slide draft/detail for teacher")
+  public ApiResponse<LessonResponse> getLessonSlide(@PathVariable UUID lessonId) {
+    return ApiResponse.<LessonResponse>builder()
+        .result(lessonSlideService.getLessonSlide(lessonId))
+        .build();
+  }
+
+  @GetMapping("/lessons")
+  @Operation(summary = "List lesson slides by status")
+  public ApiResponse<List<LessonResponse>> getLessonSlides(
+      @RequestParam(value = "status", defaultValue = "DRAFT") LessonStatus status) {
+    return ApiResponse.<List<LessonResponse>>builder()
+        .result(lessonSlideService.getLessonSlides(status))
+        .build();
+  }
+
+  @PatchMapping("/lessons/{lessonId}/publish")
+  @Operation(summary = "Publish lesson slide")
+  public ApiResponse<LessonResponse> publishLessonSlide(@PathVariable UUID lessonId) {
+    return ApiResponse.<LessonResponse>builder()
+        .message("Lesson slide published successfully")
+        .result(lessonSlideService.publishLessonSlide(lessonId))
+        .build();
+  }
+
+  @PatchMapping("/lessons/{lessonId}/unpublish")
+  @Operation(summary = "Unpublish lesson slide")
+  public ApiResponse<LessonResponse> unpublishLessonSlide(@PathVariable UUID lessonId) {
+    return ApiResponse.<LessonResponse>builder()
+        .message("Lesson slide moved back to draft")
+        .result(lessonSlideService.unpublishLessonSlide(lessonId))
         .build();
   }
 
@@ -149,8 +187,94 @@ public class LessonSlideController {
         .body(fileData.content());
   }
 
+  @GetMapping("/generated")
+  @Operation(summary = "List generated slide files of current teacher")
+  public ApiResponse<List<LessonSlideGeneratedFileResponse>> getGeneratedSlides(
+      @RequestParam(value = "lessonId", required = false) UUID lessonId) {
+    return ApiResponse.<List<LessonSlideGeneratedFileResponse>>builder()
+        .result(lessonSlideService.getMyGeneratedSlides(lessonId))
+        .build();
+  }
+
+  @GetMapping("/generated/{generatedFileId}/download")
+  @Operation(summary = "Download a previously generated slide file")
+  public ResponseEntity<byte[]> downloadGeneratedSlide(@PathVariable UUID generatedFileId) {
+    LessonSlideService.BinaryFileData fileData =
+        lessonSlideService.downloadGeneratedSlide(generatedFileId);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(fileData.fileName()))
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+  }
+
+  @GetMapping("/generated/{generatedFileId}/preview-pdf")
+  @Operation(summary = "Convert generated PPTX to PDF and preview inline")
+  public ResponseEntity<byte[]> previewGeneratedSlidePdf(@PathVariable UUID generatedFileId) {
+    LessonSlideService.BinaryFileData fileData =
+        lessonSlideService.getGeneratedSlidePreviewPdf(generatedFileId);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, inlineDisposition(fileData.fileName()))
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+  }
+
+        @GetMapping("/generated/{generatedFileId}/preview-url")
+        @Operation(summary = "Get pre-signed preview URL for a generated slide")
+        public ApiResponse<String> getGeneratedSlidePreviewUrl(@PathVariable UUID generatedFileId) {
+          return ApiResponse.<String>builder()
+          .result(lessonSlideService.getGeneratedSlidePreviewUrl(generatedFileId))
+          .build();
+        }
+
+  @PatchMapping("/generated/{generatedFileId}/publish")
+  @Operation(summary = "Publish a generated slide file for student access")
+  public ApiResponse<LessonSlideGeneratedFileResponse> publishGeneratedSlide(
+      @PathVariable UUID generatedFileId) {
+    return ApiResponse.<LessonSlideGeneratedFileResponse>builder()
+        .message("Generated slide published successfully")
+        .result(lessonSlideService.publishGeneratedSlide(generatedFileId))
+        .build();
+  }
+
+  @PatchMapping("/generated/{generatedFileId}/unpublish")
+  @Operation(summary = "Unpublish a generated slide file")
+  public ApiResponse<LessonSlideGeneratedFileResponse> unpublishGeneratedSlide(
+      @PathVariable UUID generatedFileId) {
+    return ApiResponse.<LessonSlideGeneratedFileResponse>builder()
+        .message("Generated slide moved back to private")
+        .result(lessonSlideService.unpublishGeneratedSlide(generatedFileId))
+        .build();
+  }
+
+  @PatchMapping(value = "/generated/{generatedFileId}/metadata", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @Operation(summary = "Update generated slide metadata (name, thumbnail file)")
+  public ApiResponse<LessonSlideGeneratedFileResponse> updateGeneratedSlideMetadata(
+      @PathVariable UUID generatedFileId,
+      @RequestParam(value = "name", required = false) String name,
+      @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail) {
+    return ApiResponse.<LessonSlideGeneratedFileResponse>builder()
+        .message("Generated slide metadata updated successfully")
+        .result(lessonSlideService.updateGeneratedSlideMetadata(generatedFileId, name, thumbnail))
+        .build();
+  }
+
+  @GetMapping("/generated/{generatedFileId}/thumbnail-image")
+  @Operation(summary = "Get generated slide thumbnail image")
+  public ResponseEntity<byte[]> getGeneratedSlideThumbnailImage(@PathVariable UUID generatedFileId) {
+    LessonSlideService.BinaryFileData fileData =
+        lessonSlideService.getGeneratedSlideThumbnailImage(generatedFileId);
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+  }
+
   private String contentDisposition(String fileName) {
     return "attachment; filename*=UTF-8''"
+        + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+  }
+
+  private String inlineDisposition(String fileName) {
+    return "inline; filename*=UTF-8''"
         + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
   }
 }

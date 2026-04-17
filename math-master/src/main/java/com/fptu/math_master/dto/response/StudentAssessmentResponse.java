@@ -36,4 +36,8 @@ public class StudentAssessmentResponse {
   private Boolean allowMultipleAttempts;
   private Boolean canStart;
   private String cannotStartReason;
+
+  // Course context metadata (used by course-scoped student assessment listing)
+  private Boolean isRequired;
+  private Integer courseOrderIndex;
 }

@@ -47,6 +47,14 @@ public class SubscriptionPlanServiceImpl implements SubscriptionPlanService {
 
   @Override
   @Transactional(readOnly = true)
+  public List<SubscriptionPlanResponse> getPublicPurchasablePlans() {
+    return planRepository.findPublicPurchasablePlans().stream()
+        .map(plan -> toResponse(plan, 0L, 0L, 0.0))
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<SubscriptionPlanResponse> getAllPlans() {
     List<SubscriptionPlan> plans = planRepository.findAllActive();
     YearMonth current = YearMonth.now(ZoneOffset.UTC);
@@ -87,6 +95,7 @@ public class SubscriptionPlanServiceImpl implements SubscriptionPlanService {
         .featured(request.isFeatured())
         .publicVisible(request.isPublic())
         .features(request.getFeatures())
+      .tokenQuota(request.getTokenQuota() == null ? 0 : request.getTokenQuota())
         .build();
 
     plan.setCreatedAt(Instant.now());
@@ -122,6 +131,9 @@ public class SubscriptionPlanServiceImpl implements SubscriptionPlanService {
     }
     if (request.getFeatures() != null && !request.getFeatures().isEmpty()) {
       plan.setFeatures(request.getFeatures());
+    }
+    if (request.getTokenQuota() != null) {
+      plan.setTokenQuota(request.getTokenQuota());
     }
     if (request.getFeatured() != null) {
       plan.setFeatured(request.getFeatured());
@@ -260,6 +272,8 @@ public class SubscriptionPlanServiceImpl implements SubscriptionPlanService {
           .endDate(sub.getEndDate())
           .amount(sub.getAmount())
           .currency(sub.getCurrency())
+          .tokenQuota(sub.getTokenQuota())
+          .tokenRemaining(sub.getTokenRemaining())
           .status(sub.getStatus())
           .paymentMethod(sub.getPaymentMethod())
           .createdAt(sub.getCreatedAt())
@@ -283,6 +297,7 @@ public class SubscriptionPlanServiceImpl implements SubscriptionPlanService {
         .isPublic(plan.isPublicVisible())
         .status(plan.getStatus())
         .features(plan.getFeatures())
+        .tokenQuota(plan.getTokenQuota())
         .stats(SubscriptionPlanResponse.PlanStats.builder()
             .activeUsers(activeUsers)
             .revenueThisMonth(revenueThisMonth)

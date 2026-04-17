@@ -42,7 +42,7 @@ public class GradingServiceImpl implements GradingService {
   AiReviewRepository aiReviewRepository;
 
   @Override
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  @Transactional(propagation = Propagation.REQUIRED)
   public void autoGradeSubmission(UUID submissionId) {
     log.info("Auto-grading submission: {}", submissionId);
 
@@ -57,7 +57,11 @@ public class GradingServiceImpl implements GradingService {
     }
 
     if (submission.getStatus() != SubmissionStatus.SUBMITTED) {
-      throw new AppException(ErrorCode.SUBMISSION_ALREADY_GRADED);
+      log.warn(
+          "Skipping auto-grade for submission {} because status is {} (expected SUBMITTED)",
+          submissionId,
+          submission.getStatus());
+      return;
     }
 
     List<Answer> answers = answerRepository.findBySubmissionId(submissionId);
@@ -173,26 +177,32 @@ public class GradingServiceImpl implements GradingService {
     if (question.getCorrectAnswer() == null) {
       return false;
     }
-    
-    // Try to get answer from answerData first (structured format)
-    String studentAnswer = null;
-    if (answer.getAnswerData() != null) {
-      Object selected = answer.getAnswerData().get("selected");
-      if (selected != null) {
-        studentAnswer = selected.toString();
-      }
-    }
-    
-    // Fallback to answerText (simple string format)
-    if (studentAnswer == null && answer.getAnswerText() != null) {
-      studentAnswer = answer.getAnswerText().trim();
-    }
-    
-    if (studentAnswer == null) {
+
+    String studentAnswer =
+        extractAnswerValue(
+            answer,
+            "selected",
+            "selectedOption",
+            "selectedOptionKey",
+            "option",
+            "choice",
+            "answer",
+            "value");
+    String normalizedStudent = normalizeToken(studentAnswer);
+    String normalizedCorrect = normalizeToken(question.getCorrectAnswer());
+
+    if (normalizedStudent == null || normalizedCorrect == null) {
       return false;
     }
-    
-    boolean isCorrect = studentAnswer.equals(question.getCorrectAnswer());
+
+    boolean isCorrect = normalizedStudent.equalsIgnoreCase(normalizedCorrect);
+    if (!isCorrect) {
+      log.debug(
+          "MC auto-grade mismatch for answer {}: student='{}' correct='{}'",
+          answer.getId(),
+          studentAnswer,
+          question.getCorrectAnswer());
+    }
     answer.setIsCorrect(isCorrect);
     answer.setPointsEarned(isCorrect ? effectiveMaxPoints : BigDecimal.ZERO);
     return true;
@@ -202,41 +212,125 @@ public class GradingServiceImpl implements GradingService {
     if (question.getCorrectAnswer() == null) {
       return false;
     }
-    
-    // Try to get answer from answerData first (structured format)
-    String studentAnswer = null;
-    if (answer.getAnswerData() != null) {
-      Object value = answer.getAnswerData().get("value");
-      if (value != null) {
-        studentAnswer = value.toString();
-      }
-    }
-    
-    // Fallback to answerText (simple string format)
-    if (studentAnswer == null && answer.getAnswerText() != null) {
-      studentAnswer = answer.getAnswerText().trim();
-    }
-    
-    if (studentAnswer == null) {
+
+    String studentAnswer = extractAnswerValue(answer, "value", "selected", "answer", "choice");
+    String normalizedStudent = normalizeTrueFalseToken(studentAnswer);
+    String normalizedCorrect = normalizeTrueFalseToken(question.getCorrectAnswer());
+
+    if (normalizedStudent == null || normalizedCorrect == null) {
       return false;
     }
-    
-    boolean isCorrect = studentAnswer.equalsIgnoreCase(question.getCorrectAnswer());
+
+    boolean isCorrect = normalizedStudent.equals(normalizedCorrect);
+    if (!isCorrect) {
+      log.debug(
+          "TF auto-grade mismatch for answer {}: student='{}' correct='{}'",
+          answer.getId(),
+          studentAnswer,
+          question.getCorrectAnswer());
+    }
     answer.setIsCorrect(isCorrect);
     answer.setPointsEarned(isCorrect ? effectiveMaxPoints : BigDecimal.ZERO);
     return true;
   }
 
   private boolean gradeShortAnswer(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
-    if (answer.getAnswerText() == null || question.getCorrectAnswer() == null) {
+    if (question.getCorrectAnswer() == null) {
       return false;
     }
-    String studentAnswer = answer.getAnswerText().trim().toLowerCase();
-    String correctAnswer = question.getCorrectAnswer().trim().toLowerCase();
+
+    String studentAnswer = extractAnswerValue(answer, "value", "answer", "text", "response");
+    if (studentAnswer == null) {
+      return false;
+    }
+
+    String correctAnswer = question.getCorrectAnswer();
+    studentAnswer = normalizeFreeText(studentAnswer);
+    correctAnswer = normalizeFreeText(correctAnswer);
+
     boolean isCorrect = studentAnswer.equals(correctAnswer);
+    if (!isCorrect) {
+      log.debug(
+          "Short-answer auto-grade mismatch for answer {}: student='{}' correct='{}'",
+          answer.getId(),
+          studentAnswer,
+          correctAnswer);
+    }
     answer.setIsCorrect(isCorrect);
     answer.setPointsEarned(isCorrect ? effectiveMaxPoints : BigDecimal.ZERO);
     return true;
+  }
+
+  private String extractAnswerValue(Answer answer, String... dataKeys) {
+    if (answer.getAnswerData() != null && dataKeys != null) {
+      for (String key : dataKeys) {
+        Object value = answer.getAnswerData().get(key);
+        String converted = objectToSingleValue(value);
+        if (converted != null) {
+          return converted;
+        }
+      }
+    }
+
+    return objectToSingleValue(answer.getAnswerText());
+  }
+
+  private String objectToSingleValue(Object value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value instanceof Collection<?> collection) {
+      return collection.isEmpty() ? null : objectToSingleValue(collection.iterator().next());
+    }
+
+    if (value.getClass().isArray()) {
+      int length = java.lang.reflect.Array.getLength(value);
+      return length == 0 ? null : objectToSingleValue(java.lang.reflect.Array.get(value, 0));
+    }
+
+    String text = value.toString();
+    return normalizeToken(text);
+  }
+
+  private String normalizeToken(String value) {
+    if (value == null) {
+      return null;
+    }
+
+    String normalized = value.trim();
+    if (normalized.isEmpty()) {
+      return null;
+    }
+
+    if ((normalized.startsWith("\"") && normalized.endsWith("\""))
+        || (normalized.startsWith("'") && normalized.endsWith("'"))) {
+      normalized = normalized.substring(1, normalized.length() - 1).trim();
+    }
+
+    return normalized.isEmpty() ? null : normalized;
+  }
+
+  private String normalizeFreeText(String value) {
+    String normalized = normalizeToken(value);
+    return normalized == null ? null : normalized.toLowerCase().replaceAll("\\s+", " ");
+  }
+
+  private String normalizeTrueFalseToken(String value) {
+    String normalized = normalizeToken(value);
+    if (normalized == null) {
+      return null;
+    }
+
+    String lower = normalized.toLowerCase();
+    if (lower.equals("true") || lower.equals("t") || lower.equals("1") || lower.equals("đúng")) {
+      return "true";
+    }
+    if (lower.equals("false") || lower.equals("f") || lower.equals("0") || lower.equals("sai")) {
+      return "false";
+    }
+
+    return lower;
   }
 
   @Override

@@ -189,6 +189,9 @@ public class Assessment extends BaseEntity {
   @JoinColumn(name = "exam_matrix_id", insertable = false, updatable = false)
   private ExamMatrix examMatrix;
 
+  @OneToMany(mappedBy = "assessment", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<CourseAssessment> courseAssessments;
+
   @PrePersist
   public void prePersist() {
     super.prePersist();

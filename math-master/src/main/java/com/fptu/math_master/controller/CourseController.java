@@ -1,9 +1,13 @@
 package com.fptu.math_master.controller;
 
+import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
 import com.fptu.math_master.dto.request.CreateCourseRequest;
 import com.fptu.math_master.dto.request.PublishCourseRequest;
+import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
 import com.fptu.math_master.dto.request.UpdateCourseRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
+import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
 import com.fptu.math_master.service.CourseService;
@@ -33,6 +37,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/courses")
@@ -45,13 +52,27 @@ public class CourseController {
   CourseService courseService;
 
   @Operation(summary = "Create a new course")
-  @PostMapping
+  @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasRole('TEACHER')")
   @SecurityRequirement(name = "bearerAuth")
   public ApiResponse<CourseResponse> createCourse(@Valid @RequestBody CreateCourseRequest request) {
     log.info("POST /courses – title={}", request.getTitle());
-    return ApiResponse.<CourseResponse>builder().result(courseService.createCourse(request)).build();
+    return ApiResponse.<CourseResponse>builder().result(courseService.createCourse(request, null)).build();
+  }
+
+  @Operation(summary = "Create a new course with optional thumbnail upload")
+  @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> createCourseMultipart(
+      @Valid @RequestPart("request") CreateCourseRequest request,
+      @RequestPart(value = "thumbnail", required = false) MultipartFile thumbnailFile) {
+    log.info("POST /courses (multipart) – title={}", request.getTitle());
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.createCourse(request, thumbnailFile))
+        .build();
   }
 
   @Operation(summary = "Get my courses (teacher)")
@@ -73,14 +94,28 @@ public class CourseController {
   }
 
   @Operation(summary = "Update course")
-  @PutMapping("/{courseId}")
+  @PutMapping(value = "/{courseId}", consumes = MediaType.APPLICATION_JSON_VALUE)
   @PreAuthorize("hasRole('TEACHER')")
   @SecurityRequirement(name = "bearerAuth")
   public ApiResponse<CourseResponse> updateCourse(
       @PathVariable UUID courseId, @Valid @RequestBody UpdateCourseRequest request) {
     log.info("PUT /courses/{}", courseId);
     return ApiResponse.<CourseResponse>builder()
-        .result(courseService.updateCourse(courseId, request))
+        .result(courseService.updateCourse(courseId, request, null))
+        .build();
+  }
+
+  @Operation(summary = "Update course with optional thumbnail upload")
+  @PutMapping(value = "/{courseId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> updateCourseMultipart(
+      @PathVariable UUID courseId,
+      @Valid @RequestPart("request") UpdateCourseRequest request,
+      @RequestPart(value = "thumbnail", required = false) MultipartFile thumbnailFile) {
+    log.info("PUT /courses/{} (multipart)", courseId);
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.updateCourse(courseId, request, thumbnailFile))
         .build();
   }
 
@@ -131,6 +166,73 @@ public class CourseController {
     var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
     return ApiResponse.<Page<CourseResponse>>builder()
         .result(courseService.getPublicCourses(schoolGradeId, subjectId, keyword, pageable))
+        .build();
+  }
+
+  // ─── Course Assessment Management ─────────────────────────────────────────
+
+  @Operation(summary = "Add assessment to course")
+  @PostMapping("/{courseId}/assessments")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseAssessmentResponse> addAssessmentToCourse(
+      @PathVariable UUID courseId, @Valid @RequestBody AddAssessmentToCourseRequest request) {
+    log.info("POST /courses/{}/assessments – assessmentId={}", courseId, request.getAssessmentId());
+    return ApiResponse.<CourseAssessmentResponse>builder()
+        .message("Assessment added to course successfully")
+        .result(courseService.addAssessmentToCourse(courseId, request))
+        .build();
+  }
+
+  @Operation(summary = "Get all assessments in a course with optional filtering")
+  @GetMapping("/{courseId}/assessments")
+  public ApiResponse<List<CourseAssessmentResponse>> getCourseAssessments(
+      @PathVariable UUID courseId,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String type,
+      @RequestParam(required = false) Boolean isRequired) {
+    return ApiResponse.<List<CourseAssessmentResponse>>builder()
+        .result(courseService.getCourseAssessments(courseId, status, type, isRequired))
+        .build();
+  }
+
+  @Operation(summary = "Get available assessments matched by course lessons")
+  @GetMapping("/{courseId}/assessments/available")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<List<AvailableCourseAssessmentResponse>> getAvailableAssessmentsForCourse(
+    @PathVariable UUID courseId,
+    @RequestParam(defaultValue = "false") boolean includeOutOfCourseLessons) {
+    return ApiResponse.<List<AvailableCourseAssessmentResponse>>builder()
+      .result(courseService.getAvailableAssessmentsForCourse(courseId, includeOutOfCourseLessons))
+        .build();
+  }
+
+  @Operation(summary = "Update course assessment settings")
+  @PatchMapping("/{courseId}/assessments/{assessmentId}")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseAssessmentResponse> updateCourseAssessment(
+      @PathVariable UUID courseId,
+      @PathVariable UUID assessmentId,
+      @Valid @RequestBody UpdateCourseAssessmentRequest request) {
+    log.info("PATCH /courses/{}/assessments/{}", courseId, assessmentId);
+    return ApiResponse.<CourseAssessmentResponse>builder()
+        .message("Course assessment updated successfully")
+        .result(courseService.updateCourseAssessment(courseId, assessmentId, request))
+        .build();
+  }
+
+  @Operation(summary = "Remove assessment from course")
+  @DeleteMapping("/{courseId}/assessments/{assessmentId}")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<Void> removeAssessmentFromCourse(
+      @PathVariable UUID courseId, @PathVariable UUID assessmentId) {
+    log.info("DELETE /courses/{}/assessments/{}", courseId, assessmentId);
+    courseService.removeAssessmentFromCourse(courseId, assessmentId);
+    return ApiResponse.<Void>builder()
+        .message("Assessment removed from course successfully")
         .build();
   }
 }

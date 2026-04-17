@@ -60,8 +60,32 @@ public interface MindmapRepository
       @Param("lessonId") UUID lessonId, Pageable pageable);
 
   @Query(
+      "SELECT m FROM Mindmap m "
+          + "LEFT JOIN FETCH m.teacher "
+          + "LEFT JOIN FETCH m.lesson "
+          + "WHERE m.lessonId = :lessonId AND m.status = :status AND m.deletedAt IS NULL "
+          + "ORDER BY m.createdAt DESC")
+  Page<Mindmap> findByLessonIdAndStatusWithDetailsAndNotDeleted(
+      @Param("lessonId") UUID lessonId,
+      @Param("status") MindmapStatus status,
+      Pageable pageable);
+
+  @Query(
       "SELECT m FROM Mindmap m WHERE m.status = :status AND m.deletedAt IS NULL ORDER BY m.createdAt DESC")
   Page<Mindmap> findByStatusAndNotDeleted(@Param("status") MindmapStatus status, Pageable pageable);
+
+  @Query(
+      "SELECT m FROM Mindmap m "
+          + "WHERE m.status = :status AND m.deletedAt IS NULL "
+          + "AND (:lessonId IS NULL OR m.lessonId = :lessonId) "
+          + "AND (:name IS NULL OR :name = '' "
+          + "     OR LOWER(m.title) LIKE LOWER(CONCAT('%', :name, '%')) "
+          + "     OR LOWER(COALESCE(m.description, '')) LIKE LOWER(CONCAT('%', :name, '%'))) ")
+  Page<Mindmap> findPublicWithFilters(
+      @Param("status") MindmapStatus status,
+      @Param("lessonId") UUID lessonId,
+      @Param("name") String name,
+      Pageable pageable);
 
   @Query(
       "SELECT m FROM Mindmap m WHERE m.teacherId = :teacherId AND m.lessonId = :lessonId AND m.deletedAt IS NULL")

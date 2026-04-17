@@ -24,6 +24,8 @@ public class UserSubscriptionResponse {
   private Instant endDate;
   private BigDecimal amount;
   private String currency;
+  private Integer tokenQuota;
+  private Integer tokenRemaining;
   private UserSubscriptionStatus status;
   private String paymentMethod;
   private Instant createdAt;

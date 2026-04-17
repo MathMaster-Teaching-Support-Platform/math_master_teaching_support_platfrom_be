@@ -1,10 +1,12 @@
 package com.fptu.math_master.dto.response;
 
-import com.fptu.math_master.enums.TransactionStatus;
-import com.fptu.math_master.enums.TransactionType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+
+import com.fptu.math_master.enums.TransactionStatus;
+import com.fptu.math_master.enums.TransactionType;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -35,6 +37,9 @@ public class TransactionResponse {
   private String referenceCode;
 
   private Instant transactionDate;
+
+  /** ISO-8601 expiry for PENDING transactions (15 min after creation) */
+  private Instant expiresAt;
 
   private Instant createdAt;
 

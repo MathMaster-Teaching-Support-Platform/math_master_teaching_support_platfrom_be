@@ -24,5 +24,11 @@ public interface AssessmentLessonRepository extends JpaRepository<AssessmentLess
   List<AssessmentLesson> findByAssessmentIdIn(
       @Param("assessmentIds") Collection<UUID> assessmentIds);
 
+  @Query("SELECT al.assessmentId FROM AssessmentLesson al WHERE al.lessonId = :lessonId")
+  List<UUID> findAssessmentIdsByLessonId(@Param("lessonId") UUID lessonId);
+
+  @Query("SELECT DISTINCT al.assessmentId FROM AssessmentLesson al WHERE al.lessonId IN :lessonIds")
+  List<UUID> findAssessmentIdsByLessonIds(@Param("lessonIds") Collection<UUID> lessonIds);
+
   void deleteByAssessmentId(UUID assessmentId);
 }

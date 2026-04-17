@@ -1,8 +1,10 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
+import com.fptu.math_master.dto.request.BatchUpsertMatrixRowCellsRequest;
 import com.fptu.math_master.dto.request.ExamMatrixRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
+import com.fptu.math_master.dto.request.UpdateMatrixRowCellsRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
 import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
@@ -77,6 +79,18 @@ public class ExamMatrixController {
         .build();
   }
 
+  @GetMapping("/available")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Get available exam matrices",
+      description = "Get all available exam matrices that can be used for assessment generation.")
+  public ApiResponse<List<ExamMatrixResponse>> getAvailableExamMatrices() {
+    log.info("REST request to get available exam matrices");
+    return ApiResponse.<List<ExamMatrixResponse>>builder()
+        .result(examMatrixService.getMyExamMatrices())
+        .build();
+  }
+
   @GetMapping("/{matrixId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
@@ -124,8 +138,6 @@ public class ExamMatrixController {
     examMatrixService.deleteExamMatrix(matrixId);
     return ApiResponse.<Void>builder().message("Exam matrix deleted successfully.").build();
   }
-
-
   // ── Validation & Lifecycle ──────────────────────────────────────────────
 
   @GetMapping("/{matrixId}/validate")
@@ -240,6 +252,40 @@ public class ExamMatrixController {
         .result(examMatrixService.addMatrixRow(matrixId, request))
         .build();
   }
+
+  @PutMapping("/{matrixId}/rows/{rowId}/cells")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Create/update cells for a row",
+      description =
+          "Upserts all cognitive-level cells for one row. "
+              + "Supports FE flow: create row first, then edit cell numbers flexibly.")
+  public ApiResponse<ExamMatrixTableResponse> upsertMatrixRowCells(
+      @PathVariable UUID matrixId,
+      @PathVariable UUID rowId,
+      @Valid @RequestBody UpdateMatrixRowCellsRequest request) {
+    log.info("REST request to upsert cells for row {} in matrix {}", rowId, matrixId);
+    return ApiResponse.<ExamMatrixTableResponse>builder()
+        .message("Matrix row cells updated successfully.")
+        .result(examMatrixService.upsertMatrixRowCells(matrixId, rowId, request.getCells()))
+        .build();
+  }
+
+    @PutMapping("/{matrixId}/rows/cells:batch")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Batch create/update cells for multiple rows",
+            description =
+                    "FE calculates percentages locally, then sends final question counts for many rows in one call.")
+    public ApiResponse<ExamMatrixTableResponse> batchUpsertMatrixRowCells(
+            @PathVariable UUID matrixId,
+            @Valid @RequestBody BatchUpsertMatrixRowCellsRequest request) {
+        log.info("REST request to batch upsert row cells in matrix {}", matrixId);
+        return ApiResponse.<ExamMatrixTableResponse>builder()
+                .message("Matrix row cells batch updated successfully.")
+                .result(examMatrixService.batchUpsertMatrixRowCells(matrixId, request))
+                .build();
+    }
 
   @DeleteMapping("/{matrixId}/rows/{rowId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")

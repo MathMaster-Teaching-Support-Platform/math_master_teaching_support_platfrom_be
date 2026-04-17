@@ -58,6 +58,32 @@ public class StudentAssessmentController {
   }
 
   @Operation(
+      summary = "Get my assessments by course",
+      description =
+          "Get list of available assessments for the current student in a specific course context.")
+  @GetMapping("/course/{courseId}")
+  @PreAuthorize("hasRole('STUDENT')")
+  public ApiResponse<Page<StudentAssessmentResponse>> getMyAssessmentsByCourse(
+      @PathVariable UUID courseId,
+      @RequestParam(required = false) String status,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size,
+      @RequestParam(defaultValue = "dueDate") String sortBy,
+      @RequestParam(defaultValue = "ASC") String sortDir) {
+
+    Sort sort =
+        sortDir.equalsIgnoreCase("DESC")
+            ? Sort.by(sortBy).descending()
+            : Sort.by(sortBy).ascending();
+
+    Pageable pageable = PageRequest.of(page, size, sort);
+
+    return ApiResponse.<Page<StudentAssessmentResponse>>builder()
+        .result(studentAssessmentService.getMyAssessmentsByCourse(courseId, status, pageable))
+        .build();
+  }
+
+  @Operation(
       summary = "Get assessment details",
       description = "View details of a specific assessment before starting")
   @GetMapping("/{assessmentId}")

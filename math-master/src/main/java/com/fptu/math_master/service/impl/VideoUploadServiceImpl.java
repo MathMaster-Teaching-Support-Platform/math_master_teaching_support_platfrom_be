@@ -18,10 +18,8 @@ import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.service.VideoUploadService;
 import com.fptu.math_master.util.SecurityUtils;
 import io.minio.BucketExistsArgs;
-import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
-import io.minio.http.Method;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -43,7 +41,10 @@ import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
 import software.amazon.awssdk.services.s3.model.CompletedPart;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedUploadPartRequest;
 import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignRequest;
@@ -363,21 +364,24 @@ public class VideoUploadServiceImpl implements VideoUploadService {
       }
     }
 
-    // Generate presigned URL with publicMinioClient
-    // publicMinioClient is configured with MINIO_PUBLIC_ENDPOINT (http://localhost:9000)
-    // This ensures the signature is generated for the correct hostname that browser will use
-    // Note: publicMinioClient doesn't need to actually connect - it just generates the signature
+    // Generate presigned URL with S3Presigner using configured public endpoint.
+    // This guarantees the returned URL host is browser-accessible (not internal Docker hostname).
     String bucket = minioProperties.getCourseVideosBucket();
     String objectKey = cl.getVideoUrl();
     
-    try {
-      String presignedUrl = publicMinioClient.getPresignedObjectUrl(
-          GetPresignedObjectUrlArgs.builder()
-              .method(Method.GET)
-              .bucket(bucket)
-              .object(objectKey)
-              .expiry(7, java.util.concurrent.TimeUnit.DAYS)
-              .build());
+    try (S3Presigner presigner = buildPresigner()) {
+      PresignedGetObjectRequest presigned =
+        presigner.presignGetObject(
+          GetObjectPresignRequest.builder()
+            .signatureDuration(Duration.ofDays(7))
+            .getObjectRequest(
+              GetObjectRequest.builder()
+                .bucket(bucket)
+                .key(objectKey)
+                .build())
+            .build());
+
+      String presignedUrl = presigned.url().toString();
       
       log.info("Generated presigned URL: {}", presignedUrl);
       return presignedUrl;

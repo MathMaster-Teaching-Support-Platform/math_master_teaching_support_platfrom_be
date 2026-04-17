@@ -2,14 +2,18 @@ package com.fptu.math_master.repository;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import jakarta.persistence.LockModeType;
 
 import com.fptu.math_master.entity.UserSubscription;
 import com.fptu.math_master.enums.UserSubscriptionStatus;
@@ -59,4 +63,21 @@ public interface UserSubscriptionRepository extends JpaRepository<UserSubscripti
       Pageable pageable);
 
   boolean existsByPlanIdAndStatus(UUID planId, UserSubscriptionStatus status);
+
+  @Query(
+      "SELECT s FROM UserSubscription s JOIN FETCH s.plan "
+          + "WHERE s.userId = :userId AND s.status = 'ACTIVE' AND s.deletedAt IS NULL "
+          + "AND (s.endDate IS NULL OR s.endDate > :now) "
+          + "ORDER BY s.createdAt DESC")
+  List<UserSubscription> findActiveSubscriptionsByUserId(
+      @Param("userId") UUID userId, @Param("now") Instant now);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "SELECT s FROM UserSubscription s JOIN FETCH s.plan "
+          + "WHERE s.userId = :userId AND s.status = 'ACTIVE' AND s.deletedAt IS NULL "
+          + "AND (s.endDate IS NULL OR s.endDate > :now) "
+          + "ORDER BY s.createdAt DESC")
+  List<UserSubscription> findActiveSubscriptionsByUserIdForUpdate(
+      @Param("userId") UUID userId, @Param("now") Instant now);
 }

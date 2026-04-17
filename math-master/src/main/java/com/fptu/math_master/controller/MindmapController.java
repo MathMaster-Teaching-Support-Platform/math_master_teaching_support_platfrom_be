@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -22,6 +23,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -197,6 +201,66 @@ public class MindmapController {
         .build();
   }
 
+  @GetMapping("/public")
+  @Operation(
+      summary = "List all public mindmaps",
+      description = "Public endpoint for students to browse all published mindmaps.")
+  public ApiResponse<Page<MindmapResponse>> getPublicMindmaps(
+      @RequestParam(required = false) UUID lessonId,
+      @RequestParam(required = false) String name,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size,
+      @RequestParam(defaultValue = "createdAt") String sortBy,
+      @RequestParam(defaultValue = "DESC") String direction) {
+    Sort.Direction sortDirection =
+        direction.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
+    Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
+
+    return ApiResponse.<Page<MindmapResponse>>builder()
+        .result(mindmapService.getPublicMindmaps(lessonId, name, pageable))
+        .build();
+  }
+
+    @GetMapping("/public/{id}")
+    @Operation(
+            summary = "Get published mindmap detail",
+            description = "Public endpoint for students to view published mindmap detail and node tree.")
+    public ApiResponse<MindmapDetailResponse> getPublicMindmapById(@PathVariable UUID id) {
+        log.info("REST request to get public mindmap: {}", id);
+        return ApiResponse.<MindmapDetailResponse>builder()
+                .result(mindmapService.getPublicMindmapById(id))
+                .build();
+    }
+
+  @GetMapping("/{id}/export")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Export mindmap as image or PDF",
+      description = "Teacher exports own mindmap in PNG or PDF format for download.")
+  public ResponseEntity<byte[]> exportMindmap(
+      @PathVariable UUID id,
+      @RequestParam(defaultValue = "pdf") String format) {
+    MindmapService.BinaryFileData fileData = mindmapService.exportMindmap(id, format);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(fileData.fileName()))
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+  }
+
+  @GetMapping("/public/{id}/export")
+  @Operation(
+      summary = "Export published mindmap as image or PDF",
+      description = "Public endpoint for students to download published mindmaps in PNG or PDF.")
+  public ResponseEntity<byte[]> exportPublicMindmap(
+      @PathVariable UUID id,
+      @RequestParam(defaultValue = "pdf") String format) {
+    MindmapService.BinaryFileData fileData = mindmapService.exportPublicMindmap(id, format);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition(fileData.fileName()))
+        .contentType(MediaType.parseMediaType(fileData.contentType()))
+        .body(fileData.content());
+  }
+
   // Node management endpoints
 
   @PostMapping("/nodes")
@@ -252,4 +316,20 @@ public class MindmapController {
         .result(mindmapService.getNodesByMindmap(mindmapId))
         .build();
   }
+
+    @GetMapping("/public/{mindmapId}/nodes")
+    @Operation(
+            summary = "Get all nodes of a published mindmap",
+            description = "Public endpoint for students to view published mindmap nodes only.")
+    public ApiResponse<List<MindmapNodeResponse>> getPublicNodesByMindmap(@PathVariable UUID mindmapId) {
+        log.info("REST request to get public nodes for mindmap: {}", mindmapId);
+        return ApiResponse.<List<MindmapNodeResponse>>builder()
+                .result(mindmapService.getPublicNodesByMindmap(mindmapId))
+                .build();
+    }
+
+    private String contentDisposition(String fileName) {
+        return "attachment; filename*=UTF-8''"
+                + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+    }
 }

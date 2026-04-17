@@ -8,13 +8,16 @@ import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
 import com.fptu.math_master.dto.request.LessonSlideJsonItemRequest;
+import com.fptu.math_master.dto.response.LessonSlideGeneratedFileResponse;
 import com.fptu.math_master.dto.response.LessonResponse;
 import com.fptu.math_master.dto.response.LessonSlideGeneratedContentResponse;
 import com.fptu.math_master.dto.response.LessonSlideJsonItemResponse;
 import com.fptu.math_master.dto.response.SlideTemplateResponse;
 import com.fptu.math_master.enums.LessonSlideOutputFormat;
+import com.fptu.math_master.enums.LessonStatus;
 import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.entity.Lesson;
+import com.fptu.math_master.entity.LessonSlideGeneratedFile;
 import com.fptu.math_master.entity.SchoolGrade;
 import com.fptu.math_master.entity.SlideTemplate;
 import com.fptu.math_master.entity.Subject;
@@ -22,11 +25,14 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.LessonRepository;
+import com.fptu.math_master.repository.LessonSlideGeneratedFileRepository;
 import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SlideTemplateRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.LessonSlideService;
+import com.fptu.math_master.service.UploadService;
+import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.SecurityUtils;
 import io.minio.BucketExistsArgs;
 import io.minio.GetObjectArgs;
@@ -34,6 +40,8 @@ import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.StatObjectArgs;
+import java.awt.Dimension;
+import java.time.Instant;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -64,9 +72,17 @@ import org.apache.poi.xslf.usermodel.XSLFPictureShape;
 import org.apache.poi.xslf.usermodel.XSLFShape;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.scilab.forge.jlatexmath.TeXConstants;
 import org.scilab.forge.jlatexmath.TeXFormula;
 import org.scilab.forge.jlatexmath.TeXIcon;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -86,6 +102,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private static final double LATEX_VERTICAL_PADDING = 6d;
   private static final double LATEX_MAX_IMAGE_HEIGHT = 120d;
   private static final double LATEX_MIN_IMAGE_HEIGHT = 20d;
+  private static final double LATEX_ESTIMATED_CHAR_WIDTH = 7d;
+  private static final double LATEX_ESTIMATED_LINE_HEIGHT = 22d;
+  private static final String LATEX_INLINE_PLACEHOLDER = "            ";
   private static final List<String> TAGGED_SECTIONS =
       List.of(
           "LESSON_SUMMARY",
@@ -109,16 +128,20 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   SchoolGradeRepository schoolGradeRepository;
   SubjectRepository subjectRepository;
   SlideTemplateRepository slideTemplateRepository;
+  LessonSlideGeneratedFileRepository lessonSlideGeneratedFileRepository;
   MinioClient minioClient;
   MinioProperties minioProperties;
   GeminiService geminiService;
+  UserSubscriptionService userSubscriptionService;
+  UploadService uploadService;
   ObjectMapper objectMapper;
 
   @Override
-  @Transactional(readOnly = true)
+  @Transactional
   public LessonSlideGeneratedContentResponse generateLessonContentDraft(
       LessonSlideGenerateContentRequest request) {
     validateTeacherRole();
+    userSubscriptionService.consumeMyTokens(3, "SLIDE");
 
     SchoolGrade requestedGrade = resolveRequestedGrade(request);
 
@@ -156,10 +179,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       throw new AppException(ErrorCode.CHAPTER_NOT_IN_LESSON);
     }
 
-    int slideCount = request.getSlideCount() == null ? 10 : request.getSlideCount();
-  LessonSlideOutputFormat outputFormat = resolveOutputFormat(request.getOutputFormat());
-  DeckSections deckSections =
-    buildDeckSectionsWithAi(lesson, request.getAdditionalPrompt(), outputFormat);
+    int slideCount = normalizeRequestedSlideCount(request.getSlideCount());
+    LessonSlideOutputFormat outputFormat = resolveOutputFormat(request.getOutputFormat());
+    DeckSections deckSections =
+        buildDeckSectionsWithAi(lesson, request.getAdditionalPrompt(), outputFormat, slideCount);
     List<LessonSlideJsonItemResponse> slides = buildPreviewSlides(deckSections, slideCount);
 
     return LessonSlideGeneratedContentResponse.builder()
@@ -168,10 +191,17 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         .lessonId(lesson.getId())
         .lessonTitle(lesson.getTitle())
         .slideCount(slideCount)
-    .outputFormat(outputFormat)
+        .outputFormat(outputFormat)
         .slides(slides)
         .additionalPrompt(request.getAdditionalPrompt())
         .build();
+  }
+
+  private int normalizeRequestedSlideCount(Integer requestedSlideCount) {
+    if (requestedSlideCount == null) {
+      return 10;
+    }
+    return Math.max(5, Math.min(15, requestedSlideCount));
   }
 
   private SchoolGrade resolveRequestedGrade(LessonSlideGenerateContentRequest request) {
@@ -190,6 +220,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   public LessonResponse confirmLessonContent(
       UUID lessonId, LessonSlideConfirmContentRequest request) {
     validateTeacherRole();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
 
     Lesson lesson =
         lessonRepository
@@ -205,9 +236,91 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     if (request.getLearningObjectives() != null && !request.getLearningObjectives().isBlank()) {
       lesson.setLearningObjectives(request.getLearningObjectives());
     }
+    if (lesson.getCreatedBy() == null) {
+      lesson.setCreatedBy(currentUserId);
+    }
+    lesson.setUpdatedBy(currentUserId);
 
     Lesson saved = lessonRepository.save(lesson);
     return toLessonResponse(saved);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public LessonResponse getLessonSlide(UUID lessonId) {
+    validateTeacherRole();
+
+    Lesson lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(lessonId)
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    return toLessonResponse(lesson);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<LessonResponse> getLessonSlides(LessonStatus status) {
+    validateTeacherRole();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    LessonStatus targetStatus = status == null ? LessonStatus.DRAFT : status;
+    return lessonRepository.findTeacherSlideLessonsByStatus(currentUserId, targetStatus).stream()
+        .map(this::toLessonResponse)
+        .toList();
+  }
+
+  @Override
+  @Transactional
+  public LessonResponse publishLessonSlide(UUID lessonId) {
+    validateTeacherRole();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    Lesson lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(lessonId)
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    if (lesson.getCreatedBy() == null) {
+      lesson.setCreatedBy(currentUserId);
+    }
+    lesson.setUpdatedBy(currentUserId);
+    lesson.setStatus(LessonStatus.PUBLISHED);
+    return toLessonResponse(lessonRepository.save(lesson));
+  }
+
+  @Override
+  @Transactional
+  public LessonResponse unpublishLessonSlide(UUID lessonId) {
+    validateTeacherRole();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    Lesson lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(lessonId)
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    if (lesson.getCreatedBy() == null) {
+      lesson.setCreatedBy(currentUserId);
+    }
+    lesson.setUpdatedBy(currentUserId);
+    lesson.setStatus(LessonStatus.DRAFT);
+    return toLessonResponse(lessonRepository.save(lesson));
+  }
+
+  @Override
+  public LessonResponse getPublishedLessonSlide(UUID lessonId) {
+    Lesson lesson =
+        lessonRepository
+            .findByIdAndNotDeleted(lessonId)
+            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    // Only return published lessons
+    if (lesson.getStatus() != LessonStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.LESSON_NOT_FOUND); // Use existing error code
+    }
+
+    return toLessonResponse(lesson);
   }
 
   @Override
@@ -386,7 +499,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   }
 
   @Override
-  @Transactional(readOnly = true)
+  @Transactional
   public BinaryFileData generatePptx(LessonSlideGeneratePptxRequest request) {
     validateTeacherRole();
 
@@ -409,11 +522,12 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     DeckSections deckSections = buildDeckSections(lesson, request.getAdditionalPrompt());
     byte[] generated = injectTemplate(templateBytes, deckSections);
     String outputName = buildOutputFileName(lesson.getTitle());
+    persistGeneratedSlideFile(lesson, template, generated, outputName);
     return new BinaryFileData(generated, outputName, PPTX_MIME);
   }
 
   @Override
-  @Transactional(readOnly = true)
+  @Transactional
   public BinaryFileData generatePptxFromJson(LessonSlideGeneratePptxFromJsonRequest request) {
     validateTeacherRole();
 
@@ -439,7 +553,251 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     byte[] templateBytes = readObject(template.getBucketName(), template.getObjectKey());
     byte[] generated = injectTemplateWithJson(templateBytes, lesson, sortedSlides);
     String outputName = buildOutputFileName(lesson.getTitle());
+    persistGeneratedSlideFile(lesson, template, generated, outputName);
     return new BinaryFileData(generated, outputName, PPTX_MIME);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<LessonSlideGeneratedFileResponse> getMyGeneratedSlides(UUID lessonId) {
+    validateTeacherRole();
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+    List<LessonSlideGeneratedFile> files =
+        lessonId == null
+            ? lessonSlideGeneratedFileRepository.findByTeacher(currentUserId)
+            : lessonSlideGeneratedFileRepository.findByTeacherAndLesson(currentUserId, lessonId);
+
+    return files.stream().map(this::toGeneratedFileResponse).toList();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BinaryFileData downloadGeneratedSlide(UUID generatedFileId) {
+    validateTeacherRole();
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+    byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getObjectKey());
+    return new BinaryFileData(content, generatedFile.getFileName(), generatedFile.getContentType());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BinaryFileData getGeneratedSlidePreviewPdf(UUID generatedFileId) {
+    validateTeacherRole();
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+    byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getObjectKey());
+    return convertPptxToPdf(content, generatedFile.getFileName());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public String getGeneratedSlidePreviewUrl(UUID generatedFileId) {
+    validateTeacherRole();
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+    return uploadService.getPresignedUrl(generatedFile.getObjectKey(), generatedFile.getBucketName());
+  }
+
+  @Override
+  @Transactional
+  public LessonSlideGeneratedFileResponse publishGeneratedSlide(UUID generatedFileId) {
+    validateTeacherRole();
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+    generatedFile.setIsPublic(Boolean.TRUE);
+    generatedFile.setPublishedAt(Instant.now());
+    return toGeneratedFileResponse(lessonSlideGeneratedFileRepository.save(generatedFile));
+  }
+
+  @Override
+  @Transactional
+  public LessonSlideGeneratedFileResponse unpublishGeneratedSlide(UUID generatedFileId) {
+    validateTeacherRole();
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+    generatedFile.setIsPublic(Boolean.FALSE);
+    generatedFile.setPublishedAt(null);
+    return toGeneratedFileResponse(lessonSlideGeneratedFileRepository.save(generatedFile));
+  }
+
+  @Override
+  @Transactional
+  public LessonSlideGeneratedFileResponse updateGeneratedSlideMetadata(
+      UUID generatedFileId, String name, MultipartFile thumbnailFile) {
+    validateTeacherRole();
+
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+
+    if (name != null) {
+      String normalizedName = name.trim();
+      generatedFile.setName(normalizedName.isEmpty() ? null : normalizedName);
+    }
+    if (thumbnailFile != null && !thumbnailFile.isEmpty()) {
+      validatePreviewImage(thumbnailFile);
+      ensureTemplateBucketExists();
+
+      String thumbnailObjectKey = buildGeneratedSlideThumbnailObjectKey(thumbnailFile.getOriginalFilename());
+      String thumbnailContentType = resolvePreviewImageContentType(thumbnailFile);
+
+      try {
+        minioClient.putObject(
+            PutObjectArgs.builder()
+                .bucket(minioProperties.getTemplateBucket())
+                .object(thumbnailObjectKey)
+                .contentType(thumbnailContentType)
+                .stream(thumbnailFile.getInputStream(), thumbnailFile.getSize(), -1)
+                .build());
+      } catch (Exception ex) {
+        log.error("Failed to upload generated slide thumbnail", ex);
+        throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+      }
+
+      generatedFile.setThumbnail(thumbnailObjectKey);
+    }
+
+    return toGeneratedFileResponse(lessonSlideGeneratedFileRepository.save(generatedFile));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BinaryFileData getGeneratedSlideThumbnailImage(UUID generatedFileId) {
+    validateTeacherRole();
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+    if (generatedFile.getThumbnail() == null || generatedFile.getThumbnail().isBlank()) {
+      throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+    }
+
+    byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getThumbnail());
+    return new BinaryFileData(
+        content,
+        "generated-slide-thumbnail",
+        resolveImageContentTypeFromObjectKey(generatedFile.getThumbnail()));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<LessonSlideGeneratedFileResponse> getAllPublicGeneratedSlides(
+      UUID lessonId, String keyword, Pageable pageable) {
+    String normalizedKeyword = keyword == null ? null : keyword.trim();
+    return lessonSlideGeneratedFileRepository
+        .findAllPublicWithFilters(lessonId, normalizedKeyword, pageable)
+        .map(this::toGeneratedFileResponse);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<LessonSlideGeneratedFileResponse> getPublicGeneratedSlidesByLesson(
+      UUID lessonId, String keyword, Pageable pageable) {
+    lessonRepository
+        .findByIdAndNotDeleted(lessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    String normalizedKeyword = keyword == null ? null : keyword.trim();
+    return lessonSlideGeneratedFileRepository
+        .findAllPublicWithFilters(lessonId, normalizedKeyword, pageable)
+        .map(this::toGeneratedFileResponse);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BinaryFileData downloadPublicGeneratedSlide(UUID generatedFileId) {
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findPublicById(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    lessonRepository
+        .findByIdAndNotDeleted(generatedFile.getLessonId())
+        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getObjectKey());
+    return new BinaryFileData(content, generatedFile.getFileName(), generatedFile.getContentType());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BinaryFileData getPublicGeneratedSlidePreviewPdf(UUID generatedFileId) {
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findPublicById(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    lessonRepository
+        .findByIdAndNotDeleted(generatedFile.getLessonId())
+        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getObjectKey());
+    return convertPptxToPdf(content, generatedFile.getFileName());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public String getPublicGeneratedSlidePreviewUrl(UUID generatedFileId) {
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findPublicById(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    lessonRepository
+        .findByIdAndNotDeleted(generatedFile.getLessonId())
+        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    return uploadService.getPresignedUrl(generatedFile.getObjectKey(), generatedFile.getBucketName());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BinaryFileData getPublicGeneratedSlideThumbnailImage(UUID generatedFileId) {
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findPublicById(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    lessonRepository
+        .findByIdAndNotDeleted(generatedFile.getLessonId())
+        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+
+    if (generatedFile.getThumbnail() == null || generatedFile.getThumbnail().isBlank()) {
+      throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+    }
+
+    byte[] content = readObject(generatedFile.getBucketName(), generatedFile.getThumbnail());
+    return new BinaryFileData(
+        content,
+        "generated-slide-thumbnail",
+        resolveImageContentTypeFromObjectKey(generatedFile.getThumbnail()));
   }
 
   private byte[] injectTemplate(byte[] templateBytes, DeckSections deckSections) {
@@ -478,6 +836,57 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       replaced = replaced.replace(entry.getKey(), entry.getValue());
     }
     return normalizeEscapedLineBreaks(replaced);
+  }
+
+  private BinaryFileData convertPptxToPdf(byte[] pptxContent, String fileName) {
+    final float renderScale = 2.0f;
+    try (XMLSlideShow slideShow = new XMLSlideShow(new ByteArrayInputStream(pptxContent));
+        PDDocument document = new PDDocument();
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+      Dimension pageSize = slideShow.getPageSize();
+      float slideWidth = (float) pageSize.getWidth();
+      float slideHeight = (float) pageSize.getHeight();
+      int imageWidth = Math.max(1, Math.round(slideWidth * renderScale));
+      int imageHeight = Math.max(1, Math.round(slideHeight * renderScale));
+
+      for (XSLFSlide slide : slideShow.getSlides()) {
+        BufferedImage image = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = image.createGraphics();
+        graphics.setPaint(Color.WHITE);
+        graphics.fill(new Rectangle2D.Float(0, 0, imageWidth, imageHeight));
+        graphics.scale(renderScale, renderScale);
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        graphics.setRenderingHint(
+            RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        slide.draw(graphics);
+        graphics.dispose();
+
+        PDPage page = new PDPage(new PDRectangle(slideWidth, slideHeight));
+        document.addPage(page);
+        PDImageXObject pdImage = LosslessFactory.createFromImage(document, image);
+        try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+          contentStream.drawImage(pdImage, 0, 0, slideWidth, slideHeight);
+        }
+      }
+
+      document.save(outputStream);
+      return new BinaryFileData(outputStream.toByteArray(), toPdfFileName(fileName), "application/pdf");
+    } catch (Exception ex) {
+      log.error("Failed to convert generated slide to PDF: {}", fileName, ex);
+      throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+    }
+  }
+
+  private String toPdfFileName(String fileName) {
+    if (fileName == null || fileName.isBlank()) {
+      return "slide-preview.pdf";
+    }
+    int dot = fileName.lastIndexOf('.');
+    if (dot <= 0) {
+      return fileName + ".pdf";
+    }
+    return fileName.substring(0, dot) + ".pdf";
   }
 
   private String normalizeEscapedLineBreaks(String value) {
@@ -557,7 +966,22 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     try (XMLSlideShow slideshow = new XMLSlideShow(new ByteArrayInputStream(templateBytes));
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
 
-      int applyCount = Math.min(slideshow.getSlides().size(), slides.size());
+      int templateSlideCount = slideshow.getSlides().size();
+      int requestedSlideCount = slides == null ? 0 : slides.size();
+
+      if (requestedSlideCount == 0) {
+        throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+      }
+
+      if (requestedSlideCount > templateSlideCount) {
+        log.warn(
+            "Template slide count is insufficient. templateSlides={}, requestedSlides={}",
+            templateSlideCount,
+            requestedSlideCount);
+        throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+      }
+
+      int applyCount = requestedSlideCount;
       for (int i = 0; i < applyCount; i++) {
         XSLFSlide slide = slideshow.getSlides().get(i);
         LessonSlideJsonItemRequest item = slides.get(i);
@@ -577,6 +1001,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         }
       }
 
+      // Keep output deck size aligned with requested slide count when template has more slides.
+      for (int i = templateSlideCount - 1; i >= requestedSlideCount; i--) {
+        slideshow.removeSlide(i);
+      }
+
       slideshow.write(outputStream);
       return outputStream.toByteArray();
     } catch (Exception ex) {
@@ -594,7 +1023,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       XMLSlideShow slideshow, XSLFSlide slide, XSLFTextShape textShape, String content) {
     String normalizedContent = normalizeLatexInput(content);
     List<LatexToken> latexTokens = new ArrayList<>();
-    String displayText = sanitizeDisplayText(replaceLatexWithMarkers(normalizedContent, latexTokens));
+    String contentWithMarkers = replaceLatexWithMarkers(normalizedContent, latexTokens);
+    String displayText =
+      sanitizeDisplayText(
+        contentWithMarkers.replaceAll("\\[\\[LATEX_\\d+\\]\\]", LATEX_INLINE_PLACEHOLDER));
 
     textShape.clearText();
     textShape.setText(displayText);
@@ -609,42 +1041,80 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       return;
     }
 
-    double x = anchor.getX() + LATEX_HORIZONTAL_PADDING;
-    double y = anchor.getY() + anchor.getHeight() + LATEX_VERTICAL_PADDING;
-    double maxWidth = Math.max(40d, anchor.getWidth() - LATEX_HORIZONTAL_PADDING * 2);
+    Matcher markerMatcher = Pattern.compile("\\[\\[LATEX_(\\d+)\\]\\]").matcher(contentWithMarkers);
+    int pointer = 0;
+    int line = 0;
+    int col = 0;
 
-    for (LatexToken token : latexTokens) {
+    while (markerMatcher.find()) {
+      String segment = contentWithMarkers.substring(pointer, markerMatcher.start());
+      for (int i = 0; i < segment.length(); i++) {
+        if (segment.charAt(i) == '\n') {
+          line++;
+          col = 0;
+        } else {
+          col++;
+        }
+      }
+
+      int tokenIndex = Integer.parseInt(markerMatcher.group(1));
+      if (tokenIndex < 0 || tokenIndex >= latexTokens.size()) {
+        pointer = markerMatcher.end();
+        continue;
+      }
+
+      LatexToken token = latexTokens.get(tokenIndex);
       byte[] imageBytes = renderLatexToPng(token.expression());
       if (imageBytes.length == 0) {
+        pointer = markerMatcher.end();
         continue;
       }
 
       try (ByteArrayInputStream imageInput = new ByteArrayInputStream(imageBytes)) {
         BufferedImage sourceImage = ImageIO.read(imageInput);
         if (sourceImage == null) {
+          pointer = markerMatcher.end();
           continue;
         }
 
         double width = sourceImage.getWidth();
         double height = sourceImage.getHeight();
         if (width <= 0 || height <= 0) {
+          pointer = markerMatcher.end();
           continue;
         }
 
-        double widthScale = maxWidth / width;
-        double heightScale = LATEX_MAX_IMAGE_HEIGHT / height;
+        double x = anchor.getX() + LATEX_HORIZONTAL_PADDING + col * LATEX_ESTIMATED_CHAR_WIDTH;
+        double y = anchor.getY() + LATEX_VERTICAL_PADDING + line * LATEX_ESTIMATED_LINE_HEIGHT;
+        double remainingWidth = anchor.getX() + anchor.getWidth() - LATEX_HORIZONTAL_PADDING - x;
+
+        if (remainingWidth < 40d) {
+          line++;
+          col = 0;
+          x = anchor.getX() + LATEX_HORIZONTAL_PADDING;
+          y = anchor.getY() + LATEX_VERTICAL_PADDING + line * LATEX_ESTIMATED_LINE_HEIGHT;
+          remainingWidth = Math.max(40d, anchor.getWidth() - LATEX_HORIZONTAL_PADDING * 2);
+        }
+
+        double widthScale = remainingWidth / width;
+        double inlineMaxHeight = Math.max(12d, LATEX_ESTIMATED_LINE_HEIGHT * 0.9);
+        double heightScale = Math.min(LATEX_MAX_IMAGE_HEIGHT, inlineMaxHeight) / height;
         double scale = Math.min(1d, Math.min(widthScale, heightScale));
 
-        double renderWidth = Math.max(40d, width * scale);
-        double renderHeight = Math.max(LATEX_MIN_IMAGE_HEIGHT, height * scale);
+        double renderWidth = Math.max(16d, width * scale);
+        double renderHeight = Math.max(12d, Math.min(inlineMaxHeight, height * scale));
+        double yOffset = Math.max(0d, (LATEX_ESTIMATED_LINE_HEIGHT - renderHeight) / 2d);
 
         XSLFPictureData pictureData = slideshow.addPicture(imageBytes, PictureData.PictureType.PNG);
         XSLFPictureShape pictureShape = slide.createPicture(pictureData);
-        pictureShape.setAnchor(new Rectangle2D.Double(x, y, renderWidth, renderHeight));
-        y += renderHeight + LATEX_VERTICAL_PADDING;
+        pictureShape.setAnchor(new Rectangle2D.Double(x, y + yOffset, renderWidth, renderHeight));
+
+        col += LATEX_INLINE_PLACEHOLDER.length();
       } catch (Exception ex) {
         log.warn("Failed to append LaTeX image for expression: {}", token.expression(), ex);
       }
+
+      pointer = markerMatcher.end();
     }
   }
 
@@ -661,7 +1131,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
       LatexToken token = new LatexToken(expression.trim());
       latexTokens.add(token);
-      matcher.appendReplacement(out, Matcher.quoteReplacement(" "));
+      matcher.appendReplacement(
+          out, Matcher.quoteReplacement("[[LATEX_" + (latexTokens.size() - 1) + "]]"));
     }
     matcher.appendTail(out);
 
@@ -711,16 +1182,23 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     String heading = safe(item.getHeading());
     String content = safe(item.getContent());
 
-    values.put("{{SLIDE_HEADING}}", heading);
+    // Fill all common placeholders with a sensible default body so non-10-slide flows
+    // can still inject correctly into 10-slide templates.
+    String titleValue = heading.isBlank() ? safe(lesson.getTitle()) : heading;
+
+    values.put("{{SLIDE_HEADING}}", titleValue);
     values.put("{{SLIDE_CONTENT}}", content);
-    values.put("{{LESSON_TITLE}}", safe(lesson.getTitle()));
-    values.put("{{LESSON_SUMMARY}}", safe(lesson.getSummary()));
-    values.put("{{LEARNING_OBJECTIVES}}", safe(lesson.getLearningObjectives()));
-    values.put("{{ADDITIONAL_PROMPT}}", "");
+    values.put("{{LESSON_TITLE}}", titleValue);
+    values.put("{{LESSON_SUMMARY}}", content);
+    values.put("{{LEARNING_OBJECTIVES}}", content);
+    values.put("{{ADDITIONAL_PROMPT}}", content);
     values.put("{{LESSON_CONTENT}}", content);
 
     switch (slideType) {
-      case "COVER" -> values.put("{{LESSON_SUMMARY}}", content);
+      case "COVER" -> {
+        values.put("{{LESSON_TITLE}}", safe(lesson.getTitle()));
+        values.put("{{LESSON_SUMMARY}}", content);
+      }
       case "OBJECTIVES" -> values.put("{{LEARNING_OBJECTIVES}}", content);
       case "OPENING" -> values.put("{{ADDITIONAL_PROMPT}}", content);
       case "SUMMARY" -> values.put("{{LESSON_SUMMARY}}", content);
@@ -857,16 +1335,22 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         lessonContent);
   }
 
-  private DeckSections buildDeckSectionsWithAi(
-      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
+    private DeckSections buildDeckSectionsWithAi(
+      Lesson lesson,
+      String additionalPrompt,
+      LessonSlideOutputFormat outputFormat,
+      int requestedSlideCount) {
     DeckSections fallback = buildDeckSections(lesson, additionalPrompt);
 
     try {
-      String prompt = buildSlideDeckPrompt(lesson, additionalPrompt, outputFormat);
+        String prompt =
+          buildSlideDeckPrompt(lesson, additionalPrompt, outputFormat, requestedSlideCount);
       String aiResponse = geminiService.sendMessage(prompt);
       AiDeckSections aiDeck = parseAiDeckSections(aiResponse);
       if (aiDeck == null || !hasEnoughAiContent(aiDeck)) {
-        String taggedPrompt = buildSlideDeckTaggedPrompt(lesson, additionalPrompt, outputFormat);
+        String taggedPrompt =
+          buildSlideDeckTaggedPrompt(
+            lesson, additionalPrompt, outputFormat, requestedSlideCount);
         String taggedResponse = geminiService.sendMessage(taggedPrompt);
         AiDeckSections taggedDeck = parseTaggedDeckSections(taggedResponse);
         if (taggedDeck != null && hasEnoughAiContent(taggedDeck)) {
@@ -977,8 +1461,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
   }
 
-  private String buildSlideDeckPrompt(
-      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
+    private String buildSlideDeckPrompt(
+      Lesson lesson,
+      String additionalPrompt,
+      LessonSlideOutputFormat outputFormat,
+      int requestedSlideCount) {
     String lessonTitle = safe(lesson.getTitle());
     String lessonContent = safe(lesson.getLessonContent());
     String lessonSummary = safe(lesson.getSummary());
@@ -988,7 +1475,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
     return """
         Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
-        Hãy soạn nội dung trình chiếu đầy đủ cho bài học theo cấu trúc 10 slide.
+        Hãy soạn nội dung trình chiếu đầy đủ cho bài học theo cấu trúc %d slide.
 
         THÔNG TIN ĐẦU VÀO:
         - lessonTitle: %s
@@ -1000,6 +1487,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
         YÊU CẦU:
         - Viết bằng tiếng Việt có dấu.
+        - Nội dung phải NGẮN GỌN cho đúng phạm vi 1 slide nhưng vẫn TOÀN VẸN ý chính.
+        - Mỗi phần (opening/mainPart/example/practice/closing) chỉ 3-5 ý chính.
+        - Mỗi ý tối đa khoảng 12-16 từ, ưu tiên câu ngắn và rõ nghĩa.
+        - Tránh văn xuôi dài; ưu tiên gạch đầu dòng hoặc câu ngắn tách dòng.
+        - Tổng độ dài mỗi phần nên trong khoảng 60-90 từ, không lan man.
         - Nội dung phải cụ thể, không lặp lại cùng một câu giữa các phần.
         - Mỗi mục mainPart1/mainPart2/mainPart3/examplePart/practicePart cần có nhiều ý (dạng gạch đầu dòng ngắn, tách dòng bằng ký tự xuống dòng \n).
         - closingSummary phải tóm tắt được kiến thức trọng tâm và nhấn mạnh cách áp dụng.
@@ -1022,6 +1514,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         }
         """
         .formatted(
+          requestedSlideCount,
             lessonTitle,
             lessonSummary,
             learningObjectives,
@@ -1032,7 +1525,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   }
 
   private String buildSlideDeckTaggedPrompt(
-      Lesson lesson, String additionalPrompt, LessonSlideOutputFormat outputFormat) {
+        Lesson lesson,
+        String additionalPrompt,
+        LessonSlideOutputFormat outputFormat,
+        int requestedSlideCount) {
     String lessonTitle = safe(lesson.getTitle());
     String lessonContent = safe(lesson.getLessonContent());
     String lessonSummary = safe(lesson.getSummary());
@@ -1042,7 +1538,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
     return """
         Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
-        Hãy soạn nội dung đầy đủ cho bài trình chiếu 10 slide.
+        Hãy soạn nội dung đầy đủ cho bài trình chiếu %d slide.
 
         THÔNG TIN ĐẦU VÀO:
         - lessonTitle: %s
@@ -1054,6 +1550,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
         YÊU CẦU:
         - Viết tiếng Việt có dấu, nội dung cụ thể, không lặp lại giữa các phần.
+        - Nội dung phải NGẮN GỌN theo chuẩn 1 slide nhưng vẫn đầy đủ ý cốt lõi.
+        - Mỗi phần chỉ 3-5 ý chính, mỗi ý tối đa khoảng 12-16 từ.
+        - Ưu tiên gạch đầu dòng/câu ngắn, tránh đoạn văn dài.
+        - Tổng độ dài mỗi phần nên trong khoảng 60-90 từ.
         - Mỗi phần mainPart1/mainPart2/mainPart3/examplePart/practicePart có nhiều ý và xuống dòng rõ ràng.
         - outputFormat: %s
         %s
@@ -1081,6 +1581,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         ...
         """
         .formatted(
+          requestedSlideCount,
           lessonTitle,
           lessonSummary,
           learningObjectives,
@@ -1366,6 +1867,77 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     return sanitized + "-slides.pptx";
   }
 
+  private String buildGeneratedSlideThumbnailObjectKey(String originalFileName) {
+    String normalized =
+        originalFileName == null
+            ? "thumbnail.png"
+            : Normalizer.normalize(originalFileName, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+    String sanitized = NON_ALNUM.matcher(normalized).replaceAll("_");
+    return "generated-slide-thumbnails/"
+        + UUID.randomUUID()
+        + "/"
+        + System.currentTimeMillis()
+        + "-"
+        + sanitized;
+  }
+
+  private String resolveImageContentTypeFromObjectKey(String objectKey) {
+    if (objectKey == null) {
+      return PNG_MIME;
+    }
+    String lower = objectKey.toLowerCase();
+    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+      return JPG_MIME;
+    }
+    if (lower.endsWith(".webp")) {
+      return WEBP_MIME;
+    }
+    return PNG_MIME;
+  }
+
+  private void persistGeneratedSlideFile(
+      Lesson lesson, SlideTemplate template, byte[] content, String outputName) {
+    ensureTemplateBucketExists();
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    String objectKey =
+        "generated-slides/"
+            + currentUserId
+            + "/"
+            + UUID.randomUUID()
+            + "-"
+            + NON_ALNUM.matcher(outputName).replaceAll("_");
+
+    try {
+      minioClient.putObject(
+          PutObjectArgs.builder()
+              .bucket(minioProperties.getTemplateBucket())
+              .object(objectKey)
+              .contentType(PPTX_MIME)
+              .stream(new ByteArrayInputStream(content), content.length, -1)
+              .build());
+    } catch (Exception ex) {
+      log.error("Failed to store generated slide file", ex);
+      throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+    }
+
+    LessonSlideGeneratedFile generatedFile =
+        LessonSlideGeneratedFile.builder()
+            .lessonId(lesson.getId())
+            .templateId(template.getId())
+            .bucketName(minioProperties.getTemplateBucket())
+            .objectKey(objectKey)
+            .fileName(outputName)
+        .name(lesson.getTitle())
+            .contentType(PPTX_MIME)
+            .fileSizeBytes((long) content.length)
+            .isPublic(Boolean.FALSE)
+            .build();
+    generatedFile.setCreatedBy(currentUserId);
+
+    lessonSlideGeneratedFileRepository.save(generatedFile);
+  }
+
   private String safe(String input) {
     return input == null ? "" : input;
   }
@@ -1408,6 +1980,33 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         .build();
   }
 
+        private LessonSlideGeneratedFileResponse toGeneratedFileResponse(LessonSlideGeneratedFile file) {
+          return LessonSlideGeneratedFileResponse.builder()
+          .id(file.getId())
+          .lessonId(file.getLessonId())
+          .templateId(file.getTemplateId())
+          .name(file.getName())
+          .thumbnail(buildGeneratedSlideThumbnailPath(file))
+          .fileName(file.getFileName())
+          .contentType(file.getContentType())
+          .fileSizeBytes(file.getFileSizeBytes())
+          .isPublic(Boolean.TRUE.equals(file.getIsPublic()))
+          .publishedAt(file.getPublishedAt())
+          .createdAt(file.getCreatedAt())
+          .updatedAt(file.getUpdatedAt())
+          .build();
+        }
+
+  private String buildGeneratedSlideThumbnailPath(LessonSlideGeneratedFile file) {
+    if (file.getThumbnail() == null || file.getThumbnail().isBlank()) {
+      return null;
+    }
+    if (Boolean.TRUE.equals(file.getIsPublic())) {
+      return "/lesson-slides/public/generated/" + file.getId() + "/thumbnail-image";
+    }
+    return "/lesson-slides/generated/" + file.getId() + "/thumbnail-image";
+  }
+
   private String buildPreviewImagePath(SlideTemplate template) {
     if (template.getPreviewImageObjectKey() == null || template.getPreviewImageObjectKey().isBlank()) {
       return null;
@@ -1418,6 +2017,15 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private void validateTeacherRole() {
     if (!SecurityUtils.hasRole(PredefinedRole.TEACHER_ROLE)) {
       throw new AppException(ErrorCode.NOT_A_TEACHER);
+    }
+  }
+
+  private void validateGeneratedFileOwnerOrAdmin(LessonSlideGeneratedFile file) {
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    boolean isOwner = currentUserId.equals(file.getCreatedBy());
+    boolean isAdmin = SecurityUtils.hasRole(PredefinedRole.ADMIN_ROLE);
+    if (!isOwner && !isAdmin) {
+      throw new AppException(ErrorCode.GENERATED_SLIDE_ACCESS_DENIED);
     }
   }
 }

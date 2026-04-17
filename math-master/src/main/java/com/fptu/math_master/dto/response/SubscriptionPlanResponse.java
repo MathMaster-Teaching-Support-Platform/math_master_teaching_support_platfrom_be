@@ -38,6 +38,7 @@ public class SubscriptionPlanResponse {
   private boolean isPublic;
   private SubscriptionPlanStatus status;
   private List<String> features;
+  private Integer tokenQuota;
   private PlanStats stats;
   private Instant createdAt;
   private Instant updatedAt;

@@ -10,13 +10,15 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.TeacherProfileRepository;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.OcrService;
+import io.minio.GetObjectArgs;
+import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.net.URL;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -33,7 +35,7 @@ import java.util.zip.ZipInputStream;
 public class GeminiOcrServiceImpl implements OcrService {
 
     private final TeacherProfileRepository teacherProfileRepository;
-    private final MinioUploadServiceImpl minioUploadService;
+    private final MinioClient minioClient;
     private final MinioProperties minioProperties;
     private final GeminiService geminiService;
     private final ObjectMapper objectMapper;
@@ -52,14 +54,12 @@ public class GeminiOcrServiceImpl implements OcrService {
             throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
         }
 
-        // Generate pre-signed URL for document
-        String documentUrl = minioUploadService.getPresignedUrl(
-                documentPath,
-                minioProperties.getVerificationBucket()
-        );
+        // Read verification document directly from MinIO to avoid nginx/presigned-url mismatch.
+        String objectKey = normalizeObjectKey(documentPath, minioProperties.getVerificationBucket());
+        byte[] fileBytes = readObjectFromMinio(objectKey);
 
-        // Extract data from image using Gemini
-        OcrComparisonResult.OcrExtractedData extractedData = extractDataFromImageUrl(documentUrl);
+        // Extract data from image/zip using Gemini
+        OcrComparisonResult.OcrExtractedData extractedData = extractDataFromFileBytes(objectKey, fileBytes);
 
         // Build profile data for comparison
         OcrComparisonResult.ProfileData profileData = buildProfileData(profile);
@@ -69,20 +69,20 @@ public class GeminiOcrServiceImpl implements OcrService {
     }
 
     /**
-     * Extract data from image URL using Gemini AI
+     * Extract data from file bytes using Gemini AI
      */
-    private OcrComparisonResult.OcrExtractedData extractDataFromImageUrl(String imageUrl) {
-        log.info("Extracting data from image URL using Gemini: {}", imageUrl);
+    private OcrComparisonResult.OcrExtractedData extractDataFromFileBytes(String fileNameOrKey, byte[] fileBytes) {
+        log.info("Extracting OCR data from object: {}", fileNameOrKey);
 
         try {
             // Check if file is a ZIP
-            if (isZipFile(imageUrl)) {
+            if (isZipFile(fileNameOrKey)) {
                 log.info("Detected ZIP file, extracting images...");
-                return extractDataFromZip(imageUrl);
+                return extractDataFromZipBytes(fileBytes);
             }
 
             // Direct image processing
-            return extractDataFromImage(imageUrl);
+            return extractDataFromImageBytes(fileBytes);
 
         } catch (Exception e) {
             log.error("Failed to extract data from image", e);
@@ -98,14 +98,10 @@ public class GeminiOcrServiceImpl implements OcrService {
     }
 
     /**
-     * Extract data from ZIP file (download, extract first image, process)
+     * Extract data from ZIP bytes (extract first image, process)
      */
-    private OcrComparisonResult.OcrExtractedData extractDataFromZip(String zipUrl) {
+    private OcrComparisonResult.OcrExtractedData extractDataFromZipBytes(byte[] zipBytes) {
         try {
-            // Download ZIP file
-            URL url = new URL(zipUrl);
-            byte[] zipBytes = url.openStream().readAllBytes();
-
             // Extract first image from ZIP
             try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
                 ZipEntry entry;
@@ -133,25 +129,51 @@ public class GeminiOcrServiceImpl implements OcrService {
 
         } catch (Exception e) {
             log.error("Failed to extract data from ZIP", e);
-            throw new RuntimeException("Failed to process ZIP file: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to process ZIP file from object bytes: " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Extract data from image URL (direct image)
-     */
-    private OcrComparisonResult.OcrExtractedData extractDataFromImage(String imageUrl) {
-        try {
-            // Download image
-            URL url = new URL(imageUrl);
-            byte[] imageBytes = url.openStream().readAllBytes();
-
-            return extractDataFromImageBytes(imageBytes);
-
+    private byte[] readObjectFromMinio(String objectKey) {
+        try (InputStream in = minioClient.getObject(
+                GetObjectArgs.builder()
+                    .bucket(minioProperties.getVerificationBucket())
+                    .object(objectKey)
+                    .build())) {
+            return in.readAllBytes();
         } catch (Exception e) {
-            log.error("Failed to download and process image", e);
-            throw new RuntimeException("Failed to process image: " + e.getMessage(), e);
+            log.error("Failed to read verification document from MinIO. bucket={}, objectKey={}",
+                    minioProperties.getVerificationBucket(), objectKey, e);
+            throw new RuntimeException("Failed to read verification document from MinIO", e);
         }
+    }
+
+    private String normalizeObjectKey(String rawPath, String bucket) {
+        if (rawPath == null) {
+            return null;
+        }
+
+        String value = rawPath.trim();
+
+        // Support historical format where full URL was stored in DB.
+        if (value.startsWith("http://") || value.startsWith("https://")) {
+            try {
+                String path = URI.create(value).getPath();
+                value = path == null ? value : path;
+            } catch (Exception ignored) {
+                // Keep original value if URI parsing fails.
+            }
+        }
+
+        while (value.startsWith("/")) {
+            value = value.substring(1);
+        }
+
+        String bucketPrefix = bucket + "/";
+        if (value.startsWith(bucketPrefix)) {
+            value = value.substring(bucketPrefix.length());
+        }
+
+        return value;
     }
 
     /**
@@ -175,37 +197,50 @@ public class GeminiOcrServiceImpl implements OcrService {
     }
 
     /**
-     * Build OCR prompt for Gemini
+     * Build OCR prompt for Gemini - Only extract 3 mandatory fields
      */
     private String buildOcrPrompt() {
         return """
-                Analyze this Vietnamese teacher ID card (Thẻ viên chức giáo viên) and extract the following information in JSON format:
+                Analyze this Vietnamese teacher ID card (Thẻ viên chức giáo viên) and extract ONLY the following 3 fields in JSON format:
                 
                 {
                   "fullName": "Full name of the teacher as shown on the card",
-                  "idNumber": "Employee ID number or card number if visible",
-                  "dateOfBirth": "Date of birth in DD/MM/YYYY format if visible",
-                  "placeOfBirth": "Place of birth if visible",
-                  "address": "Address if visible",
-                  "position": "Position/title (e.g., Giáo viên, Chức vụ)",
-                  "schoolName": "School name (e.g., Trường Tiểu học...)",
-                  "issueDate": "Issue date in DD/MM/YYYY format if visible",
-                  "expiryDate": "Expiry date in DD/MM/YYYY format if visible"
+                  "position": "Complete position/title with subject specialization",
+                  "schoolName": "Complete school name"
                 }
                 
-                Important:
-                - This is a TEACHER ID CARD (Thẻ viên chức), not a national ID card
-                - Extract the teacher's full name prominently displayed on the card
-                - Look for school name (Trường Tiểu học, THCS, THPT, etc.)
-                - Look for position/title (Giáo viên, Hiệu trưởng, etc.)
-                - Extract text exactly as shown, preserving Vietnamese diacritics
+                CRITICAL REQUIREMENTS FOR MATH TEACHER VERIFICATION:
+                
+                1. FULL NAME (Họ và tên):
+                   - Extract the teacher's full name exactly as shown on the card
+                   - Preserve Vietnamese diacritics (á, à, ả, ã, ạ, etc.)
+                
+                2. POSITION (Chức danh + Chuyên môn) - MOST IMPORTANT:
+                   - Must extract the COMPLETE position including teaching role AND subject
+                   - Teaching role: "Giáo viên", "Giảng viên", "Tổ trưởng", etc.
+                   - Subject specialization: "Toán", "Tổ Toán", "Khoa Toán", "Bộ môn Toán", etc.
+                   - Examples of VALID positions:
+                     * "Giáo viên Toán"
+                     * "Giảng viên Khoa Toán"
+                     * "Tổ trưởng Tổ Toán"
+                     * "Giáo viên THPT - Bộ môn Toán"
+                   - If you see separate lines for role and subject, combine them
+                
+                3. SCHOOL NAME (Tên trường):
+                   - Extract the complete official school name
+                   - Look for: "Trường Tiểu học", "THCS", "THPT", "Đại học", "Cao đẳng", etc.
+                   - Include full name: "Trường THPT Nguyễn Huệ", "Đại học Sư phạm Hà Nội", etc.
+                
+                IMPORTANT:
+                - Return ONLY these 3 fields, nothing else
                 - If a field is not found or not visible, use null
+                - Extract text exactly as shown, preserving Vietnamese diacritics
                 - Return only valid JSON, no additional text or explanation
                 """;
     }
 
     /**
-     * Parse Gemini response to extract structured data
+     * Parse Gemini response to extract structured data - Only 3 fields
      */
     private OcrComparisonResult.OcrExtractedData parseGeminiResponse(String response) {
         try {
@@ -220,14 +255,8 @@ public class GeminiOcrServiceImpl implements OcrService {
 
             return OcrComparisonResult.OcrExtractedData.builder()
                     .fullName(getJsonString(jsonNode, "fullName"))
-                    .idNumber(getJsonString(jsonNode, "idNumber"))
-                    .dateOfBirth(getJsonString(jsonNode, "dateOfBirth"))
-                    .placeOfBirth(getJsonString(jsonNode, "placeOfBirth"))
-                    .address(getJsonString(jsonNode, "address"))
                     .position(getJsonString(jsonNode, "position"))
                     .schoolName(getJsonString(jsonNode, "schoolName"))
-                    .issueDate(getJsonString(jsonNode, "issueDate"))
-                    .expiryDate(getJsonString(jsonNode, "expiryDate"))
                     .build();
 
         } catch (Exception e) {
@@ -248,74 +277,140 @@ public class GeminiOcrServiceImpl implements OcrService {
     }
 
     /**
-     * Build profile data from teacher profile entity
+     * Build profile data from teacher profile entity - Only 3 fields
      */
     private OcrComparisonResult.ProfileData buildProfileData(TeacherProfile profile) {
         return OcrComparisonResult.ProfileData.builder()
                 .fullName(profile.getFullName())
-                .idNumber(profile.getIdNumber())
-                .dateOfBirth(profile.getDateOfBirth() != null ? profile.getDateOfBirth().toString() : null)
-                .placeOfBirth(profile.getPlaceOfBirth())
-                .address(profile.getAddress())
+                .position(profile.getPosition())
+                .schoolName(profile.getSchoolName())
                 .build();
     }
 
     /**
-     * Compare OCR extracted data with profile data
+     * Compare OCR extracted data with profile data - ONLY 3 MANDATORY FIELDS
      */
     private OcrComparisonResult compareData(
             OcrComparisonResult.OcrExtractedData extractedData,
             OcrComparisonResult.ProfileData profileData) {
 
-        log.info("Comparing Gemini OCR data with profile: {}", profileData);
+        log.info("Comparing Gemini OCR data with profile (3 mandatory fields only): {}", profileData);
 
         List<OcrComparisonResult.FieldComparison> comparisons = new ArrayList<>();
 
-        // Compare full name
-        comparisons.add(compareField("Full Name", 
+        // ========== 3 TRƯỜNG BẮT BUỘC (MANDATORY FIELDS) ==========
+        
+        // 1. FULL NAME (Họ và tên) - BẮT BUỘC
+        OcrComparisonResult.FieldComparison nameComparison = compareField("Họ và tên", 
                 extractedData.getFullName(), 
-                profileData.getFullName()));
+                profileData.getFullName());
+        comparisons.add(nameComparison);
 
-        // Compare ID number
-        comparisons.add(compareField("ID Number", 
-                extractedData.getIdNumber(), 
-                profileData.getIdNumber()));
+        // 2. POSITION/CHUYÊN MÔN (Chức danh) - BẮT BUỘC + VALIDATE TỪ KHÓA
+        OcrComparisonResult.FieldComparison positionComparison = validateTeacherPosition(
+                extractedData.getPosition());
+        comparisons.add(positionComparison);
 
-        // Compare date of birth
-        comparisons.add(compareField("Date of Birth", 
-                extractedData.getDateOfBirth(), 
-                profileData.getDateOfBirth()));
+        // 3. SCHOOL NAME (Tên trường) - BẮT BUỘC
+        OcrComparisonResult.FieldComparison schoolComparison = compareField("Tên trường", 
+                extractedData.getSchoolName(), 
+                profileData.getSchoolName());
+        comparisons.add(schoolComparison);
 
-        // Compare place of birth
-        comparisons.add(compareField("Place of Birth", 
-                extractedData.getPlaceOfBirth(), 
-                profileData.getPlaceOfBirth()));
+        // ========== LOGIC DUYỆT: CHỈ PASS KHI CẢ 3 TRƯỜNG ĐỀU HỢP LỆ ==========
+        
+        boolean allFieldsPass = nameComparison.getMatches() 
+                && positionComparison.getMatches() 
+                && schoolComparison.getMatches();
 
-        // Compare address
-        comparisons.add(compareField("Address", 
-                extractedData.getAddress(), 
-                profileData.getAddress()));
-
-        // Calculate overall match score
+        // Calculate match score (all 3 fields have equal weight)
         long matchCount = comparisons.stream().filter(OcrComparisonResult.FieldComparison::getMatches).count();
-        double matchScore = (matchCount * 100.0) / comparisons.size();
+        double matchScore = (matchCount * 100.0) / 3.0; // Only 3 fields
 
-        // Determine if overall match
-        boolean isMatch = matchScore >= 80.0; // 80% threshold
-
-        String summary = String.format("Verification %s: %.2f%% match (%d/%d fields)", 
-                isMatch ? "PASSED" : "FAILED", 
-                matchScore, 
-                matchCount, 
-                comparisons.size());
+        String summary;
+        if (!allFieldsPass) {
+            summary = String.format("❌ XÁC MINH THẤT BẠI: Không đủ 3 trường bắt buộc. " +
+                    "Họ tên: %s, Chức danh+Toán: %s, Tên trường: %s", 
+                    nameComparison.getMatches() ? "✓" : "✗",
+                    positionComparison.getMatches() ? "✓" : "✗",
+                    schoolComparison.getMatches() ? "✓" : "✗");
+        } else {
+            summary = String.format("✅ XÁC MINH THÀNH CÔNG: Cả 3 trường bắt buộc đều hợp lệ (%.0f%% khớp)", 
+                    matchScore);
+        }
 
         return OcrComparisonResult.builder()
-                .isMatch(isMatch)
+                .isMatch(allFieldsPass)
                 .matchScore(matchScore)
                 .summary(summary)
                 .fieldComparisons(comparisons)
                 .extractedData(extractedData)
                 .profileData(profileData)
+                .build();
+    }
+
+    /**
+     * Validate teacher position with keyword checking
+     * MUST contain: "Giáo viên" OR "Giảng viên" 
+     * MUST contain: "Toán"
+     * REJECT: "Cán bộ", "Nhân viên", "Staff" without "Toán"
+     */
+    private OcrComparisonResult.FieldComparison validateTeacherPosition(String position) {
+        if (position == null || position.trim().isEmpty()) {
+            return OcrComparisonResult.FieldComparison.builder()
+                    .fieldName("Chức danh + Chuyên môn")
+                    .ocrValue(null)
+                    .profileValue("Bắt buộc: Giáo viên/Giảng viên + Toán")
+                    .matches(false)
+                    .similarity(0.0)
+                    .notes("❌ THẤT BẠI: Không đọc được chức danh trên giấy tờ")
+                    .build();
+        }
+
+        String normalizedPosition = position.toLowerCase().trim();
+        
+        // Check for teaching role keywords
+        boolean hasTeachingRole = normalizedPosition.contains("giáo viên") 
+                || normalizedPosition.contains("giảng viên")
+                || normalizedPosition.contains("giao vien")
+                || normalizedPosition.contains("giang vien");
+
+        // Check for Math subject keyword
+        boolean hasMathSubject = normalizedPosition.contains("toán") 
+                || normalizedPosition.contains("toan")
+                || normalizedPosition.contains("mathematics")
+                || normalizedPosition.contains("math");
+
+        // Check for rejected keywords (without Math)
+        boolean hasRejectedRole = (normalizedPosition.contains("cán bộ") 
+                || normalizedPosition.contains("can bo")
+                || normalizedPosition.contains("nhân viên")
+                || normalizedPosition.contains("nhan vien")
+                || normalizedPosition.contains("staff")
+                || normalizedPosition.contains("chuyên viên")
+                || normalizedPosition.contains("chuyen vien"))
+                && !hasMathSubject;
+
+        boolean isValid = hasTeachingRole && hasMathSubject && !hasRejectedRole;
+
+        String notes;
+        if (hasRejectedRole) {
+            notes = "❌ TỪ CHỐI: Chỉ là cán bộ/nhân viên, không phải giáo viên Toán";
+        } else if (!hasTeachingRole) {
+            notes = "❌ THẤT BẠI: Thiếu chức danh giảng dạy (Giáo viên/Giảng viên)";
+        } else if (!hasMathSubject) {
+            notes = "❌ THẤT BẠI: Thiếu chuyên môn Toán";
+        } else {
+            notes = "✅ HỢP LỆ: Giáo viên/Giảng viên Toán";
+        }
+
+        return OcrComparisonResult.FieldComparison.builder()
+                .fieldName("Chức danh + Chuyên môn")
+                .ocrValue(position)
+                .profileValue("Bắt buộc: Giáo viên/Giảng viên + Toán")
+                .matches(isValid)
+                .similarity(isValid ? 100.0 : 0.0)
+                .notes(notes)
                 .build();
     }
 

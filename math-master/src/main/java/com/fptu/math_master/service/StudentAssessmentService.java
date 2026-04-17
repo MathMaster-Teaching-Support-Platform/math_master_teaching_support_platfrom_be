@@ -17,6 +17,9 @@ public interface StudentAssessmentService {
   // My Assessments
   Page<StudentAssessmentResponse> getMyAssessments(String statusFilter, Pageable pageable);
 
+  Page<StudentAssessmentResponse> getMyAssessmentsByCourse(
+      UUID courseId, String statusFilter, Pageable pageable);
+
   StudentAssessmentResponse getAssessmentDetails(UUID assessmentId);
 
   // Start Assessment

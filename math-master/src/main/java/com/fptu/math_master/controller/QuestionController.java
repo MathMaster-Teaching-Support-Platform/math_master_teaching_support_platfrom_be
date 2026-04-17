@@ -188,7 +188,9 @@ public class QuestionController {
 
     log.info("REST request to search questions: search={}, type={}", search, type);
 
-    Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+    // Use database column name for native query, Java property name for JPQL
+    String sortProperty = (search != null && !search.isEmpty()) ? "created_at" : "createdAt";
+    Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, sortProperty));
 
     return ApiResponse.<Page<QuestionResponse>>builder()
         .message("Questions found successfully")

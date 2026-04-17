@@ -265,7 +265,20 @@ public enum ErrorCode {
   USER_SUBSCRIPTION_NOT_FOUND(1157, "User subscription not found", HttpStatus.NOT_FOUND),
   OCR_JOB_NOT_FOUND(1158, "OCR job not found", HttpStatus.NOT_FOUND),
   OCR_JOB_NOT_COMPLETED(1159, "OCR job not completed yet", HttpStatus.BAD_REQUEST),
-  OCR_JOB_FAILED(1160, "OCR job failed", HttpStatus.INTERNAL_SERVER_ERROR);
+  OCR_JOB_FAILED(1160, "OCR job failed", HttpStatus.INTERNAL_SERVER_ERROR),
+  ASSESSMENT_ALREADY_IN_COURSE(1161, "Assessment is already added to this course", HttpStatus.BAD_REQUEST),
+    COURSE_ASSESSMENT_NOT_FOUND(1162, "Course assessment not found", HttpStatus.NOT_FOUND),
+    SUBSCRIPTION_PLAN_NOT_PURCHASABLE(1163, "Subscription plan is not purchasable", HttpStatus.BAD_REQUEST),
+    NO_ACTIVE_SUBSCRIPTION(1164, "No active subscription found", HttpStatus.BAD_REQUEST),
+        INSUFFICIENT_SUBSCRIPTION_TOKENS(1165, "Not enough subscription tokens", HttpStatus.BAD_REQUEST),
+        GENERATED_SLIDE_NOT_FOUND(1166, "Generated slide file not found", HttpStatus.NOT_FOUND),
+        GENERATED_SLIDE_ACCESS_DENIED(
+                1167, "You do not have permission to access this generated slide", HttpStatus.FORBIDDEN),
+        GENERATED_SLIDE_NOT_PUBLIC(1168, "Generated slide is not public", HttpStatus.BAD_REQUEST),
+      ASSESSMENT_NOT_MATCH_COURSE_LESSONS(
+          1169,
+          "Assessment lessons do not match any lessons in this course",
+          HttpStatus.BAD_REQUEST);
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

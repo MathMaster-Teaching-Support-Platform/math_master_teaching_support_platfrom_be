@@ -1,12 +1,14 @@
 package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
+import com.fptu.math_master.dto.request.BatchUpsertMatrixRowCellsRequest;
 import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
 import com.fptu.math_master.dto.request.ExamMatrixRequest;
 import com.fptu.math_master.dto.request.FinalizePreviewRequest;
 import com.fptu.math_master.dto.request.GeneratePreviewRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
+import com.fptu.math_master.dto.request.MatrixCellRequest;
 import com.fptu.math_master.dto.response.BatchTemplateMappingsResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
 import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
@@ -59,6 +61,12 @@ public interface ExamMatrixService {
    * Remove a row and all its cells from a DRAFT matrix.
    */
   ExamMatrixTableResponse removeMatrixRow(UUID matrixId, UUID rowId);
+
+  ExamMatrixTableResponse upsertMatrixRowCells(
+      UUID matrixId, UUID rowId, List<MatrixCellRequest> cells);
+
+  ExamMatrixTableResponse batchUpsertMatrixRowCells(
+      UUID matrixId, BatchUpsertMatrixRowCellsRequest request);
 
   // ── Template Mappings ───────────────────────────────────────────────────
 

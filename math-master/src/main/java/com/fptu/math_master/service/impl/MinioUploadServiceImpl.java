@@ -5,12 +5,16 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.service.UploadService;
 import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.URI;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -21,6 +25,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 @Service
 @Slf4j
@@ -116,17 +128,56 @@ public class MinioUploadServiceImpl implements UploadService {
 
   @Override
   public String getPresignedUrl(String key, String bucketName) {
-    try {
-      return minioClient.getPresignedObjectUrl(
-          io.minio.GetPresignedObjectUrlArgs.builder()
-              .method(io.minio.http.Method.GET)
-              .bucket(bucketName)
-              .object(key)
-              .expiry(60 * 60) // 1 hour
-              .build());
+    try (S3Presigner presigner = buildPresigner()) {
+      PresignedGetObjectRequest presigned =
+          presigner.presignGetObject(
+              GetObjectPresignRequest.builder()
+                  .signatureDuration(Duration.ofHours(1))
+                  .getObjectRequest(
+                      GetObjectRequest.builder()
+                          .bucket(bucketName)
+                          .key(key)
+                          .build())
+                  .build());
+      return presigned.url().toString();
     } catch (Exception e) {
       log.error("Error generating pre-signed URL for Minio: {}/{}", bucketName, key, e);
       throw new RuntimeException("Could not generate download URL", e);
+    }
+  }
+
+  private S3Presigner buildPresigner() {
+    String signingEndpoint = minioProperties.getPublicEndpoint();
+    if (signingEndpoint == null || signingEndpoint.isBlank()) {
+      signingEndpoint = minioProperties.getEndpoint();
+    }
+
+    URI uri = URI.create(signingEndpoint);
+    if (uri.getPath() != null && !uri.getPath().isBlank() && !"/".equals(uri.getPath())) {
+      signingEndpoint = uri.getScheme() + "://" + uri.getAuthority();
+      log.warn("Stripped path from MinIO public endpoint for presign: {}", signingEndpoint);
+    }
+
+    return S3Presigner.builder()
+        .endpointOverride(URI.create(signingEndpoint))
+        .credentialsProvider(
+            StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(
+                    minioProperties.getAccessKey(), minioProperties.getSecretKey())))
+        .region(Region.US_EAST_1)
+        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+        .build();
+  }
+
+  @Override
+  public byte[] downloadFile(String key, String bucketName) {
+    try (InputStream inputStream =
+        minioClient.getObject(
+            GetObjectArgs.builder().bucket(bucketName).object(key).build())) {
+      return inputStream.readAllBytes();
+    } catch (Exception e) {
+      log.error("Error downloading file from Minio: {}/{}", bucketName, key, e);
+      throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
     }
   }
 

@@ -39,8 +39,9 @@ public class SecurityConfig {
     "/api/auth/introspect",
     "/api/auth/logout",
     "/api/auth/refresh",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
     "/api/payment/webhook",
-    "/api/ai/chat",
     "/api/question-templates/import-from-file",
   };
 
@@ -51,6 +52,7 @@ public class SecurityConfig {
     "/actuator/mappings",
     "/api/ai/test",
     "/api/lessons/**",
+    "/api/lesson-slides/public/**",
     "/api/auth/confirm-email",
     "/api/courses",
     "/api/courses/{id}",
@@ -76,6 +78,8 @@ public class SecurityConfig {
                 request
                     .requestMatchers("/api/payment/webhook/**")
                     .permitAll()
+                  .requestMatchers(HttpMethod.GET, "/api/mindmaps/public/**")
+                  .hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                     .requestMatchers(SWAGGER_WHITELIST)
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS)

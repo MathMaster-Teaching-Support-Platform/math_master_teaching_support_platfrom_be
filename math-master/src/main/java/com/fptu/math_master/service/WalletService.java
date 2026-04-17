@@ -1,5 +1,13 @@
 package com.fptu.math_master.service;
 
+import java.math.BigDecimal;
+import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fptu.math_master.dto.response.TransactionResponse;
 import com.fptu.math_master.dto.response.WalletResponse;
 import com.fptu.math_master.entity.Transaction;
@@ -7,21 +15,17 @@ import com.fptu.math_master.entity.User;
 import com.fptu.math_master.entity.Wallet;
 import com.fptu.math_master.enums.Status;
 import com.fptu.math_master.enums.TransactionStatus;
+import com.fptu.math_master.enums.TransactionType;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.TransactionRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.repository.WalletRepository;
-import java.math.BigDecimal;
-import java.util.UUID;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -148,10 +152,19 @@ public class WalletService {
   }
 
   private WalletResponse mapToWalletResponse(Wallet wallet) {
+    BigDecimal totalDeposited = transactionRepository.sumByWalletIdAndTypeAndStatus(
+        wallet.getId(), TransactionType.DEPOSIT, TransactionStatus.SUCCESS);
+    BigDecimal totalSpent = transactionRepository.sumByWalletIdAndTypeAndStatus(
+        wallet.getId(), TransactionType.PAYMENT, TransactionStatus.SUCCESS);
+    long transactionCount = transactionRepository.countByWalletId(wallet.getId());
+
     return WalletResponse.builder()
         .walletId(wallet.getId())
         .userId(wallet.getUser().getId())
         .balance(wallet.getBalance())
+        .totalDeposited(totalDeposited)
+        .totalSpent(totalSpent)
+        .transactionCount(transactionCount)
         .status(wallet.getStatus())
         .createdAt(wallet.getCreatedAt())
         .updatedAt(wallet.getUpdatedAt())
@@ -170,6 +183,7 @@ public class WalletService {
         .paymentLinkId(transaction.getPaymentLinkId())
         .referenceCode(transaction.getReferenceCode())
         .transactionDate(transaction.getTransactionDate())
+        .expiresAt(transaction.getExpiresAt())
         .createdAt(transaction.getCreatedAt())
         .updatedAt(transaction.getUpdatedAt())
         .build();

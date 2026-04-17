@@ -91,4 +91,7 @@ public class Course extends BaseEntity {
 
   @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<Enrollment> enrollments;
+
+  @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<CourseAssessment> courseAssessments;
 }

@@ -29,6 +29,14 @@ public interface UploadService {
   String getPresignedUrl(String key, String bucketName);
 
   /**
+   * Download a file from Minio
+   * @param key Path/Key to the file
+   * @param bucketName The bucket containing the file
+   * @return The byte array of the file content
+   */
+  byte[] downloadFile(String key, String bucketName);
+
+  /**
    * Delete a file from Minio
    * @param filePath Path/Key to the file
    */

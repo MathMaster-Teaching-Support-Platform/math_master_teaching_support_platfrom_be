@@ -25,4 +25,12 @@ public interface SubscriptionPlanRepository extends JpaRepository<SubscriptionPl
 
   @Query("SELECT p FROM SubscriptionPlan p WHERE p.deletedAt IS NULL AND p.status = :status ORDER BY p.createdAt ASC")
   List<SubscriptionPlan> findAllByStatus(SubscriptionPlanStatus status);
+
+  @Query(
+      "SELECT p FROM SubscriptionPlan p "
+          + "WHERE p.deletedAt IS NULL "
+          + "AND p.status = com.fptu.math_master.enums.SubscriptionPlanStatus.ACTIVE "
+          + "AND p.publicVisible = true "
+          + "ORDER BY p.featured DESC, p.createdAt ASC")
+  List<SubscriptionPlan> findPublicPurchasablePlans();
 }

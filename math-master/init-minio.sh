@@ -21,6 +21,6 @@ mc mb myminio/teacher-verifications --ignore-existing
 mc anonymous set download myminio/course-videos
 
 # Apply CORS configuration
-mc anonymous set-json /cors-config.xml myminio/course-videos
+mc cors set /cors-config.xml myminio/course-videos
 
 echo "MinIO configuration completed!"

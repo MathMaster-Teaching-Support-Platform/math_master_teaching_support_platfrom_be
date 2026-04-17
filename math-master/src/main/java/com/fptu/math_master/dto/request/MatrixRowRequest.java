@@ -1,8 +1,6 @@
 package com.fptu.math_master.dto.request;
 
 import com.fptu.math_master.enums.QuestionDifficulty;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -38,7 +36,6 @@ public class MatrixRowRequest {
   /**
    * Selected difficulty for this row (EASY/MEDIUM/HARD).
    */
-  @NotNull(message = "questionDifficulty is required")
   private QuestionDifficulty questionDifficulty;
 
   /**
@@ -58,8 +55,9 @@ public class MatrixRowRequest {
   /** 1-based display order within the chapter group. */
   private Integer orderIndex;
 
-  /** The cognitive-level cells for this row (at least one). */
-  @NotEmpty(message = "cells must not be empty")
-  @Valid
+  /**
+   * Optional cells for this row.
+   * FE can create row first, then call the dedicated row-cells endpoint.
+   */
   private List<MatrixCellRequest> cells;
 }

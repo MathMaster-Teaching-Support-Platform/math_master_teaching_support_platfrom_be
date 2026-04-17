@@ -94,4 +94,10 @@ public class Transaction extends BaseEntity {
    */
   @Column(name = "transaction_date")
   private Instant transactionDate;
+
+  /**
+   * expires_at — when a PENDING transaction expires (15 minutes after creation)
+   */
+  @Column(name = "expires_at")
+  private Instant expiresAt;
 }

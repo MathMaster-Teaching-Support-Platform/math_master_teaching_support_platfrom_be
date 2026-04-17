@@ -1,8 +1,6 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionDifficulty;
-import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,7 +14,6 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -25,7 +22,6 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.Type;
 
 @Builder
 @AllArgsConstructor
@@ -57,14 +53,14 @@ public class ExamMatrixBankMapping extends BaseEntity {
   @Column(name = "matrix_row_id")
   private UUID matrixRowId;
 
-  @Type(JsonBinaryType.class)
-  @Column(name = "difficulty_distribution", nullable = false, columnDefinition = "jsonb")
-  private Map<QuestionDifficulty, Integer> difficultyDistribution;
+  @Column(name = "question_count", nullable = false)
+  private Integer questionCount;
 
   @Column(name = "points_per_question", precision = 7, scale = 2)
   private BigDecimal pointsPerQuestion;
 
-  @Column(name = "cognitive_level", nullable = false)
+  // Nullable for percentage-based matrices (cognitive level determined by matrix-level percentages)
+  @Column(name = "cognitive_level")
   @Enumerated(EnumType.STRING)
   private CognitiveLevel cognitiveLevel;
 

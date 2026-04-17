@@ -36,6 +36,13 @@ public interface LessonRepository
   List<Lesson> findByStatusAndNotDeleted(@Param("status") LessonStatus status);
 
   @Query(
+      "SELECT l FROM Lesson l WHERE l.status = :status AND l.deletedAt IS NULL "
+          + "AND (l.createdBy = :teacherId OR l.updatedBy = :teacherId) "
+          + "ORDER BY l.updatedAt DESC, l.createdAt DESC")
+  List<Lesson> findTeacherSlideLessonsByStatus(
+      @Param("teacherId") UUID teacherId, @Param("status") LessonStatus status);
+
+  @Query(
       "SELECT l FROM Lesson l WHERE l.title = :title AND l.chapterId = :chapterId"
           + " AND l.deletedAt IS NULL")
   java.util.Optional<Lesson> findByTitleAndChapterIdAndNotDeleted(

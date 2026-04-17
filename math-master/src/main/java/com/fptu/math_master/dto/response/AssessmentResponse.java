@@ -35,6 +35,8 @@ public class AssessmentResponse {
   private Boolean showCorrectAnswers;
   private AssessmentMode assessmentMode;
   private UUID examMatrixId;
+  private String examMatrixName;
+  private Integer examMatrixGradeLevel;
   private Boolean allowMultipleAttempts;
   private Integer maxAttempts;
   private AttemptScoringPolicy attemptScoringPolicy;

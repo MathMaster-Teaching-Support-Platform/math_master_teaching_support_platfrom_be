@@ -3,14 +3,12 @@ package com.fptu.math_master.service.impl;
 import com.fptu.math_master.entity.AssessmentQuestion;
 import com.fptu.math_master.entity.ExamMatrixBankMapping;
 import com.fptu.math_master.entity.Question;
-import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ExamMatrixBankMappingRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.service.QuestionSelectionService;
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -42,7 +40,7 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     }
 
     for (ExamMatrixBankMapping mapping : mappings) {
-      int required = totalRequiredQuestions(normalizeDistribution(mapping));
+      int required = requiredQuestions(mapping);
       if (required <= 0) {
         continue;
       }
@@ -65,7 +63,7 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
         new SelectionContext(new ArrayList<>(), new HashSet<>(), startOrderIndex, 0);
 
     for (ExamMatrixBankMapping mapping : mappings) {
-      int required = totalRequiredQuestions(normalizeDistribution(mapping));
+      int required = requiredQuestions(mapping);
       appendSelectionFromMapping(assessmentId, mapping, required, context);
     }
 
@@ -130,8 +128,8 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
         mapping.getQuestionBankId(), null, cognitiveLevel, null);
   }
 
-  private int totalRequiredQuestions(Map<QuestionDifficulty, Integer> distribution) {
-    return distribution.values().stream().mapToInt(Integer::intValue).sum();
+  private int requiredQuestions(ExamMatrixBankMapping mapping) {
+    return mapping.getQuestionCount() != null ? Math.max(0, mapping.getQuestionCount()) : 0;
   }
 
   private List<Question> fetchQuestionsInOrder(List<UUID> selectedIds) {
@@ -161,23 +159,6 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
       questionIds.set(i, questionIds.get(j));
       questionIds.set(j, tmp);
     }
-  }
-
-  private Map<QuestionDifficulty, Integer> normalizeDistribution(ExamMatrixBankMapping mapping) {
-    Map<QuestionDifficulty, Integer> normalized = new EnumMap<>(QuestionDifficulty.class);
-    Map<QuestionDifficulty, Integer> source = mapping.getDifficultyDistribution();
-
-    normalized.put(
-        QuestionDifficulty.EASY,
-        source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.EASY, 0)) : 0);
-    normalized.put(
-        QuestionDifficulty.MEDIUM,
-        source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.MEDIUM, 0)) : 0);
-    normalized.put(
-        QuestionDifficulty.HARD,
-        source != null ? Math.max(0, source.getOrDefault(QuestionDifficulty.HARD, 0)) : 0);
-
-    return normalized;
   }
 
   private static final class SelectionContext {
