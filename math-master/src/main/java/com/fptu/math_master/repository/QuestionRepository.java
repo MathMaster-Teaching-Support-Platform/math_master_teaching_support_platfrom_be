@@ -76,8 +76,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
               + "WHERE q.deleted_at IS NULL "
               + "AND q.created_by = :createdBy "
               + "AND (q.question_text ILIKE :searchPattern "
-              + "  OR q.explanation ILIKE :searchPattern) "
-              + "ORDER BY q.created_at DESC",
+              + "  OR q.explanation ILIKE :searchPattern)",
       countQuery =
           "SELECT COUNT(*) FROM questions q "
               + "WHERE q.deleted_at IS NULL "
