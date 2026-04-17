@@ -46,4 +46,7 @@ public class TopicMaterialResponse {
 
   @Schema(description = "Chapter ID (for context)")
   private UUID chapterId;
+
+  @Schema(description = "API path for opening this material directly")
+  private String resourceLink;
 }

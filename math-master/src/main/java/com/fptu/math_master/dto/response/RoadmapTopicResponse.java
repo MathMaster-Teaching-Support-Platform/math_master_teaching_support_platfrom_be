@@ -65,4 +65,7 @@ public class RoadmapTopicResponse {
 
   @Schema(description = "Mindmaps for this topic (from linked lesson)")
   private List<MindmapResponse> mindmaps;
+
+  @Schema(description = "Ordered learning materials attached to this topic")
+  private List<TopicMaterialResponse> materials;
 }

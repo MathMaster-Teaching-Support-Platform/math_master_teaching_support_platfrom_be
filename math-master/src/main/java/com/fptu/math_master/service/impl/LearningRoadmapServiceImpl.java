@@ -432,6 +432,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   private RoadmapTopicResponse mapToTopicResponse(RoadmapTopic topic) {
     List<QuestionTemplateResponse> questionTemplateResponses = new ArrayList<>();
     List<MindmapResponse> mindmapResponses = new ArrayList<>();
+    List<TopicMaterialResponse> materialResponses =
+      materialRepository.findByTopicIdOrderBySequenceOrder(topic.getId()).stream()
+        .map(this::mapToMaterialResponse)
+        .collect(Collectors.toList());
 
     // Load question templates and mindmaps from the linked lesson
     if (topic.getLessonId() != null) {
@@ -469,6 +473,7 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .startedAt(topic.getStartedAt())
         .questionTemplates(questionTemplateResponses)
         .mindmaps(mindmapResponses)
+          .materials(materialResponses)
         .build();
   }
 
@@ -524,7 +529,37 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .assessmentId(material.getAssessmentId())
         .mindmapId(material.getMindmapId())
         .chapterId(material.getChapterId())
+        .resourceLink(buildMaterialLink(material))
         .build();
+  }
+
+  private String buildMaterialLink(TopicLearningMaterial material) {
+    if (material.getResourceType() == null) {
+      return null;
+    }
+
+    String normalizedType = material.getResourceType().trim().toUpperCase(Locale.ROOT);
+    return switch (normalizedType) {
+      case "LESSON" ->
+          material.getLessonId() == null ? null : "/lessons/" + material.getLessonId();
+      case "SLIDE" ->
+          material.getLessonId() == null
+              ? null
+              : "/lesson-slides/public/lessons/" + material.getLessonId() + "/generated";
+      case "ASSESSMENT" ->
+          material.getAssessmentId() == null
+              ? null
+              : "/student-assessments/" + material.getAssessmentId();
+      case "MINDMAP" -> {
+        if (material.getMindmapId() != null) {
+          yield "/mindmaps/public/" + material.getMindmapId();
+        }
+        yield material.getLessonId() == null
+            ? null
+            : "/mindmaps/public?lessonId=" + material.getLessonId();
+      }
+      default -> null;
+    };
   }
 
   private QuestionTemplateResponse mapToQuestionTemplateResponse(QuestionTemplate template) {
