@@ -13,8 +13,23 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CreateCourseLessonRequest {
 
-  @NotNull(message = "lessonId is required")
+  /**
+   * FK to Ministry Lesson. Required when adding a lesson to a MINISTRY course.
+   * Leave null for CUSTOM courses.
+   */
   private UUID lessonId;
+
+  /**
+   * FK to CustomCourseSection. Required when adding a lesson to a CUSTOM course.
+   * Leave null for MINISTRY courses.
+   */
+  private UUID sectionId;
+
+  /** Teacher-defined title. Required for CUSTOM course lessons. */
+  private String customTitle;
+
+  /** Optional description for CUSTOM course lessons. */
+  private String customDescription;
 
   private String videoTitle;
 

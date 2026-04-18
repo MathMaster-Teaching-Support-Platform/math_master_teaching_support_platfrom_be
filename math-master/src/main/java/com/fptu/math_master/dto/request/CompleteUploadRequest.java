@@ -26,8 +26,12 @@ public class CompleteUploadRequest {
   private List<PartInfo> parts;
 
   // CourseLesson metadata
-  @NotNull(message = "lessonId is required")
   private UUID lessonId;
+
+  // Metadata for custom courses
+  private UUID sectionId;
+  private String customTitle;
+  private String customDescription;
 
   private String videoTitle;
   private Integer orderIndex;
