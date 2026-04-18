@@ -18,25 +18,32 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
 
   List<Course> findByTeacherIdAndDeletedAtIsNullOrderByCreatedAtDesc(UUID teacherId);
 
-  // Public listing — JOIN subject + schoolGrade để đảm bảo còn active
+  /**
+   * Public listing — LEFT JOIN subject + schoolGrade so that CUSTOM courses
+   * with no subject_id / school_grade_id still appear.
+   */
   @Query(
-      value = "SELECT c.* FROM courses c "
-          + "JOIN subjects s ON s.id = c.subject_id "
-          + "JOIN school_grades sg ON sg.id = c.school_grade_id "
-          + "WHERE c.is_published = true AND c.deleted_at IS NULL "
-          + "AND s.is_active = true AND sg.is_active = true "
-          + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "
-          + "AND (:subjectId IS NULL OR c.subject_id = :subjectId) "
-          + "AND (:keyword IS NULL OR c.title::text ILIKE CONCAT('%', :keyword, '%')) "
-          + "ORDER BY c.created_at DESC",
-      countQuery = "SELECT COUNT(*) FROM courses c "
-          + "JOIN subjects s ON s.id = c.subject_id "
-          + "JOIN school_grades sg ON sg.id = c.school_grade_id "
-          + "WHERE c.is_published = true AND c.deleted_at IS NULL "
-          + "AND s.is_active = true AND sg.is_active = true "
-          + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "
-          + "AND (:subjectId IS NULL OR c.subject_id = :subjectId) "
-          + "AND (:keyword IS NULL OR c.title::text ILIKE CONCAT('%', :keyword, '%'))",
+      value =
+          "SELECT c.* FROM courses c "
+              + "LEFT JOIN subjects s ON s.id = c.subject_id "
+              + "LEFT JOIN school_grades sg ON sg.id = c.school_grade_id "
+              + "WHERE c.is_published = true AND c.deleted_at IS NULL "
+              + "AND (c.subject_id IS NULL OR s.is_active = true) "
+              + "AND (c.school_grade_id IS NULL OR sg.is_active = true) "
+              + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "
+              + "AND (:subjectId IS NULL OR c.subject_id = :subjectId) "
+              + "AND (:keyword IS NULL OR c.title::text ILIKE CONCAT('%', :keyword, '%')) "
+              + "ORDER BY c.created_at DESC",
+      countQuery =
+          "SELECT COUNT(*) FROM courses c "
+              + "LEFT JOIN subjects s ON s.id = c.subject_id "
+              + "LEFT JOIN school_grades sg ON sg.id = c.school_grade_id "
+              + "WHERE c.is_published = true AND c.deleted_at IS NULL "
+              + "AND (c.subject_id IS NULL OR s.is_active = true) "
+              + "AND (c.school_grade_id IS NULL OR sg.is_active = true) "
+              + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "
+              + "AND (:subjectId IS NULL OR c.subject_id = :subjectId) "
+              + "AND (:keyword IS NULL OR c.title::text ILIKE CONCAT('%', :keyword, '%'))",
       nativeQuery = true)
   Page<Course> findPublishedCoursesWithFilter(
       @Param("schoolGradeId") UUID schoolGradeId,

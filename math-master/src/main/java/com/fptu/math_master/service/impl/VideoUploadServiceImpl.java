@@ -241,12 +241,24 @@ public class VideoUploadServiceImpl implements VideoUploadService {
 
   @Override
   public CourseLessonResponse completeUpload(UUID courseId, CompleteUploadRequest request) {
-    findCourseAndVerifyOwner(courseId);
+    Course course = findCourseAndVerifyOwner(courseId);
 
-    var lesson =
-        lessonRepository
-            .findByIdAndNotDeleted(request.getLessonId())
-            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+    String lessonTitle = null;
+    
+    if (course.getProvider() == com.fptu.math_master.enums.CourseProvider.MINISTRY) {
+      if (request.getLessonId() == null) {
+        throw new AppException(ErrorCode.INVALID_REQUEST); // specific error handled by global handler
+      }
+      var lesson = lessonRepository
+          .findByIdAndNotDeleted(request.getLessonId())
+          .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+      lessonTitle = lesson.getTitle();
+    } else {
+      if (request.getSectionId() == null || request.getCustomTitle() == null) {
+        throw new AppException(ErrorCode.INVALID_REQUEST);
+      }
+      lessonTitle = request.getCustomTitle();
+    }
 
     String bucket = minioProperties.getCourseVideosBucket();
 
@@ -303,6 +315,9 @@ public class VideoUploadServiceImpl implements VideoUploadService {
         CourseLesson.builder()
             .courseId(courseId)
             .lessonId(request.getLessonId())
+            .sectionId(request.getSectionId())
+            .customTitle(request.getCustomTitle())
+            .customDescription(request.getCustomDescription())
             .videoUrl(request.getObjectKey()) // store object key; serve via presigned GET URL
             .videoTitle(request.getVideoTitle())
             .orderIndex(request.getOrderIndex())
@@ -318,7 +333,8 @@ public class VideoUploadServiceImpl implements VideoUploadService {
         .id(courseLesson.getId())
         .courseId(courseLesson.getCourseId())
         .lessonId(courseLesson.getLessonId())
-        .lessonTitle(lesson.getTitle())
+        .sectionId(courseLesson.getSectionId())
+        .lessonTitle(lessonTitle)
         .videoUrl(courseLesson.getVideoUrl())
         .videoTitle(courseLesson.getVideoTitle())
         .durationSeconds(courseLesson.getDurationSeconds())

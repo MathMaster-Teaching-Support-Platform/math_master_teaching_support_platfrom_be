@@ -57,6 +57,7 @@ public class SecurityConfig {
     "/api/courses",
     "/api/courses/{id}",
     "/api/courses/{courseId}/lessons",
+    "/api/courses/{courseId}/sections",
     "/api/courses/{courseId}/lessons/{lessonId}/video-url",
     // Stream endpoint removed - using presigned URL directly from MinIO
   };

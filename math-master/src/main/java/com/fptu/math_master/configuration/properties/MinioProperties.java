@@ -26,4 +26,5 @@ public class MinioProperties {
   @NotBlank private String verificationBucket = "teacher-verifications";
 
   @NotBlank private String courseVideosBucket = "course-videos";
+  @NotBlank private String courseMaterialsBucket = "course-materials";
 }

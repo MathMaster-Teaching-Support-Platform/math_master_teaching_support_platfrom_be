@@ -84,30 +84,50 @@ public class CourseServiceImpl implements CourseService {
   public CourseResponse createCourse(CreateCourseRequest request, MultipartFile thumbnailFile) {
     UUID teacherId = SecurityUtils.getCurrentUserId();
 
-    Subject subject =
-        subjectRepository
-            .findById(request.getSubjectId())
-            .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
+    Subject subject = null;
+    SchoolGrade schoolGrade = null;
 
-    SchoolGrade schoolGrade =
-        schoolGradeRepository
-            .findById(request.getSchoolGradeId())
-            .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+    if (request.getProvider() == com.fptu.math_master.enums.CourseProvider.MINISTRY) {
+      // Ministry courses require both subjectId and schoolGradeId
+      if (request.getSubjectId() == null) {
+        throw new AppException(ErrorCode.SUBJECT_REQUIRED_FOR_MINISTRY_COURSE);
+      }
+      if (request.getSchoolGradeId() == null) {
+        throw new AppException(ErrorCode.GRADE_REQUIRED_FOR_MINISTRY_COURSE);
+      }
+      subject =
+          subjectRepository
+              .findById(request.getSubjectId())
+              .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
+      schoolGrade =
+          schoolGradeRepository
+              .findById(request.getSchoolGradeId())
+              .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+    } else {
+      // CUSTOM: subject/grade are optional
+      if (request.getSubjectId() != null) {
+        subject = subjectRepository.findById(request.getSubjectId()).orElse(null);
+      }
+      if (request.getSchoolGradeId() != null) {
+        schoolGrade = schoolGradeRepository.findById(request.getSchoolGradeId()).orElse(null);
+      }
+    }
 
     String thumbnailUrl = resolveThumbnailForWrite(thumbnailFile);
 
     Course course =
         Course.builder()
             .teacherId(teacherId)
+            .provider(request.getProvider())
             .subjectId(request.getSubjectId())
             .schoolGradeId(request.getSchoolGradeId())
             .title(request.getTitle())
             .description(request.getDescription())
-          .thumbnailUrl(thumbnailUrl)
+            .thumbnailUrl(thumbnailUrl)
             .build();
 
     course = courseRepository.save(course);
-    log.info("Course created: {} by teacher: {}", course.getId(), teacherId);
+    log.info("Course created: {} by teacher: {} [provider={}]", course.getId(), teacherId, course.getProvider());
     return mapToResponse(course, subject, schoolGrade);
   }
 
@@ -180,7 +200,7 @@ public class CourseServiceImpl implements CourseService {
       UUID schoolGradeId, UUID subjectId, String keyword, Pageable pageable) {
     // Native query already has ORDER BY, ignore Pageable sort to avoid camelCase field names
     Pageable unsortedPageable = org.springframework.data.domain.PageRequest.of(
-        pageable.getPageNumber(), 
+        pageable.getPageNumber(),
         pageable.getPageSize()
     );
     return courseRepository
@@ -251,6 +271,7 @@ public class CourseServiceImpl implements CourseService {
         .id(course.getId())
         .teacherId(course.getTeacherId())
         .teacherName(teacherName)
+        .provider(course.getProvider())
         .subjectId(course.getSubjectId())
         .subjectName(subject != null ? subject.getName() : null)
         .schoolGradeId(course.getSchoolGradeId())
@@ -338,11 +359,20 @@ public class CourseServiceImpl implements CourseService {
       throw new AppException(ErrorCode.ASSESSMENT_NO_QUESTIONS);
     }
 
+    // For MINISTRY courses: validate lesson-matching requirement
+    // For CUSTOM courses: skip lesson-matching — teacher defines lessons freely
     Set<UUID> courseLessonIds = getCourseLessonIds(courseId);
-    List<UUID> matchedLessonIds = getMatchedLessonIds(request.getAssessmentId(), courseLessonIds);
+    List<UUID> matchedLessonIds;
     boolean allowOutOfCourseLessons = Boolean.TRUE.equals(request.getAllowOutOfCourseLessons());
-    if (!allowOutOfCourseLessons && matchedLessonIds.isEmpty()) {
-      throw new AppException(ErrorCode.ASSESSMENT_NOT_MATCH_COURSE_LESSONS);
+
+    if (course.getProvider() == com.fptu.math_master.enums.CourseProvider.MINISTRY) {
+      matchedLessonIds = getMatchedLessonIds(request.getAssessmentId(), courseLessonIds);
+      if (!allowOutOfCourseLessons && matchedLessonIds.isEmpty()) {
+        throw new AppException(ErrorCode.ASSESSMENT_NOT_MATCH_COURSE_LESSONS);
+      }
+    } else {
+      // CUSTOM: no Ministry-lesson matching required
+      matchedLessonIds = List.of();
     }
 
     CourseAssessment courseAssessment =
@@ -397,7 +427,7 @@ public class CourseServiceImpl implements CourseService {
           // Apply filters
           if (status != null && response.getAssessmentStatus() != null) {
             try {
-              com.fptu.math_master.enums.AssessmentStatus statusEnum = 
+              com.fptu.math_master.enums.AssessmentStatus statusEnum =
                   com.fptu.math_master.enums.AssessmentStatus.valueOf(status.toUpperCase());
               if (!response.getAssessmentStatus().equals(statusEnum)) {
                 return false;
@@ -407,10 +437,10 @@ public class CourseServiceImpl implements CourseService {
               log.warn("Invalid assessment status filter: {}", status);
             }
           }
-          
+
           if (type != null && response.getAssessmentType() != null) {
             try {
-              com.fptu.math_master.enums.AssessmentType typeEnum = 
+              com.fptu.math_master.enums.AssessmentType typeEnum =
                   com.fptu.math_master.enums.AssessmentType.valueOf(type.toUpperCase());
               if (!response.getAssessmentType().equals(typeEnum)) {
                 return false;
@@ -420,11 +450,11 @@ public class CourseServiceImpl implements CourseService {
               log.warn("Invalid assessment type filter: {}", type);
             }
           }
-          
+
           if (isRequired != null && response.isRequired() != isRequired) {
             return false;
           }
-          
+
           return true;
         })
         .collect(Collectors.toList());

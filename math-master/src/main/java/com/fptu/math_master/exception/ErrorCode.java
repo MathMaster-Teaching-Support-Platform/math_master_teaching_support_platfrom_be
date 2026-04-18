@@ -11,6 +11,7 @@ import lombok.Getter;
  */
 public enum ErrorCode {
   UNCATEGORIZED_EXCEPTION(9999, "Uncategorized error", HttpStatus.INTERNAL_SERVER_ERROR),
+  INVALID_REQUEST(1000, "Invalid request", HttpStatus.BAD_REQUEST),
   INVALID_KEY(1001, "Uncategorized error", HttpStatus.BAD_REQUEST),
   USER_EXISTED(1002, "User existed", HttpStatus.BAD_REQUEST),
   USERNAME_INVALID(1003, "Username must be at least {min} characters", HttpStatus.BAD_REQUEST),
@@ -278,7 +279,46 @@ public enum ErrorCode {
       ASSESSMENT_NOT_MATCH_COURSE_LESSONS(
           1169,
           "Assessment lessons do not match any lessons in this course",
-          HttpStatus.BAD_REQUEST);
+          HttpStatus.BAD_REQUEST),
+  // ─── Custom Course (provider = CUSTOM) ────────────────────────────────────
+  CUSTOM_COURSE_SECTION_NOT_FOUND(1170, "Custom course section not found", HttpStatus.NOT_FOUND),
+  CUSTOM_COURSE_SECTION_ACCESS_DENIED(
+      1171,
+      "You do not have permission to access this section",
+      HttpStatus.FORBIDDEN),
+  CUSTOM_COURSE_SECTION_HAS_LESSONS(
+      1172,
+      "Cannot delete a section that still has active lessons",
+      HttpStatus.BAD_REQUEST),
+  SECTION_REQUIRED_FOR_CUSTOM_COURSE(
+      1173,
+      "sectionId is required when adding a lesson to a CUSTOM course",
+      HttpStatus.BAD_REQUEST),
+  CUSTOM_TITLE_REQUIRED(
+      1174,
+      "customTitle is required when adding a lesson to a CUSTOM course",
+      HttpStatus.BAD_REQUEST),
+  LESSON_ID_REQUIRED_FOR_MINISTRY_COURSE(
+      1175,
+      "lessonId is required when adding a lesson to a MINISTRY course",
+      HttpStatus.BAD_REQUEST),
+  SUBJECT_REQUIRED_FOR_MINISTRY_COURSE(
+      1176,
+      "subjectId is required when creating a MINISTRY course",
+      HttpStatus.BAD_REQUEST),
+  GRADE_REQUIRED_FOR_MINISTRY_COURSE(
+      1177,
+      "schoolGradeId is required when creating a MINISTRY course",
+      HttpStatus.BAD_REQUEST),
+  SECTION_NOT_IN_COURSE(
+      1178,
+      "The specified section does not belong to this course",
+      HttpStatus.BAD_REQUEST),
+  OPERATION_NOT_SUPPORTED_FOR_PROVIDER(
+      1179,
+      "This operation is not supported for the course's provider type",
+      HttpStatus.BAD_REQUEST);
+
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
     this.code = code;

@@ -40,8 +40,28 @@ public class CourseLesson extends BaseEntity {
   @Column(name = "course_id", nullable = false)
   private UUID courseId;
 
-  @Column(name = "lesson_id", nullable = false)
+  /**
+   * FK to Ministry {@link Lesson}. Required for MINISTRY courses.
+   * NULL for CUSTOM courses (lesson is teacher-defined).
+   */
+  @Column(name = "lesson_id")
   private UUID lessonId;
+
+  /**
+   * FK to {@link CustomCourseSection}. Required for CUSTOM courses. NULL for MINISTRY.
+   */
+  @Column(name = "section_id")
+  private UUID sectionId;
+
+  /**
+   * Teacher-defined title for CUSTOM-course lessons.
+   * For MINISTRY courses, the title is fetched from the referenced {@link Lesson}.
+   */
+  @Column(name = "custom_title", length = 255)
+  private String customTitle;
+
+  @Column(name = "custom_description", columnDefinition = "TEXT")
+  private String customDescription;
 
   @Column(name = "video_url")
   private String videoUrl;
@@ -74,6 +94,10 @@ public class CourseLesson extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
   private Lesson lesson;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "section_id", insertable = false, updatable = false)
+  private CustomCourseSection section;
 
   @OneToMany(mappedBy = "courseLesson", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<LessonProgress> lessonProgresses;

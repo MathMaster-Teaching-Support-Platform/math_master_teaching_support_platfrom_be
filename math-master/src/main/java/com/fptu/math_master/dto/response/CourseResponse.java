@@ -1,5 +1,6 @@
 package com.fptu.math_master.dto.response;
 
+import com.fptu.math_master.enums.CourseProvider;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -16,6 +17,7 @@ public class CourseResponse {
   private UUID id;
   private UUID teacherId;
   private String teacherName;
+  private CourseProvider provider;
   private UUID subjectId;
   private String subjectName;
   private UUID schoolGradeId;
