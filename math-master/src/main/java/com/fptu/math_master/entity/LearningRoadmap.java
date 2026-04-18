@@ -150,6 +150,12 @@ public class LearningRoadmap extends BaseEntity {
   private Instant completedAt;
 
   /**
+   * entry_test_id - Optional entry test (placement test) for this roadmap
+   */
+  @Column(name = "entry_test_id")
+  private UUID entryTestId;
+
+  /**
    * Relationships
    * - Many-to-One with User (student)
    * - Many-to-One with User (teacher)

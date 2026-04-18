@@ -43,4 +43,18 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
       @Param("subjectId") UUID subjectId,
       @Param("keyword") String keyword,
       Pageable pageable);
+
+  // Admin search — includes unpublished, no subject/grade join requirement
+  @Query(
+      value = "SELECT c.* FROM courses c "
+          + "WHERE c.deleted_at IS NULL "
+          + "AND (:keyword IS NULL OR c.title::text ILIKE CONCAT('%', :keyword, '%')) "
+          + "ORDER BY c.created_at DESC",
+      countQuery = "SELECT COUNT(*) FROM courses c "
+          + "WHERE c.deleted_at IS NULL "
+          + "AND (:keyword IS NULL OR c.title::text ILIKE CONCAT('%', :keyword, '%'))",
+      nativeQuery = true)
+  Page<Course> searchAllCoursesForAdmin(
+      @Param("keyword") String keyword,
+      Pageable pageable);
 }

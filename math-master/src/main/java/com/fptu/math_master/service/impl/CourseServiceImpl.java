@@ -190,6 +190,17 @@ public class CourseServiceImpl implements CourseService {
 
   @Override
   @Transactional(readOnly = true)
+  public Page<CourseResponse> searchCoursesForAdmin(String keyword, Pageable pageable) {
+    String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+    Pageable unsortedPageable = org.springframework.data.domain.PageRequest.of(
+        pageable.getPageNumber(), pageable.getPageSize());
+    return courseRepository
+        .searchAllCoursesForAdmin(kw, unsortedPageable)
+        .map(this::mapToResponse);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public Page<StudentInCourseResponse> getStudentsInCourse(UUID courseId, Pageable pageable) {
     UUID currentUserId = SecurityUtils.getCurrentUserId();
     Course course = findCourseOrThrow(courseId);
@@ -258,8 +269,12 @@ public class CourseServiceImpl implements CourseService {
 
   /** mapToResponse khi chỉ có course — tự query subject/schoolGrade */
   private CourseResponse mapToResponse(Course course) {
-    Subject subject = subjectRepository.findById(course.getSubjectId()).orElse(null);
-    SchoolGrade schoolGrade = schoolGradeRepository.findById(course.getSchoolGradeId()).orElse(null);
+    Subject subject = course.getSubjectId() != null
+        ? subjectRepository.findById(course.getSubjectId()).orElse(null)
+        : null;
+    SchoolGrade schoolGrade = course.getSchoolGradeId() != null
+        ? schoolGradeRepository.findById(course.getSchoolGradeId()).orElse(null)
+        : null;
     return mapToResponse(course, subject, schoolGrade);
   }
 

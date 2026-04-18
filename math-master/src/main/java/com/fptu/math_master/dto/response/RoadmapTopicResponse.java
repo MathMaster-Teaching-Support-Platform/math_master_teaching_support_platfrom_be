@@ -11,7 +11,10 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 /**
- * Response for a topic within a roadmap
+ * Response for a topic within a roadmap.
+ *
+ * <p>Topics are always accessible — no locking. The linked {@code courses} give students a
+ * preview and direct enroll/open CTAs.
  */
 @Data
 @Builder
@@ -24,48 +27,24 @@ public class RoadmapTopicResponse {
   @Schema(description = "Topic ID")
   private UUID id;
 
-  @Schema(description = "Topic title/name")
+  @Schema(description = "Topic title")
   private String title;
 
   @Schema(description = "Topic description")
   private String description;
 
-  @Schema(description = "Current status of the topic")
+  @Schema(description = "Current status (non-blocking progress tracking)")
   private TopicStatus status;
 
   @Schema(description = "Difficulty level")
   private QuestionDifficulty difficulty;
 
-  @Schema(description = "Order in learning sequence")
+  @Schema(description = "Visual order in the roadmap (guidance only, not a lock gate)")
   private Integer sequenceOrder;
 
-  @Schema(description = "Expected mark checkpoint on a 10-point scale")
-  private Double mark;
-
-  @Schema(description = "Required point to unlock this topic (10-point scale)")
-  private Double requiredPoint;
-
-  @Schema(description = "Whether topic is unlocked for current student")
-  private Boolean unlocked;
-
-  @Schema(description = "Assessment linked to this topic")
-  private UUID topicAssessmentId;
-
-  @Schema(description = "Linked course IDs for this topic")
-  private List<UUID> courseIds;
-
-  @Schema(description = "Linked courses for this topic")
+  @Schema(description = "The courses linked to this topic")
   private List<RoadmapTopicCourseResponse> courses;
 
-  @Schema(description = "When topic was started")
+  @Schema(description = "When this topic was started by the student")
   private Instant startedAt;
-
-  @Schema(description = "Question templates for this topic (from linked lesson)")
-  private List<QuestionTemplateResponse> questionTemplates;
-
-  @Schema(description = "Mindmaps for this topic (from linked lesson)")
-  private List<MindmapResponse> mindmaps;
-
-  @Schema(description = "Ordered learning materials attached to this topic")
-  private List<TopicMaterialResponse> materials;
 }

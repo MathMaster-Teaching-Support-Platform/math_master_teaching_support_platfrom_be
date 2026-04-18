@@ -69,11 +69,6 @@ public class ResourceServiceImpl implements ResourceService {
       throw new AppException(ErrorCode.TEACHING_RESOURCE_ACCESS_DENIED);
     }
 
-    if (resource.getRoadmapTopics() != null) {
-      resource.getRoadmapTopics().forEach(topic -> topic.getTeachingResources().remove(resource));
-      resource.getRoadmapTopics().clear();
-    }
-
     uploadService.deleteFile(resource.getFileUrl());
     resource.setDeletedAt(Instant.now());
     resource.setDeletedBy(currentUserId);

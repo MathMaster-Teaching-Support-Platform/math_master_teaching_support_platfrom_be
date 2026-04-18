@@ -31,6 +31,9 @@ public interface CourseService {
   /** Filter theo schoolGradeId, subjectId, keyword */
   Page<CourseResponse> getPublicCourses(UUID schoolGradeId, UUID subjectId, String keyword, Pageable pageable);
 
+  /** Admin search — all courses (published + unpublished) by optional keyword */
+  Page<CourseResponse> searchCoursesForAdmin(String keyword, Pageable pageable);
+
   Page<StudentInCourseResponse> getStudentsInCourse(UUID courseId, Pageable pageable);
 
   // ─── Course Assessment Management ─────────────────────────────────────────

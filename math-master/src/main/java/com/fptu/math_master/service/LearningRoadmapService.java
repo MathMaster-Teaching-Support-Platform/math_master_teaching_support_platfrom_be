@@ -8,137 +8,67 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 /**
- * Service for managing student learning roadmaps
+ * Service for managing student learning roadmaps.
  *
- * <p>Responsibilities:
- * - Generate personalized learning roadmaps based on student performance
- * - Create default grade-based roadmaps when needed
- * - Track student progress through topics
- * - Link learning materials (lessons, questions) to roadmap topics
- * - Calculate roadmap completion statistics
- *
- * <p>Flow:
- * 1. Student requests roadmap generation
- * 2. Service analyzes performance data (if available)
- * 3. Identifies weak topics for prioritization
- * 4. Maps topics to curriculum (lessons/chapters)
- * 5. Generates learning materials links
- * 6. Returns personalized learning path
+ * <p>Roadmaps are course-centric: each topic links to exactly one Course.
+ * There is no topic locking — students can click any topic at any time.
  */
 public interface LearningRoadmapService {
 
   // ============================================================================
-  // ROADMAP GENERATION & RETRIEVAL
+  // ROADMAP RETRIEVAL
   // ============================================================================
 
-  /**
-   * Get existing roadmap by ID with all details
-   */
+  /** Get roadmap by ID with all topic details. */
   RoadmapDetailResponse getRoadmapById(UUID roadmapId);
 
-  /**
-   * Get all roadmaps for a student (paginated)
-   */
+  /** Get all roadmaps for a student (paginated). */
   Page<RoadmapSummaryResponse> getStudentRoadmaps(UUID studentId, Pageable pageable);
 
-  /**
-   * Get active roadmap for specific student and subject
-   */
+  /** Get active roadmap for specific student and subject. */
   RoadmapDetailResponse getActiveRoadmapBySubject(UUID studentId, String subject);
 
-  /**
-   * List all roadmaps for a student
-   */
+  /** List all roadmaps for a student. */
   List<RoadmapSummaryResponse> getStudentRoadmapsList(UUID studentId);
 
   // ============================================================================
-  // PROGRESS TRACKING
+  // PROGRESS TRACKING (non-blocking)
   // ============================================================================
 
   /**
-   * Update a topic's progress
-   *
-   * <p>Logic:
-   * - Mark topic as started/in progress/completed
-   * - Update overall roadmap progress
-   * - Check if prerequisites are met (for LOCKED topics)
-   * - Trigger notifications if milestone reached
+   * Update a topic's progress (non-blocking — does NOT gate other topics).
    *
    * @param request topic progress update
    * @return updated topic response
    */
   RoadmapTopicResponse updateTopicProgress(UpdateTopicProgressRequest request);
 
-  /**
-   * Get next recommended topic to learn
-   *
-   * <p>Logic:
-   * - Find first NOT_STARTED topic
-   * - Check prerequisites are completed
-   * - Return with learning materials
-   *
-   * @param roadmapId the roadmap ID
-   * @return next topic to study
-   */
+  /** Get next recommended topic to learn (first NOT_STARTED or IN_PROGRESS). */
   RoadmapTopicResponse getNextTopic(UUID roadmapId);
 
-  /**
-   * Get current progress stats for roadmap
-   */
+  /** Get current progress stats for roadmap. */
   RoadmapStatsResponse getRoadmapStats(UUID roadmapId);
 
   // ============================================================================
-  // TOPIC & MATERIALS MANAGEMENT
+  // TOPIC MANAGEMENT
   // ============================================================================
 
-  /**
-   * Get detailed information for a specific topic
-   */
+  /** Get detailed information for a specific topic including its linked course. */
   RoadmapTopicResponse getTopicDetails(UUID topicId);
-
-  /**
-   * Get all materials for a topic
-   */
-  List<TopicMaterialResponse> getTopicMaterials(UUID topicId);
-
-  /**
-   * Get learning materials by resource type
-   */
-  List<TopicMaterialResponse> getMaterialsByType(UUID topicId, String resourceType);
-
-  /**
-   * Remove material from topic
-   */
-  void removeMaterialFromTopic(UUID materialId);
-
-  // ============================================================================
-  // WEAK AREA ANALYSIS
-  // ============================================================================
 
   // ============================================================================
   // UTILITY & ADMINISTRATION
   // ============================================================================
 
-  /**
-   * Check if roadmap exists for student and subject
-   */
+  /** Check if roadmap exists for student and subject. */
   boolean existsActiveRoadmap(UUID studentId, String subject);
 
-  /**
-   * Soft delete a roadmap (archive it)
-   */
+  /** Soft delete a roadmap (archive it). */
   void archiveRoadmap(UUID roadmapId);
 
-  /**
-   * Get roadmap completion estimate in days
-   */
+  /** Get roadmap completion estimate in days. */
   Integer estimateCompletionDays(UUID roadmapId);
 
-  /**
-   * Calculate overall progress percentage for roadmap
-   *
-   * @param roadmapId roadmap ID
-   * @return progress 0-100
-   */
+  /** Calculate overall progress percentage for roadmap. */
   java.math.BigDecimal calculateRoadmapProgress(UUID roadmapId);
 }

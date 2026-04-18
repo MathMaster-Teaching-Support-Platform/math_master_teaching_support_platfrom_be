@@ -169,6 +169,21 @@ public class CourseController {
         .build();
   }
 
+  @Operation(summary = "Admin: search all courses (including unpublished)")
+  @GetMapping("/admin/search")
+  @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<Page<CourseResponse>> adminSearchCourses(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    log.info("GET /courses/admin/search – keyword={}", keyword);
+    var pageable = PageRequest.of(page, size);
+    return ApiResponse.<Page<CourseResponse>>builder()
+        .result(courseService.searchCoursesForAdmin(keyword, pageable))
+        .build();
+  }
+
   // ─── Course Assessment Management ─────────────────────────────────────────
 
   @Operation(summary = "Add assessment to course")

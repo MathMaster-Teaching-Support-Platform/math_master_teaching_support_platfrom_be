@@ -2,7 +2,6 @@ package com.fptu.math_master.dto.request;
 
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.TopicStatus;
-import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,23 +20,11 @@ public class UpdateRoadmapTopicRequest {
 
   private Integer sequenceOrder;
 
-  private Double mark;
-
-  private List<UUID> lessonIds;
-
-  private List<UUID> slideLessonIds;
-
-  private List<UUID> assessmentIds;
-
-  private List<UUID> lessonPlanIds;
-
-  private List<UUID> mindmapIds;
-
-  private UUID topicAssessmentId;
-
-  private List<UUID> courseIds;
-
   private QuestionDifficulty difficulty;
 
+  /** Update the linked course for this topic. */
+  private UUID courseId;
+
+  /** Optional non-blocking status update for progress tracking. */
   private TopicStatus status;
 }

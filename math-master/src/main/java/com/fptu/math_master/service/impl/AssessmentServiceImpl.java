@@ -437,12 +437,11 @@ public class AssessmentServiceImpl implements AssessmentService {
   @Override
   @Transactional(readOnly = true)
   public List<AssessmentResponse> searchAssessmentsByName(String name, AssessmentStatus status) {
-    if (name == null || name.trim().isEmpty()) {
-      return List.of();
-    }
+    // Return all assessments when keyword is empty (for dropdown/search UX)
+    String keyword = (name == null || name.trim().isEmpty()) ? "" : name.trim();
 
     return assessmentRepository
-        .findByTitleContainingAndStatusAndNotDeleted(name.trim(), status)
+        .findByTitleContainingAndStatusAndNotDeleted(keyword, status)
         .stream()
         .map(this::mapToResponse)
         .toList();
