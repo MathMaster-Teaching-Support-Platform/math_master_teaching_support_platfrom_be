@@ -136,6 +136,9 @@ public class CourseServiceImpl implements CourseService {
         .targetAudience(request.getTargetAudience())
         .subtitle(request.getSubtitle())
         .language(StringUtils.hasText(request.getLanguage()) ? request.getLanguage() : "Tiếng Việt")
+        .originalPrice(request.getOriginalPrice())
+        .discountedPrice(request.getDiscountedPrice())
+        .discountExpiryDate(request.getDiscountExpiryDate())
         .build();
 
     course = courseRepository.save(course);
@@ -164,6 +167,12 @@ public class CourseServiceImpl implements CourseService {
       course.setSubtitle(request.getSubtitle());
     if (request.getLanguage() != null)
       course.setLanguage(StringUtils.hasText(request.getLanguage()) ? request.getLanguage() : "Tiếng Việt");
+    if (request.getOriginalPrice() != null)
+      course.setOriginalPrice(request.getOriginalPrice());
+    if (request.getDiscountedPrice() != null)
+      course.setDiscountedPrice(request.getDiscountedPrice());
+    if (request.getDiscountExpiryDate() != null)
+      course.setDiscountExpiryDate(request.getDiscountExpiryDate());
 
     if (thumbnailFile != null && !thumbnailFile.isEmpty()) {
       course.setThumbnailUrl(resolveThumbnailForWrite(thumbnailFile));
@@ -323,6 +332,9 @@ public class CourseServiceImpl implements CourseService {
         .totalVideoHours(course.getTotalVideoHours())
         .articlesCount(course.getArticlesCount())
         .resourcesCount(course.getResourcesCount())
+        .originalPrice(course.getOriginalPrice())
+        .discountedPrice(course.getDiscountedPrice())
+        .discountExpiryDate(course.getDiscountExpiryDate())
         .build();
   }
 

@@ -22,4 +22,7 @@ public class UpdateCourseRequest {
   private String targetAudience;
   private String subtitle;
   private String language;
+  private java.math.BigDecimal originalPrice;
+  private java.math.BigDecimal discountedPrice;
+  private java.time.Instant discountExpiryDate;
 }

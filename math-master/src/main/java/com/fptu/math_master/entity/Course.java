@@ -109,6 +109,15 @@ public class Course extends BaseEntity {
   @Column(name = "resources_count")
   private Integer resourcesCount;
 
+  @Column(name = "original_price", precision = 15, scale = 2)
+  private BigDecimal originalPrice;
+
+  @Column(name = "discounted_price", precision = 15, scale = 2)
+  private BigDecimal discountedPrice;
+
+  @Column(name = "discount_expiry_date")
+  private java.time.Instant discountExpiryDate;
+
   // ─── Relationships ────────────────────────────────────────────────────────
 
   @ManyToOne(fetch = FetchType.LAZY)

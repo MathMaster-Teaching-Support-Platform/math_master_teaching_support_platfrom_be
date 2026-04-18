@@ -43,4 +43,7 @@ public class CourseResponse {
   private Integer articlesCount;
   private Integer resourcesCount;
   private int sectionsCount;
+  private BigDecimal originalPrice;
+  private BigDecimal discountedPrice;
+  private Instant discountExpiryDate;
 }
