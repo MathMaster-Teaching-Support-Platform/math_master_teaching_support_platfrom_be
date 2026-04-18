@@ -18,6 +18,18 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
 
   List<Course> findByTeacherIdAndDeletedAtIsNullOrderByCreatedAtDesc(UUID teacherId);
 
+  List<Course> findByTeacherIdAndIsPublishedTrueAndDeletedAtIsNull(UUID teacherId);
+
+  @Query("SELECT c FROM Course c WHERE c.isPublished = true AND c.deletedAt IS NULL " +
+         "AND (c.subjectId = :subjectId OR c.schoolGradeId = :gradeId) " +
+         "AND c.id != :currentCourseId " +
+         "ORDER BY c.rating DESC, c.createdAt DESC")
+  Page<Course> findRelatedCourses(
+      @Param("subjectId") UUID subjectId, 
+      @Param("gradeId") UUID gradeId, 
+      @Param("currentCourseId") UUID currentCourseId, 
+      Pageable pageable);
+
   /**
    * Public listing — LEFT JOIN subject + schoolGrade so that CUSTOM courses
    * with no subject_id / school_grade_id still appear.

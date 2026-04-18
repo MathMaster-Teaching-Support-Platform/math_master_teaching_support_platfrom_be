@@ -18,6 +18,7 @@ import com.fptu.math_master.repository.CourseLessonRepository;
 import com.fptu.math_master.repository.CourseRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.service.CourseLessonService;
+import com.fptu.math_master.service.CourseService;
 import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
@@ -47,6 +48,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
   UploadService uploadService;
   ObjectMapper objectMapper;
   MinioProperties minioProperties;
+  CourseService courseService;
 
   @Override
   public CourseLessonResponse addLesson(
@@ -85,6 +87,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
 
       courseLesson = courseLessonRepository.save(courseLesson);
       log.info("CourseLesson added: {} to course: {}", courseLesson.getId(), courseId);
+      
+      courseService.syncCourseMetrics(courseId);
+      
       return mapToResponse(courseLesson, lesson.getTitle());
 
     } else {
@@ -120,6 +125,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
 
       courseLesson = courseLessonRepository.save(courseLesson);
       log.info("[CUSTOM] CourseLesson added: {} to course: {}", courseLesson.getId(), courseId);
+      
+      courseService.syncCourseMetrics(courseId);
+      
       return mapToResponse(courseLesson, request.getCustomTitle());
     }
   }
@@ -153,6 +161,8 @@ public class CourseLessonServiceImpl implements CourseLessonService {
 
     courseLesson = courseLessonRepository.save(courseLesson);
 
+    courseService.syncCourseMetrics(courseId);
+
     String lessonTitle = courseLesson.getCustomTitle();
     if (courseLesson.getLessonId() != null) {
       lessonTitle =
@@ -184,6 +194,8 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     courseLesson.setDeletedBy(currentUserId);
     courseLessonRepository.save(courseLesson);
     log.info("CourseLesson soft-deleted: {}", courseLessonId);
+    
+    courseService.syncCourseMetrics(courseId);
   }
 
   @Override
@@ -308,6 +320,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     }
 
     courseLessonRepository.save(cl);
+    
+    courseService.syncCourseMetrics(courseId);
+    
     return mapToResponse(cl, getTitleForLesson(cl));
   }
 
@@ -338,6 +353,8 @@ public class CourseLessonServiceImpl implements CourseLessonService {
         throw new RuntimeException("Error updating materials metadata");
       }
       courseLessonRepository.save(cl);
+      
+      courseService.syncCourseMetrics(courseId);
     }
 
     return mapToResponse(cl, getTitleForLesson(cl));

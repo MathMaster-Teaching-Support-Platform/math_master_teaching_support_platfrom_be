@@ -29,4 +29,9 @@ public class TeacherProfileRequest {
 
   @Size(max = 1000, message = "Description must not exceed 1000 characters")
   String description;
+
+  String websiteUrl;
+  String linkedinUrl;
+  String youtubeUrl;
+  String facebookUrl;
 }

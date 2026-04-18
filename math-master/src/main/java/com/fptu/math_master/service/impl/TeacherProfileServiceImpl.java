@@ -55,10 +55,9 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
         "User {} submitting teacher profile with {} files", userId, files.size());
 
     // Check if user exists
-    User user =
-        userRepository
-            .findById(userId)
-            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    User user = userRepository
+        .findById(userId)
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     // Check if profile already exists
     if (teacherProfileRepository.existsByUserId(userId)) {
@@ -69,19 +68,18 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     String documentUrl = uploadService.uploadFilesAsZip(files, "verification", "verification_docs");
 
     // Create new profile
-    TeacherProfile profile =
-        TeacherProfile.builder()
-            .user(user)
-            .fullName(request.getFullName()) // Use fullName from request for OCR verification
-            .schoolName(request.getSchoolName())
-            .schoolAddress(request.getSchoolAddress())
-            .schoolWebsite(request.getSchoolWebsite())
-            .position(request.getPosition())
-            .verificationDocumentKey(documentUrl)
-            .verificationDocumentPath(documentUrl)
-            .description(request.getDescription())
-            .status(ProfileStatus.PENDING)
-            .build();
+    TeacherProfile profile = TeacherProfile.builder()
+        .user(user)
+        .fullName(request.getFullName()) // Use fullName from request for OCR verification
+        .schoolName(request.getSchoolName())
+        .schoolAddress(request.getSchoolAddress())
+        .schoolWebsite(request.getSchoolWebsite())
+        .position(request.getPosition())
+        .verificationDocumentKey(documentUrl)
+        .verificationDocumentPath(documentUrl)
+        .description(request.getDescription())
+        .status(ProfileStatus.PENDING)
+        .build();
 
     profile = teacherProfileRepository.save(profile);
     log.info("Teacher profile submitted successfully for user {} with document: {}", userId, documentUrl);
@@ -100,13 +98,13 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
   @Override
   @Transactional
-  public TeacherProfileResponse updateProfile(TeacherProfileRequest request, java.util.List<MultipartFile> files, UUID userId) {
+  public TeacherProfileResponse updateProfile(TeacherProfileRequest request, java.util.List<MultipartFile> files,
+      UUID userId) {
     log.info("User {} updating teacher profile", userId);
 
-    TeacherProfile profile =
-        teacherProfileRepository
-            .findByUserId(userId)
-            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile = teacherProfileRepository
+        .findByUserId(userId)
+        .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     // Only PENDING or REJECTED profiles can be updated
     if (profile.getStatus() == ProfileStatus.APPROVED) {
@@ -127,6 +125,10 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     profile.setSchoolWebsite(request.getSchoolWebsite());
     profile.setPosition(request.getPosition());
     profile.setDescription(request.getDescription());
+    profile.setWebsiteUrl(request.getWebsiteUrl());
+    profile.setLinkedinUrl(request.getLinkedinUrl());
+    profile.setYoutubeUrl(request.getYoutubeUrl());
+    profile.setFacebookUrl(request.getFacebookUrl());
 
     // If updating a rejected profile, reset status to PENDING
     if (profile.getStatus() == ProfileStatus.REJECTED) {
@@ -155,28 +157,25 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
   @Override
   public TeacherProfileResponse getMyProfile(UUID userId) {
-    TeacherProfile profile =
-        teacherProfileRepository
-            .findByUserId(userId)
-            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile = teacherProfileRepository
+        .findByUserId(userId)
+        .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     return mapToResponse(profile);
   }
 
   @Override
   public TeacherProfileResponse getProfileById(UUID profileId) {
-    TeacherProfile profile =
-        teacherProfileRepository
-            .findById(profileId)
-            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile = teacherProfileRepository
+        .findById(profileId)
+        .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     return mapToResponse(profile);
   }
 
   @Override
   public Page<TeacherProfileResponse> getProfilesByStatus(ProfileStatus status, Pageable pageable) {
-    Page<TeacherProfile> profiles =
-        teacherProfileRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+    Page<TeacherProfile> profiles = teacherProfileRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
 
     return profiles.map(this::mapToResponse);
   }
@@ -187,10 +186,9 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
       UUID profileId, ProfileReviewRequest request, UUID adminId) {
     log.info("Admin {} reviewing profile {}", adminId, profileId);
 
-    TeacherProfile profile =
-        teacherProfileRepository
-            .findById(profileId)
-            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile = teacherProfileRepository
+        .findById(profileId)
+        .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     // Check if profile is in PENDING status
     if (profile.getStatus() != ProfileStatus.PENDING) {
@@ -212,10 +210,9 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     // If approved, upgrade user role to TEACHER
     if (request.getStatus() == ProfileStatus.APPROVED) {
       User user = profile.getUser();
-      Role teacherRole =
-          roleRepository
-              .findByName(PredefinedRole.TEACHER_ROLE)
-              .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+      Role teacherRole = roleRepository
+          .findByName(PredefinedRole.TEACHER_ROLE)
+          .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
       Set<Role> roles = new HashSet<>(user.getRoles());
       roles.add(teacherRole);
@@ -231,7 +228,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     // Send email notification to teacher
     String teacherEmail = profile.getUser().getEmail();
     String teacherName = profile.getUser().getFullName();
-    
+
     NotificationRequest streamNotif = NotificationRequest.builder()
         .id(UUID.randomUUID().toString())
         .recipientId(profile.getUser().getId().toString())
@@ -240,24 +237,25 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
         .build();
 
     if (request.getStatus() == ProfileStatus.APPROVED) {
-        emailService.sendTeacherApprovalEmail(teacherEmail, teacherName);
-        streamNotif.setType("PROFILE_VERIFICATION");
-        streamNotif.setTitle("Hồ sơ Giáo viên được phê duyệt");
-        streamNotif.setContent("Chúc mừng " + teacherName + ", yêu cầu nâng cấp tài khoản Giáo viên của bạn đã được quản trị viên phê duyệt thành công!");
+      emailService.sendTeacherApprovalEmail(teacherEmail, teacherName);
+      streamNotif.setType("PROFILE_VERIFICATION");
+      streamNotif.setTitle("Hồ sơ Giáo viên được phê duyệt");
+      streamNotif.setContent("Chúc mừng " + teacherName
+          + ", yêu cầu nâng cấp tài khoản Giáo viên của bạn đã được quản trị viên phê duyệt thành công!");
     } else if (request.getStatus() == ProfileStatus.REJECTED) {
-        emailService.sendTeacherRejectionEmail(teacherEmail, teacherName, request.getAdminComment());
-        streamNotif.setType("PROFILE_VERIFICATION");
-        streamNotif.setTitle("Hồ sơ Giáo viên bị từ chối");
-        streamNotif.setContent("Hồ sơ Giáo viên của bạn đã bị từ chối với lý do: " + request.getAdminComment());
+      emailService.sendTeacherRejectionEmail(teacherEmail, teacherName, request.getAdminComment());
+      streamNotif.setType("PROFILE_VERIFICATION");
+      streamNotif.setTitle("Hồ sơ Giáo viên bị từ chối");
+      streamNotif.setContent("Hồ sơ Giáo viên của bạn đã bị từ chối với lý do: " + request.getAdminComment());
     }
 
     try {
-        if (streamNotif.getType() != null) {
-            streamPublisher.publish(streamNotif);
-            log.info("In-app notification published to stream for user {}", profile.getUser().getId());
-        }
+      if (streamNotif.getType() != null) {
+        streamPublisher.publish(streamNotif);
+        log.info("In-app notification published to stream for user {}", profile.getUser().getId());
+      }
     } catch (Exception e) {
-        log.error("Failed to publish stream notification", e);
+      log.error("Failed to publish stream notification", e);
     }
 
     return mapToResponse(profile);
@@ -271,10 +269,9 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   @Override
   @Transactional
   public void deleteMyProfile(UUID userId) {
-    TeacherProfile profile =
-        teacherProfileRepository
-            .findByUserId(userId)
-            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile = teacherProfileRepository
+        .findByUserId(userId)
+        .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     // Can only delete PENDING or REJECTED profiles
     if (profile.getStatus() == ProfileStatus.APPROVED) {
@@ -287,10 +284,9 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
   @Override
   public String getDownloadUrl(UUID profileId) {
-    TeacherProfile profile =
-        teacherProfileRepository
-            .findById(profileId)
-            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile = teacherProfileRepository
+        .findById(profileId)
+        .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     if (profile.getVerificationDocumentKey() == null) {
       throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
@@ -302,10 +298,9 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
   @Override
   public byte[] downloadVerificationDocument(UUID profileId) {
-    TeacherProfile profile =
-        teacherProfileRepository
-            .findById(profileId)
-            .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+    TeacherProfile profile = teacherProfileRepository
+        .findById(profileId)
+        .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
     if (profile.getVerificationDocumentKey() == null) {
       throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
@@ -316,25 +311,28 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
   }
 
   private TeacherProfileResponse mapToResponse(TeacherProfile profile) {
-    TeacherProfileResponse response =
-        TeacherProfileResponse.builder()
-            .id(profile.getId())
-            .userId(profile.getUser().getId())
-            .userName(profile.getUser().getUserName())
-            .fullName(profile.getFullName()) // Use fullName from profile (for OCR verification)
-            .schoolName(profile.getSchoolName())
-            .schoolAddress(profile.getSchoolAddress())
-            .schoolWebsite(profile.getSchoolWebsite())
-            .position(profile.getPosition())
-            .verificationDocumentKey(profile.getVerificationDocumentKey())
-            .description(profile.getDescription())
-            .status(profile.getStatus())
-            .adminComment(profile.getAdminComment())
-            .reviewedBy(profile.getReviewedBy())
-            .reviewedAt(profile.getReviewedAt())
-            .createdAt(profile.getCreatedAt())
-            .updatedAt(profile.getUpdatedAt())
-            .build();
+    TeacherProfileResponse response = TeacherProfileResponse.builder()
+        .id(profile.getId())
+        .userId(profile.getUser().getId())
+        .userName(profile.getUser().getUserName())
+        .fullName(profile.getFullName()) // Use fullName from profile (for OCR verification)
+        .schoolName(profile.getSchoolName())
+        .schoolAddress(profile.getSchoolAddress())
+        .schoolWebsite(profile.getSchoolWebsite())
+        .position(profile.getPosition())
+        .verificationDocumentKey(profile.getVerificationDocumentKey())
+        .description(profile.getDescription())
+        .status(profile.getStatus())
+        .adminComment(profile.getAdminComment())
+        .reviewedBy(profile.getReviewedBy())
+        .reviewedAt(profile.getReviewedAt())
+        .createdAt(profile.getCreatedAt())
+        .updatedAt(profile.getUpdatedAt())
+        .websiteUrl(profile.getWebsiteUrl())
+        .linkedinUrl(profile.getLinkedinUrl())
+        .youtubeUrl(profile.getYoutubeUrl())
+        .facebookUrl(profile.getFacebookUrl())
+        .build();
 
     // Get reviewer name if available
     if (profile.getReviewedBy() != null) {

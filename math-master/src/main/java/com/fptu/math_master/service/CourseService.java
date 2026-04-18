@@ -79,4 +79,18 @@ public interface CourseService {
    * @param assessmentId Assessment ID
    */
   void removeAssessmentFromCourse(UUID courseId, UUID assessmentId);
+
+  // ─── Discovery & Instructor Profiles ─────────────────────────────────────
+
+  Page<CourseResponse> getRelatedCourses(UUID courseId, Pageable pageable);
+
+  List<CourseResponse> getTeacherCourses(UUID teacherId);
+
+  com.fptu.math_master.dto.response.TeacherProfileResponse getTeacherProfile(UUID teacherId);
+  
+  /**
+   * Automatically recalculates and updates course metrics:
+   * total_video_hours, articles_count, resources_count
+   */
+  void syncCourseMetrics(UUID courseId);
 }

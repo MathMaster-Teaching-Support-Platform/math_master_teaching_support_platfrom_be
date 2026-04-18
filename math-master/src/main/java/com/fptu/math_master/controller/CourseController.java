@@ -10,6 +10,7 @@ import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
+import com.fptu.math_master.dto.response.TeacherProfileResponse;
 import com.fptu.math_master.service.CourseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -23,6 +24,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -142,6 +144,28 @@ public class CourseController {
   }
 
   @Operation(summary = "Get students enrolled in a course")
+  @GetMapping("/{courseId}/related")
+  public ApiResponse<Page<CourseResponse>> getRelatedCourses(
+      @PathVariable UUID courseId, Pageable pageable) {
+    return ApiResponse.<Page<CourseResponse>>builder()
+        .result(courseService.getRelatedCourses(courseId, pageable))
+        .build();
+  }
+
+  @GetMapping("/teachers/{teacherId}/courses")
+  public ApiResponse<List<CourseResponse>> getTeacherCourses(@PathVariable UUID teacherId) {
+    return ApiResponse.<List<CourseResponse>>builder()
+        .result(courseService.getTeacherCourses(teacherId))
+        .build();
+  }
+
+  @GetMapping("/teachers/{teacherId}/profile")
+  public ApiResponse<TeacherProfileResponse> getTeacherProfile(@PathVariable UUID teacherId) {
+    return ApiResponse.<TeacherProfileResponse>builder()
+        .result(courseService.getTeacherProfile(teacherId))
+        .build();
+  }
+
   @GetMapping("/{courseId}/students")
   @PreAuthorize("hasRole('TEACHER')")
   @SecurityRequirement(name = "bearerAuth")

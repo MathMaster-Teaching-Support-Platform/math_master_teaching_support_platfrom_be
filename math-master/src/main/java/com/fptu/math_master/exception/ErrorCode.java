@@ -317,7 +317,13 @@ public enum ErrorCode {
   OPERATION_NOT_SUPPORTED_FOR_PROVIDER(
       1179,
       "This operation is not supported for the course's provider type",
-      HttpStatus.BAD_REQUEST);
+      HttpStatus.BAD_REQUEST),
+  RATING_MIN_1(1180, "Rating must be at least 1", HttpStatus.BAD_REQUEST),
+  RATING_MAX_5(1181, "Rating must be at most 5", HttpStatus.BAD_REQUEST),
+  COMMENT_REQUIRED(1182, "Comment is required", HttpStatus.BAD_REQUEST),
+  COURSE_NOT_ENROLLED(1183, "You must be enrolled in the course to leave a review", HttpStatus.FORBIDDEN),
+  ALREADY_REVIEWED(1184, "You have already reviewed this course", HttpStatus.BAD_REQUEST),
+  REVIEW_NOT_FOUND(1185, "Review not found", HttpStatus.NOT_FOUND);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {

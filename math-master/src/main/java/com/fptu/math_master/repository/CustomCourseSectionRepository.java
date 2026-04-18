@@ -13,6 +13,8 @@ import org.springframework.stereotype.Repository;
 public interface CustomCourseSectionRepository extends JpaRepository<CustomCourseSection, UUID> {
 
   List<CustomCourseSection> findByCourseIdAndDeletedAtIsNullOrderByOrderIndexAsc(UUID courseId);
+  
+  long countByCourseIdAndDeletedAtIsNull(UUID courseId);
 
   Optional<CustomCourseSection> findByIdAndDeletedAtIsNull(UUID id);
 

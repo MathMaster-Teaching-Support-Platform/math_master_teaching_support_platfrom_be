@@ -4,6 +4,8 @@ import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
 import com.fptu.math_master.dto.request.CreateCourseRequest;
 import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
 import com.fptu.math_master.dto.request.UpdateCourseRequest;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
@@ -17,6 +19,7 @@ import com.fptu.math_master.entity.Enrollment;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.SchoolGrade;
 import com.fptu.math_master.entity.Subject;
+import com.fptu.math_master.entity.TeacherProfile;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.EnrollmentStatus;
 import com.fptu.math_master.exception.AppException;
@@ -26,11 +29,14 @@ import com.fptu.math_master.repository.AssessmentRepository;
 import com.fptu.math_master.repository.CourseAssessmentRepository;
 import com.fptu.math_master.repository.CourseLessonRepository;
 import com.fptu.math_master.repository.CourseRepository;
+import com.fptu.math_master.repository.CourseReviewRepository;
+import com.fptu.math_master.repository.CustomCourseSectionRepository;
 import com.fptu.math_master.repository.EnrollmentRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.LessonProgressRepository;
 import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SubjectRepository;
+import com.fptu.math_master.repository.TeacherProfileRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.CourseService;
 import com.fptu.math_master.service.UploadService;
@@ -73,12 +79,16 @@ public class CourseServiceImpl implements CourseService {
   CourseLessonRepository courseLessonRepository;
   LessonProgressRepository lessonProgressRepository;
   UserRepository userRepository;
+  ObjectMapper objectMapper;
   CourseAssessmentRepository courseAssessmentRepository;
   AssessmentRepository assessmentRepository;
   AssessmentLessonRepository assessmentLessonRepository;
   LessonRepository lessonRepository;
   UploadService uploadService;
   MinioProperties minioProperties;
+  CourseReviewRepository courseReviewRepository;
+  TeacherProfileRepository teacherProfileRepository;
+  CustomCourseSectionRepository customCourseSectionRepository;
 
   @Override
   public CourseResponse createCourse(CreateCourseRequest request, MultipartFile thumbnailFile) {
@@ -95,14 +105,12 @@ public class CourseServiceImpl implements CourseService {
       if (request.getSchoolGradeId() == null) {
         throw new AppException(ErrorCode.GRADE_REQUIRED_FOR_MINISTRY_COURSE);
       }
-      subject =
-          subjectRepository
-              .findById(request.getSubjectId())
-              .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
-      schoolGrade =
-          schoolGradeRepository
-              .findById(request.getSchoolGradeId())
-              .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+      subject = subjectRepository
+          .findById(request.getSubjectId())
+          .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
+      schoolGrade = schoolGradeRepository
+          .findById(request.getSchoolGradeId())
+          .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
     } else {
       // CUSTOM: subject/grade are optional
       if (request.getSubjectId() != null) {
@@ -115,16 +123,20 @@ public class CourseServiceImpl implements CourseService {
 
     String thumbnailUrl = resolveThumbnailForWrite(thumbnailFile);
 
-    Course course =
-        Course.builder()
-            .teacherId(teacherId)
-            .provider(request.getProvider())
-            .subjectId(request.getSubjectId())
-            .schoolGradeId(request.getSchoolGradeId())
-            .title(request.getTitle())
-            .description(request.getDescription())
-            .thumbnailUrl(thumbnailUrl)
-            .build();
+    Course course = Course.builder()
+        .teacherId(teacherId)
+        .provider(request.getProvider())
+        .subjectId(request.getSubjectId())
+        .schoolGradeId(request.getSchoolGradeId())
+        .title(request.getTitle())
+        .description(request.getDescription())
+        .thumbnailUrl(thumbnailUrl)
+        .whatYouWillLearn(request.getWhatYouWillLearn())
+        .requirements(request.getRequirements())
+        .targetAudience(request.getTargetAudience())
+        .subtitle(request.getSubtitle())
+        .language(StringUtils.hasText(request.getLanguage()) ? request.getLanguage() : "Tiếng Việt")
+        .build();
 
     course = courseRepository.save(course);
     log.info("Course created: {} by teacher: {} [provider={}]", course.getId(), teacherId, course.getProvider());
@@ -138,8 +150,20 @@ public class CourseServiceImpl implements CourseService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
-    if (request.getTitle() != null) course.setTitle(request.getTitle());
-    if (request.getDescription() != null) course.setDescription(request.getDescription());
+    if (request.getTitle() != null)
+      course.setTitle(request.getTitle());
+    if (request.getDescription() != null)
+      course.setDescription(request.getDescription());
+    if (request.getWhatYouWillLearn() != null)
+      course.setWhatYouWillLearn(request.getWhatYouWillLearn());
+    if (request.getRequirements() != null)
+      course.setRequirements(request.getRequirements());
+    if (request.getTargetAudience() != null)
+      course.setTargetAudience(request.getTargetAudience());
+    if (request.getSubtitle() != null)
+      course.setSubtitle(request.getSubtitle());
+    if (request.getLanguage() != null)
+      course.setLanguage(StringUtils.hasText(request.getLanguage()) ? request.getLanguage() : "Tiếng Việt");
 
     if (thumbnailFile != null && !thumbnailFile.isEmpty()) {
       course.setThumbnailUrl(resolveThumbnailForWrite(thumbnailFile));
@@ -198,11 +222,11 @@ public class CourseServiceImpl implements CourseService {
   @Transactional(readOnly = true)
   public Page<CourseResponse> getPublicCourses(
       UUID schoolGradeId, UUID subjectId, String keyword, Pageable pageable) {
-    // Native query already has ORDER BY, ignore Pageable sort to avoid camelCase field names
+    // Native query already has ORDER BY, ignore Pageable sort to avoid camelCase
+    // field names
     Pageable unsortedPageable = org.springframework.data.domain.PageRequest.of(
         pageable.getPageNumber(),
-        pageable.getPageSize()
-    );
+        pageable.getPageSize());
     return courseRepository
         .findPublishedCoursesWithFilter(schoolGradeId, subjectId, keyword, unsortedPageable)
         .map(this::mapToResponse);
@@ -262,15 +286,19 @@ public class CourseServiceImpl implements CourseService {
 
   /** mapToResponse khi đã có subject/schoolGrade object sẵn (tránh query lại) */
   private CourseResponse mapToResponse(Course course, Subject subject, SchoolGrade schoolGrade) {
-    String teacherName =
-        userRepository.findById(course.getTeacherId()).map(User::getFullName).orElse(null);
+    User teacher = userRepository.findById(course.getTeacherId()).orElse(null);
+    TeacherProfile profile = teacherProfileRepository.findByUserId(course.getTeacherId()).orElse(null);
     int studentsCount = (int) enrollmentRepository.countActiveEnrollmentsByCourseId(course.getId());
     int lessonsCount = (int) courseLessonRepository.countByCourseIdAndNotDeleted(course.getId());
+    int sectionsCount = (int) customCourseSectionRepository.countByCourseIdAndDeletedAtIsNull(course.getId());
+    int ratingCount = (int) courseReviewRepository.countByCourseIdAndDeletedAtIsNull(course.getId());
 
     return CourseResponse.builder()
         .id(course.getId())
         .teacherId(course.getTeacherId())
-        .teacherName(teacherName)
+        .teacherName(teacher != null ? teacher.getFullName() : "Anonymous")
+        .teacherAvatar(teacher != null ? teacher.getAvatar() : null)
+        .teacherPosition(profile != null ? profile.getPosition() : null)
         .provider(course.getProvider())
         .subjectId(course.getSubjectId())
         .subjectName(subject != null ? subject.getName() : null)
@@ -281,10 +309,20 @@ public class CourseServiceImpl implements CourseService {
         .thumbnailUrl(resolveThumbnailForRead(course.getThumbnailUrl()))
         .isPublished(course.isPublished())
         .rating(course.getRating())
+        .ratingCount(ratingCount)
         .studentsCount(studentsCount)
         .lessonsCount(lessonsCount)
+        .sectionsCount(sectionsCount)
         .createdAt(course.getCreatedAt())
         .updatedAt(course.getUpdatedAt())
+        .whatYouWillLearn(course.getWhatYouWillLearn())
+        .requirements(course.getRequirements())
+        .targetAudience(course.getTargetAudience())
+        .subtitle(course.getSubtitle())
+        .language(course.getLanguage())
+        .totalVideoHours(course.getTotalVideoHours())
+        .articlesCount(course.getArticlesCount())
+        .resourcesCount(course.getResourcesCount())
         .build();
   }
 
@@ -332,10 +370,9 @@ public class CourseServiceImpl implements CourseService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
-    Assessment assessment =
-        assessmentRepository
-            .findByIdAndNotDeleted(request.getAssessmentId())
-            .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    Assessment assessment = assessmentRepository
+        .findByIdAndNotDeleted(request.getAssessmentId())
+        .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     // Verify assessment belongs to the same teacher
     if (!assessment.getTeacherId().equals(currentUserId)) {
@@ -348,7 +385,8 @@ public class CourseServiceImpl implements CourseService {
       throw new AppException(ErrorCode.ASSESSMENT_ALREADY_IN_COURSE);
     }
 
-    // Validate assessment status - only PUBLISHED assessments can be added to courses
+    // Validate assessment status - only PUBLISHED assessments can be added to
+    // courses
     if (assessment.getStatus() != com.fptu.math_master.enums.AssessmentStatus.PUBLISHED) {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_PUBLISHED);
     }
@@ -375,13 +413,12 @@ public class CourseServiceImpl implements CourseService {
       matchedLessonIds = List.of();
     }
 
-    CourseAssessment courseAssessment =
-        CourseAssessment.builder()
-            .courseId(courseId)
-            .assessmentId(request.getAssessmentId())
-            .orderIndex(request.getOrderIndex())
-            .isRequired(request.getIsRequired() != null ? request.getIsRequired() : true)
-            .build();
+    CourseAssessment courseAssessment = CourseAssessment.builder()
+        .courseId(courseId)
+        .assessmentId(request.getAssessmentId())
+        .orderIndex(request.getOrderIndex())
+        .isRequired(request.getIsRequired() != null ? request.getIsRequired() : true)
+        .build();
 
     courseAssessment = courseAssessmentRepository.save(courseAssessment);
     log.info(
@@ -391,8 +428,7 @@ public class CourseServiceImpl implements CourseService {
         currentUserId);
 
     Map<UUID, String> lessonTitleById = getLessonTitleById(courseLessonIds);
-    List<String> matchedLessonTitles =
-      matchedLessonIds.stream()
+    List<String> matchedLessonTitles = matchedLessonIds.stream()
         .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
         .toList();
     return mapToCourseAssessmentResponse(courseAssessment, assessment, matchedLessonTitles);
@@ -400,35 +436,34 @@ public class CourseServiceImpl implements CourseService {
 
   @Override
   @Transactional(readOnly = true)
-  public List<CourseAssessmentResponse> getCourseAssessments(UUID courseId, String status, String type, Boolean isRequired) {
+  public List<CourseAssessmentResponse> getCourseAssessments(UUID courseId, String status, String type,
+      Boolean isRequired) {
     Course course = findCourseOrThrow(courseId);
-    List<CourseAssessment> courseAssessments =
-        courseAssessmentRepository.findByCourseIdAndNotDeleted(courseId);
+    List<CourseAssessment> courseAssessments = courseAssessmentRepository.findByCourseIdAndNotDeleted(courseId);
 
     Set<UUID> courseLessonIds = getCourseLessonIds(courseId);
     Map<UUID, String> lessonTitleById = getLessonTitleById(courseLessonIds);
-    Set<UUID> assessmentIds =
-      courseAssessments.stream().map(CourseAssessment::getAssessmentId).collect(Collectors.toSet());
-    Map<UUID, List<String>> matchedLessonTitlesByAssessmentId =
-      buildMatchedLessonTitlesByAssessmentId(assessmentIds, courseLessonIds, lessonTitleById);
+    Set<UUID> assessmentIds = courseAssessments.stream().map(CourseAssessment::getAssessmentId)
+        .collect(Collectors.toSet());
+    Map<UUID, List<String>> matchedLessonTitlesByAssessmentId = buildMatchedLessonTitlesByAssessmentId(assessmentIds,
+        courseLessonIds, lessonTitleById);
 
     return courseAssessments.stream()
         .map(
             ca -> {
-              Assessment assessment =
-                  assessmentRepository
-                      .findByIdAndNotDeleted(ca.getAssessmentId())
-                      .orElse(null);
-          List<String> matchedTitles =
-            matchedLessonTitlesByAssessmentId.getOrDefault(ca.getAssessmentId(), List.of());
-          return mapToCourseAssessmentResponse(ca, assessment, matchedTitles);
+              Assessment assessment = assessmentRepository
+                  .findByIdAndNotDeleted(ca.getAssessmentId())
+                  .orElse(null);
+              List<String> matchedTitles = matchedLessonTitlesByAssessmentId.getOrDefault(ca.getAssessmentId(),
+                  List.of());
+              return mapToCourseAssessmentResponse(ca, assessment, matchedTitles);
             })
         .filter(response -> {
           // Apply filters
           if (status != null && response.getAssessmentStatus() != null) {
             try {
-              com.fptu.math_master.enums.AssessmentStatus statusEnum =
-                  com.fptu.math_master.enums.AssessmentStatus.valueOf(status.toUpperCase());
+              com.fptu.math_master.enums.AssessmentStatus statusEnum = com.fptu.math_master.enums.AssessmentStatus
+                  .valueOf(status.toUpperCase());
               if (!response.getAssessmentStatus().equals(statusEnum)) {
                 return false;
               }
@@ -440,8 +475,8 @@ public class CourseServiceImpl implements CourseService {
 
           if (type != null && response.getAssessmentType() != null) {
             try {
-              com.fptu.math_master.enums.AssessmentType typeEnum =
-                  com.fptu.math_master.enums.AssessmentType.valueOf(type.toUpperCase());
+              com.fptu.math_master.enums.AssessmentType typeEnum = com.fptu.math_master.enums.AssessmentType
+                  .valueOf(type.toUpperCase());
               if (!response.getAssessmentType().equals(typeEnum)) {
                 return false;
               }
@@ -475,26 +510,23 @@ public class CourseServiceImpl implements CourseService {
 
     List<Assessment> assessments;
     if (includeOutOfCourseLessons) {
-      assessments =
-          assessmentRepository
-              .findByTeacherIdAndStatusAndNotDeleted(
-                  currentUserId, com.fptu.math_master.enums.AssessmentStatus.PUBLISHED)
-              .stream()
-              .sorted(Comparator.comparing(Assessment::getCreatedAt).reversed())
-              .toList();
+      assessments = assessmentRepository
+          .findByTeacherIdAndStatusAndNotDeleted(
+              currentUserId, com.fptu.math_master.enums.AssessmentStatus.PUBLISHED)
+          .stream()
+          .sorted(Comparator.comparing(Assessment::getCreatedAt).reversed())
+          .toList();
     } else {
-      List<UUID> candidateAssessmentIds =
-          assessmentLessonRepository.findAssessmentIdsByLessonIds(courseLessonIds);
+      List<UUID> candidateAssessmentIds = assessmentLessonRepository.findAssessmentIdsByLessonIds(courseLessonIds);
       if (candidateAssessmentIds.isEmpty()) {
         return List.of();
       }
 
-      assessments =
-          assessmentRepository.findByIdInAndNotDeleted(candidateAssessmentIds).stream()
-              .filter(a -> a.getTeacherId().equals(currentUserId))
-              .filter(a -> a.getStatus() == com.fptu.math_master.enums.AssessmentStatus.PUBLISHED)
-              .sorted(Comparator.comparing(Assessment::getCreatedAt).reversed())
-              .toList();
+      assessments = assessmentRepository.findByIdInAndNotDeleted(candidateAssessmentIds).stream()
+          .filter(a -> a.getTeacherId().equals(currentUserId))
+          .filter(a -> a.getStatus() == com.fptu.math_master.enums.AssessmentStatus.PUBLISHED)
+          .sorted(Comparator.comparing(Assessment::getCreatedAt).reversed())
+          .toList();
     }
 
     if (assessments.isEmpty()) {
@@ -503,29 +535,26 @@ public class CourseServiceImpl implements CourseService {
 
     Set<UUID> assessmentIds = assessments.stream().map(Assessment::getId).collect(Collectors.toSet());
     Map<UUID, String> lessonTitleById = getLessonTitleById(courseLessonIds);
-    Map<UUID, List<UUID>> matchedLessonIdsByAssessmentId =
-        buildMatchedLessonIdsByAssessmentId(assessmentIds, courseLessonIds);
+    Map<UUID, List<UUID>> matchedLessonIdsByAssessmentId = buildMatchedLessonIdsByAssessmentId(assessmentIds,
+        courseLessonIds);
 
     Map<UUID, long[]> summaryMap = new HashMap<>();
     for (Object[] row : assessmentRepository.findBulkSummaryByIds(assessmentIds)) {
       UUID aid = (UUID) row[0];
       long questionCount = row[1] == null ? 0L : ((Number) row[1]).longValue();
-      long pointsCents =
-          row[2] == null
-              ? 0L
-              : new BigDecimal(row[2].toString()).multiply(BigDecimal.valueOf(100)).longValue();
-      summaryMap.put(aid, new long[] {questionCount, pointsCents});
+      long pointsCents = row[2] == null
+          ? 0L
+          : new BigDecimal(row[2].toString()).multiply(BigDecimal.valueOf(100)).longValue();
+      summaryMap.put(aid, new long[] { questionCount, pointsCents });
     }
 
     List<AvailableCourseAssessmentResponse> result = new ArrayList<>();
     for (Assessment assessment : assessments) {
-      List<UUID> matchedLessonIds =
-          matchedLessonIdsByAssessmentId.getOrDefault(assessment.getId(), List.of());
-      List<String> matchedLessonTitles =
-          matchedLessonIds.stream()
-              .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
-              .toList();
-      long[] summary = summaryMap.getOrDefault(assessment.getId(), new long[] {0L, 0L});
+      List<UUID> matchedLessonIds = matchedLessonIdsByAssessmentId.getOrDefault(assessment.getId(), List.of());
+      List<String> matchedLessonTitles = matchedLessonIds.stream()
+          .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
+          .toList();
+      long[] summary = summaryMap.getOrDefault(assessment.getId(), new long[] { 0L, 0L });
 
       result.add(
           AvailableCourseAssessmentResponse.builder()
@@ -555,10 +584,9 @@ public class CourseServiceImpl implements CourseService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
-    CourseAssessment courseAssessment =
-        courseAssessmentRepository
-            .findByCourseIdAndAssessmentIdAndNotDeleted(courseId, assessmentId)
-            .orElseThrow(() -> new AppException(ErrorCode.COURSE_ASSESSMENT_NOT_FOUND));
+    CourseAssessment courseAssessment = courseAssessmentRepository
+        .findByCourseIdAndAssessmentIdAndNotDeleted(courseId, assessmentId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_ASSESSMENT_NOT_FOUND));
 
     if (request.getOrderIndex() != null) {
       courseAssessment.setOrderIndex(request.getOrderIndex());
@@ -570,12 +598,10 @@ public class CourseServiceImpl implements CourseService {
     courseAssessment = courseAssessmentRepository.save(courseAssessment);
     log.info("Course assessment {} updated in course {}", assessmentId, courseId);
 
-    Assessment assessment =
-        assessmentRepository.findByIdAndNotDeleted(assessmentId).orElse(null);
+    Assessment assessment = assessmentRepository.findByIdAndNotDeleted(assessmentId).orElse(null);
     Set<UUID> courseLessonIds = getCourseLessonIds(courseId);
     Map<UUID, String> lessonTitleById = getLessonTitleById(courseLessonIds);
-    List<String> matchedLessonTitles =
-      getMatchedLessonIds(assessmentId, courseLessonIds).stream()
+    List<String> matchedLessonTitles = getMatchedLessonIds(assessmentId, courseLessonIds).stream()
         .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
         .toList();
     return mapToCourseAssessmentResponse(courseAssessment, assessment, matchedLessonTitles);
@@ -587,10 +613,9 @@ public class CourseServiceImpl implements CourseService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
-    CourseAssessment courseAssessment =
-        courseAssessmentRepository
-            .findByCourseIdAndAssessmentIdAndNotDeleted(courseId, assessmentId)
-            .orElseThrow(() -> new AppException(ErrorCode.COURSE_ASSESSMENT_NOT_FOUND));
+    CourseAssessment courseAssessment = courseAssessmentRepository
+        .findByCourseIdAndAssessmentIdAndNotDeleted(courseId, assessmentId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_ASSESSMENT_NOT_FOUND));
 
     // Check if assessment has submissions from students
     Long submissionCount = assessmentRepository.countSubmissionsByAssessmentId(assessmentId);
@@ -612,18 +637,17 @@ public class CourseServiceImpl implements CourseService {
 
   private CourseAssessmentResponse mapToCourseAssessmentResponse(
       CourseAssessment ca, Assessment assessment, List<String> matchedLessonTitles) {
-    CourseAssessmentResponse.CourseAssessmentResponseBuilder builder =
-        CourseAssessmentResponse.builder()
-            .id(ca.getId())
-            .courseId(ca.getCourseId())
-            .assessmentId(ca.getAssessmentId())
-            .orderIndex(ca.getOrderIndex())
-            .isRequired(ca.isRequired())
+    CourseAssessmentResponse.CourseAssessmentResponseBuilder builder = CourseAssessmentResponse.builder()
+        .id(ca.getId())
+        .courseId(ca.getCourseId())
+        .assessmentId(ca.getAssessmentId())
+        .orderIndex(ca.getOrderIndex())
+        .isRequired(ca.isRequired())
         .matchedLessonCount(matchedLessonTitles.size())
         .matchedLessonTitles(matchedLessonTitles)
         .lessonMatched(!matchedLessonTitles.isEmpty())
-            .createdAt(ca.getCreatedAt())
-            .updatedAt(ca.getUpdatedAt());
+        .createdAt(ca.getCreatedAt())
+        .updatedAt(ca.getUpdatedAt());
 
     if (assessment != null) {
       Long totalQuestions = assessmentRepository.countQuestionsByAssessmentId(assessment.getId());
@@ -695,18 +719,113 @@ public class CourseServiceImpl implements CourseService {
       Collection<UUID> assessmentIds,
       Set<UUID> courseLessonIds,
       Map<UUID, String> lessonTitleById) {
-    Map<UUID, List<UUID>> lessonIdsByAssessmentId =
-        buildMatchedLessonIdsByAssessmentId(assessmentIds, courseLessonIds);
+    Map<UUID, List<UUID>> lessonIdsByAssessmentId = buildMatchedLessonIdsByAssessmentId(assessmentIds, courseLessonIds);
 
     Map<UUID, List<String>> result = new HashMap<>();
     for (Map.Entry<UUID, List<UUID>> entry : lessonIdsByAssessmentId.entrySet()) {
-      List<String> titles =
-          entry.getValue().stream()
-              .distinct()
-              .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
-              .toList();
+      List<String> titles = entry.getValue().stream()
+          .distinct()
+          .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
+          .toList();
       result.put(entry.getKey(), titles);
     }
     return result;
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<CourseResponse> getRelatedCourses(UUID courseId, Pageable pageable) {
+    Course course = courseRepository.findByIdAndDeletedAtIsNull(courseId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+
+    return courseRepository.findRelatedCourses(
+        course.getSubjectId(),
+        course.getSchoolGradeId(),
+        courseId,
+        pageable).map(this::mapToResponse);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<CourseResponse> getTeacherCourses(UUID teacherId) {
+    return courseRepository.findByTeacherIdAndIsPublishedTrueAndDeletedAtIsNull(teacherId)
+        .stream().map(this::mapToResponse).collect(Collectors.toList());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public com.fptu.math_master.dto.response.TeacherProfileResponse getTeacherProfile(UUID teacherId) {
+    User teacher = userRepository.findById(teacherId)
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    TeacherProfile profile = teacherProfileRepository.findByUserId(teacherId).orElse(null);
+
+    long totalCourses = courseRepository.findByTeacherIdAndIsPublishedTrueAndDeletedAtIsNull(teacherId).size();
+    int totalStudents = enrollmentRepository.countStudentsByTeacherId(teacherId);
+    long totalRatings = courseReviewRepository.countByTeacherId(teacherId);
+    Double avg = courseReviewRepository.calculateTeacherAverageRating(teacherId);
+    BigDecimal averageRating = avg != null ? BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP)
+        : BigDecimal.ZERO;
+
+    return com.fptu.math_master.dto.response.TeacherProfileResponse.builder()
+        .userId(teacherId)
+        .fullName(teacher.getFullName())
+        .avatar(teacher.getAvatar())
+        .description(profile != null ? profile.getDescription() : null)
+        .position(profile != null ? profile.getPosition() : null)
+        .websiteUrl(profile != null ? profile.getWebsiteUrl() : null)
+        .linkedinUrl(profile != null ? profile.getLinkedinUrl() : null)
+        .youtubeUrl(profile != null ? profile.getYoutubeUrl() : null)
+        .facebookUrl(profile != null ? profile.getFacebookUrl() : null)
+        .totalCourses(totalCourses)
+        .totalStudents(totalStudents)
+        .totalRatings((int) totalRatings)
+        .averageRating(averageRating)
+        .build();
+  }
+
+  @Override
+  @Transactional
+  public void syncCourseMetrics(UUID courseId) {
+    Course course = courseRepository.findByIdAndDeletedAtIsNull(courseId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+
+    var lessons = courseLessonRepository.findByCourseIdAndNotDeleted(courseId);
+
+    BigDecimal totalVideoSeconds = BigDecimal.ZERO;
+    int articlesCount = 0;
+    int resourcesCount = 0;
+
+    for (var cl : lessons) {
+      // 1. Video Hours
+      if (cl.getDurationSeconds() != null) {
+        totalVideoSeconds = totalVideoSeconds.add(BigDecimal.valueOf(cl.getDurationSeconds()));
+      }
+
+      // 2. Articles Count (Lesson with no video)
+      if (!StringUtils.hasText(cl.getVideoUrl())) {
+        articlesCount++;
+      }
+
+      // 3. Resources Count (Materials JSON)
+      String materialsJson = cl.getMaterials();
+      if (StringUtils.hasText(materialsJson)) {
+        try {
+          List<?> materials = objectMapper.readValue(materialsJson, new TypeReference<List<Object>>() {});
+          resourcesCount += materials.size();
+        } catch (Exception e) {
+          log.warn("Failed to parse materials JSON for lesson {}: {}", cl.getId(), e.getMessage());
+        }
+      }
+    }
+
+    BigDecimal totalVideoHours = totalVideoSeconds.divide(BigDecimal.valueOf(3600), 2, RoundingMode.HALF_UP);
+
+    course.setTotalVideoHours(totalVideoHours);
+    course.setArticlesCount(articlesCount);
+    course.setResourcesCount(resourcesCount);
+
+    courseRepository.save(course);
+    log.info("Synced metrics for course {}: {}h, {} articles, {} resources", 
+        courseId, totalVideoHours, articlesCount, resourcesCount);
   }
 }

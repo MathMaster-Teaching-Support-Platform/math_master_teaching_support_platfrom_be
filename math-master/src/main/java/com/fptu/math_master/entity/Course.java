@@ -84,6 +84,31 @@ public class Course extends BaseEntity {
   @Builder.Default
   private BigDecimal rating = BigDecimal.ZERO;
 
+  @Column(name = "what_you_will_learn", columnDefinition = "TEXT")
+  private String whatYouWillLearn;
+
+  @Column(name = "requirements", columnDefinition = "TEXT")
+  private String requirements;
+
+  @Column(name = "target_audience", columnDefinition = "TEXT")
+  private String targetAudience;
+
+  @Column(name = "subtitle")
+  private String subtitle;
+
+  @Column(name = "language")
+  @Builder.Default
+  private String language = "Tiếng Việt";
+
+  @Column(name = "total_video_hours", precision = 10, scale = 2)
+  private BigDecimal totalVideoHours;
+
+  @Column(name = "articles_count")
+  private Integer articlesCount;
+
+  @Column(name = "resources_count")
+  private Integer resourcesCount;
+
   // ─── Relationships ────────────────────────────────────────────────────────
 
   @ManyToOne(fetch = FetchType.LAZY)
