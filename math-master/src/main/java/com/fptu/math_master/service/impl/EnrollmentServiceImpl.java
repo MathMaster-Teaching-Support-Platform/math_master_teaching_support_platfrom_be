@@ -20,6 +20,7 @@ import com.fptu.math_master.entity.Transaction;
 import com.fptu.math_master.enums.TransactionType;
 import com.fptu.math_master.enums.TransactionStatus;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -49,18 +50,43 @@ public class EnrollmentServiceImpl implements EnrollmentService {
   public EnrollmentResponse enroll(UUID courseId) {
     UUID studentId = SecurityUtils.getCurrentUserId();
 
-    Course course =
-        courseRepository
-            .findByIdAndDeletedAtIsNull(courseId)
-            .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+    Course course = courseRepository
+        .findByIdAndDeletedAtIsNull(courseId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
 
     if (!course.isPublished()) {
       throw new AppException(ErrorCode.COURSE_NOT_PUBLISHED);
     }
 
-    // --- Start Payment Logic ---
+    // 1. Check early for idempotency
+    var existingEnrollment = enrollmentRepository.findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, courseId);
+
+    if (existingEnrollment.isPresent()) {
+      Enrollment e = existingEnrollment.get();
+      if (e.getStatus() == EnrollmentStatus.ACTIVE) {
+        log.info("Student {} already active in course {}. Returning existing record.", studentId, courseId);
+        return mapToResponse(e, course.getTitle(), studentId);
+      }
+    }
+
+    // 2. Initialize or Update to PENDING
+    // This phase ensures we have a record to lock against concurrent requests
+    Enrollment enrollment;
+    if (existingEnrollment.isPresent()) {
+      enrollment = existingEnrollment.get();
+      enrollment.setStatus(EnrollmentStatus.PENDING);
+    } else {
+      enrollment = Enrollment.builder()
+          .courseId(courseId)
+          .studentId(studentId)
+          .status(EnrollmentStatus.PENDING)
+          .enrolledAt(Instant.now())
+          .build();
+    }
+    enrollment = enrollmentRepository.saveAndFlush(enrollment);
+
+    // 3. Process Payment and Split
     BigDecimal activePrice = course.getOriginalPrice();
-    // If discount is active and not expired
     if (course.getDiscountedPrice() != null) {
       if (course.getDiscountExpiryDate() == null || course.getDiscountExpiryDate().isAfter(Instant.now())) {
         activePrice = course.getDiscountedPrice();
@@ -68,56 +94,67 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     }
 
     if (activePrice != null && activePrice.compareTo(BigDecimal.ZERO) > 0) {
-      Wallet wallet = walletRepository.findByUserId(studentId)
+      Wallet studentWallet = walletRepository.findByUserId(studentId)
           .orElseGet(() -> {
             walletService.createWallet(studentId);
             return walletRepository.findByUserId(studentId)
                 .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
           });
 
-      // This will throw INSUFFICIENT_BALANCE if not enough
-      walletService.deductBalance(wallet.getId(), activePrice);
+      // Deduct full amount from student
+      walletService.deductBalance(studentWallet.getId(), activePrice);
 
-      // Record transaction
-      Transaction transaction = Transaction.builder()
-          .wallet(wallet)
+      // Calculate Split
+      BigDecimal instructorEarnings = activePrice.multiply(new BigDecimal("0.9"))
+          .setScale(2, RoundingMode.HALF_UP);
+      BigDecimal platformCommission = activePrice.subtract(instructorEarnings);
+
+      // Record Student Transaction (COURSE_PURCHASE)
+      Transaction studentTx = Transaction.builder()
+          .wallet(studentWallet)
           .amount(activePrice)
-          .type(TransactionType.PAYMENT)
+          .type(TransactionType.COURSE_PURCHASE)
           .status(TransactionStatus.SUCCESS)
-          .description("Purchase Course: " + course.getTitle())
+          .description("Purchased Course: " + course.getTitle())
           .transactionDate(Instant.now())
           .orderCode(System.currentTimeMillis())
+          .instructorEarnings(instructorEarnings)
+          .platformCommission(platformCommission)
           .build();
-      transactionRepository.save(transaction);
-      log.info("Payment successful: Student {} paid {} for course {}", studentId, activePrice, courseId);
+      transactionRepository.save(studentTx);
+
+      // Deposit to Instructor
+      Wallet instructorWallet = walletRepository.findByUserId(course.getTeacherId())
+          .orElseGet(() -> {
+            walletService.createWallet(course.getTeacherId());
+            return walletRepository.findByUserId(course.getTeacherId())
+                .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
+          });
+
+      walletService.addBalance(instructorWallet.getId(), instructorEarnings);
+
+      // Record Instructor Transaction (INSTRUCTOR_REVENUE)
+      Transaction instructorTx = Transaction.builder()
+          .wallet(instructorWallet)
+          .amount(instructorEarnings)
+          .type(TransactionType.INSTRUCTOR_REVENUE)
+          .status(TransactionStatus.SUCCESS)
+          .description("Revenue from Course: " + course.getTitle())
+          .transactionDate(Instant.now())
+          .orderCode(System.currentTimeMillis() + 1)
+          .build();
+      transactionRepository.save(instructorTx);
+
+      log.info("Enrollment payment success: Student {} paid {}, Teacher {} earned {}",
+          studentId, activePrice, instructorEarnings);
     }
-    // --- End Payment Logic ---
 
-    var existing =
-        enrollmentRepository.findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, courseId);
-
-    if (existing.isPresent()) {
-      Enrollment e = existing.get();
-      if (e.getStatus() == EnrollmentStatus.ACTIVE) {
-        throw new AppException(ErrorCode.ALREADY_ENROLLED);
-      }
-      e.setStatus(EnrollmentStatus.ACTIVE);
-      e.setEnrolledAt(Instant.now());
-      e = enrollmentRepository.save(e);
-      log.info("Student {} re-enrolled in course {}", studentId, courseId);
-      return mapToResponse(e, course.getTitle(), studentId);
-    }
-
-    Enrollment enrollment =
-        Enrollment.builder()
-            .courseId(courseId)
-            .studentId(studentId)
-            .status(EnrollmentStatus.ACTIVE)
-            .enrolledAt(Instant.now())
-            .build();
-
+    // 4. Finalize Enrollment
+    enrollment.setStatus(EnrollmentStatus.ACTIVE);
+    enrollment.setEnrolledAt(Instant.now());
     enrollment = enrollmentRepository.save(enrollment);
-    log.info("Student {} enrolled in course {}", studentId, courseId);
+
+    log.info("Student {} enrollment finalized for course {}", studentId, courseId);
     return mapToResponse(enrollment, course.getTitle(), studentId);
   }
 
@@ -125,10 +162,9 @@ public class EnrollmentServiceImpl implements EnrollmentService {
   public EnrollmentResponse drop(UUID enrollmentId) {
     UUID studentId = SecurityUtils.getCurrentUserId();
 
-    Enrollment enrollment =
-        enrollmentRepository
-            .findByIdAndDeletedAtIsNull(enrollmentId)
-            .orElseThrow(() -> new AppException(ErrorCode.ENROLLMENT_NOT_FOUND));
+    Enrollment enrollment = enrollmentRepository
+        .findByIdAndDeletedAtIsNull(enrollmentId)
+        .orElseThrow(() -> new AppException(ErrorCode.ENROLLMENT_NOT_FOUND));
 
     if (!enrollment.getStudentId().equals(studentId)) {
       throw new AppException(ErrorCode.ENROLLMENT_ACCESS_DENIED);
@@ -137,11 +173,10 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     enrollment.setStatus(EnrollmentStatus.DROPPED);
     enrollment = enrollmentRepository.save(enrollment);
 
-    String courseTitle =
-        courseRepository
-            .findByIdAndDeletedAtIsNull(enrollment.getCourseId())
-            .map(Course::getTitle)
-            .orElse(null);
+    String courseTitle = courseRepository
+        .findByIdAndDeletedAtIsNull(enrollment.getCourseId())
+        .map(Course::getTitle)
+        .orElse(null);
 
     log.info("Student {} dropped enrollment {}", studentId, enrollmentId);
     return mapToResponse(enrollment, courseTitle, studentId);
@@ -156,11 +191,10 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         .stream()
         .map(
             e -> {
-              String courseTitle =
-                  courseRepository
-                      .findByIdAndDeletedAtIsNull(e.getCourseId())
-                      .map(Course::getTitle)
-                      .orElse(null);
+              String courseTitle = courseRepository
+                  .findByIdAndDeletedAtIsNull(e.getCourseId())
+                  .map(Course::getTitle)
+                  .orElse(null);
               return mapToResponse(e, courseTitle, studentId);
             })
         .collect(Collectors.toList());

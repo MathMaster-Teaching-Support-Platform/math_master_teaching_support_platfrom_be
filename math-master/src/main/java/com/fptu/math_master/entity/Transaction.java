@@ -100,4 +100,16 @@ public class Transaction extends BaseEntity {
    */
   @Column(name = "expires_at")
   private Instant expiresAt;
+
+  /**
+   * instructorEarnings — 90% share of the payment allocated to the teacher
+   */
+  @Column(name = "instructor_earnings", precision = 15, scale = 2)
+  private BigDecimal instructorEarnings;
+
+  /**
+   * platformCommission — 10% share of the payment retained by the platform
+   */
+  @Column(name = "platform_commission", precision = 15, scale = 2)
+  private BigDecimal platformCommission;
 }

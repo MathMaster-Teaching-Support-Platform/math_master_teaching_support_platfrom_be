@@ -90,15 +90,12 @@ public class WalletService {
       throw new AppException(ErrorCode.INVALID_AMOUNT);
     }
 
-    Wallet wallet =
-        walletRepository
-            .findById(walletId)
-            .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
+    if (!walletRepository.existsById(walletId)) {
+        throw new AppException(ErrorCode.WALLET_NOT_FOUND);
+    }
 
-    wallet.setBalance(wallet.getBalance().add(amount));
-    walletRepository.save(wallet);
-
-    log.info("Balance added successfully. New balance: {}", wallet.getBalance());
+    walletRepository.incrementBalance(walletId, amount);
+    log.info("Balance incremented atomically for wallet: {}", walletId);
   }
 
   @Transactional
@@ -110,21 +107,24 @@ public class WalletService {
       throw new AppException(ErrorCode.INVALID_AMOUNT);
     }
 
-    Wallet wallet =
-        walletRepository
-            .findById(walletId)
-            .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-
-    if (wallet.getBalance().compareTo(amount) < 0) {
-      log.warn("Deduction failed for wallet {}: Insufficient balance. Available: {}, Requested: {}", 
-          walletId, wallet.getBalance(), amount);
-      throw new AppException(ErrorCode.INSUFFICIENT_BALANCE);
+    int rowsUpdated = walletRepository.decrementBalance(walletId, amount);
+    
+    if (rowsUpdated == 0) {
+      // If no rows were updated, it means either wallet not found OR insufficient balance
+      // We check specifically to throw the right ErrorCode
+      Wallet wallet = walletRepository.findById(walletId)
+          .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
+      
+      if (wallet.getBalance().compareTo(amount) < 0) {
+        log.warn("Deduction failed for wallet {}: Insufficient balance. Available: {}, Requested: {}", 
+            walletId, wallet.getBalance(), amount);
+        throw new AppException(ErrorCode.INSUFFICIENT_BALANCE);
+      }
+      
+      throw new AppException(ErrorCode.WALLET_NOT_FOUND);
     }
 
-    wallet.setBalance(wallet.getBalance().subtract(amount));
-    walletRepository.save(wallet);
-
-    log.info("Balance deducted successfully. New balance: {}", wallet.getBalance());
+    log.info("Balance deducted atomically for wallet: {}", walletId);
   }
 
   public Page<TransactionResponse> getMyTransactions(UUID userId, Pageable pageable) {
