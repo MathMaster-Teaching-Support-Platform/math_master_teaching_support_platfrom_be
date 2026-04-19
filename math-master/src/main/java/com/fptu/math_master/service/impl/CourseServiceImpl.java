@@ -123,6 +123,12 @@ public class CourseServiceImpl implements CourseService {
 
     String thumbnailUrl = resolveThumbnailForWrite(thumbnailFile);
 
+    if (request.getOriginalPrice() != null && request.getDiscountedPrice() != null) {
+      if (request.getDiscountedPrice().compareTo(request.getOriginalPrice()) > 0) {
+        throw new AppException(ErrorCode.INVALID_AMOUNT);
+      }
+    }
+
     Course course = Course.builder()
         .teacherId(teacherId)
         .provider(request.getProvider())
@@ -157,6 +163,16 @@ public class CourseServiceImpl implements CourseService {
       course.setTitle(request.getTitle());
     if (request.getDescription() != null)
       course.setDescription(request.getDescription());
+
+    // Validate prices before updating
+    java.math.BigDecimal activeOriginal = request.getOriginalPrice() != null ? request.getOriginalPrice() : course.getOriginalPrice();
+    java.math.BigDecimal activeDiscounted = request.getDiscountedPrice() != null ? request.getDiscountedPrice() : course.getDiscountedPrice();
+    
+    if (activeOriginal != null && activeDiscounted != null) {
+      if (activeDiscounted.compareTo(activeOriginal) > 0) {
+        throw new AppException(ErrorCode.INVALID_AMOUNT);
+      }
+    }
     if (request.getWhatYouWillLearn() != null)
       course.setWhatYouWillLearn(request.getWhatYouWillLearn());
     if (request.getRequirements() != null)

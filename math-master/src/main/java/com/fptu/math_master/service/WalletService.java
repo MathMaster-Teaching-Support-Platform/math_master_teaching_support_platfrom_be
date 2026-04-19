@@ -106,6 +106,7 @@ public class WalletService {
     log.info("Deducting balance {} from wallet: {}", amount, walletId);
 
     if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+      log.warn("Deduction failed for wallet {}: Invalid amount {}", walletId, amount);
       throw new AppException(ErrorCode.INVALID_AMOUNT);
     }
 
@@ -115,6 +116,8 @@ public class WalletService {
             .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
 
     if (wallet.getBalance().compareTo(amount) < 0) {
+      log.warn("Deduction failed for wallet {}: Insufficient balance. Available: {}, Requested: {}", 
+          walletId, wallet.getBalance(), amount);
       throw new AppException(ErrorCode.INSUFFICIENT_BALANCE);
     }
 

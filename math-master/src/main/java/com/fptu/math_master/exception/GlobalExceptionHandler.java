@@ -60,6 +60,10 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(value = AppException.class)
   ResponseEntity<ApiResponse<Void>> handlingAppException(AppException exception) {
     ErrorCode errorCode = exception.getErrorCode();
+    
+    // Log business exceptions so developers can trace them in the console
+    log.warn("AppException occurred - Code: {}, Message: {}", errorCode.getCode(), errorCode.getMessage());
+    
     ApiResponse<Void> apiResponse = new ApiResponse<>();
 
     apiResponse.setCode(errorCode.getCode());
