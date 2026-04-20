@@ -128,6 +128,7 @@ public class MinioUploadServiceImpl implements UploadService {
 
   @Override
   public String getPresignedUrl(String key, String bucketName) {
+    String normalizedKey = normalizeObjectKey(key, bucketName);
     try (S3Presigner presigner = buildPresigner()) {
       PresignedGetObjectRequest presigned =
           presigner.presignGetObject(
@@ -136,12 +137,12 @@ public class MinioUploadServiceImpl implements UploadService {
                   .getObjectRequest(
                       GetObjectRequest.builder()
                           .bucket(bucketName)
-                          .key(key)
+                          .key(normalizedKey)
                           .build())
                   .build());
       return presigned.url().toString();
     } catch (Exception e) {
-      log.error("Error generating pre-signed URL for Minio: {}/{}", bucketName, key, e);
+      log.error("Error generating pre-signed URL for Minio: {}/{}", bucketName, normalizedKey, e);
       throw new RuntimeException("Could not generate download URL", e);
     }
   }
@@ -171,14 +172,43 @@ public class MinioUploadServiceImpl implements UploadService {
 
   @Override
   public byte[] downloadFile(String key, String bucketName) {
+    String normalizedKey = normalizeObjectKey(key, bucketName);
     try (InputStream inputStream =
         minioClient.getObject(
-            GetObjectArgs.builder().bucket(bucketName).object(key).build())) {
+            GetObjectArgs.builder().bucket(bucketName).object(normalizedKey).build())) {
       return inputStream.readAllBytes();
     } catch (Exception e) {
-      log.error("Error downloading file from Minio: {}/{}", bucketName, key, e);
+      log.error("Error downloading file from Minio: {}/{}", bucketName, normalizedKey, e);
       throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
     }
+  }
+
+  private String normalizeObjectKey(String key, String bucketName) {
+    if (key == null) {
+      return null;
+    }
+
+    String value = key.trim();
+
+    if (value.startsWith("http://") || value.startsWith("https://")) {
+      try {
+        String path = URI.create(value).getPath();
+        value = path == null ? value : path;
+      } catch (Exception ignored) {
+        // Keep original value if URI parsing fails.
+      }
+    }
+
+    while (value.startsWith("/")) {
+      value = value.substring(1);
+    }
+
+    String bucketPrefix = bucketName + "/";
+    if (value.startsWith(bucketPrefix)) {
+      value = value.substring(bucketPrefix.length());
+    }
+
+    return value;
   }
 
   private void ensureBucketExists(String bucketName) throws Exception {
