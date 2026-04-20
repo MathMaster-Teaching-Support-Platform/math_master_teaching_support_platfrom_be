@@ -28,6 +28,24 @@ public final class SecurityUtils {
     }
   }
 
+  public static UUID getOptionalCurrentUserId() {
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (!(auth instanceof JwtAuthenticationToken jwtAuth) || !auth.isAuthenticated()) {
+      return null;
+    }
+
+    String subject = jwtAuth.getToken().getSubject();
+    if (subject == null || subject.isBlank()) {
+      return null;
+    }
+
+    try {
+      return UUID.fromString(subject);
+    } catch (IllegalArgumentException ex) {
+      return null;
+    }
+  }
+
   public static boolean hasRole(String roleName) {
     var auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null) return false;

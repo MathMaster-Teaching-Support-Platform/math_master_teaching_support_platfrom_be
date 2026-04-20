@@ -45,6 +45,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
   CourseRepository courseRepository;
   LessonRepository lessonRepository;
   CustomCourseSectionRepository customCourseSectionRepository;
+  com.fptu.math_master.repository.EnrollmentRepository enrollmentRepository;
   UploadService uploadService;
   ObjectMapper objectMapper;
   MinioProperties minioProperties;
@@ -90,7 +91,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
       
       courseService.syncCourseMetrics(courseId);
       
-      return mapToResponse(courseLesson, lesson.getTitle());
+      return mapToResponse(courseLesson, lesson.getTitle(), true);
 
     } else {
       // ── CUSTOM: teacher-defined lesson ──────────────────────────────────────
@@ -128,7 +129,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
       
       courseService.syncCourseMetrics(courseId);
       
-      return mapToResponse(courseLesson, request.getCustomTitle());
+      return mapToResponse(courseLesson, request.getCustomTitle(), true);
     }
   }
 
@@ -172,7 +173,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
               .orElse(lessonTitle);
     }
 
-    return mapToResponse(courseLesson, lessonTitle);
+    return mapToResponse(courseLesson, lessonTitle, true);
   }
 
   @Override
@@ -201,7 +202,26 @@ public class CourseLessonServiceImpl implements CourseLessonService {
   @Override
   @Transactional(readOnly = true)
   public List<CourseLessonResponse> getLessons(UUID courseId) {
-    findCourseOrThrow(courseId);
+    Course course = findCourseOrThrow(courseId);
+    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+
+    boolean isAuthorized = false;
+    if (currentUserId != null) {
+      if (course.getTeacherId().equals(currentUserId) || SecurityUtils.hasRole("ADMIN")) {
+        isAuthorized = true;
+      } else {
+        isAuthorized =
+            enrollmentRepository
+                .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
+                .map(e -> "ACTIVE".equals(e.getStatus().name()))
+                .orElse(false);
+      }
+    }
+
+    // Udemy-style access: only enrolled/owner/admin can access all lessons.
+    // Non-enrolled users can access only lessons explicitly marked as free preview.
+    final boolean canAccessAll = isAuthorized;
+
     return courseLessonRepository.findByCourseIdAndNotDeleted(courseId).stream()
         .map(
             cl -> {
@@ -213,7 +233,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
                         .map(l -> l.getTitle())
                         .orElse(lessonTitle);
               }
-              return mapToResponse(cl, lessonTitle);
+              return mapToResponse(cl, lessonTitle, canAccessAll);
             })
         .collect(Collectors.toList());
   }
@@ -230,15 +250,28 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     }
   }
 
-  private CourseLessonResponse mapToResponse(CourseLesson cl, String lessonTitle) {
+  private CourseLessonResponse mapToResponse(
+      CourseLesson cl, String lessonTitle, boolean isAuthorized) {
     String materialsJson = cl.getMaterials();
+    boolean canAccess = isAuthorized || cl.isFreePreview();
+
     if (materialsJson != null && !materialsJson.isBlank()) {
       List<MaterialItem> items = getMaterialList(materialsJson);
-      for (MaterialItem item : items) {
-        try {
-          item.setUrl(uploadService.getPresignedUrl(item.getKey(), minioProperties.getCourseMaterialsBucket()));
-        } catch (Exception e) {
-          log.error("Error generating presigned URL for material {}", item.getId(), e);
+      if (canAccess) {
+        for (MaterialItem item : items) {
+          try {
+            item.setUrl(
+                uploadService.getPresignedUrl(
+                    item.getKey(), minioProperties.getCourseMaterialsBucket()));
+          } catch (Exception e) {
+            log.error("Error generating presigned URL for material {}", item.getId(), e);
+          }
+        }
+      } else {
+        // Lock materials for unauthorized/non-preview access
+        for (MaterialItem item : items) {
+          item.setKey(null);
+          item.setUrl(null);
         }
       }
       try {
@@ -271,7 +304,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
         .chapterTitle(chapterTitle)
         .lessonTitle(lessonTitle)
         .customDescription(cl.getCustomDescription())
-        .videoUrl(cl.getVideoUrl())
+        .videoUrl(canAccess ? cl.getVideoUrl() : null)
         .videoTitle(cl.getVideoTitle())
         .durationSeconds(cl.getDurationSeconds())
         .orderIndex(cl.getOrderIndex())
@@ -323,7 +356,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     
     courseService.syncCourseMetrics(courseId);
     
-    return mapToResponse(cl, getTitleForLesson(cl));
+    return mapToResponse(cl, getTitleForLesson(cl), true);
   }
 
   @Override
@@ -357,7 +390,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
       courseService.syncCourseMetrics(courseId);
     }
 
-    return mapToResponse(cl, getTitleForLesson(cl));
+    return mapToResponse(cl, getTitleForLesson(cl), true);
   }
 
   private List<MaterialItem> getMaterialList(String json) {

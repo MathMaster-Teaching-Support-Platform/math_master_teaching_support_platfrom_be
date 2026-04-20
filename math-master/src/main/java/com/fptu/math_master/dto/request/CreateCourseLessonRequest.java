@@ -1,5 +1,7 @@
 package com.fptu.math_master.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -36,6 +38,8 @@ public class CreateCourseLessonRequest {
   private Integer orderIndex;
 
   @Builder.Default
+  @JsonProperty("isFreePreview")
+  @JsonAlias({"freePreview"})
   private boolean isFreePreview = false;
 
   /** JSON string of List<MaterialItem>: [{type, title, url}] */

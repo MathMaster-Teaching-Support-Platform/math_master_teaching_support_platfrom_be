@@ -31,14 +31,12 @@ import org.hibernate.annotations.Nationalized;
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Entity
-@Table(
-    name = "courses",
-    indexes = {
-      @Index(name = "idx_courses_teacher_id", columnList = "teacher_id"),
-      @Index(name = "idx_courses_subject_id", columnList = "subject_id"),
-      @Index(name = "idx_courses_school_grade_id", columnList = "school_grade_id"),
-      @Index(name = "idx_courses_is_published", columnList = "is_published")
-    })
+@Table(name = "courses", indexes = {
+    @Index(name = "idx_courses_teacher_id", columnList = "teacher_id"),
+    @Index(name = "idx_courses_subject_id", columnList = "subject_id"),
+    @Index(name = "idx_courses_school_grade_id", columnList = "school_grade_id"),
+    @Index(name = "idx_courses_is_published", columnList = "is_published")
+})
 public class Course extends BaseEntity {
 
   @EqualsAndHashCode.Include
@@ -58,11 +56,17 @@ public class Course extends BaseEntity {
   @Builder.Default
   private CourseProvider provider = CourseProvider.MINISTRY;
 
-  /** Subject (môn học) mà course này dạy, e.g. "Đại Số lớp 10". Nullable for CUSTOM courses. */
+  /**
+   * Subject (môn học) mà course này dạy, e.g. "Đại Số lớp 10". Nullable for
+   * CUSTOM courses.
+   */
   @Column(name = "subject_id")
   private UUID subjectId;
 
-  /** SchoolGrade để biết lớp mấy, cache lại cho tiện query/filter. Nullable for CUSTOM courses. */
+  /**
+   * SchoolGrade để biết lớp mấy, cache lại cho tiện query/filter. Nullable for
+   * CUSTOM courses.
+   */
   @Column(name = "school_grade_id")
   private UUID schoolGradeId;
 

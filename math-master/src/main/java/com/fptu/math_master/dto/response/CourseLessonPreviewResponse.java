@@ -1,5 +1,6 @@
 package com.fptu.math_master.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -20,6 +21,7 @@ public class CourseLessonPreviewResponse {
   private String videoTitle;
   private Integer durationSeconds;
   private Integer orderIndex;
+  @JsonProperty("isFreePreview")
   private boolean isFreePreview;
   private Instant createdAt;
   private Instant updatedAt;
