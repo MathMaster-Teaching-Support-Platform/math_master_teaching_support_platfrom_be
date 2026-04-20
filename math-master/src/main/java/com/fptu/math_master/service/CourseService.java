@@ -7,6 +7,7 @@ import com.fptu.math_master.dto.request.UpdateCourseRequest;
 import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
+import com.fptu.math_master.dto.response.CoursePreviewResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
 import java.util.List;
 import java.util.UUID;
@@ -27,6 +28,8 @@ public interface CourseService {
   List<CourseResponse> getMyCourses();
 
   CourseResponse getCourseById(UUID courseId);
+
+  CoursePreviewResponse getCoursePreview(UUID courseId);
 
   /** Filter theo schoolGradeId, subjectId, keyword */
   Page<CourseResponse> getPublicCourses(UUID schoolGradeId, UUID subjectId, String keyword, Pageable pageable);

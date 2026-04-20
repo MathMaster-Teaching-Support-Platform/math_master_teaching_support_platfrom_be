@@ -8,6 +8,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
+import com.fptu.math_master.dto.response.CoursePreviewResponse;
+import com.fptu.math_master.dto.response.CourseLessonPreviewResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
 import com.fptu.math_master.configuration.properties.MinioProperties;
@@ -245,6 +247,43 @@ public class CourseServiceImpl implements CourseService {
 
   @Override
   @Transactional(readOnly = true)
+  public CoursePreviewResponse getCoursePreview(UUID courseId) {
+    Course course = findCourseOrThrow(courseId);
+    CourseResponse courseResponse = mapToResponse(course);
+    
+    List<CourseLessonPreviewResponse> lessons = courseLessonRepository.findByCourseIdAndNotDeleted(courseId)
+        .stream()
+        .map(cl -> {
+          String lessonTitle = cl.getCustomTitle();
+          if (cl.getLessonId() != null) {
+            lessonTitle = lessonRepository.findByIdAndNotDeleted(cl.getLessonId())
+                .map(Lesson::getTitle)
+                .orElse(lessonTitle);
+          }
+          return CourseLessonPreviewResponse.builder()
+              .id(cl.getId())
+              .courseId(cl.getCourseId())
+              .sectionId(cl.getSectionId())
+              .lessonTitle(lessonTitle)
+              .customDescription(cl.getCustomDescription())
+              .videoTitle(cl.getVideoTitle())
+              .durationSeconds(cl.getDurationSeconds())
+              .orderIndex(cl.getOrderIndex())
+              .isFreePreview(cl.isFreePreview())
+              .createdAt(cl.getCreatedAt())
+              .updatedAt(cl.getUpdatedAt())
+              .build();
+        })
+        .collect(Collectors.toList());
+
+    return CoursePreviewResponse.builder()
+        .course(courseResponse)
+        .lessons(lessons)
+        .build();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public Page<CourseResponse> getPublicCourses(
       UUID schoolGradeId, UUID subjectId, String keyword, Pageable pageable) {
     // Native query already has ORDER BY, ignore Pageable sort to avoid camelCase
@@ -318,6 +357,28 @@ public class CourseServiceImpl implements CourseService {
     int sectionsCount = (int) customCourseSectionRepository.countByCourseIdAndDeletedAtIsNull(course.getId());
     int ratingCount = (int) courseReviewRepository.countByCourseIdAndDeletedAtIsNull(course.getId());
 
+    UUID studentId = null;
+    try {
+      studentId = SecurityUtils.getCurrentUserId();
+    } catch (Exception e) {
+      // Ignored
+    }
+
+    Boolean isEnrolled = false;
+    Integer completedLessons = 0;
+    Double progress = 0.0;
+
+    if (studentId != null) {
+      Enrollment enrollment = enrollmentRepository
+          .findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, course.getId())
+          .orElse(null);
+      if (enrollment != null) {
+        isEnrolled = true;
+        completedLessons = (int) lessonProgressRepository.countCompletedByEnrollmentId(enrollment.getId());
+        progress = lessonsCount == 0 ? 0.0 : (completedLessons * 100.0) / lessonsCount;
+      }
+    }
+
     return CourseResponse.builder()
         .id(course.getId())
         .teacherId(course.getTeacherId())
@@ -351,6 +412,9 @@ public class CourseServiceImpl implements CourseService {
         .originalPrice(course.getOriginalPrice())
         .discountedPrice(course.getDiscountedPrice())
         .discountExpiryDate(course.getDiscountExpiryDate())
+        .isEnrolled(isEnrolled)
+        .completedLessons(completedLessons)
+        .progress(progress)
         .build();
   }
 

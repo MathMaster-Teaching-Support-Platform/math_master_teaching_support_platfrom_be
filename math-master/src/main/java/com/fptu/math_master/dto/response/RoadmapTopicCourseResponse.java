@@ -31,4 +31,10 @@ public class RoadmapTopicCourseResponse {
    * Always {@code false} from the backend; the FE overlays real-time enrollment state.
    */
   private Boolean isEnrolled;
+
+  /** Number of completed lessons */
+  private Integer completedLessons;
+
+  /** Progress percentage (0.0 to 100.0) */
+  private Double progress;
 }

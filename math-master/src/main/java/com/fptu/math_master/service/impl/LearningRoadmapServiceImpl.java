@@ -44,6 +44,9 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
   TopicCourseRepository topicCourseRepository;
   CourseRepository courseRepository;
   CourseLessonRepository courseLessonRepository;
+  EnrollmentRepository enrollmentRepository;
+  LessonProgressRepository lessonProgressRepository;
+  AssessmentRepository assessmentRepository;
 
   // ============================================================================
   // ROADMAP RETRIEVAL
@@ -122,8 +125,10 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     topic = topicRepository.save(topic);
     updateRoadmapProgress(topic.getRoadmapId());
 
+    LearningRoadmap roadmap = roadmapRepository.findById(topic.getRoadmapId()).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+
     log.info("Topic progress updated successfully: topicId={}", topic.getId());
-    return mapToTopicResponse(topic);
+    return mapToTopicResponse(topic, roadmap.getStudentId());
   }
 
   @Override
@@ -134,7 +139,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
             .findNextTopic(roadmapId)
             .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
-    return mapToTopicResponse(nextTopic);
+    LearningRoadmap roadmap = roadmapRepository.findById(roadmapId).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    return mapToTopicResponse(nextTopic, roadmap.getStudentId());
   }
 
   @Override
@@ -190,7 +196,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
             .findById(topicId)
             .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
-    return mapToTopicResponse(topic);
+    LearningRoadmap roadmap = roadmapRepository.findById(topic.getRoadmapId()).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    return mapToTopicResponse(topic, roadmap.getStudentId());
   }
 
   // ============================================================================
@@ -310,8 +317,28 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     List<RoadmapTopicResponse> topicResponses =
         topics.stream()
             .filter(topic -> topic.getDeletedAt() == null)
-            .map(this::mapToTopicResponse)
+            .map(topic -> mapToTopicResponse(topic, roadmap.getStudentId()))
             .collect(Collectors.toList());
+
+    RoadmapEntryTestInfo entryTestInfo = null;
+    if (roadmap.getEntryTestId() != null) {
+      Assessment assessment = assessmentRepository.findByIdAndNotDeleted(roadmap.getEntryTestId()).orElse(null);
+      if (assessment != null) {
+        Long totalQuestions = assessmentRepository.countQuestionsByAssessmentId(assessment.getId());
+        entryTestInfo = RoadmapEntryTestInfo.builder()
+            .assessmentId(assessment.getId())
+            .name(assessment.getTitle())
+            .description(assessment.getDescription())
+            .totalQuestions(totalQuestions != null ? totalQuestions.intValue() : 0)
+            .build();
+      }
+    }
+
+    BigDecimal calculatedRoadmapProgress = BigDecimal.ZERO;
+    if (!topicResponses.isEmpty()) {
+      double totalProgress = topicResponses.stream().mapToDouble(t -> t.getProgress() != null ? t.getProgress() : 0.0).sum();
+      calculatedRoadmapProgress = BigDecimal.valueOf(totalProgress / topicResponses.size()).setScale(2, RoundingMode.HALF_UP);
+    }
 
     return RoadmapDetailResponse.builder()
         .id(roadmap.getId())
@@ -323,7 +350,7 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .gradeLevel(roadmap.getGradeLevel())
         .generationType(roadmap.getGenerationType())
         .status(roadmap.getStatus())
-        .progressPercentage(roadmap.getProgressPercentage())
+        .progressPercentage(calculatedRoadmapProgress)
         .completedTopicsCount(roadmap.getCompletedTopicsCount())
         .totalTopicsCount(roadmap.getTotalTopicsCount())
         .estimatedCompletionDays(roadmap.getEstimatedCompletionDays())
@@ -334,6 +361,7 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .updatedAt(roadmap.getUpdatedAt())
         .topics(topicResponses)
         .stats(getRoadmapStats(roadmap.getId()))
+        .entryTest(entryTestInfo)
         .build();
   }
 
@@ -358,7 +386,7 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
    * Maps a RoadmapTopic to its response, resolving the linked courses info.
    * If a course has been deleted, returns a placeholder with title "Unavailable".
    */
-  private RoadmapTopicResponse mapToTopicResponse(RoadmapTopic topic) {
+  private RoadmapTopicResponse mapToTopicResponse(RoadmapTopic topic, UUID studentId) {
     // Load courses from TopicCourse join table
     List<TopicCourse> topicCourses = topicCourseRepository.findByTopicId(topic.getId());
     
@@ -370,12 +398,32 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
       RoadmapTopicCourseResponse courseResponse;
       if (course != null) {
         long totalLessons = courseLessonRepository.countByCourseIdAndNotDeleted(course.getId());
+        
+        boolean isEnrolled = false;
+        int completedLessons = 0;
+        Double progress = null;
+        
+        if (studentId != null) {
+            Enrollment enrollment = enrollmentRepository.findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, course.getId()).orElse(null);
+            if (enrollment != null) {
+                isEnrolled = true;
+                completedLessons = (int) lessonProgressRepository.countCompletedByEnrollmentId(enrollment.getId());
+                if (totalLessons > 0) {
+                    progress = (completedLessons * 100.0) / totalLessons;
+                } else {
+                    progress = 0.0;
+                }
+            }
+        }
+        
         courseResponse = RoadmapTopicCourseResponse.builder()
             .id(course.getId())
             .title(course.getTitle())
             .thumbnail(course.getThumbnailUrl())
             .totalLessons((int) totalLessons)
-            .isEnrolled(false) // FE overlays real-time enrollment state
+            .isEnrolled(isEnrolled)
+            .completedLessons(completedLessons)
+            .progress(progress)
             .build();
       } else {
         // Course was deleted — return a placeholder so FE can show "Unavailable"
@@ -384,11 +432,17 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
             .title("Unavailable")
             .totalLessons(0)
             .isEnrolled(false)
+            .completedLessons(0)
+            .progress(null)
             .build();
       }
       
       courseResponses.add(courseResponse);
     }
+
+    int topicTotalLessons = courseResponses.stream().mapToInt(c -> c.getTotalLessons() != null ? c.getTotalLessons() : 0).sum();
+    int topicCompletedLessons = courseResponses.stream().mapToInt(c -> c.getCompletedLessons() != null ? c.getCompletedLessons() : 0).sum();
+    Double topicProgress = topicTotalLessons > 0 ? (topicCompletedLessons * 100.0) / topicTotalLessons : 0.0;
 
     return RoadmapTopicResponse.builder()
         .id(topic.getId())
@@ -398,6 +452,9 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .difficulty(topic.getDifficulty())
         .sequenceOrder(topic.getSequenceOrder())
         .courses(courseResponses)
+        .totalLessons(topicTotalLessons)
+        .completedLessons(topicCompletedLessons)
+        .progress(topicProgress)
         .startedAt(topic.getStartedAt())
         .build();
   }

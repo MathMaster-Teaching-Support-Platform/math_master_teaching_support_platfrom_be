@@ -46,4 +46,8 @@ public class CourseResponse {
   private BigDecimal originalPrice;
   private BigDecimal discountedPrice;
   private Instant discountExpiryDate;
+
+  private Boolean isEnrolled;
+  private Integer completedLessons;
+  private Double progress;
 }

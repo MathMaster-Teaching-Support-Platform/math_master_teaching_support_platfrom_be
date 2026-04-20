@@ -95,6 +95,14 @@ public class CourseController {
         .build();
   }
 
+  @Operation(summary = "Get course preview")
+  @GetMapping("/{courseId}/preview")
+  public ApiResponse<com.fptu.math_master.dto.response.CoursePreviewResponse> getCoursePreview(@PathVariable UUID courseId) {
+    return ApiResponse.<com.fptu.math_master.dto.response.CoursePreviewResponse>builder()
+        .result(courseService.getCoursePreview(courseId))
+        .build();
+  }
+
   @Operation(summary = "Update course")
   @PutMapping(value = "/{courseId}", consumes = MediaType.APPLICATION_JSON_VALUE)
   @PreAuthorize("hasRole('TEACHER')")

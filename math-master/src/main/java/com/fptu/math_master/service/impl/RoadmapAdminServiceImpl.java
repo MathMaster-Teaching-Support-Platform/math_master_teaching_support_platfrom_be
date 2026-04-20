@@ -122,8 +122,8 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   public void setRoadmapEntryTest(UUID roadmapId, UUID entryTestId) {
     LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
     
-    // Validate that the assessment exists
-    assessmentRepository.findById(entryTestId)
+    // Validate that the assessment exists and is not deleted
+    assessmentRepository.findByIdAndNotDeleted(entryTestId)
         .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
     
     roadmap.setEntryTestId(entryTestId);

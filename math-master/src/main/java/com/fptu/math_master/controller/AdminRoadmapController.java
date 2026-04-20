@@ -141,8 +141,8 @@ public class AdminRoadmapController {
   @PreAuthorize("hasRole('ADMIN')")
   @Operation(summary = "Set or update roadmap entry test (placement test)")
   public ApiResponse<String> setRoadmapEntryTest(
-      @PathVariable UUID roadmapId, @RequestParam UUID entryTestId) {
-    roadmapAdminService.setRoadmapEntryTest(roadmapId, entryTestId);
+      @PathVariable UUID roadmapId, @Valid @RequestBody CreateRoadmapEntryTestRequest request) {
+    roadmapAdminService.setRoadmapEntryTest(roadmapId, request.getAssessmentId());
     return ApiResponse.<String>builder()
         .message("Roadmap entry test set successfully").result("OK").build();
   }

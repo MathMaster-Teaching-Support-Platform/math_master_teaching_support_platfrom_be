@@ -45,6 +45,15 @@ public class RoadmapTopicResponse {
   @Schema(description = "The courses linked to this topic")
   private List<RoadmapTopicCourseResponse> courses;
 
+  @Schema(description = "Total lessons across all courses in this topic")
+  private Integer totalLessons;
+
+  @Schema(description = "Total completed lessons across all courses in this topic")
+  private Integer completedLessons;
+
+  @Schema(description = "Dynamic progress percentage based on lessons")
+  private Double progress;
+
   @Schema(description = "When this topic was started by the student")
   private Instant startedAt;
 }
