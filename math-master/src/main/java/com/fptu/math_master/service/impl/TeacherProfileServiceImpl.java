@@ -18,6 +18,7 @@ import com.fptu.math_master.repository.TeacherProfileRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.TeacherProfileService;
 import com.fptu.math_master.service.UploadService;
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -288,12 +289,10 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
         .findById(profileId)
         .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-    if (profile.getVerificationDocumentKey() == null) {
-      throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
-    }
+    String objectKey = resolveDocumentObjectKey(profile);
 
     return uploadService.getPresignedUrl(
-        profile.getVerificationDocumentKey(), minioProperties.getVerificationBucket());
+        objectKey, minioProperties.getVerificationBucket());
   }
 
   @Override
@@ -302,12 +301,47 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
         .findById(profileId)
         .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-    if (profile.getVerificationDocumentKey() == null) {
+    String objectKey = resolveDocumentObjectKey(profile);
+
+    return uploadService.downloadFile(
+        objectKey, minioProperties.getVerificationBucket());
+  }
+
+  private String resolveDocumentObjectKey(TeacherProfile profile) {
+    String rawPath = profile.getVerificationDocumentKey();
+    if (rawPath == null || rawPath.isBlank()) {
+      rawPath = profile.getVerificationDocumentPath();
+    }
+
+    if (rawPath == null || rawPath.isBlank()) {
       throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
     }
 
-    return uploadService.downloadFile(
-        profile.getVerificationDocumentKey(), minioProperties.getVerificationBucket());
+    return normalizeObjectKey(rawPath);
+  }
+
+  private String normalizeObjectKey(String rawPath) {
+    String value = rawPath.trim();
+
+    if (value.startsWith("http://") || value.startsWith("https://")) {
+      try {
+        String path = URI.create(value).getPath();
+        value = path == null ? value : path;
+      } catch (Exception ignored) {
+        // Keep original value if URI parsing fails.
+      }
+    }
+
+    while (value.startsWith("/")) {
+      value = value.substring(1);
+    }
+
+    String bucketPrefix = minioProperties.getVerificationBucket() + "/";
+    if (value.startsWith(bucketPrefix)) {
+      value = value.substring(bucketPrefix.length());
+    }
+
+    return value;
   }
 
   private TeacherProfileResponse mapToResponse(TeacherProfile profile) {
