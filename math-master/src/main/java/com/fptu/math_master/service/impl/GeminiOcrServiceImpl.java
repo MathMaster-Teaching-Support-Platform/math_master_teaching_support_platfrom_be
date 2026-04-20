@@ -361,8 +361,33 @@ public class GeminiOcrServiceImpl implements OcrService {
 
         String summary;
         if (!allFieldsPass) {
-            summary = String.format("❌ XÁC MINH THẤT BẠI: Không đủ 3 trường bắt buộc. " +
-                    "Họ tên: %s, Chức danh+Toán: %s, Tên trường: %s", 
+            List<String> missingFields = new ArrayList<>();
+            List<String> mismatchedFields = new ArrayList<>();
+
+            for (OcrComparisonResult.FieldComparison comparison : comparisons) {
+                boolean hasOcrValue = comparison.getOcrValue() != null
+                        && !comparison.getOcrValue().trim().isEmpty();
+
+                if (!hasOcrValue) {
+                    missingFields.add(comparison.getFieldName());
+                } else if (!Boolean.TRUE.equals(comparison.getMatches())) {
+                    mismatchedFields.add(comparison.getFieldName());
+                }
+            }
+
+            String failureReason;
+            if (!missingFields.isEmpty()) {
+                failureReason = "OCR không đọc được đầy đủ thông tin bắt buộc từ tài liệu";
+                failureReason += " (thiếu: " + String.join(", ", missingFields) + ")";
+            } else {
+                failureReason = "Đã đọc đủ 3 trường bắt buộc nhưng thông tin chưa khớp với hồ sơ";
+                if (!mismatchedFields.isEmpty()) {
+                    failureReason += " (không khớp: " + String.join(", ", mismatchedFields) + ")";
+                }
+            }
+
+            summary = String.format("❌ XÁC MINH THẤT BẠI: %s. Họ tên: %s, Chức danh+Toán: %s, Tên trường: %s",
+                    failureReason,
                     nameComparison.getMatches() ? "✓" : "✗",
                     positionComparison.getMatches() ? "✓" : "✗",
                     schoolComparison.getMatches() ? "✓" : "✗");
