@@ -20,6 +20,7 @@ import com.fptu.math_master.service.TeacherProfileService;
 import com.fptu.math_master.service.UploadService;
 import java.net.URI;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -289,7 +290,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
         .findById(profileId)
         .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-    String objectKey = resolveDocumentObjectKey(profile);
+    String objectKey = findExistingDocumentObjectKey(profile);
 
     return uploadService.getPresignedUrl(
         objectKey, minioProperties.getVerificationBucket());
@@ -301,23 +302,49 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
         .findById(profileId)
         .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-    String objectKey = resolveDocumentObjectKey(profile);
-
-    return uploadService.downloadFile(
-        objectKey, minioProperties.getVerificationBucket());
+    String objectKey = findExistingDocumentObjectKey(profile);
+    return uploadService.downloadFile(objectKey, minioProperties.getVerificationBucket());
   }
 
-  private String resolveDocumentObjectKey(TeacherProfile profile) {
-    String rawPath = profile.getVerificationDocumentKey();
-    if (rawPath == null || rawPath.isBlank()) {
-      rawPath = profile.getVerificationDocumentPath();
+  private String findExistingDocumentObjectKey(TeacherProfile profile) {
+    Set<String> candidateKeys = resolveDocumentObjectKeys(profile);
+
+    for (String objectKey : candidateKeys) {
+      try {
+        uploadService.downloadFile(objectKey, minioProperties.getVerificationBucket());
+        return objectKey;
+      } catch (AppException ex) {
+        if (ex.getErrorCode() == ErrorCode.DOCUMENT_NOT_FOUND) {
+          log.warn("Document key not found in MinIO, trying next key: {}", objectKey);
+          continue;
+        }
+        throw ex;
+      }
     }
 
-    if (rawPath == null || rawPath.isBlank()) {
+    log.error("No valid document key found in MinIO for profile {}. Candidates: {}",
+        profile.getId(), candidateKeys);
+    throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
+  }
+
+  private Set<String> resolveDocumentObjectKeys(TeacherProfile profile) {
+    Set<String> keys = new LinkedHashSet<>();
+
+    String key = normalizeObjectKey(profile.getVerificationDocumentKey());
+    if (key != null && !key.isBlank()) {
+      keys.add(key);
+    }
+
+    String path = normalizeObjectKey(profile.getVerificationDocumentPath());
+    if (path != null && !path.isBlank()) {
+      keys.add(path);
+    }
+
+    if (keys.isEmpty()) {
       throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
     }
 
-    return normalizeObjectKey(rawPath);
+    return keys;
   }
 
   private String normalizeObjectKey(String rawPath) {
