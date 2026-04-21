@@ -1,6 +1,7 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.request.UpdateProgressRequest;
 import com.fptu.math_master.dto.response.LessonProgressItem;
 import com.fptu.math_master.dto.response.StudentProgressResponse;
 import com.fptu.math_master.service.ProgressService;
@@ -38,6 +39,18 @@ public class ProgressController {
     log.info("POST /enrollments/{}/lessons/{}/complete", enrollmentId, courseLessonId);
     return ApiResponse.<LessonProgressItem>builder()
         .result(progressService.markComplete(enrollmentId, courseLessonId))
+        .build();
+  }
+
+  @Operation(summary = "Update lesson progress (watched seconds)")
+  @PostMapping("/{enrollmentId}/lessons/{courseLessonId}/progress")
+  @PreAuthorize("hasRole('STUDENT')")
+  public ApiResponse<LessonProgressItem> updateProgress(
+      @PathVariable UUID enrollmentId,
+      @PathVariable UUID courseLessonId,
+      @org.springframework.web.bind.annotation.RequestBody UpdateProgressRequest request) {
+    return ApiResponse.<LessonProgressItem>builder()
+        .result(progressService.updateProgress(enrollmentId, courseLessonId, request))
         .build();
   }
 

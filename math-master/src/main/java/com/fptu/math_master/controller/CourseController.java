@@ -3,6 +3,7 @@ package com.fptu.math_master.controller;
 import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
 import com.fptu.math_master.dto.request.CreateCourseRequest;
 import com.fptu.math_master.dto.request.PublishCourseRequest;
+import com.fptu.math_master.dto.request.RejectCourseRequest;
 import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
 import com.fptu.math_master.dto.request.UpdateCourseRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -148,6 +149,54 @@ public class CourseController {
     log.info("PATCH /courses/{}/publish – published={}", courseId, request.getPublished());
     return ApiResponse.<CourseResponse>builder()
         .result(courseService.publishCourse(courseId, request.getPublished()))
+        .build();
+  }
+
+  @Operation(summary = "Submit course for admin review")
+  @PatchMapping("/{courseId}/submit-review")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> submitCourseForReview(@PathVariable UUID courseId) {
+    log.info("PATCH /courses/{}/submit-review", courseId);
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.submitForReview(courseId))
+        .build();
+  }
+
+  @Operation(summary = "Admin: get courses pending review")
+  @GetMapping("/admin/pending")
+  @PreAuthorize("hasRole('ADMIN')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<Page<CourseResponse>> getPendingReviewCourses(
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    var pageable = PageRequest.of(page, size, Sort.by("createdAt").ascending());
+    return ApiResponse.<Page<CourseResponse>>builder()
+        .result(courseService.getPendingReviewCourses(pageable))
+        .build();
+  }
+
+  @Operation(summary = "Admin: approve a course")
+  @PatchMapping("/admin/{courseId}/approve")
+  @PreAuthorize("hasRole('ADMIN')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> approveCourse(@PathVariable UUID courseId) {
+    log.info("PATCH /courses/admin/{}/approve", courseId);
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.approveCourse(courseId))
+        .build();
+  }
+
+  @Operation(summary = "Admin: reject a course")
+  @PatchMapping("/admin/{courseId}/reject")
+  @PreAuthorize("hasRole('ADMIN')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> rejectCourse(
+      @PathVariable UUID courseId,
+      @Valid @RequestBody RejectCourseRequest request) {
+    log.info("PATCH /courses/admin/{}/reject", courseId);
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.rejectCourse(courseId, request.getReason()))
         .build();
   }
 

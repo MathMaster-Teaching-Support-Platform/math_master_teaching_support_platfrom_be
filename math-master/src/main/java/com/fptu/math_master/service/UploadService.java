@@ -12,6 +12,15 @@ public interface UploadService {
   String uploadFile(MultipartFile file, String directory);
 
   /**
+   * Upload a file to Minio specifying a bucket
+   * @param file The file to upload
+   * @param directory The subdirectory/prefix
+   * @param bucketName The bucket to upload to
+   * @return The URL or path to the stored file
+   */
+  String uploadFile(MultipartFile file, String directory, String bucketName);
+
+  /**
    * Upload multiple files to Minio as a single Zip file
    * @param files The list of files to upload
    * @param directory The subdirectory/prefix
@@ -41,4 +50,11 @@ public interface UploadService {
    * @param filePath Path/Key to the file
    */
   void deleteFile(String filePath);
+
+  /**
+   * Delete a file from Minio in a specific bucket
+   * @param filePath Path/Key to the file
+   * @param bucketName The bucket containing the file
+   */
+  void deleteFile(String filePath, String bucketName);
 }

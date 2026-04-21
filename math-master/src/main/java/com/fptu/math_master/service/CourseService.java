@@ -25,6 +25,14 @@ public interface CourseService {
 
   CourseResponse publishCourse(UUID courseId, boolean publish);
 
+  CourseResponse submitForReview(UUID courseId);
+
+  Page<CourseResponse> getPendingReviewCourses(Pageable pageable);
+
+  CourseResponse approveCourse(UUID courseId);
+
+  CourseResponse rejectCourse(UUID courseId, String reason);
+
   List<CourseResponse> getMyCourses();
 
   CourseResponse getCourseById(UUID courseId);

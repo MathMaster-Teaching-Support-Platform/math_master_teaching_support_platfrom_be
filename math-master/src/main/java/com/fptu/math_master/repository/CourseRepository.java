@@ -1,6 +1,7 @@
 package com.fptu.math_master.repository;
 
 import com.fptu.math_master.entity.Course;
+import com.fptu.math_master.enums.CourseStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -76,4 +77,6 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
   Page<Course> searchAllCoursesForAdmin(
       @Param("keyword") String keyword,
       Pageable pageable);
+
+    Page<Course> findByStatusAndDeletedAtIsNullOrderByCreatedAtAsc(CourseStatus status, Pageable pageable);
 }

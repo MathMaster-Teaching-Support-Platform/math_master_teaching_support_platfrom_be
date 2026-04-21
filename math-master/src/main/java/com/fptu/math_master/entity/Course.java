@@ -1,6 +1,8 @@
 package com.fptu.math_master.entity;
 
+import com.fptu.math_master.enums.CourseLevel;
 import com.fptu.math_master.enums.CourseProvider;
+import com.fptu.math_master.enums.CourseStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -35,7 +37,8 @@ import org.hibernate.annotations.Nationalized;
     @Index(name = "idx_courses_teacher_id", columnList = "teacher_id"),
     @Index(name = "idx_courses_subject_id", columnList = "subject_id"),
     @Index(name = "idx_courses_school_grade_id", columnList = "school_grade_id"),
-    @Index(name = "idx_courses_is_published", columnList = "is_published")
+    @Index(name = "idx_courses_is_published", columnList = "is_published"),
+    @Index(name = "idx_courses_status", columnList = "status")
 })
 public class Course extends BaseEntity {
 
@@ -84,6 +87,14 @@ public class Course extends BaseEntity {
   @Builder.Default
   private boolean isPublished = false;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "status", nullable = false, length = 30, columnDefinition = "varchar(30) default 'DRAFT'")
+  @Builder.Default
+  private CourseStatus status = CourseStatus.DRAFT;
+
+  @Column(name = "rejection_reason", columnDefinition = "TEXT")
+  private String rejectionReason;
+
   @Column(name = "rating", precision = 3, scale = 2)
   @Builder.Default
   private BigDecimal rating = BigDecimal.ZERO;
@@ -103,6 +114,15 @@ public class Course extends BaseEntity {
   @Column(name = "language")
   @Builder.Default
   private String language = "Tiếng Việt";
+
+  /**
+   * Difficulty level for this course — surfaced on the course card and landing page
+   * so students can self-select the right course for their background.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "level", length = 20, columnDefinition = "varchar(20) default 'ALL_LEVELS'")
+  @Builder.Default
+  private CourseLevel level = CourseLevel.ALL_LEVELS;
 
   @Column(name = "total_video_hours", precision = 10, scale = 2)
   private BigDecimal totalVideoHours;
