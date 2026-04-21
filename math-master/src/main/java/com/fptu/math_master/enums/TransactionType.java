@@ -7,5 +7,7 @@ public enum TransactionType {
   DEPOSIT,
   WITHDRAWAL,
   PAYMENT,
-  REFUND
+  REFUND,
+  COURSE_PURCHASE,
+  INSTRUCTOR_REVENUE
 }

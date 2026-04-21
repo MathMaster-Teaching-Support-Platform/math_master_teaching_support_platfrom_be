@@ -82,6 +82,9 @@ public class RoadmapDetailResponse {
   @Schema(description = "Quick stats")
   private RoadmapStatsResponse stats;
 
+  @Schema(description = "Entry test information if available")
+  private RoadmapEntryTestInfo entryTest;
+
   @Schema(description = "Student best score across all submitted tests (10-point scale)")
   private Integer studentBestScore;
 }

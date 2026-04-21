@@ -3,6 +3,7 @@ package com.fptu.math_master.controller;
 import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
 import com.fptu.math_master.dto.request.CreateCourseRequest;
 import com.fptu.math_master.dto.request.PublishCourseRequest;
+import com.fptu.math_master.dto.request.RejectCourseRequest;
 import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
 import com.fptu.math_master.dto.request.UpdateCourseRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -10,6 +11,7 @@ import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
+import com.fptu.math_master.dto.response.TeacherProfileResponse;
 import com.fptu.math_master.service.CourseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -23,6 +25,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -93,6 +96,14 @@ public class CourseController {
         .build();
   }
 
+  @Operation(summary = "Get course preview")
+  @GetMapping("/{courseId}/preview")
+  public ApiResponse<com.fptu.math_master.dto.response.CoursePreviewResponse> getCoursePreview(@PathVariable UUID courseId) {
+    return ApiResponse.<com.fptu.math_master.dto.response.CoursePreviewResponse>builder()
+        .result(courseService.getCoursePreview(courseId))
+        .build();
+  }
+
   @Operation(summary = "Update course")
   @PutMapping(value = "/{courseId}", consumes = MediaType.APPLICATION_JSON_VALUE)
   @PreAuthorize("hasRole('TEACHER')")
@@ -141,7 +152,77 @@ public class CourseController {
         .build();
   }
 
+  @Operation(summary = "Submit course for admin review")
+  @PatchMapping("/{courseId}/submit-review")
+  @PreAuthorize("hasRole('TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> submitCourseForReview(@PathVariable UUID courseId) {
+    log.info("PATCH /courses/{}/submit-review", courseId);
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.submitForReview(courseId))
+        .build();
+  }
+
+  @Operation(summary = "Admin: get courses pending review")
+  @GetMapping("/admin/pending")
+  @PreAuthorize("hasRole('ADMIN')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<Page<CourseResponse>> getPendingReviewCourses(
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    var pageable = PageRequest.of(page, size, Sort.by("createdAt").ascending());
+    return ApiResponse.<Page<CourseResponse>>builder()
+        .result(courseService.getPendingReviewCourses(pageable))
+        .build();
+  }
+
+  @Operation(summary = "Admin: approve a course")
+  @PatchMapping("/admin/{courseId}/approve")
+  @PreAuthorize("hasRole('ADMIN')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> approveCourse(@PathVariable UUID courseId) {
+    log.info("PATCH /courses/admin/{}/approve", courseId);
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.approveCourse(courseId))
+        .build();
+  }
+
+  @Operation(summary = "Admin: reject a course")
+  @PatchMapping("/admin/{courseId}/reject")
+  @PreAuthorize("hasRole('ADMIN')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<CourseResponse> rejectCourse(
+      @PathVariable UUID courseId,
+      @Valid @RequestBody RejectCourseRequest request) {
+    log.info("PATCH /courses/admin/{}/reject", courseId);
+    return ApiResponse.<CourseResponse>builder()
+        .result(courseService.rejectCourse(courseId, request.getReason()))
+        .build();
+  }
+
   @Operation(summary = "Get students enrolled in a course")
+  @GetMapping("/{courseId}/related")
+  public ApiResponse<Page<CourseResponse>> getRelatedCourses(
+      @PathVariable UUID courseId, Pageable pageable) {
+    return ApiResponse.<Page<CourseResponse>>builder()
+        .result(courseService.getRelatedCourses(courseId, pageable))
+        .build();
+  }
+
+  @GetMapping("/teachers/{teacherId}/courses")
+  public ApiResponse<List<CourseResponse>> getTeacherCourses(@PathVariable UUID teacherId) {
+    return ApiResponse.<List<CourseResponse>>builder()
+        .result(courseService.getTeacherCourses(teacherId))
+        .build();
+  }
+
+  @GetMapping("/teachers/{teacherId}/profile")
+  public ApiResponse<TeacherProfileResponse> getTeacherProfile(@PathVariable UUID teacherId) {
+    return ApiResponse.<TeacherProfileResponse>builder()
+        .result(courseService.getTeacherProfile(teacherId))
+        .build();
+  }
+
   @GetMapping("/{courseId}/students")
   @PreAuthorize("hasRole('TEACHER')")
   @SecurityRequirement(name = "bearerAuth")
@@ -166,6 +247,21 @@ public class CourseController {
     var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
     return ApiResponse.<Page<CourseResponse>>builder()
         .result(courseService.getPublicCourses(schoolGradeId, subjectId, keyword, pageable))
+        .build();
+  }
+
+  @Operation(summary = "Admin: search all courses (including unpublished)")
+  @GetMapping("/admin/search")
+  @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<Page<CourseResponse>> adminSearchCourses(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    log.info("GET /courses/admin/search – keyword={}", keyword);
+    var pageable = PageRequest.of(page, size);
+    return ApiResponse.<Page<CourseResponse>>builder()
+        .result(courseService.searchCoursesForAdmin(keyword, pageable))
         .build();
   }
 

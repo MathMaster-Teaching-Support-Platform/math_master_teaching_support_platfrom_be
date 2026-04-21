@@ -16,4 +16,13 @@ public class UpdateCourseRequest {
   private String title;
 
   private String description;
+
+  private String whatYouWillLearn;
+  private String requirements;
+  private String targetAudience;
+  private String subtitle;
+  private String language;
+  private java.math.BigDecimal originalPrice;
+  private java.math.BigDecimal discountedPrice;
+  private java.time.Instant discountExpiryDate;
 }

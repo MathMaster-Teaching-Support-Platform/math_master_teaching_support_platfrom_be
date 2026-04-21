@@ -30,7 +30,7 @@ public interface QuestionBankRepository
           + "WHERE qb.deletedAt IS NULL "
           + "AND qb.teacherId = :teacherId "
           + "AND (:chapterId IS NULL OR qb.chapterId = :chapterId) "
-          + "AND (:searchTerm IS NULL OR LOWER(qb.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+          + "AND (CAST(:searchTerm AS string) IS NULL OR LOWER(qb.name) LIKE LOWER(CONCAT('%', CAST(:searchTerm AS string), '%')))")
   Page<QuestionBank> searchMineByChapterAndName(
       @Param("teacherId") UUID teacherId,
       @Param("chapterId") UUID chapterId,
@@ -41,7 +41,7 @@ public interface QuestionBankRepository
       "SELECT qb FROM QuestionBank qb "
           + "WHERE qb.deletedAt IS NULL "
           + "AND (:chapterId IS NULL OR qb.chapterId = :chapterId) "
-          + "AND (:searchTerm IS NULL OR LOWER(qb.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+          + "AND (CAST(:searchTerm AS string) IS NULL OR LOWER(qb.name) LIKE LOWER(CONCAT('%', CAST(:searchTerm AS string), '%')))")
   Page<QuestionBank> searchAllActiveByChapterAndName(
       @Param("chapterId") UUID chapterId,
       @Param("searchTerm") String searchTerm,

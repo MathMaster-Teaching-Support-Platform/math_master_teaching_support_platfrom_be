@@ -13,6 +13,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import com.fptu.math_master.enums.TemplateStatus;
+
 @Repository
 public interface QuestionTemplateRepository extends JpaRepository<QuestionTemplate, UUID> {
 
@@ -37,6 +39,21 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
           + "WHERE t.deletedAt IS NULL AND t.createdBy = :createdBy")
   Page<QuestionTemplate> findByCreatedByAndNotDeleted(
       @Param("createdBy") UUID createdBy, Pageable pageable);
+
+  /**
+   * Teacher's own templates with optional search term and status filter.
+   */
+  @Query(
+      "SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator "
+          + "WHERE t.deletedAt IS NULL AND t.createdBy = :createdBy "
+          + "AND (:status IS NULL OR t.status = :status) "
+          + "AND (:search IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', CAST(:search as string), '%')) "
+          + "     OR LOWER(COALESCE(t.description, '')) LIKE LOWER(CONCAT('%', CAST(:search as string), '%')))")
+  Page<QuestionTemplate> findByCreatedByWithSearch(
+      @Param("createdBy") UUID createdBy,
+      @Param("status") TemplateStatus status,
+      @Param("search") String search,
+      Pageable pageable);
 
   /**
    * Fix #3: search query with all filters properly applied.

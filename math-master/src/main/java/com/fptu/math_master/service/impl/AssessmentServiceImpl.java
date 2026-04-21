@@ -413,11 +413,12 @@ public class AssessmentServiceImpl implements AssessmentService {
 
   @Override
   @Transactional(readOnly = true)
-  public Page<AssessmentResponse> getMyAssessments(AssessmentStatus status, Pageable pageable) {
+  public Page<AssessmentResponse> getMyAssessments(AssessmentStatus status, String search, Pageable pageable) {
 
     UUID currentUserId = getCurrentUserId();
+    String searchTerm = (search != null && !search.isBlank()) ? search.trim() : null;
     Page<Assessment> assessmentsPage =
-        assessmentRepository.findWithFilters(currentUserId, status, pageable);
+        assessmentRepository.findWithFilters(currentUserId, status, searchTerm, pageable);
 
     // FIX: eliminate N+1 — fetch bulk summary for all IDs on this page in one query
     List<UUID> ids = assessmentsPage.getContent().stream().map(Assessment::getId).toList();
@@ -437,12 +438,11 @@ public class AssessmentServiceImpl implements AssessmentService {
   @Override
   @Transactional(readOnly = true)
   public List<AssessmentResponse> searchAssessmentsByName(String name, AssessmentStatus status) {
-    if (name == null || name.trim().isEmpty()) {
-      return List.of();
-    }
+    // Return all assessments when keyword is empty (for dropdown/search UX)
+    String keyword = (name == null || name.trim().isEmpty()) ? "" : name.trim();
 
     return assessmentRepository
-        .findByTitleContainingAndStatusAndNotDeleted(name.trim(), status)
+        .findByTitleContainingAndStatusAndNotDeleted(keyword, status)
         .stream()
         .map(this::mapToResponse)
         .toList();

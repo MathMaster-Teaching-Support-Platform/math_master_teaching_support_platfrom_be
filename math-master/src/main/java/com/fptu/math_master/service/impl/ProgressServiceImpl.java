@@ -1,5 +1,6 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.dto.request.UpdateProgressRequest;
 import com.fptu.math_master.dto.response.LessonProgressItem;
 import com.fptu.math_master.dto.response.StudentProgressResponse;
 import com.fptu.math_master.entity.Enrollment;
@@ -68,6 +69,42 @@ public class ProgressServiceImpl implements ProgressService {
   }
 
   @Override
+  public LessonProgressItem updateProgress(
+      UUID enrollmentId, UUID courseLessonId, UpdateProgressRequest request) {
+    UUID studentId = SecurityUtils.getCurrentUserId();
+    Enrollment enrollment = findActiveEnrollmentOrThrow(enrollmentId, studentId);
+
+    if (!courseLessonRepository.existsByIdAndCourseIdAndDeletedAtIsNull(
+        courseLessonId, enrollment.getCourseId())) {
+      throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
+    }
+
+    LessonProgress progress = lessonProgressRepository
+        .findByEnrollmentIdAndCourseLessonIdAndDeletedAtIsNull(enrollmentId, courseLessonId)
+        .orElse(LessonProgress.builder()
+            .enrollmentId(enrollmentId)
+            .courseLessonId(courseLessonId)
+            .isCompleted(false)
+            .watchedSeconds(0)
+            .build());
+
+    if (request.getWatchedSeconds() != null) {
+      // Only allow increasing watched seconds, protect against reverting backward on seek
+      progress.setWatchedSeconds(Math.max(progress.getWatchedSeconds(), request.getWatchedSeconds()));
+      progress.setLastWatchedAt(Instant.now());
+    }
+
+    if (Boolean.TRUE.equals(request.getIsCompleted()) && !progress.isCompleted()) {
+      progress.setCompleted(true);
+      progress.setCompletedAt(Instant.now());
+    }
+
+    progress = lessonProgressRepository.save(progress);
+    log.info("Progress updated for lesson {} on enrollment {}", courseLessonId, enrollmentId);
+    return mapToItem(progress);
+  }
+
+  @Override
   @Transactional(readOnly = true)
   public StudentProgressResponse getProgress(UUID enrollmentId) {
     UUID studentId = SecurityUtils.getCurrentUserId();
@@ -105,6 +142,7 @@ public class ProgressServiceImpl implements ProgressService {
                       .orderIndex(cl.getOrderIndex())
                       .isCompleted(lp != null && lp.isCompleted())
                       .completedAt(lp != null ? lp.getCompletedAt() : null)
+                      .watchedSeconds(lp != null ? lp.getWatchedSeconds() : 0)
                       .build();
                 })
             .collect(Collectors.toList());
@@ -155,6 +193,7 @@ public class ProgressServiceImpl implements ProgressService {
         .orderIndex(cl != null ? cl.getOrderIndex() : null)
         .isCompleted(lp.isCompleted())
         .completedAt(lp.getCompletedAt())
+        .watchedSeconds(lp.getWatchedSeconds())
         .build();
   }
 }

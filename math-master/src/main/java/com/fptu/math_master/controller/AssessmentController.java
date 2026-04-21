@@ -202,10 +202,11 @@ public class AssessmentController {
       summary = "List my assessments",
       description =
           "Get all assessments created by current teacher. "
-              + "Supports filtering by status (DRAFT/PUBLISHED/CLOSED) and lessonId. "
+              + "Supports filtering by status (DRAFT/PUBLISHED/CLOSED) and search by title. "
               + "Pagination supported (default 20 items/page).")
   public ApiResponse<Page<AssessmentResponse>> getMyAssessments(
       @RequestParam(required = false) AssessmentStatus status,
+      @RequestParam(required = false) String search,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(defaultValue = "createdAt") String sortBy,
@@ -219,7 +220,7 @@ public class AssessmentController {
     Pageable pageable = PageRequest.of(page, size, sort);
 
     return ApiResponse.<Page<AssessmentResponse>>builder()
-        .result(assessmentService.getMyAssessments(status, pageable))
+        .result(assessmentService.getMyAssessments(status, search, pageable))
         .build();
   }
 

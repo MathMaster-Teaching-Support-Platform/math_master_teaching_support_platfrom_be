@@ -49,8 +49,35 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       @Param("createdBy") UUID createdBy, Pageable pageable);
 
   @Query(
+      nativeQuery = true,
+      value =
+          "SELECT q.* FROM questions q "
+              + "WHERE q.deleted_at IS NULL "
+              + "AND q.created_by = :createdBy "
+              + "AND (CAST(:name AS text) IS NULL OR q.question_text ILIKE CAST(:name AS text)) "
+              + "AND (CAST(:tag AS text) IS NULL OR EXISTS (SELECT 1 FROM unnest(q.tags) t WHERE t ILIKE CAST(:tag AS text))) "
+              + "ORDER BY q.created_at DESC",
+      countQuery =
+          "SELECT COUNT(*) FROM questions q "
+              + "WHERE q.deleted_at IS NULL "
+              + "AND q.created_by = :createdBy "
+              + "AND (CAST(:name AS text) IS NULL OR q.question_text ILIKE CAST(:name AS text)) "
+              + "AND (CAST(:tag AS text) IS NULL OR EXISTS (SELECT 1 FROM unnest(q.tags) t WHERE t ILIKE CAST(:tag AS text)))")
+  Page<Question> findByCreatedByWithSearch(
+      @Param("createdBy") UUID createdBy,
+      @Param("name") String name,
+      @Param("tag") String tag,
+      Pageable pageable);
+
+  @Query(
       "SELECT q FROM Question q WHERE q.questionBankId = :bankId AND q.deletedAt IS NULL ORDER BY q.createdAt DESC")
   Page<Question> findByQuestionBankIdAndNotDeleted(@Param("bankId") UUID bankId, Pageable pageable);
+
+  @Query(
+      "SELECT q.cognitiveLevel, COUNT(q) FROM Question q "
+          + "WHERE q.questionBankId = :bankId AND q.deletedAt IS NULL "
+          + "GROUP BY q.cognitiveLevel")
+  List<Object[]> countByCognitiveLevelForBank(@Param("bankId") UUID bankId);
 
   @Query(
       "SELECT q FROM Question q WHERE q.templateId = :templateId AND q.deletedAt IS NULL ORDER BY q.createdAt DESC")

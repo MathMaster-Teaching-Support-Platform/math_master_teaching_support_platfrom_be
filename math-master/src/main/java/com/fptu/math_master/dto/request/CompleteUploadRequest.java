@@ -1,5 +1,7 @@
 package com.fptu.math_master.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -26,11 +28,17 @@ public class CompleteUploadRequest {
   private List<PartInfo> parts;
 
   // CourseLesson metadata
-  @NotNull(message = "lessonId is required")
   private UUID lessonId;
+
+  // Metadata for custom courses
+  private UUID sectionId;
+  private String customTitle;
+  private String customDescription;
 
   private String videoTitle;
   private Integer orderIndex;
+  @JsonProperty("isFreePreview")
+  @JsonAlias({"freePreview"})
   private boolean isFreePreview;
   private Integer durationSeconds;
   private String materials;

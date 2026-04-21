@@ -1,5 +1,7 @@
 package com.fptu.math_master.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +17,8 @@ public class UpdateCourseLessonRequest {
 
   private Integer orderIndex;
 
+  @JsonProperty("isFreePreview")
+  @JsonAlias({"freePreview"})
   private Boolean isFreePreview;
 
   /** JSON string of List<MaterialItem>: [{type, title, url}] */

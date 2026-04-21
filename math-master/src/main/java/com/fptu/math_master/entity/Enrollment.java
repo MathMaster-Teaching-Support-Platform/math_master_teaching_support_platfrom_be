@@ -54,7 +54,7 @@ public class Enrollment extends BaseEntity {
   @Enumerated(EnumType.STRING)
   private EnrollmentStatus status;
 
-  @Column(name = "enrolled_at", nullable = false)
+  @Column(name = "enrolled_at")
   private Instant enrolledAt;
 
   // ─── Relationships ────────────────────────────────────────────────────────

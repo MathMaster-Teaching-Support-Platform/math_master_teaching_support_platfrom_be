@@ -57,10 +57,10 @@ import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignReque
 public class VideoUploadServiceImpl implements VideoUploadService {
 
   MinioClient minioClient;
-  
+
   @org.springframework.beans.factory.annotation.Qualifier("publicMinioClient")
   MinioClient publicMinioClient;
-  
+
   MinioProperties minioProperties;
   CourseRepository courseRepository;
   CourseLessonRepository courseLessonRepository;
@@ -79,12 +79,13 @@ public class VideoUploadServiceImpl implements VideoUploadService {
                 AwsBasicCredentials.create(
                     minioProperties.getAccessKey(), minioProperties.getSecretKey())))
         .region(Region.US_EAST_1) // MinIO ignores region but SDK requires it
-        .forcePathStyle(true)     // required for MinIO path-style URLs
+        .forcePathStyle(true) // required for MinIO path-style URLs
         .build();
   }
 
   /**
-   * Presigner uses the PUBLIC endpoint so the generated URL is browser-accessible.
+   * Presigner uses the PUBLIC endpoint so the generated URL is
+   * browser-accessible.
    * MinIO validates the signature against the host in the URL, so signing and
    * serving must use the same host.
    */
@@ -110,8 +111,7 @@ public class VideoUploadServiceImpl implements VideoUploadService {
 
   private void ensureBucketExists(String bucket) {
     try {
-      boolean exists =
-          minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+      boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
       if (!exists) {
         minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
         log.info("Created MinIO bucket: {}", bucket);
@@ -123,10 +123,9 @@ public class VideoUploadServiceImpl implements VideoUploadService {
 
   private Course findCourseAndVerifyOwner(UUID courseId) {
     UUID currentUserId = SecurityUtils.getCurrentUserId();
-    Course course =
-        courseRepository
-            .findByIdAndDeletedAtIsNull(courseId)
-            .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+    Course course = courseRepository
+        .findByIdAndDeletedAtIsNull(courseId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
     if (!course.getTeacherId().equals(currentUserId)) {
       throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
     }
@@ -136,7 +135,8 @@ public class VideoUploadServiceImpl implements VideoUploadService {
   private String buildObjectKey(UUID courseId, String fileName) {
     String ext = "";
     int dot = fileName.lastIndexOf('.');
-    if (dot > 0) ext = fileName.substring(dot);
+    if (dot > 0)
+      ext = fileName.substring(dot);
     return courseId + "/" + UUID.randomUUID() + ext;
   }
 
@@ -152,13 +152,12 @@ public class VideoUploadServiceImpl implements VideoUploadService {
     String objectKey = buildObjectKey(courseId, request.getFileName());
 
     try (S3Client s3 = buildS3Client()) {
-      var response =
-          s3.createMultipartUpload(
-              CreateMultipartUploadRequest.builder()
-                  .bucket(bucket)
-                  .key(objectKey)
-                  .contentType(request.getContentType())
-                  .build());
+      var response = s3.createMultipartUpload(
+          CreateMultipartUploadRequest.builder()
+              .bucket(bucket)
+              .key(objectKey)
+              .contentType(request.getContentType())
+              .build());
 
       log.info("Initiated multipart upload: uploadId={}, key={}", response.uploadId(), objectKey);
 
@@ -179,18 +178,17 @@ public class VideoUploadServiceImpl implements VideoUploadService {
     String bucket = minioProperties.getCourseVideosBucket();
 
     try (S3Presigner presigner = buildPresigner()) {
-      PresignedUploadPartRequest presigned =
-          presigner.presignUploadPart(
-              UploadPartPresignRequest.builder()
-                  .signatureDuration(Duration.ofMinutes(PRESIGNED_EXPIRY_MINUTES))
-                  .uploadPartRequest(
-                      UploadPartRequest.builder()
-                          .bucket(bucket)
-                          .key(objectKey)
-                          .uploadId(uploadId)
-                          .partNumber(partNumber)
-                          .build())
-                  .build());
+      PresignedUploadPartRequest presigned = presigner.presignUploadPart(
+          UploadPartPresignRequest.builder()
+              .signatureDuration(Duration.ofMinutes(PRESIGNED_EXPIRY_MINUTES))
+              .uploadPartRequest(
+                  UploadPartRequest.builder()
+                      .bucket(bucket)
+                      .key(objectKey)
+                      .uploadId(uploadId)
+                      .partNumber(partNumber)
+                      .build())
+              .build());
 
       String presignedUrl = presigned.url().toString();
 
@@ -226,7 +224,7 @@ public class VideoUploadServiceImpl implements VideoUploadService {
       if (eTag != null) {
         eTag = eTag.replaceAll("^\"|\"$", "");
       }
-      
+
       log.info("Uploaded part {} for {}, ETag: {}", partNumber, objectKey, eTag);
 
       return PartUploadUrlResponse.builder()
@@ -241,24 +239,34 @@ public class VideoUploadServiceImpl implements VideoUploadService {
 
   @Override
   public CourseLessonResponse completeUpload(UUID courseId, CompleteUploadRequest request) {
-    findCourseAndVerifyOwner(courseId);
+    Course course = findCourseAndVerifyOwner(courseId);
 
-    var lesson =
-        lessonRepository
-            .findByIdAndNotDeleted(request.getLessonId())
-            .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+    String lessonTitle = null;
+
+    if (course.getProvider() == com.fptu.math_master.enums.CourseProvider.MINISTRY) {
+      if (request.getLessonId() == null) {
+        throw new AppException(ErrorCode.INVALID_REQUEST); // specific error handled by global handler
+      }
+      var lesson = lessonRepository
+          .findByIdAndNotDeleted(request.getLessonId())
+          .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+      lessonTitle = lesson.getTitle();
+    } else {
+      if (request.getSectionId() == null || request.getCustomTitle() == null) {
+        throw new AppException(ErrorCode.INVALID_REQUEST);
+      }
+      lessonTitle = request.getCustomTitle();
+    }
 
     String bucket = minioProperties.getCourseVideosBucket();
 
-    List<CompletedPart> completedParts =
-        request.getParts().stream()
-            .map(
-                p ->
-                    CompletedPart.builder()
-                        .partNumber(p.getPartNumber())
-                        .eTag(p.getETag())
-                        .build())
-            .collect(Collectors.toList());
+    List<CompletedPart> completedParts = request.getParts().stream()
+        .map(
+            p -> CompletedPart.builder()
+                .partNumber(p.getPartNumber())
+                .eTag(p.getETag())
+                .build())
+        .collect(Collectors.toList());
 
     log.info(
         "Completing multipart upload: bucket={}, key={}, uploadId={}, parts={}",
@@ -299,17 +307,19 @@ public class VideoUploadServiceImpl implements VideoUploadService {
       throw new RuntimeException("Failed to complete video upload", e);
     }
 
-    CourseLesson courseLesson =
-        CourseLesson.builder()
-            .courseId(courseId)
-            .lessonId(request.getLessonId())
-            .videoUrl(request.getObjectKey()) // store object key; serve via presigned GET URL
-            .videoTitle(request.getVideoTitle())
-            .orderIndex(request.getOrderIndex())
-            .isFreePreview(request.isFreePreview())
-            .durationSeconds(request.getDurationSeconds())
-            .materials(request.getMaterials())
-            .build();
+    CourseLesson courseLesson = CourseLesson.builder()
+        .courseId(courseId)
+        .lessonId(request.getLessonId())
+        .sectionId(request.getSectionId())
+        .customTitle(request.getCustomTitle())
+        .customDescription(request.getCustomDescription())
+        .videoUrl(request.getObjectKey()) // store object key; serve via presigned GET URL
+        .videoTitle(request.getVideoTitle())
+        .orderIndex(request.getOrderIndex())
+        .isFreePreview(request.isFreePreview())
+        .durationSeconds(request.getDurationSeconds())
+        .materials(request.getMaterials())
+        .build();
 
     courseLesson = courseLessonRepository.save(courseLesson);
     log.info("CourseLesson saved: {}", courseLesson.getId());
@@ -318,7 +328,8 @@ public class VideoUploadServiceImpl implements VideoUploadService {
         .id(courseLesson.getId())
         .courseId(courseLesson.getCourseId())
         .lessonId(courseLesson.getLessonId())
-        .lessonTitle(lesson.getTitle())
+        .sectionId(courseLesson.getSectionId())
+        .lessonTitle(lessonTitle)
         .videoUrl(courseLesson.getVideoUrl())
         .videoTitle(courseLesson.getVideoTitle())
         .durationSeconds(courseLesson.getDurationSeconds())
@@ -335,54 +346,54 @@ public class VideoUploadServiceImpl implements VideoUploadService {
   @Override
   @Transactional(readOnly = true)
   public String getVideoPresignedUrl(UUID courseId, UUID courseLessonId, UUID requesterId) {
-    CourseLesson cl =
-        courseLessonRepository
-            .findByIdAndDeletedAtIsNull(courseLessonId)
-            .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+    CourseLesson cl = courseLessonRepository
+        .findByIdAndDeletedAtIsNull(courseLessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
 
     if (!cl.getCourseId().equals(courseId)) {
       throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
     }
 
-    // Free preview: anyone can watch without enrollment
+    // Udemy-style access: only explicit free-preview lessons are publicly viewable.
+    // All other lessons require active enrollment, teacher ownership, or admin role.
     if (!cl.isFreePreview()) {
-      boolean enrolled =
-          enrollmentRepository
-              .findByStudentIdAndCourseIdAndDeletedAtIsNull(requesterId, courseId)
-              .map(e -> "ACTIVE".equals(e.getStatus().name()))
-              .orElse(false);
+      boolean enrolled = enrollmentRepository
+          .findByStudentIdAndCourseIdAndDeletedAtIsNull(requesterId, courseId)
+          .map(e -> "ACTIVE".equals(e.getStatus().name()))
+          .orElse(false);
 
-      Course course =
-          courseRepository
-              .findByIdAndDeletedAtIsNull(courseId)
-              .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+      if (!enrolled) {
+        Course course = courseRepository
+            .findByIdAndDeletedAtIsNull(courseId)
+            .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
 
-      boolean isOwner = course.getTeacherId().equals(requesterId);
+        boolean isOwner = requesterId != null && course.getTeacherId().equals(requesterId);
 
-      if (!enrolled && !isOwner) {
-        throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+        if (!isOwner) {
+          throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+        }
       }
     }
 
     // Generate presigned URL with S3Presigner using configured public endpoint.
-    // This guarantees the returned URL host is browser-accessible (not internal Docker hostname).
+    // This guarantees the returned URL host is browser-accessible (not internal
+    // Docker hostname).
     String bucket = minioProperties.getCourseVideosBucket();
     String objectKey = cl.getVideoUrl();
-    
+
     try (S3Presigner presigner = buildPresigner()) {
-      PresignedGetObjectRequest presigned =
-        presigner.presignGetObject(
+      PresignedGetObjectRequest presigned = presigner.presignGetObject(
           GetObjectPresignRequest.builder()
-            .signatureDuration(Duration.ofDays(7))
-            .getObjectRequest(
-              GetObjectRequest.builder()
-                .bucket(bucket)
-                .key(objectKey)
-                .build())
-            .build());
+              .signatureDuration(Duration.ofDays(7))
+              .getObjectRequest(
+                  GetObjectRequest.builder()
+                      .bucket(bucket)
+                      .key(objectKey)
+                      .build())
+              .build());
 
       String presignedUrl = presigned.url().toString();
-      
+
       log.info("Generated presigned URL: {}", presignedUrl);
       return presignedUrl;
     } catch (Exception e) {
@@ -391,53 +402,55 @@ public class VideoUploadServiceImpl implements VideoUploadService {
     }
   }
 
-  // DEPRECATED: Stream method removed - use presigned URL directly from MinIO instead
+  // DEPRECATED: Stream method removed - use presigned URL directly from MinIO
+  // instead
   // @Override
-  // public void streamVideo(UUID courseId, UUID courseLessonId, UUID requesterId, String token,
-  //     jakarta.servlet.http.HttpServletResponse response) throws Exception {
-  //   CourseLesson cl =
-  //       courseLessonRepository
-  //           .findByIdAndDeletedAtIsNull(courseLessonId)
-  //           .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+  // public void streamVideo(UUID courseId, UUID courseLessonId, UUID requesterId,
+  // String token,
+  // jakarta.servlet.http.HttpServletResponse response) throws Exception {
+  // CourseLesson cl =
+  // courseLessonRepository
+  // .findByIdAndDeletedAtIsNull(courseLessonId)
+  // .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
   //
-  //   if (!cl.getCourseId().equals(courseId)) {
-  //     throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
-  //   }
+  // if (!cl.getCourseId().equals(courseId)) {
+  // throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
+  // }
   //
-  //   // Check access permission
-  //   if (!cl.isFreePreview()) {
-  //     boolean enrolled =
-  //         enrollmentRepository
-  //             .findByStudentIdAndCourseIdAndDeletedAtIsNull(requesterId, courseId)
-  //             .map(e -> "ACTIVE".equals(e.getStatus().name()))
-  //             .orElse(false);
+  // // Check access permission
+  // if (!cl.isFreePreview()) {
+  // boolean enrolled =
+  // enrollmentRepository
+  // .findByStudentIdAndCourseIdAndDeletedAtIsNull(requesterId, courseId)
+  // .map(e -> "ACTIVE".equals(e.getStatus().name()))
+  // .orElse(false);
   //
-  //     Course course =
-  //         courseRepository
-  //             .findByIdAndDeletedAtIsNull(courseId)
-  //             .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+  // Course course =
+  // courseRepository
+  // .findByIdAndDeletedAtIsNull(courseId)
+  // .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
   //
-  //     boolean isOwner = course.getTeacherId().equals(requesterId);
+  // boolean isOwner = course.getTeacherId().equals(requesterId);
   //
-  //     if (!enrolled && !isOwner) {
-  //       throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
-  //     }
-  //   }
+  // if (!enrolled && !isOwner) {
+  // throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+  // }
+  // }
   //
-  //   // Stream from MinIO
-  //   String bucket = minioProperties.getCourseVideosBucket();
-  //   try (var stream = minioClient.getObject(
-  //       io.minio.GetObjectArgs.builder()
-  //           .bucket(bucket)
-  //           .object(cl.getVideoUrl())
-  //           .build())) {
-  //     
-  //     response.setContentType("video/mp4");
-  //     response.setHeader("Accept-Ranges", "bytes");
-  //     response.setHeader("Cache-Control", "no-cache");
-  //     
-  //     stream.transferTo(response.getOutputStream());
-  //     response.getOutputStream().flush();
-  //   }
+  // // Stream from MinIO
+  // String bucket = minioProperties.getCourseVideosBucket();
+  // try (var stream = minioClient.getObject(
+  // io.minio.GetObjectArgs.builder()
+  // .bucket(bucket)
+  // .object(cl.getVideoUrl())
+  // .build())) {
+  //
+  // response.setContentType("video/mp4");
+  // response.setHeader("Accept-Ranges", "bytes");
+  // response.setHeader("Cache-Control", "no-cache");
+  //
+  // stream.transferTo(response.getOutputStream());
+  // response.getOutputStream().flush();
+  // }
   // }
 }

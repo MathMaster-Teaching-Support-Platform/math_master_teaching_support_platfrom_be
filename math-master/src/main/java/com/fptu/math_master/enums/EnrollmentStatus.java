@@ -5,5 +5,6 @@ package com.fptu.math_master.enums;
  */
 public enum EnrollmentStatus {
   ACTIVE,
+  PENDING,
   DROPPED
 }

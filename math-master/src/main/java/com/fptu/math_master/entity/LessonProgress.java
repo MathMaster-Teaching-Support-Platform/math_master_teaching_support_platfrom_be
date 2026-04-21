@@ -33,6 +33,7 @@ import lombok.Setter;
     },
     indexes = {
       @Index(name = "idx_lesson_progress_enrollment_id", columnList = "enrollment_id"),
+      @Index(name = "idx_lesson_progress_enrollment_watched", columnList = "enrollment_id, watched_seconds"),
       @Index(
           name = "idx_lesson_progress_enrollment_lesson",
           columnList = "enrollment_id, course_lesson_id")
@@ -51,6 +52,15 @@ public class LessonProgress extends BaseEntity {
 
   @Column(name = "completed_at")
   private Instant completedAt;
+
+  /** Last known playback position in seconds — used to resume video. */
+  @Column(name = "watched_seconds")
+  @Builder.Default
+  private int watchedSeconds = 0;
+
+  /** Timestamp of the most recent progress update. */
+  @Column(name = "last_watched_at")
+  private Instant lastWatchedAt;
 
   // ─── Relationships ────────────────────────────────────────────────────────
 

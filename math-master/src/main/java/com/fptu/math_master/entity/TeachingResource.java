@@ -7,10 +7,9 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
-import jakarta.persistence.ManyToMany;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
-import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -46,7 +45,4 @@ public class TeachingResource extends BaseEntity {
 
   @Column(name = "file_url", nullable = false, columnDefinition = "TEXT")
   private String fileUrl;
-
-  @ManyToMany(mappedBy = "teachingResources", fetch = FetchType.LAZY)
-  private Set<RoadmapTopic> roadmapTopics;
 }

@@ -84,7 +84,29 @@ public class UserSubscriptionServiceImpl implements UserSubscriptionService {
     }
 
     Instant now = Instant.now();
+    List<UserSubscription> activeSubscriptions =
+        userSubscriptionRepository.findActiveSubscriptionsByUserIdForUpdate(userId, now);
+
+    int carryOverTokens =
+        activeSubscriptions.stream()
+            .mapToInt(
+                sub -> {
+                  Integer remaining = sub.getTokenRemaining();
+                  return remaining == null ? 0 : Math.max(remaining, 0);
+                })
+            .sum();
+
+    if (!activeSubscriptions.isEmpty()) {
+      activeSubscriptions.forEach(
+          sub -> {
+            sub.setStatus(UserSubscriptionStatus.EXPIRED);
+            sub.setEndDate(now);
+          });
+      userSubscriptionRepository.saveAll(activeSubscriptions);
+    }
+
     Integer tokenQuota = plan.getTokenQuota() == null ? 0 : Math.max(plan.getTokenQuota(), 0);
+    int tokenRemaining = tokenQuota + carryOverTokens;
 
     UserSubscription subscription =
         UserSubscription.builder()
@@ -97,7 +119,7 @@ public class UserSubscriptionServiceImpl implements UserSubscriptionService {
             .status(UserSubscriptionStatus.ACTIVE)
             .paymentMethod("wallet")
             .tokenQuota(tokenQuota)
-            .tokenRemaining(tokenQuota)
+            .tokenRemaining(tokenRemaining)
             .build();
 
     UserSubscription saved = userSubscriptionRepository.save(subscription);
@@ -115,11 +137,13 @@ public class UserSubscriptionServiceImpl implements UserSubscriptionService {
     transactionRepository.save(transaction);
 
     log.info(
-        "Subscription purchased. userId={}, planId={}, subscriptionId={}, tokenQuota={}",
+        "Subscription purchased. userId={}, planId={}, subscriptionId={}, tokenQuota={}, carryOverTokens={}, tokenRemaining={}",
         userId,
         planId,
         saved.getId(),
-        tokenQuota);
+        tokenQuota,
+        carryOverTokens,
+        tokenRemaining);
 
     return toResponse(saved);
   }

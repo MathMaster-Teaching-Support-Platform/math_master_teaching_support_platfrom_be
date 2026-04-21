@@ -137,4 +137,28 @@ public class TeacherProfile extends BaseEntity {
    */
   @Column(name = "ocr_verified_at")
   private LocalDateTime ocrVerifiedAt;
+
+  /**
+   * website_url
+   */
+  @Column(name = "website_url")
+  private String websiteUrl;
+
+  /**
+   * linkedin_url
+   */
+  @Column(name = "linkedin_url")
+  private String linkedinUrl;
+
+  /**
+   * youtube_url
+   */
+  @Column(name = "youtube_url")
+  private String youtubeUrl;
+
+  /**
+   * facebook_url
+   */
+  @Column(name = "facebook_url")
+  private String facebookUrl;
 }

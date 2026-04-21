@@ -20,7 +20,9 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -48,15 +50,25 @@ public class GeminiOcrServiceImpl implements OcrService {
         TeacherProfile profile = teacherProfileRepository.findById(profileId)
                 .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-        // Get verification document URL
-        String documentPath = profile.getVerificationDocumentPath();
-        if (documentPath == null || documentPath.isEmpty()) {
-            throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
+        // Resolve verification document key from both historical and current columns.
+        Set<String> candidateKeys = resolveDocumentObjectKeys(profile);
+        String objectKey = candidateKeys.iterator().next();
+        byte[] fileBytes = null;
+
+        for (String candidateKey : candidateKeys) {
+            try {
+                fileBytes = readObjectFromMinio(candidateKey);
+                objectKey = candidateKey;
+                break;
+            } catch (Exception ex) {
+                log.warn("OCR could not read object from MinIO with key: {}", candidateKey);
+            }
         }
 
-        // Read verification document directly from MinIO to avoid nginx/presigned-url mismatch.
-        String objectKey = normalizeObjectKey(documentPath, minioProperties.getVerificationBucket());
-        byte[] fileBytes = readObjectFromMinio(objectKey);
+        if (fileBytes == null) {
+            log.error("All verification document keys failed for profile {}: {}", profileId, candidateKeys);
+            throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
+        }
 
         // Extract data from image/zip using Gemini
         OcrComparisonResult.OcrExtractedData extractedData = extractDataFromFileBytes(objectKey, fileBytes);
@@ -145,6 +157,26 @@ public class GeminiOcrServiceImpl implements OcrService {
                     minioProperties.getVerificationBucket(), objectKey, e);
             throw new RuntimeException("Failed to read verification document from MinIO", e);
         }
+    }
+
+    private Set<String> resolveDocumentObjectKeys(TeacherProfile profile) {
+        Set<String> keys = new LinkedHashSet<>();
+
+        String key = normalizeObjectKey(profile.getVerificationDocumentKey(), minioProperties.getVerificationBucket());
+        if (key != null && !key.isBlank()) {
+            keys.add(key);
+        }
+
+        String path = normalizeObjectKey(profile.getVerificationDocumentPath(), minioProperties.getVerificationBucket());
+        if (path != null && !path.isBlank()) {
+            keys.add(path);
+        }
+
+        if (keys.isEmpty()) {
+            throw new AppException(ErrorCode.DOCUMENT_NOT_FOUND);
+        }
+
+        return keys;
     }
 
     private String normalizeObjectKey(String rawPath, String bucket) {
@@ -329,8 +361,33 @@ public class GeminiOcrServiceImpl implements OcrService {
 
         String summary;
         if (!allFieldsPass) {
-            summary = String.format("❌ XÁC MINH THẤT BẠI: Không đủ 3 trường bắt buộc. " +
-                    "Họ tên: %s, Chức danh+Toán: %s, Tên trường: %s", 
+            List<String> missingFields = new ArrayList<>();
+            List<String> mismatchedFields = new ArrayList<>();
+
+            for (OcrComparisonResult.FieldComparison comparison : comparisons) {
+                boolean hasOcrValue = comparison.getOcrValue() != null
+                        && !comparison.getOcrValue().trim().isEmpty();
+
+                if (!hasOcrValue) {
+                    missingFields.add(comparison.getFieldName());
+                } else if (!Boolean.TRUE.equals(comparison.getMatches())) {
+                    mismatchedFields.add(comparison.getFieldName());
+                }
+            }
+
+            String failureReason;
+            if (!missingFields.isEmpty()) {
+                failureReason = "OCR không đọc được đầy đủ thông tin bắt buộc từ tài liệu";
+                failureReason += " (thiếu: " + String.join(", ", missingFields) + ")";
+            } else {
+                failureReason = "Đã đọc đủ 3 trường bắt buộc nhưng thông tin chưa khớp với hồ sơ";
+                if (!mismatchedFields.isEmpty()) {
+                    failureReason += " (không khớp: " + String.join(", ", mismatchedFields) + ")";
+                }
+            }
+
+            summary = String.format("❌ XÁC MINH THẤT BẠI: %s. Họ tên: %s, Chức danh+Toán: %s, Tên trường: %s",
+                    failureReason,
                     nameComparison.getMatches() ? "✓" : "✗",
                     positionComparison.getMatches() ? "✓" : "✗",
                     schoolComparison.getMatches() ? "✓" : "✗");

@@ -1,5 +1,6 @@
 package com.fptu.math_master.dto.request;
 
+import com.fptu.math_master.enums.CourseProvider;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -15,10 +16,18 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CreateCourseRequest {
 
-  @NotNull(message = "subjectId is required")
+  /**
+   * Determines the course flow.
+   * MINISTRY → existing flow (subjectId + schoolGradeId required).
+   * CUSTOM   → Udemy-style (subjectId + schoolGradeId optional).
+   */
+  @NotNull(message = "provider is required")
+  private CourseProvider provider;
+
+  /** Required when provider = MINISTRY. */
   private UUID subjectId;
 
-  @NotNull(message = "schoolGradeId is required")
+  /** Required when provider = MINISTRY. */
   private UUID schoolGradeId;
 
   @NotBlank(message = "title is required")
@@ -26,4 +35,13 @@ public class CreateCourseRequest {
   private String title;
 
   private String description;
+
+  private String whatYouWillLearn;
+  private String requirements;
+  private String targetAudience;
+  private String subtitle;
+  private String language;
+  private java.math.BigDecimal originalPrice;
+  private java.math.BigDecimal discountedPrice;
+  private java.time.Instant discountExpiryDate;
 }

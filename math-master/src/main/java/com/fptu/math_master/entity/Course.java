@@ -1,8 +1,13 @@
 package com.fptu.math_master.entity;
 
+import com.fptu.math_master.enums.CourseLevel;
+import com.fptu.math_master.enums.CourseProvider;
+import com.fptu.math_master.enums.CourseStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
@@ -28,14 +33,13 @@ import org.hibernate.annotations.Nationalized;
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Entity
-@Table(
-    name = "courses",
-    indexes = {
-      @Index(name = "idx_courses_teacher_id", columnList = "teacher_id"),
-      @Index(name = "idx_courses_subject_id", columnList = "subject_id"),
-      @Index(name = "idx_courses_school_grade_id", columnList = "school_grade_id"),
-      @Index(name = "idx_courses_is_published", columnList = "is_published")
-    })
+@Table(name = "courses", indexes = {
+    @Index(name = "idx_courses_teacher_id", columnList = "teacher_id"),
+    @Index(name = "idx_courses_subject_id", columnList = "subject_id"),
+    @Index(name = "idx_courses_school_grade_id", columnList = "school_grade_id"),
+    @Index(name = "idx_courses_is_published", columnList = "is_published"),
+    @Index(name = "idx_courses_status", columnList = "status")
+})
 public class Course extends BaseEntity {
 
   @EqualsAndHashCode.Include
@@ -46,12 +50,27 @@ public class Course extends BaseEntity {
   @Column(name = "teacher_id", nullable = false)
   private UUID teacherId;
 
-  /** Subject (môn học) mà course này dạy, e.g. "Đại Số lớp 10" */
-  @Column(name = "subject_id", nullable = false)
+  /**
+   * Discriminates between Ministry-curriculum and Custom (Udemy-style) courses.
+   * Defaults to {@link CourseProvider#MINISTRY} for full backward compatibility.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "provider", nullable = false, length = 50, columnDefinition = "varchar(50) default 'MINISTRY'")
+  @Builder.Default
+  private CourseProvider provider = CourseProvider.MINISTRY;
+
+  /**
+   * Subject (môn học) mà course này dạy, e.g. "Đại Số lớp 10". Nullable for
+   * CUSTOM courses.
+   */
+  @Column(name = "subject_id")
   private UUID subjectId;
 
-  /** SchoolGrade để biết lớp mấy, cache lại cho tiện query/filter */
-  @Column(name = "school_grade_id", nullable = false)
+  /**
+   * SchoolGrade để biết lớp mấy, cache lại cho tiện query/filter. Nullable for
+   * CUSTOM courses.
+   */
+  @Column(name = "school_grade_id")
   private UUID schoolGradeId;
 
   @Size(max = 255)
@@ -68,9 +87,60 @@ public class Course extends BaseEntity {
   @Builder.Default
   private boolean isPublished = false;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "status", nullable = false, length = 30, columnDefinition = "varchar(30) default 'DRAFT'")
+  @Builder.Default
+  private CourseStatus status = CourseStatus.DRAFT;
+
+  @Column(name = "rejection_reason", columnDefinition = "TEXT")
+  private String rejectionReason;
+
   @Column(name = "rating", precision = 3, scale = 2)
   @Builder.Default
   private BigDecimal rating = BigDecimal.ZERO;
+
+  @Column(name = "what_you_will_learn", columnDefinition = "TEXT")
+  private String whatYouWillLearn;
+
+  @Column(name = "requirements", columnDefinition = "TEXT")
+  private String requirements;
+
+  @Column(name = "target_audience", columnDefinition = "TEXT")
+  private String targetAudience;
+
+  @Column(name = "subtitle")
+  private String subtitle;
+
+  @Column(name = "language")
+  @Builder.Default
+  private String language = "Tiếng Việt";
+
+  /**
+   * Difficulty level for this course — surfaced on the course card and landing page
+   * so students can self-select the right course for their background.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "level", length = 20, columnDefinition = "varchar(20) default 'ALL_LEVELS'")
+  @Builder.Default
+  private CourseLevel level = CourseLevel.ALL_LEVELS;
+
+  @Column(name = "total_video_hours", precision = 10, scale = 2)
+  private BigDecimal totalVideoHours;
+
+  @Column(name = "articles_count")
+  private Integer articlesCount;
+
+  @Column(name = "resources_count")
+  private Integer resourcesCount;
+
+  @Column(name = "original_price", precision = 15, scale = 2)
+  private BigDecimal originalPrice;
+
+  @Column(name = "discounted_price", precision = 15, scale = 2)
+  private BigDecimal discountedPrice;
+
+  @Column(name = "discount_expiry_date")
+  private java.time.Instant discountExpiryDate;
 
   // ─── Relationships ────────────────────────────────────────────────────────
 

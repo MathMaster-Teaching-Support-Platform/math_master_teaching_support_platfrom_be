@@ -16,10 +16,17 @@ public class EnrollmentResponse {
   private UUID id;
   private UUID courseId;
   private String courseTitle;
+  private String courseThumbnailUrl;
   private UUID studentId;
   private String studentName;
   private EnrollmentStatus status;
   private Instant enrolledAt;
   private Instant createdAt;
   private Instant updatedAt;
+
+  // ─── Embedded progress summary (eliminates N+1 on the student course list) ─
+  private Integer completedLessons;
+  private Integer totalLessons;
+  private Double completionRate;
 }
+

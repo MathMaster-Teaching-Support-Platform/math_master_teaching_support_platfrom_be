@@ -16,8 +16,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -28,18 +26,12 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import java.util.Set;
 
 /**
- * Represents a topic/module within a learning roadmap
+ * Represents a topic/module within a learning roadmap.
  *
- * <p>Topics are organized by:
- * - Lesson (from the curriculum)
- * - Difficulty level
- * - Status (not started, in progress, completed, locked)
- * - Progress tracking
- *
- * <p>Topics have assessments and mindmaps organized by lessons.
+ * Students can click any topic freely — there is no locking.
+ * Topics are ordered visually (sequenceOrder) for guidance only.
  */
 @Builder
 @AllArgsConstructor
@@ -52,7 +44,6 @@ import java.util.Set;
     name = "roadmap_topics",
     indexes = {
       @Index(name = "idx_roadmap_topics_roadmap", columnList = "roadmap_id"),
-      @Index(name = "idx_roadmap_topics_lesson", columnList = "lesson_id"),
       @Index(name = "idx_roadmap_topics_status", columnList = "status"),
       @Index(name = "idx_roadmap_topics_sequence", columnList = "sequence_order")
     })
@@ -63,129 +54,70 @@ public class RoadmapTopic extends BaseEntity {
     return getId();
   }
 
-  /**
-   * roadmap_id
-   */
+  /** roadmap_id — the parent roadmap */
   @Column(name = "roadmap_id", nullable = false)
   private UUID roadmapId;
 
-  /**
-   * lesson_id
-   */
-  @Column(name = "lesson_id")
-  private UUID lessonId;
-
-  @Column(name = "topic_assessment_id")
-  private UUID topicAssessmentId;
-
-  /**
-   * title
-   */
+  /** title */
   @Size(max = 255)
   @Nationalized
   @Column(name = "title", length = 255, nullable = false)
   private String title;
 
-  /**
-   * description
-   */
+  /** description */
   @Column(name = "description", columnDefinition = "TEXT")
   private String description;
 
-  /**
-   * status
-   */
+  /** status — used for optional non-blocking progress tracking */
   @Column(name = "status", nullable = false)
   @Enumerated(EnumType.STRING)
   private TopicStatus status;
 
-  /**
-   * difficulty
-   */
+  /** difficulty */
   @Column(name = "difficulty", nullable = false)
   @Enumerated(EnumType.STRING)
   private QuestionDifficulty difficulty;
 
-  /**
-   * sequence_order
-   */
+  /** sequence_order — visual ordering, NOT a lock gate */
   @Column(name = "sequence_order", nullable = false)
   private Integer sequenceOrder;
 
-  /**
-   * priority
-   */
+  /** priority */
   @Builder.Default
   @Column(name = "priority", nullable = false)
   private Integer priority = 0;
 
-  /**
-   * progress_percentage
-   */
+  /** progress_percentage — optional non-blocking progress */
   @Column(name = "progress_percentage", nullable = false, precision = 5, scale = 2)
   private BigDecimal progressPercentage;
 
   @Column(name = "pass_threshold_percentage", precision = 5, scale = 2)
   private BigDecimal passThresholdPercentage;
 
-  /**
-   * estimated_hours
-   */
+  /** estimated_hours */
   @Builder.Default
   @Column(name = "estimated_hours", nullable = false)
   private Integer estimatedHours = 1;
 
   /**
-   * mark
-   *
-   * <p>Expected checkpoint score on a 10-point scale used to determine student level placement.
+   * mark — entry test score checkpoint used to SUGGEST which topic to start from (non-blocking).
+   * Students can still access any topic regardless of this value.
    */
   @Column(name = "mark")
   private Double mark;
 
-  /**
-   * started_at
-   */
+  /** started_at */
   @Column(name = "started_at")
   private Instant startedAt;
 
-  /**
-   * completed_at
-   */
+  /** completed_at */
   @Column(name = "completed_at")
   private Instant completedAt;
 
-  /**
-   * Relationships
-   * - Many-to-One with LearningRoadmap
-   * - Many-to-One with Lesson
-   */
   // Relationships
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "roadmap_id", insertable = false, updatable = false)
   private LearningRoadmap roadmap;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
-  private Lesson lesson;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "topic_assessment_id", insertable = false, updatable = false)
-  private Assessment topicAssessment;
-
-  @ManyToMany(fetch = FetchType.LAZY)
-  @JoinTable(
-      name = "roadmap_topic_courses",
-      joinColumns = @JoinColumn(name = "roadmap_topic_id"),
-      inverseJoinColumns = @JoinColumn(name = "course_id"))
-  private Set<Course> courses;
-
-  @ManyToMany(fetch = FetchType.LAZY)
-  @JoinTable(
-      name = "roadmap_topic_teaching_resources",
-      joinColumns = @JoinColumn(name = "roadmap_topic_id"),
-      inverseJoinColumns = @JoinColumn(name = "teaching_resource_id"))
-  private Set<TeachingResource> teachingResources;
 
   @PrePersist
   @Override

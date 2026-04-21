@@ -7,6 +7,7 @@ import com.fptu.math_master.dto.request.UpdateCourseRequest;
 import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
+import com.fptu.math_master.dto.response.CoursePreviewResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
 import java.util.List;
 import java.util.UUID;
@@ -24,12 +25,25 @@ public interface CourseService {
 
   CourseResponse publishCourse(UUID courseId, boolean publish);
 
+  CourseResponse submitForReview(UUID courseId);
+
+  Page<CourseResponse> getPendingReviewCourses(Pageable pageable);
+
+  CourseResponse approveCourse(UUID courseId);
+
+  CourseResponse rejectCourse(UUID courseId, String reason);
+
   List<CourseResponse> getMyCourses();
 
   CourseResponse getCourseById(UUID courseId);
 
+  CoursePreviewResponse getCoursePreview(UUID courseId);
+
   /** Filter theo schoolGradeId, subjectId, keyword */
   Page<CourseResponse> getPublicCourses(UUID schoolGradeId, UUID subjectId, String keyword, Pageable pageable);
+
+  /** Admin search — all courses (published + unpublished) by optional keyword */
+  Page<CourseResponse> searchCoursesForAdmin(String keyword, Pageable pageable);
 
   Page<StudentInCourseResponse> getStudentsInCourse(UUID courseId, Pageable pageable);
 
@@ -76,4 +90,18 @@ public interface CourseService {
    * @param assessmentId Assessment ID
    */
   void removeAssessmentFromCourse(UUID courseId, UUID assessmentId);
+
+  // ─── Discovery & Instructor Profiles ─────────────────────────────────────
+
+  Page<CourseResponse> getRelatedCourses(UUID courseId, Pageable pageable);
+
+  List<CourseResponse> getTeacherCourses(UUID teacherId);
+
+  com.fptu.math_master.dto.response.TeacherProfileResponse getTeacherProfile(UUID teacherId);
+  
+  /**
+   * Automatically recalculates and updates course metrics:
+   * total_video_hours, articles_count, resources_count
+   */
+  void syncCourseMetrics(UUID courseId);
 }

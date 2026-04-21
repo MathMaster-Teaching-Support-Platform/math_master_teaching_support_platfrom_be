@@ -16,15 +16,15 @@ public interface CourseLessonRepository extends JpaRepository<CourseLesson, UUID
 
   @Query(
       "SELECT cl FROM CourseLesson cl "
-          + "JOIN cl.lesson l "
-          + "WHERE cl.courseId = :courseId AND cl.deletedAt IS NULL AND l.deletedAt IS NULL "
+          + "LEFT JOIN cl.lesson l "
+          + "WHERE cl.courseId = :courseId AND cl.deletedAt IS NULL AND (l IS NULL OR l.deletedAt IS NULL) "
           + "ORDER BY cl.orderIndex ASC, cl.createdAt ASC")
   List<CourseLesson> findByCourseIdAndNotDeleted(@Param("courseId") UUID courseId);
 
   @Query(
       "SELECT COUNT(cl) FROM CourseLesson cl "
-          + "JOIN cl.lesson l "
-          + "WHERE cl.courseId = :courseId AND cl.deletedAt IS NULL AND l.deletedAt IS NULL")
+          + "LEFT JOIN cl.lesson l "
+          + "WHERE cl.courseId = :courseId AND cl.deletedAt IS NULL AND (l IS NULL OR l.deletedAt IS NULL)")
   long countByCourseIdAndNotDeleted(@Param("courseId") UUID courseId);
 
   boolean existsByIdAndCourseIdAndDeletedAtIsNull(UUID id, UUID courseId);

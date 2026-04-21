@@ -74,10 +74,12 @@ public interface AssessmentRepository
       "SELECT a FROM Assessment a "
           + "WHERE a.deletedAt IS NULL "
           + "AND a.teacherId = :teacherId "
-          + "AND (:status IS NULL OR a.status = :status) ")
+          + "AND (:status IS NULL OR a.status = :status) "
+          + "AND (CAST(:search AS string) IS NULL OR LOWER(a.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
   Page<Assessment> findWithFilters(
       @Param("teacherId") UUID teacherId,
       @Param("status") AssessmentStatus status,
+      @Param("search") String search,
       Pageable pageable);
 
   @Query(

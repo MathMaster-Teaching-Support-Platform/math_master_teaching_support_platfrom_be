@@ -17,4 +17,6 @@ public class LessonProgressItem {
   private Integer orderIndex;
   private boolean isCompleted;
   private Instant completedAt;
+  /** Last known playback position in seconds; 0 means never watched. */
+  private int watchedSeconds;
 }

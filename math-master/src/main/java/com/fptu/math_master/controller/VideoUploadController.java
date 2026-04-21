@@ -104,11 +104,10 @@ public class VideoUploadController {
       summary = "Get presigned URL to watch a video",
       description = "Returns a time-limited presigned URL directly from MinIO. Requires enrollment or teacher ownership, or lesson must be free preview.")
   @GetMapping("/{courseLessonId}/video-url")
-  @PreAuthorize("isAuthenticated()")
   public ApiResponse<String> getVideoUrl(
       @PathVariable UUID courseId,
       @PathVariable UUID courseLessonId) {
-    UUID requesterId = SecurityUtils.getCurrentUserId();
+    UUID requesterId = SecurityUtils.getOptionalCurrentUserId();
     return ApiResponse.<String>builder()
         .result(videoUploadService.getVideoPresignedUrl(courseId, courseLessonId, requesterId))
         .build();

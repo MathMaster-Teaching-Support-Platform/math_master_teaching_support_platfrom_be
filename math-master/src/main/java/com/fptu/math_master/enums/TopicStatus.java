@@ -7,5 +7,5 @@ public enum TopicStatus {
   NOT_STARTED,
   IN_PROGRESS,
   COMPLETED,
-  LOCKED
+  INACTIVE
 }

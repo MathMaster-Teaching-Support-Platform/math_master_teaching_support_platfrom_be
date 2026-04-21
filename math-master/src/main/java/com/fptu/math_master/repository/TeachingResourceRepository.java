@@ -15,9 +15,4 @@ public interface TeachingResourceRepository extends JpaRepository<TeachingResour
   @Query("SELECT tr FROM TeachingResource tr WHERE tr.id = :id AND tr.deletedAt IS NULL")
   Optional<TeachingResource> findByIdAndNotDeleted(@Param("id") UUID id);
 
-  @Query(
-      "SELECT DISTINCT tr FROM TeachingResource tr "
-          + "JOIN tr.roadmapTopics rt "
-          + "WHERE rt.id = :topicId AND tr.deletedAt IS NULL")
-  List<TeachingResource> findByRoadmapTopicId(@Param("topicId") UUID topicId);
 }
