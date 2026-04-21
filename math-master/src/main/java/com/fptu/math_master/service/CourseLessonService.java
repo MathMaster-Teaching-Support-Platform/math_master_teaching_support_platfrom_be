@@ -17,6 +17,8 @@ public interface CourseLessonService {
 
   List<CourseLessonResponse> getLessons(UUID courseId);
 
+  void reorderLessons(UUID courseId, com.fptu.math_master.dto.request.ReorderLessonsRequest request);
+
   CourseLessonResponse addMaterial(UUID courseId, UUID lessonId, MultipartFile file);
 
   CourseLessonResponse removeMaterial(UUID courseId, UUID lessonId, String materialId);

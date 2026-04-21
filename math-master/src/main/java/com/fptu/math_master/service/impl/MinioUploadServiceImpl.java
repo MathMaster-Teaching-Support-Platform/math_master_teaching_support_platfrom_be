@@ -49,6 +49,11 @@ public class MinioUploadServiceImpl implements UploadService {
   }
 
   @Override
+  public String uploadFile(MultipartFile file, String directory, String bucketName) {
+    return uploadToMinio(file, directory, bucketName);
+  }
+
+  @Override
   public String uploadFilesAsZip(List<MultipartFile> files, String directory, String zipName) {
     String bucketName = minioProperties.getVerificationBucket();
 
@@ -223,12 +228,18 @@ public class MinioUploadServiceImpl implements UploadService {
     // Current logic assumes template bucket, but we should handle both or specify bucket
     // For now, let's try template bucket as fallback
     String bucketName = minioProperties.getTemplateBucket();
+    deleteFile(filePath, bucketName);
+  }
+
+  @Override
+  public void deleteFile(String filePath, String bucketName) {
+    String normalizedKey = normalizeObjectKey(filePath, bucketName);
     try {
       minioClient.removeObject(
-          RemoveObjectArgs.builder().bucket(bucketName).object(filePath).build());
-      log.info("File deleted from Minio: {}/{}", bucketName, filePath);
+          RemoveObjectArgs.builder().bucket(bucketName).object(normalizedKey).build());
+      log.info("File deleted from Minio: {}/{}", bucketName, normalizedKey);
     } catch (Exception e) {
-      log.error("Error deleting file from Minio: {}", filePath, e);
+      log.error("Error deleting file from Minio: {}/{}", bucketName, normalizedKey, e);
     }
   }
 }

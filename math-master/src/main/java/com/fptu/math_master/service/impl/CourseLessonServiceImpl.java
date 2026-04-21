@@ -60,7 +60,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
 
     String videoUrl = null;
     if (videoFile != null && !videoFile.isEmpty()) {
-      videoUrl = uploadService.uploadFile(videoFile, "course-videos");
+      videoUrl = uploadService.uploadFile(videoFile, "course-videos", minioProperties.getCourseVideosBucket());
     }
 
     CourseLesson courseLesson;
@@ -153,7 +153,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     }
 
     if (videoFile != null && !videoFile.isEmpty()) {
-      courseLesson.setVideoUrl(uploadService.uploadFile(videoFile, "course-videos"));
+      courseLesson.setVideoUrl(uploadService.uploadFile(videoFile, "course-videos", minioProperties.getCourseVideosBucket()));
     }
     if (request.getVideoTitle() != null) courseLesson.setVideoTitle(request.getVideoTitle());
     if (request.getOrderIndex() != null) courseLesson.setOrderIndex(request.getOrderIndex());
@@ -191,12 +191,45 @@ public class CourseLessonServiceImpl implements CourseLessonService {
       throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
     }
 
+    // MinIO Cleanup: Delete video file
+    if (org.springframework.util.StringUtils.hasText(courseLesson.getVideoUrl())) {
+      uploadService.deleteFile(courseLesson.getVideoUrl(), minioProperties.getCourseVideosBucket());
+    }
+
+    // MinIO Cleanup: Delete all material files
+    List<MaterialItem> items = getMaterialList(courseLesson.getMaterials());
+    for (MaterialItem item : items) {
+      if (org.springframework.util.StringUtils.hasText(item.getKey())) {
+        uploadService.deleteFile(item.getKey(), minioProperties.getCourseMaterialsBucket());
+      }
+    }
+
     courseLesson.setDeletedAt(Instant.now());
     courseLesson.setDeletedBy(currentUserId);
     courseLessonRepository.save(courseLesson);
-    log.info("CourseLesson soft-deleted: {}", courseLessonId);
+    log.info("CourseLesson soft-deleted and resources cleaned up: {}", courseLessonId);
     
     courseService.syncCourseMetrics(courseId);
+  }
+
+  @Override
+  public void reorderLessons(UUID courseId, com.fptu.math_master.dto.request.ReorderLessonsRequest request) {
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    Course course = findCourseOrThrow(courseId);
+    verifyOwnership(course, currentUserId);
+
+    for (var order : request.getOrders()) {
+      CourseLesson lesson = courseLessonRepository.findByIdAndDeletedAtIsNull(order.getLessonId())
+          .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+
+      if (!lesson.getCourseId().equals(courseId)) {
+        throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
+      }
+
+      lesson.setOrderIndex(order.getOrderIndex());
+      courseLessonRepository.save(lesson);
+    }
+    log.info("Batch reordered lessons for course: {}", courseId);
   }
 
   @Override
@@ -375,9 +408,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
         items.stream().filter(i -> i.getId().equals(materialId)).findFirst().orElse(null);
 
     if (toRemove != null) {
-      // Note: We might want to actually delete the file from MinIO here, but for safety
-      // let's just remove reference. In a production app, we'd have a cleanup job or delete immediately.
-      // uploadService.deleteFile(toRemove.getKey()); // Need bucket info too
+      if (toRemove.getKey() != null && !toRemove.getKey().isBlank()) {
+        uploadService.deleteFile(toRemove.getKey(), minioProperties.getCourseMaterialsBucket());
+      }
       items.remove(toRemove);
       try {
         cl.setMaterials(objectMapper.writeValueAsString(items));

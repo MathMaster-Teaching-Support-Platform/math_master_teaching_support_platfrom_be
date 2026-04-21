@@ -249,6 +249,8 @@ public enum ErrorCode {
   COURSE_ACCESS_DENIED(
       1146, "You do not have permission to access this course", HttpStatus.FORBIDDEN),
   COURSE_ALREADY_PUBLISHED(1147, "Course is already published", HttpStatus.BAD_REQUEST),
+    COURSE_NOT_APPROVED(1147_1, "Course must be approved before publishing", HttpStatus.BAD_REQUEST),
+    INVALID_COURSE_STATUS(1147_2, "Invalid course status transition", HttpStatus.BAD_REQUEST),
   ALREADY_ENROLLED(1148, "Student is already enrolled in this course", HttpStatus.BAD_REQUEST),
   ENROLLMENT_NOT_FOUND(1149, "Enrollment not found", HttpStatus.NOT_FOUND),
   ENROLLMENT_ACCESS_DENIED(

@@ -1,6 +1,7 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.CreateCourseLessonRequest;
+import com.fptu.math_master.dto.request.ReorderLessonsRequest;
 import com.fptu.math_master.dto.request.UpdateCourseLessonRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.CourseLessonResponse;
@@ -19,9 +20,11 @@ import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -83,5 +86,16 @@ public class CourseLessonController {
     log.info("DELETE /courses/{}/lessons/{}", courseId, courseLessonId);
     courseLessonService.deleteLesson(courseId, courseLessonId);
     return ApiResponse.<Void>builder().message("Lesson deleted successfully").build();
+  }
+
+  @Operation(summary = "Reorder lessons in a course")
+  @PatchMapping("/reorder")
+  @PreAuthorize("hasRole('TEACHER')")
+  public ApiResponse<Void> reorderLessons(
+      @PathVariable UUID courseId,
+      @RequestBody ReorderLessonsRequest request) {
+    log.info("PATCH /courses/{}/lessons/reorder", courseId);
+    courseLessonService.reorderLessons(courseId, request);
+    return ApiResponse.<Void>builder().message("Lessons reordered successfully").build();
   }
 }

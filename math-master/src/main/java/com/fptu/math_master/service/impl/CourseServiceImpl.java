@@ -207,13 +207,41 @@ public class CourseServiceImpl implements CourseService {
     verifyOwnership(course, currentUserId);
 
     if (enrollmentRepository.countActiveEnrollmentsByCourseId(courseId) > 0) {
+      // Keep course data for existing students, only hide it from catalog.
       course.setPublished(false);
+      course.setStatus(com.fptu.math_master.enums.CourseStatus.DRAFT);
+      courseRepository.save(course);
+      log.info("Course {} has active enrollments; converted to draft/unpublished instead of deleting", courseId);
+      return;
+    }
+
+    // MinIO Cleanup: Course Thumbnail
+    if (org.springframework.util.StringUtils.hasText(course.getThumbnailUrl())) {
+      uploadService.deleteFile(course.getThumbnailUrl(), minioProperties.getTemplateBucket());
+    }
+
+    // MinIO Cleanup: Loop through all lessons and trigger their cleanup
+    List<com.fptu.math_master.entity.CourseLesson> lessons =
+        courseLessonRepository.findByCourseIdAndNotDeleted(courseId);
+    for (var lesson : lessons) {
+      // Cleanup video
+      if (org.springframework.util.StringUtils.hasText(lesson.getVideoUrl())) {
+        uploadService.deleteFile(lesson.getVideoUrl(), minioProperties.getCourseVideosBucket());
+      }
+      // Cleanup materials
+      List<com.fptu.math_master.dto.response.MaterialItem> items =
+          getMaterialListStatic(lesson.getMaterials());
+      for (var item : items) {
+        if (org.springframework.util.StringUtils.hasText(item.getKey())) {
+          uploadService.deleteFile(item.getKey(), minioProperties.getCourseMaterialsBucket());
+        }
+      }
     }
 
     course.setDeletedAt(Instant.now());
     course.setDeletedBy(currentUserId);
     courseRepository.save(course);
-    log.info("Course soft-deleted: {}", courseId);
+    log.info("Course soft-deleted and all associated MinIO resources cleaned up: {}", courseId);
   }
 
   @Override
@@ -222,9 +250,61 @@ public class CourseServiceImpl implements CourseService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
+    if (publish && course.getStatus() != com.fptu.math_master.enums.CourseStatus.PUBLISHED) {
+       throw new AppException(ErrorCode.COURSE_NOT_APPROVED);
+    }
+
     course.setPublished(publish);
     course = courseRepository.save(course);
     log.info("Course {} {}", courseId, publish ? "published" : "unpublished");
+    return mapToResponse(course);
+  }
+
+  @Override
+  public CourseResponse submitForReview(UUID courseId) {
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    Course course = findCourseOrThrow(courseId);
+    verifyOwnership(course, currentUserId);
+
+    if (course.getStatus() == com.fptu.math_master.enums.CourseStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
+    }
+
+    course.setStatus(com.fptu.math_master.enums.CourseStatus.PENDING_REVIEW);
+    course = courseRepository.save(course);
+    log.info("Course {} submitted for review", courseId);
+    return mapToResponse(course);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<CourseResponse> getPendingReviewCourses(Pageable pageable) {
+    return courseRepository
+        .findByStatusAndDeletedAtIsNullOrderByCreatedAtAsc(
+            com.fptu.math_master.enums.CourseStatus.PENDING_REVIEW,
+            pageable)
+        .map(this::mapToResponse);
+  }
+
+  @Override
+  public CourseResponse approveCourse(UUID courseId) {
+    Course course = findCourseOrThrow(courseId);
+    course.setStatus(com.fptu.math_master.enums.CourseStatus.PUBLISHED);
+    course.setPublished(true);
+    course.setRejectionReason(null);
+    course = courseRepository.save(course);
+    log.info("Course {} approved and published by admin", courseId);
+    return mapToResponse(course);
+  }
+
+  @Override
+  public CourseResponse rejectCourse(UUID courseId, String reason) {
+    Course course = findCourseOrThrow(courseId);
+    course.setStatus(com.fptu.math_master.enums.CourseStatus.REJECTED);
+    course.setPublished(false);
+    course.setRejectionReason(reason);
+    course = courseRepository.save(course);
+    log.info("Course {} rejected by admin. Reason: {}", courseId, reason);
     return mapToResponse(course);
   }
 
@@ -394,6 +474,8 @@ public class CourseServiceImpl implements CourseService {
         .description(course.getDescription())
         .thumbnailUrl(resolveThumbnailForRead(course.getThumbnailUrl()))
         .isPublished(course.isPublished())
+        .status(course.getStatus())
+        .rejectionReason(course.getRejectionReason())
         .rating(course.getRating())
         .ratingCount(ratingCount)
         .studentsCount(studentsCount)
@@ -406,6 +488,7 @@ public class CourseServiceImpl implements CourseService {
         .targetAudience(course.getTargetAudience())
         .subtitle(course.getSubtitle())
         .language(course.getLanguage())
+        .level(course.getLevel())
         .totalVideoHours(course.getTotalVideoHours())
         .articlesCount(course.getArticlesCount())
         .resourcesCount(course.getResourcesCount())
@@ -414,6 +497,7 @@ public class CourseServiceImpl implements CourseService {
         .discountExpiryDate(course.getDiscountExpiryDate())
         .isEnrolled(isEnrolled)
         .completedLessons(completedLessons)
+        .totalLessons(lessonsCount)
         .progress(progress)
         .build();
   }
@@ -873,6 +957,20 @@ public class CourseServiceImpl implements CourseService {
         .totalRatings((int) totalRatings)
         .averageRating(averageRating)
         .build();
+  }
+
+  private List<com.fptu.math_master.dto.response.MaterialItem> getMaterialListStatic(String json) {
+    if (json == null || json.isBlank()) {
+      return new ArrayList<>();
+    }
+    try {
+      return objectMapper.readValue(
+          json,
+          new TypeReference<List<com.fptu.math_master.dto.response.MaterialItem>>() {});
+    } catch (Exception e) {
+      log.warn("Invalid materials JSON while deleting course assets: {}", json, e);
+      return new ArrayList<>();
+    }
   }
 
   @Override
