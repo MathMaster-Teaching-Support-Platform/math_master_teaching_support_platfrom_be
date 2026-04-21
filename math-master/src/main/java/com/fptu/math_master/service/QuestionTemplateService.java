@@ -11,6 +11,7 @@ import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.enums.TemplateStatus;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -58,6 +59,9 @@ public interface QuestionTemplateService {
   QuestionTemplateResponse getQuestionTemplateById(UUID id);
 
   Page<QuestionTemplateResponse> getMyQuestionTemplates(Pageable pageable);
+
+  Page<QuestionTemplateResponse> getMyQuestionTemplatesFiltered(
+      String search, TemplateStatus status, Pageable pageable);
 
   Page<QuestionTemplateResponse> searchQuestionTemplates(
       QuestionType templateType,

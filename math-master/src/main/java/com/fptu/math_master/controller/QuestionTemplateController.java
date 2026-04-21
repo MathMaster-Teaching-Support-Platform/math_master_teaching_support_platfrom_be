@@ -15,6 +15,7 @@ import com.fptu.math_master.dto.response.TemplateImportResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.service.ExcelImportService;
 import com.fptu.math_master.service.QuestionTemplateService;
 import com.fptu.math_master.service.TemplateImportService;
@@ -130,6 +131,8 @@ public class QuestionTemplateController {
           "Teacher views all their question templates. Shows name, type, "
               + "cognitive level, tags, usage count, and created date.")
   public ApiResponse<Page<QuestionTemplateResponse>> getMyQuestionTemplates(
+      @RequestParam(required = false) String search,
+      @RequestParam(required = false) TemplateStatus status,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(defaultValue = "createdAt") String sortBy,
@@ -138,7 +141,7 @@ public class QuestionTemplateController {
     Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
     Pageable pageable = PageRequest.of(page, size, sort);
     return ApiResponse.<Page<QuestionTemplateResponse>>builder()
-        .result(questionTemplateService.getMyQuestionTemplates(pageable))
+        .result(questionTemplateService.getMyQuestionTemplatesFiltered(search, status, pageable))
         .build();
   }
 

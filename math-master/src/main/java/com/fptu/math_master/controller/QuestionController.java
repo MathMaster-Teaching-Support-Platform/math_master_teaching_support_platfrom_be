@@ -69,23 +69,25 @@ public class QuestionController {
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
       summary = "Get my questions",
-      description = "Retrieve all questions created by current teacher with pagination")
+      description = "Retrieve all questions created by current teacher with pagination and optional search")
   public ApiResponse<Page<QuestionResponse>> getMyQuestions(
       @Parameter(description = "Page number (0-indexed)") @RequestParam(defaultValue = "0")
           int page,
       @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
       @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt")
           String sortBy,
-      @Parameter(description = "Sort direction") @RequestParam(defaultValue = "DESC") String sort) {
+      @Parameter(description = "Sort direction") @RequestParam(defaultValue = "DESC") String sort,
+      @Parameter(description = "Search by question text") @RequestParam(required = false) String name,
+      @Parameter(description = "Search by tag") @RequestParam(required = false) String tag) {
 
-    log.info("REST request to get my questions: page={}, size={}", page, size);
+    log.info("REST request to get my questions: page={}, size={}, name={}, tag={}", page, size, name, tag);
 
     Sort.Direction sortDirection = Sort.Direction.fromString(sort.toUpperCase());
     Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
 
     return ApiResponse.<Page<QuestionResponse>>builder()
         .message("Questions retrieved successfully")
-        .result(questionService.getMyQuestions(pageable))
+        .result(questionService.getMyQuestions(name, tag, pageable))
         .build();
   }
 

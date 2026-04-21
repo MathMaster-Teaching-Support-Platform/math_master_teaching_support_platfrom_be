@@ -9,8 +9,13 @@ import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
 import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
 import com.fptu.math_master.dto.response.MatrixValidationReport;
+import com.fptu.math_master.enums.MatrixStatus;
 import com.fptu.math_master.service.ExamMatrixService;
 import com.fptu.math_master.service.impl.ExamMatrixPdfExportService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -32,6 +37,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -125,6 +131,31 @@ public class ExamMatrixController {
     log.info("REST request to get my exam matrices");
     return ApiResponse.<List<ExamMatrixResponse>>builder()
         .result(examMatrixService.getMyExamMatrices())
+        .build();
+  }
+
+  @GetMapping("/my/paged")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "List my exam matrices (paginated)",
+      description = "Get exam matrices owned by the current teacher with pagination, search and status filter.")
+  public ApiResponse<Page<ExamMatrixResponse>> getMyExamMatricesPaged(
+      @RequestParam(required = false) String search,
+      @RequestParam(required = false) MatrixStatus status,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(defaultValue = "createdAt") String sortBy,
+      @RequestParam(defaultValue = "DESC") String sortDirection) {
+
+    log.info("REST request to get my exam matrices paged: search={}, status={}", search, status);
+
+    Sort sort = sortDirection.equalsIgnoreCase("ASC")
+        ? Sort.by(sortBy).ascending()
+        : Sort.by(sortBy).descending();
+    Pageable pageable = PageRequest.of(page, size, sort);
+
+    return ApiResponse.<Page<ExamMatrixResponse>>builder()
+        .result(examMatrixService.getMyExamMatricesPaged(search, status, pageable))
         .build();
   }
 

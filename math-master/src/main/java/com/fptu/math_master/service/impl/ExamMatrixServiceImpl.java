@@ -15,7 +15,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.fptu.math_master.entity.*;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -197,6 +199,26 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               return buildMatrixResponse(m, mappings);
             })
         .collect(Collectors.toList());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Page<ExamMatrixResponse> getMyExamMatricesPaged(
+      String search, MatrixStatus status, Pageable pageable) {
+    log.info("Getting my exam matrices paged: search={}, status={}", search, status);
+
+    UUID currentUserId = getCurrentUserId();
+    String searchTerm = (search != null && !search.isBlank()) ? search.trim() : null;
+    MatrixStatus statusFilter = status;
+
+    return examMatrixRepository
+        .findByTeacherIdWithFilters(currentUserId, statusFilter, searchTerm, pageable)
+        .map(
+            m -> {
+              List<ExamMatrixTemplateMapping> mappings =
+                  templateMappingRepository.findByExamMatrixIdOrderByCreatedAt(m.getId());
+              return buildMatrixResponse(m, mappings);
+            });
   }
 
   @Override

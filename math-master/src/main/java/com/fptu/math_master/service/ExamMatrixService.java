@@ -17,8 +17,11 @@ import com.fptu.math_master.dto.response.MatchingTemplatesResponse;
 import com.fptu.math_master.dto.response.MatrixValidationReport;
 import com.fptu.math_master.dto.response.PreviewCandidatesResponse;
 import com.fptu.math_master.dto.response.TemplateMappingResponse;
+import com.fptu.math_master.enums.MatrixStatus;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface ExamMatrixService {
 
@@ -33,6 +36,8 @@ public interface ExamMatrixService {
   ExamMatrixResponse getExamMatrixByAssessmentId(UUID assessmentId);
 
   List<ExamMatrixResponse> getMyExamMatrices();
+
+  Page<ExamMatrixResponse> getMyExamMatricesPaged(String search, MatrixStatus status, Pageable pageable);
 
   void deleteExamMatrix(UUID matrixId);
 

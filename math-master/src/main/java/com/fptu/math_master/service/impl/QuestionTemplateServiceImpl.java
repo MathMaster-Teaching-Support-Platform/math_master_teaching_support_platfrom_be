@@ -285,6 +285,17 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
   @Override
   @Transactional(readOnly = true)
+  public Page<QuestionTemplateResponse> getMyQuestionTemplatesFiltered(
+      String search, TemplateStatus status, Pageable pageable) {
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    String searchTerm = (search != null && !search.isBlank()) ? search.trim() : null;
+    return questionTemplateRepository
+        .findByCreatedByWithSearch(currentUserId, status, searchTerm, pageable)
+        .map(this::mapToResponse);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public Page<QuestionTemplateResponse> searchQuestionTemplates(
       QuestionType templateType,
       CognitiveLevel cognitiveLevel,

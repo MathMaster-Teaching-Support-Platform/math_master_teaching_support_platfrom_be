@@ -31,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -144,12 +145,18 @@ public class QuestionServiceImpl implements QuestionService {
   }
 
   @Override
-  public Page<QuestionResponse> getMyQuestions(Pageable pageable) {
+  public Page<QuestionResponse> getMyQuestions(String name, String tag, Pageable pageable) {
     UUID currentUserId = getCurrentUserId();
     log.info("Fetching questions for user: {}", currentUserId);
 
+    String namePattern = (name != null && !name.isBlank()) ? "%" + name.trim() + "%" : null;
+    String tagPattern = (tag != null && !tag.isBlank()) ? "%" + tag.trim() + "%" : null;
+
+    // Native query already has ORDER BY hardcoded; strip sort from Pageable to prevent
+    // Hibernate appending camelCase field names that PostgreSQL can't resolve.
+    Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
     return questionRepository
-        .findByCreatedByAndNotDeleted(currentUserId, pageable)
+        .findByCreatedByWithSearch(currentUserId, namePattern, tagPattern, unsorted)
         .map(this::mapToResponse);
   }
 

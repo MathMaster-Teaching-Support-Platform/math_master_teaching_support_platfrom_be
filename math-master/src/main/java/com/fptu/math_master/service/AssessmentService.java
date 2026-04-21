@@ -37,7 +37,7 @@ public interface AssessmentService {
 
   AssessmentResponse getAssessmentById(UUID id);
 
-  Page<AssessmentResponse> getMyAssessments(AssessmentStatus status, Pageable pageable);
+  Page<AssessmentResponse> getMyAssessments(AssessmentStatus status, String search, Pageable pageable);
 
   List<AssessmentResponse> searchAssessmentsByName(String name, AssessmentStatus status);
 

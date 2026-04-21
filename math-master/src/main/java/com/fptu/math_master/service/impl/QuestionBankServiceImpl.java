@@ -7,6 +7,7 @@ import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.entity.QuestionBank;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.entity.User;
+import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ChapterRepository;
@@ -17,7 +18,9 @@ import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.QuestionBankService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -318,6 +321,15 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             .map(Chapter::getTitle)
             .orElse(null));
 
+    List<Object[]> cognitiveRows =
+        questionRepository.countByCognitiveLevelForBank(questionBank.getId());
+    Map<String, Long> cognitiveStats = new LinkedHashMap<>();
+    for (Object[] row : cognitiveRows) {
+      CognitiveLevel level = (CognitiveLevel) row[0];
+      Long count = (Long) row[1];
+      cognitiveStats.put(level.name(), count);
+    }
+
     return QuestionBankResponse.builder()
         .id(questionBank.getId())
         .teacherId(questionBank.getTeacherId())
@@ -328,6 +340,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         .chapterId(questionBank.getChapterId())
         .chapterTitle(chapterTitle)
         .questionCount(questionCount)
+        .cognitiveStats(cognitiveStats)
         .createdAt(questionBank.getCreatedAt())
         .updatedAt(questionBank.getUpdatedAt())
         .build();
