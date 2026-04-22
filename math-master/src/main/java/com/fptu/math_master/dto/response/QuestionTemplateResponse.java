@@ -3,7 +3,6 @@ package com.fptu.math_master.dto.response;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
-import com.fptu.math_master.enums.TemplateVariant;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
@@ -25,14 +24,15 @@ public class QuestionTemplateResponse {
   private String name;
   private String description;
   private QuestionType templateType;
-  private TemplateVariant templateVariant;
+  /** Simplified content with {{param}} placeholders (new format). */
+  private String content;
+  /** Legacy multi-language template text (kept for backward compat). */
   private Map<String, Object> templateText;
   private Map<String, Object> parameters;
   private String answerFormula;
-  private String diagramTemplate;
-  private Map<String, Object> optionsGenerator;
+  /** Step-by-step solution explanation. */
+  private String solution;
   private String topic;
-  private String[] constraints;
   private CognitiveLevel cognitiveLevel;
   private String[] tags;
   private Boolean isPublic;

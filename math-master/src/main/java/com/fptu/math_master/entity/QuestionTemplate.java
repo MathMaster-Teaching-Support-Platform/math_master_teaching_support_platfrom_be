@@ -110,6 +110,23 @@ public class QuestionTemplate extends BaseEntity {
   @Column(name = "answer_formula", columnDefinition = "TEXT")
   private String answerFormula;
 
+  /**
+   * Simplified question content with {{param}} placeholders.
+   * Replaces the complex templateText jsonb map for new templates.
+   * Example: "Giải phương trình {{a}}x + {{b}} = 0"
+   */
+  @Nationalized
+  @Column(name = "content", columnDefinition = "TEXT")
+  private String content;
+
+  /**
+   * Step-by-step solution / explanation for this template.
+   * Example: "Chuyển vế: {{a}}x = -{{b}}, chia hai vế: x = -{{b}}/{{a}}"
+   */
+  @Nationalized
+  @Column(name = "solution", columnDefinition = "TEXT")
+  private String solution;
+
   @Column(name = "diagram_template", columnDefinition = "TEXT")
   private String diagramTemplate;
 

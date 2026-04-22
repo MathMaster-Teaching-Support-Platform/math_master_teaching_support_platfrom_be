@@ -13,8 +13,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * FR-TPL-002: Update Template (Edit Draft) Enhanced request with validation and version tracking
- * support
+ * FR-TPL-002: Update Template (Edit Draft)
  */
 @Data
 @Builder
@@ -28,38 +27,31 @@ public class UpdateQuestionTemplateRequest {
 
   private String description;
 
-  @NotNull(message = "Template type is required")
   private QuestionType templateType;
 
   /**
-   * Multi-language template text with placeholders {{param}} Example: {"vi": "Giải phương trình:
-   * {{a}}x + {{b}} = {{c}}", "en": "Solve: {{a}}x + {{b}} = {{c}}"}
+   * Simplified question content with {{param}} placeholders.
+   * Example: "Giải phương trình: {{a}}x + {{b}} = {{c}}"
    */
-  @NotNull(message = "Template text is required")
+  private String content;
+
+  /**
+   * Legacy multi-language template text. If content is provided, this is ignored.
+   */
   private Map<String, Object> templateText;
 
   /**
-   * Parameter definitions with type, min, max, step, exclude Example: {"a": {"type": "integer",
-   * "min": 1, "max": 10, "exclude": [0]}}
+   * Parameter definitions with type, min, max, step, exclude
    */
-  @NotNull(message = "Parameters are required")
   private Map<String, Object> parameters;
 
-  /** Answer formula using parameter names Example: "(c - b) / a" */
-  @NotBlank(message = "Answer formula is required")
+  /** Answer formula using parameter names. Example: "(c - b) / a" */
   private String answerFormula;
 
   /**
-   * Options generator configuration for MCQ Example: {"count": 4, "distractors": [...],
-   * "correctAnswer": "Use answerFormula"}
+   * Step-by-step solution explanation.
    */
-  private Map<String, Object> optionsGenerator;
-
-  /**
-   * Mathematical constraints for parameter generation Example: ["a != 0", "answer > 0", "answer % 1
-   * == 0"]
-   */
-  private String[] constraints;
+  private String solution;
 
   @NotNull(message = "Cognitive level is required")
   private CognitiveLevel cognitiveLevel;

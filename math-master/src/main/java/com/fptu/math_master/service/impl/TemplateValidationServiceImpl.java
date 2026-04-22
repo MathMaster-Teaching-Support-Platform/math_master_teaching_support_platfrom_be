@@ -37,9 +37,6 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
     validateTemplateText(request.getTemplateText(), request.getParameters(), errors, warnings);
     validateParameters(request.getParameters(), errors, warnings, info);
     validateAnswerFormula(request.getAnswerFormula(), request.getParameters(), errors, warnings);
-    validateConstraints(request.getConstraints(), request.getParameters(), errors, warnings);
-    validateOptionsGenerator(
-        request.getOptionsGenerator(), request.getTemplateType(), errors, warnings, info);
     validateTags(request.getTags(), warnings, info);
 
     return buildResponse(errors, warnings, info);
@@ -55,9 +52,6 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
     validateTemplateText(request.getTemplateText(), request.getParameters(), errors, warnings);
     validateParameters(request.getParameters(), errors, warnings, info);
     validateAnswerFormula(request.getAnswerFormula(), request.getParameters(), errors, warnings);
-    validateConstraints(request.getConstraints(), request.getParameters(), errors, warnings);
-    validateOptionsGenerator(
-        request.getOptionsGenerator(), request.getTemplateType(), errors, warnings, info);
     validateTags(request.getTags(), warnings, info);
 
     return buildResponse(errors, warnings, info);
