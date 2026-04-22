@@ -131,7 +131,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private static final String WEBP_MIME = "image/webp";
 
   private static final String QUICKLATEX_PREAMBLE =
-      "\\usepackage{tikz}\n"
+      "\\usepackage[utf8]{inputenc}\n"
+          + "\\usepackage{tikz}\n"
           + "\\usepackage{pgfplots}\n"
           + "\\usepackage{tkz-euclide}\n"
           + "\\usepackage{tkz-tab}\n"
@@ -945,7 +946,14 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     if (value == null || value.isEmpty()) {
       return value;
     }
-    return value.replace("\\r\\n", "\n").replace("\\n", "\n");
+    return value
+        .replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        // Strip trailing LaTeX line-break markers (\ or \\) that AI appends to each line.
+        // (?m) enables multiline so $ matches end-of-line, not end-of-string.
+        // \h matches horizontal whitespace only, preserving the newline character itself.
+        .replaceAll("(?m)\\\\+\\h*$", "")
+        .trim();
   }
 
   private String normalizeLatexInput(String value) {
@@ -1200,22 +1208,72 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         sb.append("\\\\[4pt]\n");
         continue;
       }
-      if (isLatexLine(trimmed)) {
+      if (isBlockLatexLine(trimmed)) {
         sb.append(trimmed).append("\\\\[4pt]\n");
       } else {
-        sb.append("\\text{").append(escapeLatexText(trimmed)).append("}\\\\[4pt]\n");
+        // Mixed line: might contain plain text, inline $...$, or both.
+        // Wrap text segments in \text{} and keep $...$ math segments as-is.
+        sb.append(buildMixedLatexLine(trimmed)).append("\\\\[4pt]\n");
       }
     }
     return sb.toString();
   }
 
-  private boolean isLatexLine(String line) {
+  /**
+   * Returns true only for block-level LaTeX constructs (environments, display math).
+   * Inline math ($...$) is handled by buildMixedLatexLine instead.
+   */
+  private boolean isBlockLatexLine(String line) {
     return line.contains("\\begin{") || line.contains("\\end{")
-        || line.contains("\\(") || line.contains("\\)")
-        || line.contains("\\[") || line.contains("\\]")
-        || line.contains("$$") || line.contains("\\frac")
-        || line.contains("\\sqrt") || line.contains("\\sum")
-        || line.contains("\\int") || line.contains("\\tikz");
+        || line.contains("\\[")
+        || line.contains("\\]");
+  }
+
+  /**
+   * Converts a line that may contain a mix of plain text and inline {@code $...$} math into
+   * a LaTeX fragment where text segments are wrapped in {@code \text{}} and math segments
+   * are emitted verbatim.
+   *
+   * <p>Examples:
+   * <ul>
+   *   <li>{@code "abc"} → {@code \text{abc}}
+   *   <li>{@code "Prove $a+b=c$"} → {@code \text{Prove }$a+b=c$}
+   *   <li>{@code "$x^2$ and $y^2$"} → {@code $x^2$\text{ and }$y^2$}
+   * </ul>
+   */
+  private String buildMixedLatexLine(String line) {
+    if (!line.contains("$")) {
+      return "\\text{" + escapeLatexText(line) + "}";
+    }
+    StringBuilder sb = new StringBuilder();
+    int i = 0;
+    boolean changed = false;
+    while (i < line.length()) {
+      int dollarStart = line.indexOf('$', i);
+      if (dollarStart == -1) {
+        // Remaining text
+        sb.append("\\text{").append(escapeLatexText(line.substring(i))).append("}");
+        changed = true;
+        break;
+      }
+      // Text before $
+      if (dollarStart > i) {
+        sb.append("\\text{").append(escapeLatexText(line.substring(i, dollarStart))).append("}");
+        changed = true;
+      }
+      // Find closing $
+      int dollarEnd = line.indexOf('$', dollarStart + 1);
+      if (dollarEnd == -1) {
+        // Unclosed $: treat everything from here as text
+        sb.append("\\text{").append(escapeLatexText(line.substring(dollarStart))).append("}");
+        changed = true;
+        break;
+      }
+      // Emit $...$ verbatim
+      sb.append(line, dollarStart, dollarEnd + 1);
+      i = dollarEnd + 1;
+    }
+    return changed ? sb.toString() : "\\text{" + escapeLatexText(line) + "}";
   }
 
   private String escapeLatexText(String text) {
