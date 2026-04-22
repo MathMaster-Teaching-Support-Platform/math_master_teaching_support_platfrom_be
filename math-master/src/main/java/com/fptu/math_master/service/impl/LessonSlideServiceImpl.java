@@ -202,7 +202,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     LessonSlideOutputFormat outputFormat = resolveOutputFormat(request.getOutputFormat());
     DeckSections deckSections =
         buildDeckSectionsWithAi(lesson, request.getAdditionalPrompt(), outputFormat, slideCount);
-    List<LessonSlideJsonItemResponse> slides = buildPreviewSlides(deckSections, slideCount);
+    List<LessonSlideJsonItemResponse> slides = buildPreviewSlides(deckSections, slideCount, outputFormat);
 
     return LessonSlideGeneratedContentResponse.builder()
         .subjectId(subject.getId())
@@ -1125,10 +1125,17 @@ public class LessonSlideServiceImpl implements LessonSlideService {
    * QuickLaTeX (mode=1 for full-document support including TikZ geometry). Returns the PNG bytes.
    */
   private byte[] renderSlideAsFullLatexImage(String heading, String content) {
-    // Strip outer LaTeX delimiters if the content is just a bare expression.
-    // If content already contains \begin{tikzpicture} or similar, it will be used as-is.
-    String latexBody = buildLatexSlideBody(heading, content);
+    String imageUrl = renderSlidePreviewUrl(heading, content);
+    if (imageUrl == null) return new byte[0];
+    return downloadImageBytes(imageUrl);
+  }
 
+  /**
+   * Renders heading + content via QuickLaTeX and returns the hosted image URL.
+   * Returns null on failure.
+   */
+  private String renderSlidePreviewUrl(String heading, String content) {
+    String latexBody = buildLatexSlideBody(heading, content);
     try {
       LatexRenderRequest renderRequest =
           LatexRenderRequest.builder()
@@ -1140,12 +1147,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
                       .fontSize("14px")
                       .build())
               .build();
-
-      String imageUrl = latexRenderService.render(renderRequest);
-      return downloadImageBytes(imageUrl);
+      return latexRenderService.render(renderRequest);
     } catch (Exception ex) {
-      log.warn("Full-LaTeX slide render failed (heading={}): {}", heading, ex.getMessage());
-      return new byte[0];
+      log.warn("Full-LaTeX slide preview render failed (heading={}): {}", heading, ex.getMessage());
+      return null;
     }
   }
 
@@ -1415,21 +1420,22 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     return values;
   }
 
-  private List<LessonSlideJsonItemResponse> buildPreviewSlides(DeckSections deck, int slideCount) {
+  private List<LessonSlideJsonItemResponse> buildPreviewSlides(
+      DeckSections deck, int slideCount, LessonSlideOutputFormat outputFormat) {
     List<LessonSlideJsonItemResponse> slides = new ArrayList<>();
 
     // 10-slide canonical structure.
     if (slideCount == 10) {
-      slides.add(buildPreviewSlide(1, "COVER", "Cover", deck.coverSummary()));
-      slides.add(buildPreviewSlide(2, "OBJECTIVES", "Muc tieu", deck.learningObjectives()));
-      slides.add(buildPreviewSlide(3, "OPENING", "Khoi dong", deck.opening()));
-      slides.add(buildPreviewSlide(4, "MAIN_CONTENT", "Noi dung chinh 1", deck.mainPart1()));
-      slides.add(buildPreviewSlide(5, "MAIN_CONTENT", "Noi dung chinh 2", deck.mainPart2()));
-      slides.add(buildPreviewSlide(6, "MAIN_CONTENT", "Noi dung chinh 3", deck.mainPart3()));
-      slides.add(buildPreviewSlide(7, "EXAMPLE", "Vi du", deck.examplePart()));
-      slides.add(buildPreviewSlide(8, "PRACTICE", "Luyen tap", deck.practicePart()));
-      slides.add(buildPreviewSlide(9, "SUMMARY", "Tong ket", deck.closingSummary()));
-      slides.add(buildPreviewSlide(10, "CLOSING", "Cam on / Q&A", deck.lessonTitle()));
+      slides.add(buildPreviewSlide(1,  "COVER",        "Cover",            deck.coverSummary(),        outputFormat));
+      slides.add(buildPreviewSlide(2,  "OBJECTIVES",   "Muc tieu",         deck.learningObjectives(),  outputFormat));
+      slides.add(buildPreviewSlide(3,  "OPENING",      "Khoi dong",        deck.opening(),             outputFormat));
+      slides.add(buildPreviewSlide(4,  "MAIN_CONTENT", "Noi dung chinh 1", deck.mainPart1(),           outputFormat));
+      slides.add(buildPreviewSlide(5,  "MAIN_CONTENT", "Noi dung chinh 2", deck.mainPart2(),           outputFormat));
+      slides.add(buildPreviewSlide(6,  "MAIN_CONTENT", "Noi dung chinh 3", deck.mainPart3(),           outputFormat));
+      slides.add(buildPreviewSlide(7,  "EXAMPLE",      "Vi du",            deck.examplePart(),         outputFormat));
+      slides.add(buildPreviewSlide(8,  "PRACTICE",     "Luyen tap",        deck.practicePart(),        outputFormat));
+      slides.add(buildPreviewSlide(9,  "SUMMARY",      "Tong ket",         deck.closingSummary(),      outputFormat));
+      slides.add(buildPreviewSlide(10, "CLOSING",      "Cam on / Q&A",     deck.lessonTitle(),         outputFormat));
       return slides;
     }
 
@@ -1437,9 +1443,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     int middleCount = normalizedCount - 5;
     List<String> middleChunks = splitIntoChunks(deck.fullLessonContent(), middleCount);
 
-    slides.add(buildPreviewSlide(1, "COVER", "Cover", deck.coverSummary()));
-    slides.add(buildPreviewSlide(2, "OBJECTIVES", "Muc tieu", deck.learningObjectives()));
-    slides.add(buildPreviewSlide(3, "OPENING", "Khoi dong", deck.opening()));
+    slides.add(buildPreviewSlide(1, "COVER",      "Cover",     deck.coverSummary(),       outputFormat));
+    slides.add(buildPreviewSlide(2, "OBJECTIVES", "Muc tieu",  deck.learningObjectives(), outputFormat));
+    slides.add(buildPreviewSlide(3, "OPENING",    "Khoi dong", deck.opening(),            outputFormat));
 
     for (int i = 0; i < middleChunks.size(); i++) {
       String type = "MAIN_CONTENT";
@@ -1452,22 +1458,31 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         type = "PRACTICE";
         heading = "Luyen tap";
       }
-      slides.add(buildPreviewSlide(4 + i, type, heading, middleChunks.get(i)));
+      slides.add(buildPreviewSlide(4 + i, type, heading, middleChunks.get(i), outputFormat));
     }
 
-    slides.add(
-        buildPreviewSlide(normalizedCount - 1, "SUMMARY", "Tong ket", deck.closingSummary()));
-    slides.add(buildPreviewSlide(normalizedCount, "CLOSING", "Cam on / Q&A", deck.lessonTitle()));
+    slides.add(buildPreviewSlide(normalizedCount - 1, "SUMMARY", "Tong ket",      deck.closingSummary(), outputFormat));
+    slides.add(buildPreviewSlide(normalizedCount,     "CLOSING", "Cam on / Q&A",  deck.lessonTitle(),    outputFormat));
     return slides;
   }
 
   private LessonSlideJsonItemResponse buildPreviewSlide(
-      int slideNumber, String slideType, String heading, String content) {
+      int slideNumber, String slideType, String heading, String content,
+      LessonSlideOutputFormat outputFormat) {
+    String normalizedContent = normalizeAiGeneratedText(content);
+    String normalizedHeading = normalizeAiGeneratedText(heading);
+
+    String previewImageUrl = null;
+    if (outputFormat == LessonSlideOutputFormat.LATEX) {
+      previewImageUrl = renderSlidePreviewUrl(normalizedHeading, normalizedContent);
+    }
+
     return LessonSlideJsonItemResponse.builder()
         .slideNumber(slideNumber)
         .slideType(slideType)
-        .heading(heading)
-        .content(normalizeAiGeneratedText(content))
+        .heading(normalizedHeading)
+        .content(normalizedContent)
+        .previewImageUrl(previewImageUrl)
         .build();
   }
 
