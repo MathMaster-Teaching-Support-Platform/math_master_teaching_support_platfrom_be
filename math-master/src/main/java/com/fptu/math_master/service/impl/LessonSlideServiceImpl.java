@@ -861,6 +861,22 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     return normalizeEscapedLineBreaks(replaced);
   }
 
+  /** Replaces all placeholder tags in every text shape of a slide. */
+  private void replacePlaceholdersInSlide(
+      XMLSlideShow slideshow, XSLFSlide slide, Map<String, String> values) {
+    List<XSLFShape> shapesSnapshot = new ArrayList<>(slide.getShapes());
+    for (XSLFShape shape : shapesSnapshot) {
+      if (shape instanceof XSLFTextShape textShape) {
+        String text = textShape.getText();
+        if (text == null || text.isBlank()) continue;
+        String replaced = replacePlaceholders(text, values);
+        if (!text.equals(replaced)) {
+          applyTextAndLatex(slideshow, slide, textShape, replaced);
+        }
+      }
+    }
+  }
+
   private BinaryFileData convertPptxToPdf(byte[] pptxContent, String fileName) {
     final float renderScale = 2.0f;
     try (XMLSlideShow slideShow = new XMLSlideShow(new ByteArrayInputStream(pptxContent));
@@ -1014,25 +1030,16 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         XSLFSlide slide = slideshow.getSlides().get(i);
         LessonSlideJsonItemRequest item = slides.get(i);
 
+        // Step 1: Always replace all placeholder tags in every shape of the slide.
+        // This ensures {{LESSON_SUMMARY}}, {{SLIDE_CONTENT}}, etc. are substituted
+        // regardless of output format.
+        Map<String, String> slideValues = buildJsonSlidePlaceholders(item, lesson);
+        replacePlaceholdersInSlide(slideshow, slide, slideValues);
+
+        // Step 2: For LATEX mode, additionally render the heading+content as a PNG image
+        // and inject it over the main content area.
         if (useFullLatexImage) {
-          // In LATEX mode: render entire slide content (text + geometry) as one image
-          // and replace the first non-empty content text shape with that image.
           applySlideAsFullLatexImage(slideshow, slide, item);
-        } else {
-          Map<String, String> slideValues = buildJsonSlidePlaceholders(item, lesson);
-          List<XSLFShape> shapesSnapshot = new ArrayList<>(slide.getShapes());
-          for (XSLFShape shape : shapesSnapshot) {
-            if (shape instanceof XSLFTextShape textShape) {
-              String text = textShape.getText();
-              if (text == null || text.isBlank()) {
-                continue;
-              }
-              String replaced = replacePlaceholders(text, slideValues);
-              if (!text.equals(replaced)) {
-                applyTextAndLatex(slideshow, slide, textShape, replaced);
-              }
-            }
-          }
         }
       }
 
@@ -1074,9 +1081,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
     byte[] imageBytes = renderSlideAsFullLatexImage(heading, content);
     if (imageBytes.length == 0) {
-      // Fallback: just apply as plain text
-      targetShape.clearText();
-      targetShape.setText((heading.isBlank() ? "" : heading + "\n") + content);
+      // Render failed — placeholder text was already replaced by the normal loop in step 1.
+      log.debug("LATEX render returned empty bytes for slide {}, keeping replaced text", item.getSlideNumber());
       return;
     }
 
@@ -1086,9 +1092,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       return;
     }
 
-    // Hide the original text shape and overlay the rendered image in the same bounding box.
+    // Clear the target shape safely: clearText() removes all paragraphs, but OOXML requires
+    // at least one <a:p> in a txBody — add an empty one to keep the XML valid.
     targetShape.clearText();
-    targetShape.setText("");
+    targetShape.addNewTextParagraph();
 
     try {
       XSLFPictureData pictureData = slideshow.addPicture(imageBytes, PictureData.PictureType.PNG);
