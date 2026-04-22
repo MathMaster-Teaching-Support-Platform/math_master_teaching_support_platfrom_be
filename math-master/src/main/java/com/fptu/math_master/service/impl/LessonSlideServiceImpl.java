@@ -981,10 +981,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     return value
         .replace("\\r\\n", "\n")
         .replace("\\n", "\n")
-        // Strip trailing LaTeX line-break markers (\ or \\) that AI appends to each line.
-        // (?m) enables multiline so $ matches end-of-line, not end-of-string.
-        // \h matches horizontal whitespace only, preserving the newline character itself.
-        .replaceAll("(?m)\\\\+\\h*$", "")
+        // Strip a LONE trailing backslash (single \, not \\) that AI appends as a line-break
+        // marker in plain-text mode. (?<!\\) and (?!\\) ensure we do NOT strip LaTeX \\
+        // (double-backslash used in align, tabular, etc.).
+        .replaceAll("(?m)(?<!\\\\)\\\\(?!\\\\)\\h*$", "")
         .trim();
   }
 
@@ -1266,8 +1266,15 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       return sb.toString().isBlank() ? "\\phantom{x}" : sb.toString();
     }
 
-    // Each non-empty line: if it contains LaTeX delimiters or \begin, emit as-is;
-    // otherwise wrap as plain text.
+    // If the body already contains a LaTeX block environment (\begin{...}) emit
+    // it verbatim — do NOT split line-by-line, otherwise \item / \textbf etc.
+    // would be incorrectly escaped by escapeLatexText().
+    if (body.contains("\\begin{")) {
+      sb.append(body.trim()).append("\n");
+      return sb.toString();
+    }
+
+    // Line-by-line processing for plain / inline-math content.
     for (String line : body.split("\n")) {
       String trimmed = line.trim();
       if (trimmed.isEmpty()) {
@@ -2016,21 +2023,25 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   private String buildFormatGuidance(LessonSlideOutputFormat outputFormat, boolean jsonMode) {
     return switch (outputFormat) {
-      case LATEX ->
-          jsonMode
-              ? "- Tất cả biểu thức toán học phải viết bằng LaTeX. KHÔNG dùng diễn đạt công thức dạng chữ thuần."
-                  + "\\n- Vì output là JSON string, bắt buộc escape dấu \\\\ trong LaTeX (ví dụ: \\\\frac, \\\\sqrt, \\\\left, \\\\right)."
-              : "- Tất cả biểu thức toán học phải viết bằng LaTeX."
-                  + "\\n- Dùng delimiters chuẩn: inline \\( ... \\), block \\[ ... \\].";
-      case HYBRID ->
-          jsonMode
-              ? "- Ưu tiên nội dung tiếng Việt dễ hiểu, nhưng công thức/ký hiệu toán phải dùng LaTeX."
-                  + "\\n- Vì output là JSON string, bắt buộc escape dấu \\\\ trong LaTeX (ví dụ: \\\\frac, \\\\sqrt)."
-              : "- Nội dung mô tả bằng tiếng Việt, công thức/ký hiệu toán thể hiện bằng LaTeX."
-                  + "\\n- Dùng delimiters chuẩn: inline \\( ... \\), block \\[ ... \\].";
+      case LATEX -> jsonMode
+          ? "- Tất cả biểu thức toán học PHẢI dùng LaTeX inline ($...$) hoặc display (\\\\[ ... \\\\]).\n"
+              + "- Danh sách bước/ý: dùng \\\\begin{itemize} \\\\item ... \\\\end{itemize}. KHÔNG dùng dấu gạch đầu dòng thủ công.\n"
+              + "- Vì output là JSON string, PHẢI escape backslash: \\\\frac, \\\\item, \\\\begin, \\\\end, \\\\textbf, v.v.\n"
+              + "- KHÔNG thêm ký tự \\\\ ở cuối dòng văn bản thường.\n"
+              + "- KHÔNG viết công thức dạng chữ thuần túy."
+          : "- Tất cả biểu thức toán học PHẢI dùng LaTeX inline ($...$) hoặc display (\\[ ... \\]).\n"
+              + "- Danh sách bước/ý: dùng \\begin{itemize} \\item ... \\end{itemize}. KHÔNG dùng dấu gạch đầu dòng thủ công.\n"
+              + "- KHÔNG thêm ký tự \\ ở cuối dòng văn bản thường.\n"
+              + "- KHÔNG viết công thức dạng chữ thuần túy.";
+      case HYBRID -> jsonMode
+          ? "- Nội dung mô tả bằng tiếng Việt, công thức/ký hiệu toán dùng LaTeX inline ($...$).\n"
+              + "- Vì output là JSON string, PHẢI escape backslash: \\\\frac, \\\\sqrt, v.v.\n"
+              + "- KHÔNG thêm ký tự \\\\ ở cuối dòng văn bản thường."
+          : "- Nội dung mô tả bằng tiếng Việt, công thức/ký hiệu toán dùng LaTeX inline ($...$).\n"
+              + "- KHÔNG thêm ký tự \\ ở cuối dòng văn bản thường.";
       case PLAIN_TEXT ->
-          "- Dùng văn bản thuần như hiện tại, không bắt buộc LaTeX."
-              + "\\n- Nếu có công thức thì giữ ở dạng dễ đọc bằng chữ.";
+          "- Dùng văn bản thuần, không bắt buộc LaTeX.\n"
+              + "- Nếu có công thức thì giữ dạng dễ đọc bằng chữ.";
     };
   }
 
