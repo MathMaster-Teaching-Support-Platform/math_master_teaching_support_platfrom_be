@@ -41,6 +41,7 @@ import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import java.awt.Dimension;
 import java.time.Instant;
@@ -668,6 +669,37 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   @Override
   @Transactional
+  public void deleteGeneratedSlide(UUID generatedFileId) {
+    validateTeacherRole();
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+
+    // Soft-delete the DB record.
+    generatedFile.setDeletedAt(Instant.now());
+    lessonSlideGeneratedFileRepository.save(generatedFile);
+
+    // Best-effort deletion of the actual object from MinIO.
+    try {
+      minioClient.removeObject(
+          RemoveObjectArgs.builder()
+              .bucket(generatedFile.getBucketName())
+              .object(generatedFile.getObjectKey())
+              .build());
+    } catch (Exception ex) {
+      log.warn(
+          "Failed to remove MinIO object during slide deletion. bucket={}, key={}: {}",
+          generatedFile.getBucketName(),
+          generatedFile.getObjectKey(),
+          ex.getMessage());
+    }
+  }
+
+  @Override
+  @Transactional
   public LessonSlideGeneratedFileResponse updateGeneratedSlideMetadata(
       UUID generatedFileId, String name, MultipartFile thumbnailFile) {
     validateTeacherRole();
@@ -1136,21 +1168,55 @@ public class LessonSlideServiceImpl implements LessonSlideService {
    * Returns the text shape with the largest area that is likely the main content area.
    * Skips shapes that are probably title shapes (small height).
    */
+  // Placeholders that mark a shape as the main slide CONTENT area.
+  private static final List<String> CONTENT_PLACEHOLDER_KEYS = List.of(
+      "{{LESSON_CONTENT}}", "{{LESSON_SUMMARY}}", "{{SLIDE_CONTENT}}",
+      "{{LEARNING_OBJECTIVES}}", "{{ADDITIONAL_PROMPT}}");
+
+  /**
+   * Finds the best target shape for LATEX full-image injection.
+   *
+   * <p>Priority:
+   * <ol>
+   *   <li>A shape whose text contains a recognised content placeholder tag
+   *       ({@code {{LESSON_CONTENT}}}, {@code {{LESSON_SUMMARY}}}, etc.).
+   *   <li>Fallback: the text shape with the largest area that does NOT contain
+   *       {@code {{LESSON_TITLE}}} — so title shapes are never hijacked as content areas.
+   * </ol>
+   */
   private XSLFTextShape findLargestTextShape(XSLFSlide slide) {
-    XSLFTextShape best = null;
+    XSLFTextShape contentTagged = null;
+    XSLFTextShape largest = null;
     double bestArea = 0;
+
     for (XSLFShape shape : slide.getShapes()) {
-      if (shape instanceof XSLFTextShape ts) {
-        Rectangle2D anchor = ts.getAnchor();
-        if (anchor == null) continue;
+      if (!(shape instanceof XSLFTextShape ts)) continue;
+      Rectangle2D anchor = ts.getAnchor();
+      if (anchor == null) continue;
+
+      String text = safe(ts.getText());
+
+      // Prefer a shape explicitly tagged as a content area.
+      if (contentTagged == null) {
+        for (String key : CONTENT_PLACEHOLDER_KEYS) {
+          if (text.contains(key)) {
+            contentTagged = ts;
+            break;
+          }
+        }
+      }
+
+      // Track largest non-title shape as fallback.
+      if (!text.contains("{{LESSON_TITLE}}")) {
         double area = anchor.getWidth() * anchor.getHeight();
         if (area > bestArea) {
           bestArea = area;
-          best = ts;
+          largest = ts;
         }
       }
     }
-    return best;
+
+    return contentTagged != null ? contentTagged : largest;
   }
 
   /**

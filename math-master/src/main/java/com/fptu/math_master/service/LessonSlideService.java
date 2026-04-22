@@ -78,6 +78,8 @@ public interface LessonSlideService {
 
     BinaryFileData downloadPublicGeneratedSlide(UUID generatedFileId);
 
+    void deleteGeneratedSlide(UUID generatedFileId);
+
     BinaryFileData getPublicGeneratedSlidePreviewPdf(UUID generatedFileId);
 
     String getPublicGeneratedSlidePreviewUrl(UUID generatedFileId);
