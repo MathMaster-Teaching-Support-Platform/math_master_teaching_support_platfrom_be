@@ -20,10 +20,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.fptu.math_master.component.StreamPublisher;
 import com.fptu.math_master.configuration.properties.CentrifugoProperties;
+import com.fptu.math_master.dto.request.FcmTokenRequest;
 import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.dto.response.NotificationResponse;
 import com.fptu.math_master.service.CentrifugoService;
 import com.fptu.math_master.service.NotificationService;
+import com.fptu.math_master.service.PushNotificationService;
+
+import jakarta.validation.Valid;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,6 +40,7 @@ public class NotificationController {
     private final CentrifugoService centrifugoService;
     private final NotificationService notificationService;
     private final CentrifugoProperties centrifugoProperties;
+    private final PushNotificationService pushNotificationService;
 
     @GetMapping("/token")
     @PreAuthorize("isAuthenticated()")
@@ -80,6 +85,26 @@ public class NotificationController {
 
         long count = notificationService.getUnreadCount(userId);
         return ResponseEntity.ok(Map.of("unreadCount", count));
+    }
+
+    @PostMapping("/push-token/register")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> registerPushToken(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody FcmTokenRequest request) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        pushNotificationService.registerToken(userId, request.getToken(), request.getDeviceInfo());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/push-token/unregister")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> unregisterPushToken(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody FcmTokenRequest request) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        pushNotificationService.unregisterToken(userId, request.getToken());
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/send")

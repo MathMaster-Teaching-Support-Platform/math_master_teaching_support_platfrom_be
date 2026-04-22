@@ -5,7 +5,7 @@ import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.entity.Notification;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.repository.NotificationRepository;
-import com.fptu.math_master.service.CentrifugoService;
+import com.fptu.math_master.service.PushNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.stream.MapRecord;
@@ -14,7 +14,6 @@ import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -23,7 +22,7 @@ import java.util.UUID;
 public class StreamConsumerListener implements StreamListener<String, MapRecord<String, String, String>> {
 
     private final ObjectMapper objectMapper;
-    private final CentrifugoService centrifugoService;
+    private final PushNotificationService pushNotificationService;
     private final RedisTemplate<String, Object> redisTemplate;
     private final NotificationRepository notificationRepository;
 
@@ -67,18 +66,8 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
                 log.info("Notification saved to DB for user: {}", recipientIdStr);
             }
 
-            // 2. Forward to Centrifugo
-            Map<String, Object> data = objectMapper.convertValue(notificationMessage, Map.class);
-            String channel;
-            if (recipientIdStr == null || recipientIdStr.isEmpty()) {
-                channel = "notifications:public";
-            } else if (recipientIdStr.equals("ALL")) {
-                channel = "notifications:all";
-            } else {
-                channel = "notifications:user:" + recipientIdStr;
-            }
-
-            centrifugoService.publishToChannel(channel, data);
+            // 2. Forward to FCM Push Service
+            pushNotificationService.sendNotification(notificationMessage);
 
             // 3. ACK on success
             redisTemplate.opsForStream().acknowledge(STREAM_KEY, GROUP_NAME, record.getId());

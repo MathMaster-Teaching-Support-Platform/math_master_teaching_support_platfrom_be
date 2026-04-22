@@ -101,6 +101,12 @@ centrifugo:
   ws-url: ${CENTRIFUGO_WS_URL:ws://localhost:8000/connection/websocket}
   token-ttl-hours: ${CENTRIFUGO_TOKEN_TTL_HOURS:1}
 
+firebase:
+  enabled: ${FIREBASE_ENABLED:false}
+  service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:}
+  service-account-json: ${FIREBASE_SERVICE_ACCOUNT_JSON:}
+  project-id: ${FIREBASE_PROJECT_ID:}
+
 gemini:
   api-key: ${GEMINI_API_KEY:AIzaSyC80Q3fDX-n3-XmcT04KbWI5B72RZwiWWc}
   model: ${GEMINI_MODEL:gemini-2.5-flash}
