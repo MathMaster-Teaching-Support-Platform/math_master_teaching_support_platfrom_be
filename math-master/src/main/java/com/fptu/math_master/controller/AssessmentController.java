@@ -1,6 +1,9 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
+import com.fptu.math_master.dto.request.AutoDistributePointsRequest;
+import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
+import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
@@ -452,6 +455,50 @@ public class AssessmentController {
     return ApiResponse.<Void>builder()
         .code(1000)
         .message("Unlinked assessment from lesson successfully")
+        .build();
+  }
+
+  // ─────────────────────────────── Batch endpoints ───────────────────────────────
+
+  @PostMapping("/{id}/questions/batch")
+  @Operation(summary = "Batch add questions to assessment", description = "Add multiple questions by ID at once. Duplicates are silently skipped.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<List<AssessmentQuestionResponse>> batchAddQuestions(
+      @PathVariable UUID id,
+      @Valid @org.springframework.web.bind.annotation.RequestBody BatchAddQuestionsRequest request) {
+    log.info("POST /api/v1/assessments/{}/questions/batch size={}", id, request.getQuestionIds().size());
+    return ApiResponse.<List<AssessmentQuestionResponse>>builder()
+        .code(1000)
+        .message("Questions added successfully")
+        .result(assessmentService.batchAddQuestions(id, request))
+        .build();
+  }
+
+  @org.springframework.web.bind.annotation.PutMapping("/{id}/questions/points")
+  @Operation(summary = "Batch update question points", description = "Update points for multiple questions in one transactional request.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<List<AssessmentQuestionResponse>> batchUpdatePoints(
+      @PathVariable UUID id,
+      @Valid @org.springframework.web.bind.annotation.RequestBody BatchUpdatePointsRequest request) {
+    log.info("PUT /api/v1/assessments/{}/questions/points", id);
+    return ApiResponse.<List<AssessmentQuestionResponse>>builder()
+        .code(1000)
+        .message("Points updated successfully")
+        .result(assessmentService.batchUpdatePoints(id, request))
+        .build();
+  }
+
+  @PostMapping("/{id}/auto-distribute")
+  @Operation(summary = "Auto-distribute total points", description = "Distribute totalPoints across all questions based on cognitive-level percentages.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<List<AssessmentQuestionResponse>> autoDistributePoints(
+      @PathVariable UUID id,
+      @Valid @org.springframework.web.bind.annotation.RequestBody AutoDistributePointsRequest request) {
+    log.info("POST /api/v1/assessments/{}/auto-distribute", id);
+    return ApiResponse.<List<AssessmentQuestionResponse>>builder()
+        .code(1000)
+        .message("Points distributed successfully")
+        .result(assessmentService.autoDistributePoints(id, request))
         .build();
   }
 }

@@ -179,8 +179,8 @@ public class QuestionController {
   @PostMapping("/search")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
-      summary = "Search questions",
-      description = "Search questions with filters (search term, type)")
+      summary = "Search questions (legacy)",
+      description = "Search questions with filters (search term, type). Use GET /questions/search for new flow.")
   public ApiResponse<Page<QuestionResponse>> searchQuestions(
       @Parameter(description = "Search term") @RequestParam(required = false) String search,
       @Parameter(description = "Question type filter") @RequestParam(required = false) String type,
@@ -197,6 +197,27 @@ public class QuestionController {
     return ApiResponse.<Page<QuestionResponse>>builder()
         .message("Questions found successfully")
         .result(questionService.searchQuestions(search, type, pageable))
+        .build();
+  }
+
+  @GetMapping("/search")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Search questions by keyword and tags",
+      description =
+          "Full-text search on question content (keyword) with optional multi-tag filter. "
+              + "tags param accepts multiple values (e.g. ?tags=TH&tags=VD). Supports pagination.")
+  public ApiResponse<Page<QuestionResponse>> searchByKeywordAndTags(
+      @Parameter(description = "Keyword to search in question text") @RequestParam(required = false) String keyword,
+      @Parameter(description = "Tag filter (multi-value)") @RequestParam(required = false) List<String> tags,
+      @Parameter(description = "Page number (0-indexed)") @RequestParam(defaultValue = "0") int page,
+      @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
+
+    log.info("REST request to search questions by keyword={} tags={}", keyword, tags);
+    Pageable pageable = PageRequest.of(page, size);
+    return ApiResponse.<Page<QuestionResponse>>builder()
+        .message("Questions found successfully")
+        .result(questionService.searchByKeywordAndTags(keyword, tags, pageable))
         .build();
   }
 

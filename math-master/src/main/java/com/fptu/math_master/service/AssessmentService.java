@@ -1,5 +1,8 @@
 package com.fptu.math_master.service;
 
+import com.fptu.math_master.dto.request.AutoDistributePointsRequest;
+import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
+import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
@@ -111,4 +114,19 @@ public interface AssessmentService {
    * @param lessonId Lesson ID
    */
   void unlinkAssessmentFromLesson(UUID assessmentId, UUID lessonId);
+
+  /** Batch add questions to a direct assessment (no exam matrix). Skips duplicates. */
+  List<AssessmentQuestionResponse> batchAddQuestions(
+      UUID assessmentId, BatchAddQuestionsRequest request);
+
+  /** Batch update points for questions in an assessment. Transactional. */
+  List<AssessmentQuestionResponse> batchUpdatePoints(
+      UUID assessmentId, BatchUpdatePointsRequest request);
+
+  /**
+   * Auto-distribute total points across questions by cognitive level percentages.
+   * Questions not matching any distribution key are split evenly from remaining points.
+   */
+  List<AssessmentQuestionResponse> autoDistributePoints(
+      UUID assessmentId, AutoDistributePointsRequest request);
 }

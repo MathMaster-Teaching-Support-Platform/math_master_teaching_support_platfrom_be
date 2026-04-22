@@ -62,9 +62,15 @@ public interface QuestionService {
   ImportQuestionsResponse importQuestionsFromFile(ImportQuestionsRequest request);
 
   /**
-   * Search questions
+   * Search questions (legacy - by searchTerm + type)
    */
   Page<QuestionResponse> searchQuestions(String searchTerm, String type, Pageable pageable);
+
+  /**
+   * Search questions by keyword (full-text) and/or multiple tags (IN filter).
+   * Supports pagination. Used by the new GET /questions/search endpoint.
+   */
+  Page<QuestionResponse> searchByKeywordAndTags(String keyword, List<String> tags, Pageable pageable);
 
   /**
    * Assign multiple existing questions into one question bank

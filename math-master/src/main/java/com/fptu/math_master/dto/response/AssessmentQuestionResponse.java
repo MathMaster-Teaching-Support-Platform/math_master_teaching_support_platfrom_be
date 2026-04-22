@@ -1,5 +1,6 @@
 package com.fptu.math_master.dto.response;
 
+import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -18,12 +19,14 @@ public class AssessmentQuestionResponse {
 
   private UUID questionId;
   private Integer orderIndex;
+  /** Final effective points (pointsOverride if set, otherwise question.points). */
   private BigDecimal points;
-  private BigDecimal pointsOverride;
   private QuestionType questionType;
   private String questionText;
   private Map<String, Object> options;
   private String correctAnswer;
   private String explanation;
+  private String[] tags;
+  private CognitiveLevel cognitiveLevel;
   private Instant createdAt;
 }

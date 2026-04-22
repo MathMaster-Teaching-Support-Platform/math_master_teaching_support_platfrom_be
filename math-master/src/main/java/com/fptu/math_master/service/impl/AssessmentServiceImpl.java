@@ -2,6 +2,9 @@ package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
+import com.fptu.math_master.dto.request.AutoDistributePointsRequest;
+import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
+import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
@@ -638,12 +641,13 @@ public class AssessmentServiceImpl implements AssessmentService {
                   .questionId(question.getId())
                   .orderIndex(aq.getOrderIndex())
                   .points(effectivePoints)
-                  .pointsOverride(aq.getPointsOverride())
                   .questionType(question.getQuestionType())
                   .questionText(question.getQuestionText())
                   .options(question.getOptions())
                   .correctAnswer(question.getCorrectAnswer())
                   .explanation(question.getExplanation())
+                  .tags(question.getTags())
+                  .cognitiveLevel(question.getCognitiveLevel())
                   .createdAt(question.getCreatedAt())
                   .build();
             })
@@ -1336,5 +1340,163 @@ public class AssessmentServiceImpl implements AssessmentService {
         .forEach(assessmentLessonRepository::delete);
 
     log.info("Unlinked assessment {} from lesson {} by user {}", assessmentId, lessonId, currentUserId);
+  }
+
+  // ─────────────────────────────── Batch operations ───────────────────────────────
+
+  @Override
+  @Transactional
+  public List<AssessmentQuestionResponse> batchAddQuestions(
+      UUID assessmentId, BatchAddQuestionsRequest request) {
+    log.info("Batch-adding {} questions to assessment {}", request.getQuestionIds().size(), assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() != AssessmentStatus.DRAFT) {
+      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
+    }
+    if (assessment.getExamMatrixId() != null) {
+      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
+    }
+
+    for (UUID questionId : request.getQuestionIds()) {
+      questionRepository
+          .findByIdAndNotDeleted(questionId)
+          .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+      boolean isDuplicate =
+          assessmentQuestionRepository.findByAssessmentIdAndQuestionId(assessmentId, questionId).isPresent();
+      if (isDuplicate) {
+        log.debug("Question {} already in assessment {}, skipping", questionId, assessmentId);
+        continue;
+      }
+
+      Integer maxOrder = assessmentQuestionRepository.findMaxOrderIndex(assessmentId);
+      int nextOrder = (maxOrder != null ? maxOrder : 0) + 1;
+
+      AssessmentQuestion aq =
+          AssessmentQuestion.builder()
+              .assessmentId(assessmentId)
+              .questionId(questionId)
+              .orderIndex(nextOrder)
+              .build();
+      assessmentQuestionRepository.save(aq);
+    }
+
+    return getAssessmentQuestions(assessmentId);
+  }
+
+  @Override
+  @Transactional
+  public List<AssessmentQuestionResponse> batchUpdatePoints(
+      UUID assessmentId, BatchUpdatePointsRequest request) {
+    log.info("Batch-updating points for {} questions in assessment {}", request.getQuestions().size(), assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
+    }
+
+    List<AssessmentQuestion> toSave = new java.util.ArrayList<>();
+    for (BatchUpdatePointsRequest.QuestionPointItem item : request.getQuestions()) {
+      AssessmentQuestion aq =
+          assessmentQuestionRepository
+              .findByAssessmentIdAndQuestionId(assessmentId, item.getId())
+              .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_QUESTION_NOT_FOUND));
+      aq.setPointsOverride(item.getPoint());
+      toSave.add(aq);
+    }
+    assessmentQuestionRepository.saveAll(toSave);
+
+    return getAssessmentQuestions(assessmentId);
+  }
+
+  @Override
+  @Transactional
+  public List<AssessmentQuestionResponse> autoDistributePoints(
+      UUID assessmentId, AutoDistributePointsRequest request) {
+    log.info("Auto-distributing {} total points for assessment {}", request.getTotalPoints(), assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
+    }
+
+    List<AssessmentQuestion> allAQs =
+        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessmentId);
+    if (allAQs.isEmpty()) {
+      return java.util.Collections.emptyList();
+    }
+
+    java.math.BigDecimal totalPoints = request.getTotalPoints();
+    java.util.Map<String, Integer> distribution =
+        (request.getDistribution() != null) ? request.getDistribution() : java.util.Collections.emptyMap();
+
+    // Group AssessmentQuestion by cognitiveLevel of underlying question
+    java.util.Map<String, List<AssessmentQuestion>> byLevel = new java.util.LinkedHashMap<>();
+    List<AssessmentQuestion> unmatched = new java.util.ArrayList<>();
+
+    for (AssessmentQuestion aq : allAQs) {
+      Question q =
+          questionRepository
+              .findByIdAndNotDeleted(aq.getQuestionId())
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+      String levelKey =
+          (q.getCognitiveLevel() != null) ? q.getCognitiveLevel().name() : null;
+      if (levelKey != null && distribution.containsKey(levelKey)) {
+        byLevel.computeIfAbsent(levelKey, k -> new java.util.ArrayList<>()).add(aq);
+      } else {
+        unmatched.add(aq);
+      }
+    }
+
+    // Calculate total allocated percentage
+    int allocatedPct = distribution.values().stream().mapToInt(Integer::intValue).sum();
+    int remainingPct = Math.max(0, 100 - allocatedPct);
+
+    List<AssessmentQuestion> toSave = new java.util.ArrayList<>();
+
+    for (java.util.Map.Entry<String, Integer> entry : distribution.entrySet()) {
+      List<AssessmentQuestion> group = byLevel.getOrDefault(entry.getKey(), java.util.Collections.emptyList());
+      if (group.isEmpty()) continue;
+      java.math.BigDecimal groupPoints =
+          totalPoints.multiply(java.math.BigDecimal.valueOf(entry.getValue()))
+              .divide(java.math.BigDecimal.valueOf(100), 10, java.math.RoundingMode.HALF_UP);
+      java.math.BigDecimal perQuestion =
+          groupPoints.divide(java.math.BigDecimal.valueOf(group.size()), 2, java.math.RoundingMode.HALF_UP);
+      for (AssessmentQuestion aq : group) {
+        aq.setPointsOverride(perQuestion);
+        toSave.add(aq);
+      }
+    }
+
+    // Distribute remaining points to unmatched questions
+    if (!unmatched.isEmpty() && remainingPct > 0) {
+      java.math.BigDecimal remainingPoints =
+          totalPoints.multiply(java.math.BigDecimal.valueOf(remainingPct))
+              .divide(java.math.BigDecimal.valueOf(100), 10, java.math.RoundingMode.HALF_UP);
+      java.math.BigDecimal perQuestion =
+          remainingPoints.divide(java.math.BigDecimal.valueOf(unmatched.size()), 2, java.math.RoundingMode.HALF_UP);
+      for (AssessmentQuestion aq : unmatched) {
+        aq.setPointsOverride(perQuestion);
+        toSave.add(aq);
+      }
+    } else if (!unmatched.isEmpty()) {
+      // No percentage reserved — split totalPoints equally among unmatched
+      java.math.BigDecimal perQuestion =
+          totalPoints.divide(java.math.BigDecimal.valueOf(allAQs.size()), 2, java.math.RoundingMode.HALF_UP);
+      for (AssessmentQuestion aq : unmatched) {
+        aq.setPointsOverride(perQuestion);
+        toSave.add(aq);
+      }
+    }
+
+    assessmentQuestionRepository.saveAll(toSave);
+    return getAssessmentQuestions(assessmentId);
   }
 }
