@@ -861,12 +861,25 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     return normalizeEscapedLineBreaks(replaced);
   }
 
-  /** Replaces all placeholder tags in every text shape of a slide. */
+  /** Replaces placeholder tags in every text shape of a slide. */
   private void replacePlaceholdersInSlide(
       XMLSlideShow slideshow, XSLFSlide slide, Map<String, String> values) {
+    replacePlaceholdersInSlideExcept(slideshow, slide, values, null);
+  }
+
+  /**
+   * Replaces placeholder tags in every text shape of a slide, skipping {@code excludeShape}.
+   * Pass {@code null} for {@code excludeShape} to process all shapes.
+   */
+  private void replacePlaceholdersInSlideExcept(
+      XMLSlideShow slideshow,
+      XSLFSlide slide,
+      Map<String, String> values,
+      XSLFTextShape excludeShape) {
     List<XSLFShape> shapesSnapshot = new ArrayList<>(slide.getShapes());
     for (XSLFShape shape : shapesSnapshot) {
       if (shape instanceof XSLFTextShape textShape) {
+        if (textShape == excludeShape) continue;
         String text = textShape.getText();
         if (text == null || text.isBlank()) continue;
         String replaced = replacePlaceholders(text, values);
@@ -1030,16 +1043,21 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         XSLFSlide slide = slideshow.getSlides().get(i);
         LessonSlideJsonItemRequest item = slides.get(i);
 
-        // Step 1: Always replace all placeholder tags in every shape of the slide.
-        // This ensures {{LESSON_SUMMARY}}, {{SLIDE_CONTENT}}, etc. are substituted
-        // regardless of output format.
         Map<String, String> slideValues = buildJsonSlidePlaceholders(item, lesson);
-        replacePlaceholdersInSlide(slideshow, slide, slideValues);
 
-        // Step 2: For LATEX mode, additionally render the heading+content as a PNG image
-        // and inject it over the main content area.
         if (useFullLatexImage) {
+          // Step 1 (LATEX): Replace placeholders only on title/decoration shapes.
+          // The main content shape is intentionally skipped here — step 2 will render
+          // heading+content as a full PNG and inject it, so we must NOT pre-fill that
+          // shape with text (which would cause text and image to appear simultaneously).
+          XSLFTextShape contentShape = findLargestTextShape(slide);
+          replacePlaceholdersInSlideExcept(slideshow, slide, slideValues, contentShape);
+
+          // Step 2 (LATEX): Render entire content as one PNG image and inject it.
           applySlideAsFullLatexImage(slideshow, slide, item);
+        } else {
+          // PLAIN_TEXT / HYBRID: replace all placeholder tags in every shape.
+          replacePlaceholdersInSlide(slideshow, slide, slideValues);
         }
       }
 
