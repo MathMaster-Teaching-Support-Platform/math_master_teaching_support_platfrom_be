@@ -133,6 +133,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   private static final String QUICKLATEX_PREAMBLE =
       "\\usepackage[utf8]{inputenc}\n"
+          + "\\usepackage[T1]{fontenc}\n"
+          + "\\usepackage{lmodern}\n"
           + "\\usepackage{tikz}\n"
           + "\\usepackage{pgfplots}\n"
           + "\\usepackage{tkz-euclide}\n"
@@ -1631,6 +1633,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     String previewImageUrl = null;
     if (outputFormat == LessonSlideOutputFormat.LATEX) {
       previewImageUrl = renderSlidePreviewUrl(normalizedHeading, normalizedContent);
+      if (previewImageUrl != null) {
+        log.info("Slide {} ({}) preview URL generated: {}", slideNumber, slideType, previewImageUrl);
+      } else {
+        log.warn("Slide {} ({}) preview URL is NULL — QuickLaTeX render failed", slideNumber, slideType);
+      }
     }
 
     return LessonSlideJsonItemResponse.builder()
