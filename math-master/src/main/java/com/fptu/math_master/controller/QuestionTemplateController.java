@@ -201,21 +201,6 @@ public class QuestionTemplateController {
         .build();
   }
 
-  @PatchMapping("/{id}/unpublish")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Unpublish Question Template",
-      description =
-          "Revert a PUBLISHED or ARCHIVED template back to DRAFT status. "
-              + "Useful when edits are needed after publishing.")
-  public ApiResponse<QuestionTemplateResponse> unpublishTemplate(@PathVariable UUID id) {
-    log.info("REST request to unpublish template: {}", id);
-    return ApiResponse.<QuestionTemplateResponse>builder()
-        .message("Template reverted to draft successfully")
-        .result(questionTemplateService.unpublishTemplate(id))
-        .build();
-  }
-
   @PatchMapping("/{id}/archive")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
@@ -372,26 +357,4 @@ public class QuestionTemplateController {
         .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
         .body(excelBytes);
   }
-
-  @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Import Question Templates from Excel (Simplified)",
-      description =
-          "Upload Excel file (.xlsx) to batch-create question templates. "
-              + "Column format: title | content | answer | level | param_json. "
-              + "Each row becomes one DRAFT template. Returns success/failure summary.")
-  public ApiResponse<TemplateBatchImportResponse> importFromExcel(
-      @RequestParam("file") MultipartFile file) {
-    log.info("REST request to import templates from Excel (simple): {}", file.getOriginalFilename());
-    TemplateBatchImportResponse response = excelImportService.importFromExcel(file);
-    String message = String.format(
-        "Import hoàn tất: %d thành công, %d thất bại (tổng %d dòng)",
-        response.getSuccessCount(), response.getFailedCount(), response.getTotalRows());
-    return ApiResponse.<TemplateBatchImportResponse>builder()
-        .message(message)
-        .result(response)
-        .build();
-  }
 }
-

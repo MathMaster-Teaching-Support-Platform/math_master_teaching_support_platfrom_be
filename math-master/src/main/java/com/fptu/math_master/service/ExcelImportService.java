@@ -29,14 +29,4 @@ public interface ExcelImportService {
    * @return Excel file as byte array
    */
   byte[] generateExcelTemplate();
-
-  /**
-   * Simple Excel import using new simplified column format:
-   * title | content | answer | level | param_json
-   * Each row becomes one QuestionTemplate (DRAFT status).
-   *
-   * @param file Excel file (.xlsx)
-   * @return Import result with success/failure counts and error details
-   */
-  TemplateBatchImportResponse importFromExcel(MultipartFile file);
 }

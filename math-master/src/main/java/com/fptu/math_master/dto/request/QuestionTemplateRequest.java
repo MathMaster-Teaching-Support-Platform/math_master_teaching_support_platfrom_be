@@ -25,30 +25,23 @@ public class QuestionTemplateRequest {
 
   private String description;
 
+  @NotNull(message = "Template type is required")
   private QuestionType templateType;
 
-  /**
-   * Simplified question content with {{param}} placeholders.
-   * Example: "Giải phương trình {{a}}x + {{b}} = 0"
-   */
-  private String content;
-
-  /**
-   * Legacy multi-language map. If content is provided, templateText is ignored.
-   */
+  @NotNull(message = "Template text is required")
   private Map<String, Object> templateText;
 
-  /** Parameter definitions. May be empty for simple templates. */
+  @NotNull(message = "Parameters are required")
   private Map<String, Object> parameters;
 
-  /** Answer formula using parameter names. Example: "(-b)/a" */
+  @NotBlank(message = "Answer formula is required")
   private String answerFormula;
 
-  /**
-   * Step-by-step solution explanation.
-   * Example: "Chuyển vế: {{a}}x = -{{b}}, chia hai vế: x = -{{b}}/{{a}}"
-   */
-  private String solution;
+  private String diagramTemplate;
+
+  private Map<String, Object> optionsGenerator;
+
+  private String[] constraints;
 
   @NotNull(message = "Cognitive level is required")
   private CognitiveLevel cognitiveLevel;

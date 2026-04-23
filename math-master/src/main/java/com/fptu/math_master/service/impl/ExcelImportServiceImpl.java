@@ -21,7 +21,6 @@ import jakarta.validation.Validator;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -209,6 +208,8 @@ public class ExcelImportServiceImpl implements ExcelImportService {
     String templateTextVi = getCellValueAsString(row, COLUMN_MAPPING.get("templateText_vi"));
     String parametersJson = getCellValueAsString(row, COLUMN_MAPPING.get("parameters"));
     String answerFormula = getCellValueAsString(row, COLUMN_MAPPING.get("answerFormula"));
+    String diagramTemplate = getCellValueAsString(row, COLUMN_MAPPING.get("diagramTemplate"));
+    String optionsJson = getCellValueAsString(row, COLUMN_MAPPING.get("options"));
     String cognitiveLevelStr = getCellValueAsString(row, COLUMN_MAPPING.get("cognitiveLevel"));
     String tagsStr = getCellValueAsString(row, COLUMN_MAPPING.get("tags"));
     String isPublicStr = getCellValueAsString(row, COLUMN_MAPPING.get("isPublic"));
@@ -233,11 +234,10 @@ public class ExcelImportServiceImpl implements ExcelImportService {
       }
     }
 
-    // Parse templateText (kept for backward compat) and use as content
-    String content = (templateTextVi != null && !templateTextVi.isBlank()) ? templateTextVi.trim() : null;
+    // Parse templateText
     Map<String, Object> templateText = new HashMap<>();
-    if (content != null) {
-      templateText.put("vi", content);
+    if (templateTextVi != null && !templateTextVi.isBlank()) {
+      templateText.put("vi", templateTextVi);
     }
 
     // Parse parameters JSON
@@ -247,6 +247,16 @@ public class ExcelImportServiceImpl implements ExcelImportService {
         parameters = objectMapper.readValue(parametersJson, new TypeReference<>() {});
       } catch (Exception e) {
         throw new Exception("Invalid parameters JSON: " + e.getMessage());
+      }
+    }
+
+    // Parse options JSON
+    Map<String, Object> optionsGenerator = null;
+    if (optionsJson != null && !optionsJson.isBlank()) {
+      try {
+        optionsGenerator = objectMapper.readValue(optionsJson, new TypeReference<>() {});
+      } catch (Exception e) {
+        throw new Exception("Invalid options JSON: " + e.getMessage());
       }
     }
 
@@ -272,10 +282,11 @@ public class ExcelImportServiceImpl implements ExcelImportService {
         .name(name)
         .description(description)
         .templateType(templateType)
-        .content(content)
         .templateText(templateText)
         .parameters(parameters)
         .answerFormula(answerFormula)
+        .diagramTemplate(diagramTemplate)
+        .optionsGenerator(optionsGenerator)
         .cognitiveLevel(cognitiveLevel)
         .tags(tags)
         .isPublic(isPublic)
@@ -311,10 +322,12 @@ public class ExcelImportServiceImpl implements ExcelImportService {
     }
 
     // Additional custom validations
-    boolean hasContent = request.getContent() != null && !request.getContent().isBlank();
-    boolean hasTemplateText = request.getTemplateText() != null && !request.getTemplateText().isEmpty();
-    if (!hasContent && !hasTemplateText) {
-      errors.add("content/templateText: Template content is required");
+    if (request.getTemplateText() == null || request.getTemplateText().isEmpty()) {
+      errors.add("templateText: Template text is required");
+    }
+
+    if (request.getParameters() == null || request.getParameters().isEmpty()) {
+      errors.add("parameters: Parameters are required");
     }
 
     return errors;
@@ -328,12 +341,13 @@ public class ExcelImportServiceImpl implements ExcelImportService {
             .canonicalQuestionId(request.getCanonicalQuestionId())
             .name(request.getName())
             .description(request.getDescription())
-            .templateType(request.getTemplateType() != null ? request.getTemplateType() : com.fptu.math_master.enums.QuestionType.MULTIPLE_CHOICE)
-            .content(request.getContent())
+            .templateType(request.getTemplateType())
             .templateText(request.getTemplateText())
-            .parameters(request.getParameters() != null ? request.getParameters() : Collections.emptyMap())
+            .parameters(request.getParameters())
             .answerFormula(request.getAnswerFormula())
-            .solution(request.getSolution())
+            .diagramTemplate(request.getDiagramTemplate())
+            .optionsGenerator(request.getOptionsGenerator())
+            .constraints(request.getConstraints())
             .cognitiveLevel(request.getCognitiveLevel())
             .tags(request.getTags())
             .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
@@ -345,21 +359,17 @@ public class ExcelImportServiceImpl implements ExcelImportService {
   }
 
   private QuestionTemplateResponse mapToResponse(QuestionTemplate template) {
-    String displayContent = template.getContent();
-    if ((displayContent == null || displayContent.isBlank()) && template.getTemplateText() != null) {
-      Object vi = template.getTemplateText().get("vi");
-      if (vi instanceof String s) displayContent = s;
-    }
     return QuestionTemplateResponse.builder()
         .id(template.getId())
         .name(template.getName())
         .description(template.getDescription())
         .templateType(template.getTemplateType())
-        .content(displayContent)
         .templateText(template.getTemplateText())
         .parameters(template.getParameters())
         .answerFormula(template.getAnswerFormula())
-        .solution(template.getSolution())
+        .diagramTemplate(template.getDiagramTemplate())
+        .optionsGenerator(template.getOptionsGenerator())
+        .constraints(template.getConstraints())
         .cognitiveLevel(template.getCognitiveLevel())
         .tags(template.getTags())
         .isPublic(template.getIsPublic())
@@ -457,171 +467,4 @@ public class ExcelImportServiceImpl implements ExcelImportService {
       throw new AppException(ErrorCode.INVALID_KEY);
     }
   }
-
-  /**
-   * Column format (0-indexed):
-   *   0: title    – required
-   *   1: content  – required, may contain {{param}} placeholders
-   *   2: answer   – required, answer formula
-   *   3: level    – required, one of NHAN_BIET / THONG_HIEU / VAN_DUNG / VAN_DUNG_CAO
-   *   4: param_json – optional, JSON object e.g. {"a":{"type":"int","min":1,"max":10}}
-   */
-  @Override
-  @Transactional
-  public TemplateBatchImportResponse importFromExcel(MultipartFile file) {
-    log.info("Simple Excel import: {}", file.getOriginalFilename());
-
-    if (file == null || file.isEmpty()) {
-      throw new AppException(ErrorCode.INVALID_KEY);
-    }
-
-    UUID currentUserId = SecurityUtils.getCurrentUserId();
-
-    List<QuestionTemplate> toSave = new ArrayList<>();
-    List<TemplateBatchImportResponse.ImportErrorDetail> errors = new ArrayList<>();
-    int totalRows = 0;
-
-    try (InputStream is = file.getInputStream();
-        Workbook workbook = new XSSFWorkbook(is)) {
-
-      Sheet sheet = workbook.getSheetAt(0);
-
-      for (Row row : sheet) {
-        if (row.getRowNum() == HEADER_ROW) continue; // skip header
-
-        // Skip blank rows
-        boolean allBlank = true;
-        for (int c = 0; c <= 4; c++) {
-          Cell cell = row.getCell(c);
-          if (cell != null && cell.getCellType() != CellType.BLANK) {
-            allBlank = false;
-            break;
-          }
-        }
-        if (allBlank) continue;
-
-        totalRows++;
-        int rowNum = row.getRowNum() + 1; // 1-based for error reporting
-
-        String title   = getCellStringValue(row, 0);
-        String content = getCellStringValue(row, 1);
-        String answer  = getCellStringValue(row, 2);
-        String levelStr = getCellStringValue(row, 3);
-        String paramJson = getCellStringValue(row, 4);
-
-        // Validate required fields
-        if (title == null || title.isBlank()) {
-          errors.add(TemplateBatchImportResponse.ImportErrorDetail.builder()
-              .rowNumber(rowNum).field("title").message("Tiêu đề (cột 1) không được để trống").build());
-          continue;
-        }
-        if (content == null || content.isBlank()) {
-          errors.add(TemplateBatchImportResponse.ImportErrorDetail.builder()
-              .rowNumber(rowNum).rowName(title).field("content").message("Nội dung (cột 2) không được để trống").build());
-          continue;
-        }
-        if (answer == null || answer.isBlank()) {
-          errors.add(TemplateBatchImportResponse.ImportErrorDetail.builder()
-              .rowNumber(rowNum).rowName(title).field("answer").message("Đáp án (cột 3) không được để trống").build());
-          continue;
-        }
-
-        // Parse cognitive level
-        CognitiveLevel cognitiveLevel;
-        try {
-          cognitiveLevel = CognitiveLevel.valueOf(levelStr == null ? "" : levelStr.trim().toUpperCase());
-        } catch (IllegalArgumentException e) {
-          errors.add(TemplateBatchImportResponse.ImportErrorDetail.builder()
-              .rowNumber(rowNum).rowName(title).field("level")
-              .message("Mức độ '" + levelStr + "' không hợp lệ. Dùng: NHAN_BIET / THONG_HIEU / VAN_DUNG / VAN_DUNG_CAO").build());
-          continue;
-        }
-
-        // Parse parameters JSON
-        Map<String, Object> parameters = new HashMap<>();
-        if (paramJson != null && !paramJson.isBlank()) {
-          try {
-            parameters = objectMapper.readValue(paramJson, new TypeReference<Map<String, Object>>() {});
-          } catch (Exception e) {
-            errors.add(TemplateBatchImportResponse.ImportErrorDetail.builder()
-                .rowNumber(rowNum).rowName(title).field("param_json")
-                .message("JSON tham số không hợp lệ: " + e.getMessage()).build());
-            continue;
-          }
-        }
-
-        // Build templateText for backward compat
-        Map<String, Object> templateText = new HashMap<>();
-        templateText.put("vi", content);
-
-        QuestionTemplate template = QuestionTemplate.builder()
-            .name(title)
-            .templateType(QuestionType.MULTIPLE_CHOICE)
-            .templateText(templateText)
-            .content(content)
-            .parameters(parameters)
-            .answerFormula(answer)
-            .cognitiveLevel(cognitiveLevel)
-            .tags(new String[]{"excel-import"})
-            .isPublic(false)
-            .status(TemplateStatus.DRAFT)
-            .usageCount(0)
-            .build();
-        template.setCreatedBy(currentUserId);
-
-        toSave.add(template);
-      }
-
-    } catch (Exception e) {
-      log.error("Failed to parse Excel file: {}", e.getMessage(), e);
-      throw new AppException(ErrorCode.INVALID_KEY);
-    }
-
-    List<QuestionTemplate> saved = questionTemplateRepository.saveAll(toSave);
-    List<QuestionTemplateResponse> successfulTemplates = saved.stream()
-        .map(this::mapTemplateToResponse)
-        .collect(java.util.stream.Collectors.toList());
-
-    log.info("Excel import complete: {} saved, {} errors (total rows: {})",
-        saved.size(), errors.size(), totalRows);
-
-    return TemplateBatchImportResponse.builder()
-        .totalRows(totalRows)
-        .successCount(saved.size())
-        .failedCount(errors.size())
-        .successfulTemplates(successfulTemplates)
-        .errors(errors)
-        .build();
-  }
-
-  private QuestionTemplateResponse mapTemplateToResponse(QuestionTemplate template) {
-    return QuestionTemplateResponse.builder()
-        .id(template.getId())
-        .createdBy(template.getCreatedBy())
-        .name(template.getName())
-        .content(template.getContent())
-        .templateType(template.getTemplateType())
-        .parameters(template.getParameters())
-        .answerFormula(template.getAnswerFormula())
-        .cognitiveLevel(template.getCognitiveLevel())
-        .tags(template.getTags())
-        .isPublic(template.getIsPublic())
-        .status(template.getStatus())
-        .usageCount(template.getUsageCount())
-        .createdAt(template.getCreatedAt())
-        .build();
-  }
-
-  private String getCellStringValue(Row row, int colIndex) {
-    Cell cell = row.getCell(colIndex);
-    if (cell == null) return null;
-    return switch (cell.getCellType()) {
-      case STRING -> cell.getStringCellValue().trim();
-      case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
-      case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
-      case FORMULA -> cell.getCellFormula();
-      default -> null;
-    };
-  }
 }
-

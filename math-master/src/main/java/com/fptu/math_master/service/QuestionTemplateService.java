@@ -76,9 +76,6 @@ public interface QuestionTemplateService {
   /** Promote a DRAFT template to PUBLISHED so it can be used for question generation. */
   QuestionTemplateResponse publishTemplate(UUID id);
 
-  /** Revert a PUBLISHED (or ARCHIVED) template back to DRAFT status. */
-  QuestionTemplateResponse unpublishTemplate(UUID id);
-
   /** Move a PUBLISHED template to ARCHIVED so it can no longer be used for generation. */
   QuestionTemplateResponse archiveTemplate(UUID id);
 }

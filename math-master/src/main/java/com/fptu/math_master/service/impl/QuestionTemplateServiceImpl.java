@@ -5,7 +5,6 @@ import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
 import com.fptu.math_master.dto.request.GenerateCanonicalQuestionsRequest;
 import com.fptu.math_master.dto.request.GenerateTemplateQuestionsRequest;
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
-import com.fptu.math_master.dto.request.UpdateQuestionTemplateRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.dto.response.AIGeneratedTemplatesResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionSample;
@@ -88,24 +87,19 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       throw new AppException(ErrorCode.INVALID_TEMPLATE_SYNTAX);
     }
 
-    // Resolve content: prefer the new simple `content` field; fall back to templateText.vi
-    String resolvedContent = resolveContent(request.getContent(), request.getTemplateText());
-
-    // Build templateText map for backward compat
-    Map<String, Object> resolvedTemplateText = resolveTemplateText(request.getContent(), request.getTemplateText());
-
     QuestionTemplate template =
         QuestionTemplate.builder()
             .questionBankId(bankId)
           .canonicalQuestionId(request.getCanonicalQuestionId())
             .name(request.getName())
             .description(request.getDescription())
-            .templateType(request.getTemplateType() != null ? request.getTemplateType() : com.fptu.math_master.enums.QuestionType.MULTIPLE_CHOICE)
-            .content(resolvedContent)
-            .templateText(resolvedTemplateText)
-            .parameters(request.getParameters() != null ? request.getParameters() : Collections.emptyMap())
+            .templateType(request.getTemplateType())
+            .templateText(request.getTemplateText())
+            .parameters(request.getParameters())
             .answerFormula(request.getAnswerFormula())
-            .solution(request.getSolution())
+          .diagramTemplate(request.getDiagramTemplate())
+            .optionsGenerator(request.getOptionsGenerator())
+            .constraints(request.getConstraints())
             .cognitiveLevel(request.getCognitiveLevel())
             .tags(request.getTags())
             .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
@@ -155,19 +149,15 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       throw new AppException(ErrorCode.INVALID_TEMPLATE_SYNTAX);
     }
 
-    String resolvedContent = resolveContent(request.getContent(), request.getTemplateText());
-    Map<String, Object> resolvedTemplateText = resolveTemplateText(request.getContent(), request.getTemplateText());
-
     template.setName(request.getName());
     template.setDescription(request.getDescription());
-    if (request.getTemplateType() != null) {
-      template.setTemplateType(request.getTemplateType());
-    }
-    template.setContent(resolvedContent);
-    template.setTemplateText(resolvedTemplateText);
-    template.setParameters(request.getParameters() != null ? request.getParameters() : Collections.emptyMap());
+    template.setTemplateType(request.getTemplateType());
+    template.setTemplateText(request.getTemplateText());
+    template.setParameters(request.getParameters());
     template.setAnswerFormula(request.getAnswerFormula());
-    template.setSolution(request.getSolution());
+    template.setDiagramTemplate(request.getDiagramTemplate());
+    template.setOptionsGenerator(request.getOptionsGenerator());
+    template.setConstraints(request.getConstraints());
     template.setCognitiveLevel(request.getCognitiveLevel());
     template.setTags(request.getTags());
     if (request.getIsPublic() != null) {
@@ -232,31 +222,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     template = questionTemplateRepository.save(template);
 
     log.info("Template {} published", id);
-    return mapToResponse(template);
-  }
-
-  @Override
-  @Transactional
-  public QuestionTemplateResponse unpublishTemplate(UUID id) {
-    log.info("Unpublishing template: {}", id);
-
-    QuestionTemplate template =
-        questionTemplateRepository
-            .findByIdWithCreator(id)
-            .filter(t -> t.getDeletedAt() == null)
-            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
-
-    UUID currentUserId = SecurityUtils.getCurrentUserId();
-    validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
-
-    if (template.getStatus() == TemplateStatus.DRAFT) {
-      throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
-    }
-
-    template.setStatus(TemplateStatus.DRAFT);
-    template = questionTemplateRepository.save(template);
-
-    log.info("Template {} reverted to DRAFT", id);
     return mapToResponse(template);
   }
 
@@ -903,14 +868,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   private List<String> validateTemplateSyntax(QuestionTemplateRequest request) {
     List<String> errors = new ArrayList<>();
 
-    // Prefer new `content` field; fall back to templateText map
-    String templateTextStr;
-    if (request.getContent() != null && !request.getContent().isBlank()) {
-      templateTextStr = request.getContent();
-    } else {
-      templateTextStr = request.getTemplateText() != null ? request.getTemplateText().toString() : "";
-    }
-
+    String templateTextStr =
+        request.getTemplateText() != null ? request.getTemplateText().toString() : "";
     Pattern pattern = Pattern.compile("\\{\\{(\\w+)}}");
     Matcher matcher = pattern.matcher(templateTextStr);
 
@@ -928,69 +887,9 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     }
 
     return errors;
-  }
-
-  private List<String> validateUpdateSyntax(UpdateQuestionTemplateRequest request) {
-    List<String> errors = new ArrayList<>();
-
-    String templateTextStr;
-    if (request.getContent() != null && !request.getContent().isBlank()) {
-      templateTextStr = request.getContent();
-    } else {
-      templateTextStr = request.getTemplateText() != null ? request.getTemplateText().toString() : "";
-    }
-
-    Pattern pattern = Pattern.compile("\\{\\{(\\w+)}}");
-    Matcher matcher = pattern.matcher(templateTextStr);
-
-    Set<String> placeholders = new HashSet<>();
-    while (matcher.find()) {
-      placeholders.add(matcher.group(1));
-    }
-
-    Map<String, Object> parameters =
-        request.getParameters() != null ? request.getParameters() : Collections.emptyMap();
-    for (String placeholder : placeholders) {
-      if (!parameters.containsKey(placeholder)) {
-        errors.add("Placeholder {{" + placeholder + "}} not defined in parameters");
-      }
-    }
-
-    return errors;
-  }
-
-  /** Resolve the canonical content string: prefer new `content`; fall back to templateText.vi */
-  private String resolveContent(String content, Map<String, Object> templateText) {
-    if (content != null && !content.isBlank()) {
-      return content.trim();
-    }
-    if (templateText != null) {
-      Object vi = templateText.get("vi");
-      if (vi instanceof String s && !s.isBlank()) return s.trim();
-      Object en = templateText.get("en");
-      if (en instanceof String s && !s.isBlank()) return s.trim();
-    }
-    return null;
-  }
-
-  /** Build templateText map for backward compat when `content` is the source. */
-  private Map<String, Object> resolveTemplateText(String content, Map<String, Object> templateText) {
-    if (content != null && !content.isBlank()) {
-      Map<String, Object> map = new HashMap<>();
-      map.put("vi", content.trim());
-      return map;
-    }
-    return templateText != null ? templateText : Collections.emptyMap();
   }
 
   private QuestionTemplateResponse mapToResponse(QuestionTemplate template) {
-    // Derive content: prefer entity.content; fall back to templateText.vi
-    String displayContent = template.getContent();
-    if ((displayContent == null || displayContent.isBlank()) && template.getTemplateText() != null) {
-      Object vi = template.getTemplateText().get("vi");
-      if (vi instanceof String s) displayContent = s;
-    }
-
     QuestionTemplateResponse response =
         QuestionTemplateResponse.builder()
             .id(template.getId())
@@ -998,11 +897,12 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .name(template.getName())
             .description(template.getDescription())
             .templateType(template.getTemplateType())
-            .content(displayContent)
             .templateText(template.getTemplateText())
             .parameters(template.getParameters())
             .answerFormula(template.getAnswerFormula())
-            .solution(template.getSolution())
+            .diagramTemplate(template.getDiagramTemplate())
+            .optionsGenerator(template.getOptionsGenerator())
+            .constraints(template.getConstraints())
             .cognitiveLevel(template.getCognitiveLevel())
             .tags(template.getTags())
             .isPublic(template.getIsPublic())
