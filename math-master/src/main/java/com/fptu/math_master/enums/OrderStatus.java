@@ -5,6 +5,5 @@ public enum OrderStatus {
     PROCESSING,   // Payment being processed
     COMPLETED,    // Payment successful, enrollment created
     FAILED,       // Payment failed
-    CANCELLED,    // Order cancelled by user or expired
-    REFUNDED      // Order refunded
+    CANCELLED     // Order cancelled by user or expired
 }

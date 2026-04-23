@@ -24,9 +24,7 @@ import com.fptu.math_master.enums.TransactionStatus;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.Collections;
@@ -35,7 +33,6 @@ import java.util.Map;
 import java.util.HashMap;
 import com.fptu.math_master.repository.CourseLessonRepository;
 import com.fptu.math_master.repository.LessonProgressRepository;
-import org.springframework.data.domain.PageRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -235,80 +232,6 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     Course course = courseRepository
         .findByIdAndDeletedAtIsNull(enrollment.getCourseId())
         .orElse(null);
-
-    // ─── Refund Eligibility Check ─────────────────────────────────────────────
-    boolean isEligibleForRefund = true;
-    if (enrollment.getEnrolledAt() != null) {
-      Duration duration = Duration.between(enrollment.getEnrolledAt(), Instant.now());
-      if (duration.toHours() >= 24) {
-        log.info("Student {} dropping {}, beyond 24h limit ({}h). Skip refund.", studentId, enrollmentId, duration.toHours());
-        isEligibleForRefund = false;
-      }
-    }
-
-    if (isEligibleForRefund && course != null) {
-      int totalLessons = (int) courseLessonRepository.countByCourseIdAndNotDeleted(course.getId());
-      if (totalLessons > 0) {
-        int completedLessons = (int) lessonProgressRepository.countCompletedByEnrollmentId(enrollmentId);
-        double completionRate = (completedLessons * 100.0) / totalLessons;
-        if (completionRate >= 10.0) {
-          log.info("Student {} dropping {}, beyond 10% progress limit ({}%). Skip refund.", studentId, enrollmentId, completionRate);
-          isEligibleForRefund = false;
-        }
-      }
-    }
-
-    // ─── Refund Logic ─────────────────────────────────────────────────────────
-    if (isEligibleForRefund && course != null && course.getTeacherId() != null) {
-      Wallet studentWallet = walletRepository.findByUserId(studentId).orElse(null);
-      if (studentWallet != null) {
-        // Find recent purchase transaction for this course
-        // Note: Using PageRequest to get most recent txs, filter by title
-        List<Transaction> txs = transactionRepository.findByWalletId(studentWallet.getId(), PageRequest.of(0, 100))
-            .getContent();
-        Transaction purchaseTx = txs.stream()
-            .filter(t -> t.getType() == TransactionType.COURSE_PURCHASE 
-                      && t.getDescription().contains(course.getTitle()) 
-                      && t.getStatus() == TransactionStatus.SUCCESS)
-            .findFirst()
-            .orElse(null);
-
-        // FREE COURSE EXEMPTION:
-        if (purchaseTx != null && purchaseTx.getAmount().compareTo(BigDecimal.ZERO) > 0) {
-          log.info("Refunding {} to student {} for course {}", purchaseTx.getAmount(), studentId, course.getId());
-          walletService.addBalance(studentWallet.getId(), purchaseTx.getAmount());
-          
-          Transaction refundTx = Transaction.builder()
-              .wallet(studentWallet)
-              .amount(purchaseTx.getAmount())
-              .type(TransactionType.REFUND)
-              .status(TransactionStatus.SUCCESS)
-              .description("Refund for Course: " + course.getTitle())
-              .transactionDate(Instant.now())
-              .orderCode(System.currentTimeMillis())
-              .build();
-          transactionRepository.save(refundTx);
-
-          // Deduct from teacher's wallet
-          Wallet teacherWallet = walletRepository.findByUserId(course.getTeacherId()).orElse(null);
-          if (teacherWallet != null && purchaseTx.getInstructorEarnings() != null) {
-            log.info("Deducting refund {} from teacher {} for course {}", purchaseTx.getInstructorEarnings(), course.getTeacherId(), course.getId());
-            walletService.deductBalance(teacherWallet.getId(), purchaseTx.getInstructorEarnings());
-            
-            Transaction deductionTx = Transaction.builder()
-                .wallet(teacherWallet)
-                .amount(purchaseTx.getInstructorEarnings())
-                .type(TransactionType.REFUND)
-                .status(TransactionStatus.SUCCESS)
-                .description("Refund Deduction for Course: " + course.getTitle())
-                .transactionDate(Instant.now())
-                .orderCode(System.currentTimeMillis() + 1)
-                .build();
-            transactionRepository.save(deductionTx);
-          }
-        }
-      }
-    }
 
     log.info("Student {} dropped enrollment {}", studentId, enrollmentId);
     return mapToResponse(enrollment, course != null ? course.getTitle() : null, studentId);

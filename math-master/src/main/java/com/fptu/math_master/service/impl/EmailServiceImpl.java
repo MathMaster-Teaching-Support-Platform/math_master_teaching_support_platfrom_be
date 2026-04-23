@@ -102,7 +102,7 @@ public class EmailServiceImpl implements EmailService {
     sendEmail(to, "Đặt lại mật khẩu MathMaster của bạn", "password-reset", variables);
   }
 
-  // ─── Order & Refund Email Methods ────────────────────────────────────────
+  // ─── Order Email Methods ─────────────────────────────────────────────────
 
   @Override
   public void sendOrderConfirmationEmail(String to, String studentName, String courseTitle, 
@@ -129,31 +129,5 @@ public class EmailServiceImpl implements EmailService {
     variables.put("currentYear", java.time.Year.now().getValue());
 
     sendEmail(to, "Học viên mới đăng ký khóa học - " + courseTitle, "new-enrollment", variables);
-  }
-
-  @Override
-  public void sendRefundConfirmationEmail(String to, String studentName, String courseTitle, 
-      String refundAmount, String reason) {
-    Map<String, Object> variables = new HashMap<>();
-    variables.put("studentName", studentName);
-    variables.put("courseTitle", courseTitle);
-    variables.put("refundAmount", refundAmount);
-    variables.put("reason", reason);
-    variables.put("currentYear", java.time.Year.now().getValue());
-
-    sendEmail(to, "Xác nhận hoàn tiền - " + courseTitle, "refund-confirmation", variables);
-  }
-
-  @Override
-  public void sendRefundNotificationEmail(String to, String instructorName, String studentName, 
-      String courseTitle, String deductionAmount) {
-    Map<String, Object> variables = new HashMap<>();
-    variables.put("instructorName", instructorName);
-    variables.put("studentName", studentName);
-    variables.put("courseTitle", courseTitle);
-    variables.put("deductionAmount", deductionAmount);
-    variables.put("currentYear", java.time.Year.now().getValue());
-
-    sendEmail(to, "Thông báo hoàn tiền - " + courseTitle, "refund-notification", variables);
   }
 }
