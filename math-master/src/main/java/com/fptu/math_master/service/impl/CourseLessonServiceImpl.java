@@ -331,7 +331,14 @@ public class CourseLessonServiceImpl implements CourseLessonService {
                 uploadService.getPresignedUrl(
                     item.getKey(), minioProperties.getCourseMaterialsBucket()));
           } catch (Exception e) {
-            log.error("Error generating presigned URL for material {}", item.getId(), e);
+            // Legacy: file was uploaded to template bucket before course-materials bucket existed
+            try {
+              item.setUrl(
+                  uploadService.getPresignedUrl(
+                      item.getKey(), minioProperties.getTemplateBucket()));
+            } catch (Exception ex) {
+              log.error("Error generating presigned URL for material {}", item.getId(), ex);
+            }
           }
           // Never expose the raw object key to clients — they must use the presigned url field.
           item.setKey(null);
@@ -399,7 +406,8 @@ public class CourseLessonServiceImpl implements CourseLessonService {
       throw new AppException(ErrorCode.INVALID_REQUEST);
     }
 
-    String objectKey = uploadService.uploadFile(file, minioProperties.getCourseMaterialsBucket());
+    String objectKey = uploadService.uploadFile(
+        file, "course-materials", minioProperties.getCourseMaterialsBucket());
 
     MaterialItem newItem =
         MaterialItem.builder()
@@ -488,8 +496,15 @@ public class CourseLessonServiceImpl implements CourseLessonService {
         .findFirst()
         .orElseThrow(() -> new AppException(ErrorCode.INVALID_REQUEST));
 
-    return uploadService.getPresignedDownloadUrl(
-        item.getKey(), minioProperties.getCourseMaterialsBucket(), item.getName());
+    try {
+      return uploadService.getPresignedDownloadUrl(
+          item.getKey(), minioProperties.getCourseMaterialsBucket(), item.getName());
+    } catch (Exception e) {
+      // Legacy fallback: file stored in template bucket before course-materials bucket existed
+      log.warn("Material not in course-materials bucket, falling back to template bucket for key: {}", item.getKey());
+      return uploadService.getPresignedDownloadUrl(
+          item.getKey(), minioProperties.getTemplateBucket(), item.getName());
+    }
   }
 
   @Override
@@ -518,8 +533,16 @@ public class CourseLessonServiceImpl implements CourseLessonService {
         .findFirst()
         .orElseThrow(() -> new AppException(ErrorCode.INVALID_REQUEST));
 
-    byte[] content = uploadService.downloadFile(
-        item.getKey(), minioProperties.getCourseMaterialsBucket());
+    byte[] content;
+    try {
+      content = uploadService.downloadFile(
+          item.getKey(), minioProperties.getCourseMaterialsBucket());
+    } catch (Exception e) {
+      // Legacy fallback: file stored in template bucket before course-materials bucket existed
+      log.warn("Material not in course-materials bucket, falling back to template bucket for key: {}", item.getKey());
+      content = uploadService.downloadFile(
+          item.getKey(), minioProperties.getTemplateBucket());
+    }
     String ct = item.getContentType() != null ? item.getContentType() : "application/octet-stream";
     return new CourseLessonService.MaterialDownloadResult(content, ct, item.getName());
   }
