@@ -22,6 +22,8 @@ public class UpdateRoadmapTopicRequest {
 
   private QuestionDifficulty difficulty;
 
+  private Double mark;
+
   /** Update the linked course for this topic. */
   private UUID courseId;
 

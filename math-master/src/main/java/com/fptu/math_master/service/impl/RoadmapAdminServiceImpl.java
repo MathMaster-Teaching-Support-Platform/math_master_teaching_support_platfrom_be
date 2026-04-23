@@ -179,6 +179,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .status(TopicStatus.NOT_STARTED)
         .difficulty(request.getDifficulty())
         .sequenceOrder(request.getSequenceOrder())
+        .mark(request.getMark())
         .progressPercentage(BigDecimal.ZERO)
         .build();
 
@@ -212,6 +213,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     if (request.getDescription() != null) topic.setDescription(request.getDescription());
     if (request.getSequenceOrder() != null) topic.setSequenceOrder(request.getSequenceOrder());
     if (request.getDifficulty() != null) topic.setDifficulty(request.getDifficulty());
+    if (request.getMark() != null) topic.setMark(request.getMark());
     if (request.getStatus() != null) topic.setStatus(request.getStatus());
 
     topicRepository.save(topic);

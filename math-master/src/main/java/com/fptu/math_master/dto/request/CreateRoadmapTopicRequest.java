@@ -26,6 +26,8 @@ public class CreateRoadmapTopicRequest {
   @NotNull(message = "Difficulty is required")
   private QuestionDifficulty difficulty;
 
+  private Double mark;
+
   @NotNull(message = "courseId is required")
   private UUID courseId;
 }
