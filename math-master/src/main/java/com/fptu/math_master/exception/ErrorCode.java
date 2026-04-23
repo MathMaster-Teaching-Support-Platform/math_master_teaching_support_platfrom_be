@@ -257,18 +257,19 @@ public enum ErrorCode {
   ENROLLMENT_ACCESS_DENIED(
       1150, "You do not have permission to access this enrollment", HttpStatus.FORBIDDEN),
   COURSE_LESSON_NOT_FOUND(1151, "Course lesson not found", HttpStatus.NOT_FOUND),
-    COURSE_NOT_PUBLISHED(1152, "Course is not published", HttpStatus.BAD_REQUEST),
-    QUESTION_TEMPLATE_NOT_IN_BANK(
-            1153, "Question template does not belong to this question bank", HttpStatus.BAD_REQUEST),
-  SUBSCRIPTION_PLAN_NOT_FOUND(1154, "Subscription plan not found", HttpStatus.NOT_FOUND),
-  SUBSCRIPTION_PLAN_SLUG_EXISTS(1155, "A plan with this slug already exists", HttpStatus.BAD_REQUEST),
+  COURSE_NOT_PUBLISHED(1152, "Course is not published", HttpStatus.BAD_REQUEST),
+  DUPLICATE_ORDER_INDEX(1153, "Duplicate order index detected in lesson reordering", HttpStatus.BAD_REQUEST),
+  QUESTION_TEMPLATE_NOT_IN_BANK(
+          1154, "Question template does not belong to this question bank", HttpStatus.BAD_REQUEST),
+  SUBSCRIPTION_PLAN_NOT_FOUND(1155, "Subscription plan not found", HttpStatus.NOT_FOUND),
+  SUBSCRIPTION_PLAN_SLUG_EXISTS(1156, "A plan with this slug already exists", HttpStatus.BAD_REQUEST),
   SUBSCRIPTION_PLAN_HAS_ACTIVE_USERS(
-      1156,
+      1157,
       "Cannot delete a plan that has active subscribers. Deactivate the plan instead.",
       HttpStatus.BAD_REQUEST),
-  USER_SUBSCRIPTION_NOT_FOUND(1157, "User subscription not found", HttpStatus.NOT_FOUND),
-  OCR_JOB_NOT_FOUND(1158, "OCR job not found", HttpStatus.NOT_FOUND),
-  OCR_JOB_NOT_COMPLETED(1159, "OCR job not completed yet", HttpStatus.BAD_REQUEST),
+  USER_SUBSCRIPTION_NOT_FOUND(1158, "User subscription not found", HttpStatus.NOT_FOUND),
+  OCR_JOB_NOT_FOUND(1159, "OCR job not found", HttpStatus.NOT_FOUND),
+  OCR_JOB_NOT_COMPLETED(1160, "OCR job not completed yet", HttpStatus.BAD_REQUEST),
   OCR_JOB_FAILED(1160, "OCR job failed", HttpStatus.INTERNAL_SERVER_ERROR),
   ASSESSMENT_ALREADY_IN_COURSE(1161, "Assessment is already added to this course", HttpStatus.BAD_REQUEST),
     COURSE_ASSESSMENT_NOT_FOUND(1162, "Course assessment not found", HttpStatus.NOT_FOUND),

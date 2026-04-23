@@ -44,6 +44,10 @@ public class CourseResponse {
   private String subtitle;
   private String language;
   private CourseLevel level;
+  private UUID approvedBy;
+  private Instant approvedAt;
+  private UUID rejectedBy;
+  private Instant rejectedAt;
   private BigDecimal totalVideoHours;
   private Integer articlesCount;
   private Integer resourcesCount;
