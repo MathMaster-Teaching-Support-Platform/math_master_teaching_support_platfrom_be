@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.fptu.math_master.entity.User;
@@ -59,4 +60,13 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 
   @Query("SELECT DISTINCT u.id FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.status != com.fptu.math_master.enums.Status.DELETED")
   List<UUID> findUserIdsByRoleName(String roleName);
+
+  // Admin Financial Dashboard queries
+  @Query("SELECT COUNT(DISTINCT u) FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.createdAt BETWEEN :start AND :end AND u.status != com.fptu.math_master.enums.Status.DELETED")
+  long countByRoleAndCreatedAtBetween(@Param("roleName") String roleName, @Param("start") java.time.Instant start, @Param("end") java.time.Instant end);
+
+  long countByCreatedAtBefore(java.time.Instant before);
+
+  @Query("SELECT u FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.status != com.fptu.math_master.enums.Status.DELETED")
+  List<User> findByRole(@Param("roleName") String roleName);
 }

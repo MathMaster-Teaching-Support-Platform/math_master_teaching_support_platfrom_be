@@ -42,4 +42,15 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     @Query("SELECT COUNT(o) FROM Order o WHERE o.courseId = :courseId AND o.status = 'COMPLETED' AND o.deletedAt IS NULL")
     long countCompletedOrdersByCourse(@Param("courseId") UUID courseId);
+
+    // Admin Financial Dashboard queries
+    List<Order> findByStatusAndDeletedAtIsNull(OrderStatus status);
+
+    @Query("SELECT o FROM Order o WHERE o.status = :status AND o.confirmedAt BETWEEN :start AND :end AND o.deletedAt IS NULL")
+    List<Order> findByStatusAndConfirmedAtBetweenAndDeletedAtIsNull(
+        @Param("status") OrderStatus status,
+        @Param("start") Instant start,
+        @Param("end") Instant end);
+
+    List<Order> findByCourseIdAndStatusAndDeletedAtIsNull(UUID courseId, OrderStatus status);
 }

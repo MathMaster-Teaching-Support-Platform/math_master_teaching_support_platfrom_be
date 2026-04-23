@@ -93,4 +93,49 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
   /** Find PENDING transactions whose expiresAt is in the past */
   @Query("SELECT t FROM Transaction t WHERE t.status = 'PENDING' AND t.expiresAt IS NOT NULL AND t.expiresAt < :now")
   List<Transaction> findExpiredPendingTransactions(@Param("now") Instant now);
+
+  /** Sum transactions by wallet, type, status, and date range */
+  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
+         "WHERE t.wallet.id = :walletId AND t.type = :type AND t.status = :status " +
+         "AND t.createdAt >= :startDate AND t.createdAt <= :endDate")
+  BigDecimal sumByWalletIdAndTypeAndStatusAndDateRange(
+      @Param("walletId") UUID walletId,
+      @Param("type") TransactionType type,
+      @Param("status") TransactionStatus status,
+      @Param("startDate") Instant startDate,
+      @Param("endDate") Instant endDate);
+
+  /** Find transactions by wallet and type with pagination */
+  Page<Transaction> findByWalletIdAndType(UUID walletId, TransactionType type, Pageable pageable);
+
+  /** Sum instructor revenue for a specific course */
+  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
+         "WHERE t.wallet.id = :walletId AND t.order.courseId = :courseId " +
+         "AND t.type = 'INSTRUCTOR_REVENUE' AND t.status = :status")
+  BigDecimal sumInstructorRevenueForCourse(
+      @Param("walletId") UUID walletId,
+      @Param("courseId") UUID courseId,
+      @Param("status") TransactionStatus status);
+
+  /** Sum transactions by type, status, and date range */
+  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
+         "WHERE t.type = :type AND t.status = :status " +
+         "AND t.createdAt >= :startDate AND t.createdAt <= :endDate")
+  BigDecimal sumByTypeAndStatusAndDateRange(
+      @Param("type") TransactionType type,
+      @Param("status") TransactionStatus status,
+      @Param("startDate") Instant startDate,
+      @Param("endDate") Instant endDate);
+
+  /** Count transactions by status */
+  long countByStatus(TransactionStatus status);
+
+  /** Count transactions by status and date range */
+  long countByStatusAndCreatedAtBetween(TransactionStatus status, Instant start, Instant end);
+
+  /** Count transactions by status list and date range */
+  long countByStatusInAndCreatedAtBetween(List<TransactionStatus> statuses, Instant start, Instant end);
+
+  /** Find transactions by date range */
+  List<Transaction> findByCreatedAtBetween(Instant start, Instant end);
 }
