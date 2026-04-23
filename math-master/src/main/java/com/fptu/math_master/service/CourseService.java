@@ -29,6 +29,8 @@ public interface CourseService {
 
   Page<CourseResponse> getPendingReviewCourses(Pageable pageable);
 
+  Page<CourseResponse> getCourseReviewsForAdmin(String status, Pageable pageable);
+
   CourseResponse approveCourse(UUID courseId);
 
   CourseResponse rejectCourse(UUID courseId, String reason);

@@ -16,6 +16,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -124,6 +125,22 @@ public class Course extends BaseEntity {
   @Builder.Default
   private CourseLevel level = CourseLevel.ALL_LEVELS;
 
+  /** UUID of the admin who approved this course. */
+  @Column(name = "approved_by")
+  private UUID approvedBy;
+
+  /** Timestamp when the course was approved. */
+  @Column(name = "approved_at")
+  private Instant approvedAt;
+
+  /** UUID of the admin who rejected this course. */
+  @Column(name = "rejected_by")
+  private UUID rejectedBy;
+
+  /** Timestamp when the course was rejected. */
+  @Column(name = "rejected_at")
+  private Instant rejectedAt;
+
   @Column(name = "total_video_hours", precision = 10, scale = 2)
   private BigDecimal totalVideoHours;
 
@@ -140,7 +157,7 @@ public class Course extends BaseEntity {
   private BigDecimal discountedPrice;
 
   @Column(name = "discount_expiry_date")
-  private java.time.Instant discountExpiryDate;
+  private Instant discountExpiryDate;
 
   // ─── Relationships ────────────────────────────────────────────────────────
 

@@ -858,6 +858,12 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         resolveImageContentTypeFromObjectKey(generatedFile.getThumbnail()));
   }
 
+  @Override
+  public String renderSlidePreview(String heading, String content) {
+    return renderSlidePreviewUrl(
+        normalizeAiGeneratedText(heading), normalizeAiGeneratedText(content));
+  }
+
   private byte[] injectTemplate(byte[] templateBytes, DeckSections deckSections) {
     try (XMLSlideShow slideshow = new XMLSlideShow(new ByteArrayInputStream(templateBytes));
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -1173,9 +1179,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     try {
       XSLFPictureData pictureData = slideshow.addPicture(imageBytes, PictureData.PictureType.PNG);
       XSLFPictureShape pictureShape = slide.createPicture(pictureData);
-      // Expand width by 1 inch (72 pt) so the image fills more of the slide horizontally.
+      // Expand width by 1 inch (72 pt) and height by 0.5 inch (36 pt) so the image
+      // fills the content area without clipping tall content.
       Rectangle2D expandedAnchor = new Rectangle2D.Double(
-          anchor.getX(), anchor.getY(), anchor.getWidth() + 72.0, anchor.getHeight());
+          anchor.getX(), anchor.getY(), anchor.getWidth() + 72.0, anchor.getHeight() + 36.0);
       pictureShape.setAnchor(expandedAnchor);
     } catch (Exception ex) {
       log.warn("Failed to inject full-LaTeX image for slide {}: {}", item.getSlideNumber(), ex.getMessage());
@@ -1284,11 +1291,26 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       return sb.toString().isBlank() ? "\\phantom{x}" : sb.toString();
     }
 
-    // If the body already contains a LaTeX block environment (\begin{...}) emit
-    // it verbatim — do NOT split line-by-line, otherwise \item / \textbf etc.
-    // would be incorrectly escaped by escapeLatexText().
-    if (body.contains("\\begin{")) {
-      sb.append(body.trim()).append("\n");
+    // Verbatim path: emit the body as-is when it already uses LaTeX commands.
+    // This covers:
+    //   (a) explicit environments like \begin{itemize}...\end{itemize}
+    //   (b) bare \item or \textbf{} lines that AI emits without a surrounding environment
+    // Running these through escapeLatexText() would double-escape the backslashes and braces,
+    // producing broken output like "\{}item" instead of a rendered bullet.
+    boolean hasLatexCommands = body.contains("\\begin{")
+        || body.contains("\\item ")
+        || body.contains("\\item\n")
+        || body.contains("\\textbf{")
+        || body.contains("\\textit{")
+        || body.contains("\\section{")
+        || body.contains("\\subsection{");
+    if (hasLatexCommands) {
+      String latexBody = body.trim();
+      // Auto-wrap bare \item lines in an itemize environment if none is present.
+      if (!latexBody.contains("\\begin{") && latexBody.contains("\\item ")) {
+        latexBody = "\\begin{itemize}\n" + latexBody + "\n\\end{itemize}";
+      }
+      sb.append(latexBody).append("\n");
       return sb.toString();
     }
 
@@ -1643,7 +1665,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private LessonSlideJsonItemResponse buildPreviewSlide(
       int slideNumber, String slideType, String heading, String content,
       LessonSlideOutputFormat outputFormat) {
-    String normalizedContent = normalizeAiGeneratedText(content);
+    String normalizedContent = truncateToWordLimit(normalizeAiGeneratedText(content), 50);
     String normalizedHeading = normalizeAiGeneratedText(heading);
 
     String previewImageUrl = null;
@@ -1663,6 +1685,27 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         .content(normalizedContent)
         .previewImageUrl(previewImageUrl)
         .build();
+  }
+
+  /**
+   * Truncates text to at most maxWords words, preserving line structure within the kept portion.
+   */
+  private String truncateToWordLimit(String text, int maxWords) {
+    if (text == null || text.isBlank() || maxWords <= 0) return text;
+    String[] words = text.split("\\s+");
+    if (words.length <= maxWords) return text;
+    // Reconstruct from original text up to the position of the maxWords-th word.
+    int count = 0;
+    int pos = 0;
+    while (pos < text.length() && count < maxWords) {
+      // skip whitespace
+      while (pos < text.length() && Character.isWhitespace(text.charAt(pos))) pos++;
+      if (pos >= text.length()) break;
+      // advance through the word
+      while (pos < text.length() && !Character.isWhitespace(text.charAt(pos))) pos++;
+      count++;
+    }
+    return text.substring(0, pos).stripTrailing();
   }
 
   private List<String> splitIntoChunks(String content, int chunkCount) {
