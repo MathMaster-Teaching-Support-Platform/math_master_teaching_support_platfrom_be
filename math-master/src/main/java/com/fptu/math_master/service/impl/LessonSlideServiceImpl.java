@@ -1665,7 +1665,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private LessonSlideJsonItemResponse buildPreviewSlide(
       int slideNumber, String slideType, String heading, String content,
       LessonSlideOutputFormat outputFormat) {
-    String normalizedContent = normalizeAiGeneratedText(content);
+    String normalizedContent = truncateToWordLimit(normalizeAiGeneratedText(content), 50);
     String normalizedHeading = normalizeAiGeneratedText(heading);
 
     String previewImageUrl = null;
@@ -1685,6 +1685,27 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         .content(normalizedContent)
         .previewImageUrl(previewImageUrl)
         .build();
+  }
+
+  /**
+   * Truncates text to at most maxWords words, preserving line structure within the kept portion.
+   */
+  private String truncateToWordLimit(String text, int maxWords) {
+    if (text == null || text.isBlank() || maxWords <= 0) return text;
+    String[] words = text.split("\\s+");
+    if (words.length <= maxWords) return text;
+    // Reconstruct from original text up to the position of the maxWords-th word.
+    int count = 0;
+    int pos = 0;
+    while (pos < text.length() && count < maxWords) {
+      // skip whitespace
+      while (pos < text.length() && Character.isWhitespace(text.charAt(pos))) pos++;
+      if (pos >= text.length()) break;
+      // advance through the word
+      while (pos < text.length() && !Character.isWhitespace(text.charAt(pos))) pos++;
+      count++;
+    }
+    return text.substring(0, pos).stripTrailing();
   }
 
   private List<String> splitIntoChunks(String content, int chunkCount) {
