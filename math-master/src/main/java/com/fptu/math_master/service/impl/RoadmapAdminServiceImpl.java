@@ -89,6 +89,22 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     RoadmapDetailResponse response = getRoadmap(roadmapId);
     double bestScore = computeStudentBestScoreOnTenForRoadmap(studentId, roadmapId, null);
     response.setStudentBestScore(toPointScaleInt(bestScore));
+    response.setProgress(RoadmapProgressInfo.builder()
+        .currentTopicIndex(resolveCurrentTopicIndexFromMarks(response, bestScore))
+        .build());
+
+    if (response.getEntryTest() != null) {
+      try {
+        RoadmapEntryTestInfoResponse entryInfo = getEntryTestForStudent(studentId, roadmapId);
+        response.getEntryTest().setStudentStatus(mapStudentEntryStatus(entryInfo.getStudentStatus()));
+        response.getEntryTest().setCanStart(entryInfo.getCanStart());
+        response.getEntryTest().setCannotStartReason(entryInfo.getCannotStartReason());
+        response.getEntryTest().setActiveAttemptId(entryInfo.getActiveAttemptId());
+      } catch (AppException ignored) {
+        log.debug("Unable to resolve entry-test status for roadmap {}", roadmapId);
+      }
+    }
+
     return response;
   }
 
@@ -163,6 +179,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .status(TopicStatus.NOT_STARTED)
         .difficulty(request.getDifficulty())
         .sequenceOrder(request.getSequenceOrder())
+        .mark(request.getMark())
         .progressPercentage(BigDecimal.ZERO)
         .build();
 
@@ -196,6 +213,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     if (request.getDescription() != null) topic.setDescription(request.getDescription());
     if (request.getSequenceOrder() != null) topic.setSequenceOrder(request.getSequenceOrder());
     if (request.getDifficulty() != null) topic.setDifficulty(request.getDifficulty());
+    if (request.getMark() != null) topic.setMark(request.getMark());
     if (request.getStatus() != null) topic.setStatus(request.getStatus());
 
     topicRepository.save(topic);
@@ -220,6 +238,8 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   public List<RoadmapTopicResponse> batchSaveTopics(BatchTopicRequest request) {
     UUID roadmapId = request.getRoadmapId();
     LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+
+    validateTopicMarksStrictlyIncreasing(request.getTopics());
     
     log.info("Batch saving {} topics for roadmap {}", request.getTopics().size(), roadmapId);
     
@@ -525,6 +545,68 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .unlockedTopics(unlockedTopics).newlyUnlockedTopics(newlyUnlocked)
         .scoreOnTen(scoreOnTen).evaluatedQuestions(mappings.size())
         .thresholdPercentage(70).evaluatedAt(Instant.now()).build();
+  }
+
+  private void validateTopicMarksStrictlyIncreasing(List<TopicBatchItem> items) {
+    if (items == null || items.isEmpty()) {
+      return;
+    }
+
+    List<TopicBatchItem> activeItems = items.stream()
+        .filter(Objects::nonNull)
+        .filter(item -> item.getStatus() == null || item.getStatus() != TopicStatus.INACTIVE)
+      .sorted(Comparator.comparing(
+        TopicBatchItem::getSequenceOrder,
+        Comparator.nullsLast(Integer::compareTo)))
+        .toList();
+
+    double previousMark = -1;
+    for (TopicBatchItem item : activeItems) {
+      Double mark = item.getMark();
+      if (mark == null || mark <= 0) {
+        throw new AppException(ErrorCode.INVALID_TOPIC_POINT_ORDER);
+      }
+      if (previousMark >= 0 && mark <= previousMark) {
+        throw new AppException(ErrorCode.INVALID_TOPIC_POINT_ORDER);
+      }
+      previousMark = mark;
+    }
+  }
+
+  private String mapStudentEntryStatus(String rawStatus) {
+    if (rawStatus == null || rawStatus.isBlank()) {
+      return "NOT_STARTED";
+    }
+    if ("IN_PROGRESS".equalsIgnoreCase(rawStatus)) {
+      return "IN_PROGRESS";
+    }
+    if ("COMPLETED".equalsIgnoreCase(rawStatus)) {
+      return "COMPLETED";
+    }
+    return "NOT_STARTED";
+  }
+
+  private Integer resolveCurrentTopicIndexFromMarks(RoadmapDetailResponse response, double scoreOnTen) {
+    List<RoadmapTopicResponse> topics = response.getTopics() == null
+        ? Collections.emptyList()
+        : response.getTopics().stream()
+            .sorted(Comparator.comparing(
+                RoadmapTopicResponse::getSequenceOrder,
+                Comparator.nullsLast(Integer::compareTo)))
+            .toList();
+
+    if (topics.isEmpty()) {
+      return 0;
+    }
+
+    for (int i = 0; i < topics.size(); i++) {
+      Double mark = topics.get(i).getMark();
+      if (mark != null && scoreOnTen <= mark) {
+        return i;
+      }
+    }
+
+    return Math.max(0, topics.size() - 1);
   }
 
   private Course validateCourse(UUID courseId, LearningRoadmap roadmap) {

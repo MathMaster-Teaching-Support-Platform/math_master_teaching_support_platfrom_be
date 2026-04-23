@@ -153,6 +153,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     }
 
     if (videoFile != null && !videoFile.isEmpty()) {
+      if (org.springframework.util.StringUtils.hasText(courseLesson.getVideoUrl())) {
+        uploadService.deleteFile(courseLesson.getVideoUrl(), minioProperties.getCourseVideosBucket());
+      }
       courseLesson.setVideoUrl(uploadService.uploadFile(videoFile, "course-videos", minioProperties.getCourseVideosBucket()));
     }
     if (request.getVideoTitle() != null) courseLesson.setVideoTitle(request.getVideoTitle());
@@ -191,6 +194,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
       throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
     }
 
+    // Store the orderIndex of the deleted lesson
+    int deletedOrderIndex = courseLesson.getOrderIndex();
+
     // MinIO Cleanup: Delete video file
     if (org.springframework.util.StringUtils.hasText(courseLesson.getVideoUrl())) {
       uploadService.deleteFile(courseLesson.getVideoUrl(), minioProperties.getCourseVideosBucket());
@@ -209,6 +215,25 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     courseLessonRepository.save(courseLesson);
     log.info("CourseLesson soft-deleted and resources cleaned up: {}", courseLessonId);
     
+    // Reorder remaining lessons to fill the gap
+    List<CourseLesson> remainingLessons = courseLessonRepository.findByCourseIdAndNotDeleted(courseId);
+    remainingLessons.stream()
+        .filter(lesson -> {
+            if (course.getProvider() == com.fptu.math_master.enums.CourseProvider.CUSTOM) {
+                return java.util.Objects.equals(lesson.getSectionId(), courseLesson.getSectionId()) 
+                    && lesson.getOrderIndex() > deletedOrderIndex;
+            }
+            return lesson.getOrderIndex() > deletedOrderIndex;
+        })
+        .forEach(lesson -> {
+          lesson.setOrderIndex(lesson.getOrderIndex() - 1);
+          courseLessonRepository.save(lesson);
+        });
+    
+    log.info("Reordered {} lessons after deletion of lesson {}", 
+        remainingLessons.stream().filter(l -> l.getOrderIndex() >= deletedOrderIndex).count(), 
+        courseLessonId);
+    
     courseService.syncCourseMetrics(courseId);
   }
 
@@ -218,6 +243,15 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
+    // Validate: Check for duplicate orderIndex values
+    java.util.Set<Integer> orderIndexSet = new java.util.HashSet<>();
+    for (var order : request.getOrders()) {
+      if (!orderIndexSet.add(order.getOrderIndex())) {
+        throw new AppException(ErrorCode.DUPLICATE_ORDER_INDEX);
+      }
+    }
+
+    // Validate: All lessons belong to this course
     for (var order : request.getOrders()) {
       CourseLesson lesson = courseLessonRepository.findByIdAndDeletedAtIsNull(order.getLessonId())
           .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
@@ -229,7 +263,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
       lesson.setOrderIndex(order.getOrderIndex());
       courseLessonRepository.save(lesson);
     }
-    log.info("Batch reordered lessons for course: {}", courseId);
+    log.info("Batch reordered {} lessons for course: {}", request.getOrders().size(), courseId);
   }
 
   @Override

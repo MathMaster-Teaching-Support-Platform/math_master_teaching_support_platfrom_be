@@ -1,9 +1,12 @@
 package com.fptu.math_master.dto.request;
 
 import com.fptu.math_master.enums.CourseProvider;
+import com.fptu.math_master.enums.CourseLevel;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Future;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,7 +44,16 @@ public class CreateCourseRequest {
   private String targetAudience;
   private String subtitle;
   private String language;
+  
+  /** Course difficulty level. Defaults to ALL_LEVELS if not specified. */
+  private CourseLevel level;
+  
+  @DecimalMin(value = "0.0", inclusive = true, message = "originalPrice must not be negative")
   private java.math.BigDecimal originalPrice;
+  
+  @DecimalMin(value = "0.0", inclusive = true, message = "discountedPrice must not be negative")
   private java.math.BigDecimal discountedPrice;
+  
+  @Future(message = "discountExpiryDate must be in the future")
   private java.time.Instant discountExpiryDate;
 }

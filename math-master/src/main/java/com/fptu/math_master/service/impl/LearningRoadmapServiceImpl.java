@@ -124,8 +124,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
 
     topic = topicRepository.save(topic);
     updateRoadmapProgress(topic.getRoadmapId());
-
-    LearningRoadmap roadmap = roadmapRepository.findById(topic.getRoadmapId()).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    LearningRoadmap roadmap = roadmapRepository.findById(topic.getRoadmapId())
+      .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     log.info("Topic progress updated successfully: topicId={}", topic.getId());
     return mapToTopicResponse(topic, roadmap.getStudentId());
@@ -322,23 +322,51 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
 
     RoadmapEntryTestInfo entryTestInfo = null;
     if (roadmap.getEntryTestId() != null) {
-      Assessment assessment = assessmentRepository.findByIdAndNotDeleted(roadmap.getEntryTestId()).orElse(null);
-      if (assessment != null) {
-        Long totalQuestions = assessmentRepository.countQuestionsByAssessmentId(assessment.getId());
-        entryTestInfo = RoadmapEntryTestInfo.builder()
-            .assessmentId(assessment.getId())
-            .name(assessment.getTitle())
-            .description(assessment.getDescription())
-            .totalQuestions(totalQuestions != null ? totalQuestions.intValue() : 0)
-            .build();
+      try {
+        Assessment assessment = assessmentRepository.findByIdAndNotDeleted(roadmap.getEntryTestId()).orElse(null);
+        if (assessment != null) {
+          Long totalQuestions = assessmentRepository.countQuestionsByAssessmentId(assessment.getId());
+          entryTestInfo = RoadmapEntryTestInfo.builder()
+              .assessmentId(assessment.getId())
+              .name(assessment.getTitle())
+              .description(assessment.getDescription())
+              .totalQuestions(totalQuestions != null ? totalQuestions.intValue() : 0)
+              .build();
+        } else {
+          // Assessment was deleted - clear the reference
+          log.warn("Entry test assessment {} not found for roadmap {}, clearing reference", 
+                   roadmap.getEntryTestId(), roadmap.getId());
+          roadmap.setEntryTestId(null);
+          roadmapRepository.save(roadmap);
+        }
+      } catch (Exception e) {
+        log.error("Error loading entry test for roadmap {}: {}", roadmap.getId(), e.getMessage());
+        // Clear invalid reference
+        roadmap.setEntryTestId(null);
+        roadmapRepository.save(roadmap);
       }
     }
 
+    // Calculate roadmap progress based on completed vs total lessons across all topics
+    int totalRoadmapLessons = topicResponses.stream()
+        .mapToInt(t -> t.getTotalLessons() != null ? t.getTotalLessons() : 0)
+        .sum();
+    int completedRoadmapLessons = topicResponses.stream()
+        .mapToInt(t -> t.getCompletedLessons() != null ? t.getCompletedLessons() : 0)
+        .sum();
+    
     BigDecimal calculatedRoadmapProgress = BigDecimal.ZERO;
-    if (!topicResponses.isEmpty()) {
-      double totalProgress = topicResponses.stream().mapToDouble(t -> t.getProgress() != null ? t.getProgress() : 0.0).sum();
-      calculatedRoadmapProgress = BigDecimal.valueOf(totalProgress / topicResponses.size()).setScale(2, RoundingMode.HALF_UP);
+    if (totalRoadmapLessons > 0) {
+      calculatedRoadmapProgress = BigDecimal.valueOf((completedRoadmapLessons * 100.0) / totalRoadmapLessons)
+          .setScale(2, RoundingMode.HALF_UP);
     }
+    
+    // Update the roadmap's cached progress
+    roadmap.setProgressPercentage(calculatedRoadmapProgress);
+    roadmap.setCompletedTopicsCount((int) topicResponses.stream().filter(t -> 
+        t.getProgress() != null && t.getProgress() >= 100.0).count());
+    roadmap.setTotalTopicsCount(topicResponses.size());
+    roadmapRepository.save(roadmap);
 
     return RoadmapDetailResponse.builder()
         .id(roadmap.getId())
@@ -451,6 +479,7 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .status(topic.getStatus())
         .difficulty(topic.getDifficulty())
         .sequenceOrder(topic.getSequenceOrder())
+      .mark(topic.getMark())
         .courses(courseResponses)
         .totalLessons(topicTotalLessons)
         .completedLessons(topicCompletedLessons)

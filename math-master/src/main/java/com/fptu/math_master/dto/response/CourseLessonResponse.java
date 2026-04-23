@@ -25,6 +25,8 @@ public class CourseLessonResponse {
    * or from {@code CourseLesson.customTitle} for CUSTOM courses.
    */
   private String lessonTitle;
+  /** Teacher-defined custom title (CUSTOM courses only). */
+  private String customTitle;
   /** Teacher-defined description (CUSTOM courses only). */
   private String customDescription;
   private String videoUrl;

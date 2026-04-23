@@ -15,7 +15,9 @@ import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.dto.response.DistributeAssessmentPointsResponse;
+import com.fptu.math_master.dto.response.PagedDataResponse;
 import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
+import com.fptu.math_master.dto.response.QuestionResponse;
 import com.fptu.math_master.enums.AssessmentStatus;
 import java.util.List;
 import java.util.UUID;
@@ -59,6 +61,9 @@ public interface AssessmentService {
   AssessmentResponse addQuestion(UUID assessmentId, AddQuestionToAssessmentRequest request);
 
   List<AssessmentQuestionResponse> getAssessmentQuestions(UUID assessmentId);
+
+    PagedDataResponse<QuestionResponse> getAvailableQuestions(
+            UUID assessmentId, String keyword, String tag, Pageable pageable);
 
   AssessmentResponse removeQuestion(UUID assessmentId, UUID questionId);
 

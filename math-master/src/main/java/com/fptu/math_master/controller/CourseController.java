@@ -176,6 +176,20 @@ public class CourseController {
         .build();
   }
 
+  @Operation(summary = "Admin: get course review history (PENDING_REVIEW, APPROVED, REJECTED, or ALL)")
+  @GetMapping("/admin/reviews")
+  @PreAuthorize("hasRole('ADMIN')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<Page<CourseResponse>> getCourseReviewHistory(
+      @RequestParam(required = false) String status,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    var pageable = PageRequest.of(page, size, Sort.by("updatedAt").descending());
+    return ApiResponse.<Page<CourseResponse>>builder()
+        .result(courseService.getCourseReviewsForAdmin(status, pageable))
+        .build();
+  }
+
   @Operation(summary = "Admin: approve a course")
   @PatchMapping("/admin/{courseId}/approve")
   @PreAuthorize("hasRole('ADMIN')")
