@@ -1071,11 +1071,24 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       }
 
       if (requestedSlideCount > templateSlideCount) {
-        log.warn(
-            "Template slide count is insufficient. templateSlides={}, requestedSlides={}",
-            templateSlideCount,
-            requestedSlideCount);
-        throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+        // Template has fewer slides than requested. Clone the first MAIN_CONTENT slide
+        // (index 3 = slide 4 in a 10-slide template) to fill the gap.
+        // The clones are inserted right after the existing MAIN_CONTENT block so that
+        // EXAMPLE / PRACTICE / SUMMARY / CLOSING remain at the tail.
+        int extraNeeded = requestedSlideCount - templateSlideCount;
+        // Index 3 = MAIN_CONTENT slide 1 (0-based). Guard: use last slide if template < 4 slides.
+        int contentTemplateIndex = Math.min(3, templateSlideCount - 1);
+        XSLFSlide contentTemplate = slideshow.getSlides().get(contentTemplateIndex);
+        for (int extra = 0; extra < extraNeeded; extra++) {
+          XSLFSlide newSlide = slideshow.createSlide();
+          newSlide.importContent(contentTemplate);
+          // Insert right after contentTemplateIndex (shift subsequent extras forward).
+          slideshow.setSlideOrder(newSlide, contentTemplateIndex + 1 + extra);
+        }
+        templateSlideCount = slideshow.getSlides().size(); // now == requestedSlideCount
+        log.info(
+            "Cloned {} extra MAIN_CONTENT slide(s) from template index {}. Total slides now: {}",
+            extraNeeded, contentTemplateIndex, templateSlideCount);
       }
 
       boolean useFullLatexImage = outputFormat == LessonSlideOutputFormat.LATEX;
