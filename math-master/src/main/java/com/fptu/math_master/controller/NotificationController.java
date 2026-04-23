@@ -108,6 +108,7 @@ public class NotificationController {
     }
 
     @PostMapping("/send")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<String> sendNotification(@RequestBody NotificationRequest message) {
         if (message.getId() == null) {
             message.setId(UUID.randomUUID().toString());
@@ -121,6 +122,7 @@ public class NotificationController {
     }
 
     @PostMapping("/test-system")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<String> sendSystemNotification() {
         NotificationRequest message = NotificationRequest.builder()
                 .id(UUID.randomUUID().toString())

@@ -14,6 +14,7 @@ import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.UUID;
 
 @Component
@@ -28,6 +29,9 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
 
     private static final String STREAM_KEY = "notifications";
     private static final String GROUP_NAME = "notif-group";
+    private static final int MAX_RETRIES = 3;
+    private static final String RETRY_KEY_PREFIX = "notif:retry:";
+    private static final Duration RETRY_KEY_TTL = Duration.ofHours(24);
 
     @Override
     @Transactional
@@ -73,7 +77,19 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
             redisTemplate.opsForStream().acknowledge(STREAM_KEY, GROUP_NAME, record.getId());
             log.info("Message {} acknowledged.", record.getId());
         } catch (Exception e) {
-            log.error("Error processing Redis Stream message, will remain in pending", e);
+            String retryKey = RETRY_KEY_PREFIX + record.getId();
+            Long retryCount = redisTemplate.opsForValue().increment(retryKey);
+            redisTemplate.expire(retryKey, RETRY_KEY_TTL);
+
+            if (retryCount != null && retryCount >= MAX_RETRIES) {
+                log.error("Message {} exceeded max retries ({}), acknowledging as dead letter. Error: {}",
+                        record.getId(), MAX_RETRIES, e.getMessage(), e);
+                redisTemplate.opsForStream().acknowledge(STREAM_KEY, GROUP_NAME, record.getId());
+                redisTemplate.delete(retryKey);
+            } else {
+                log.error("Error processing Redis Stream message {} (attempt {}/{}), will remain in pending: {}",
+                        record.getId(), retryCount, MAX_RETRIES, e.getMessage(), e);
+            }
         }
     }
 }

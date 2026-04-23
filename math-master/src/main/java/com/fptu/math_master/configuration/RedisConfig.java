@@ -18,12 +18,10 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.data.redis.stream.StreamMessageListenerContainer;
 import com.fptu.math_master.component.StreamConsumerListener;
-import com.fptu.math_master.dto.request.NotificationRequest;
 
 import java.time.Duration;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.Collections;
 import java.util.UUID;
 
 @Configuration
@@ -62,19 +60,6 @@ public class RedisConfig {
       RedisConnectionFactory connectionFactory,
       StreamConsumerListener streamConsumerListener,
       RedisTemplate<String, Object> redisTemplate) {
-
-    // Ensure stream exists before creating group
-    if (Boolean.FALSE.equals(redisTemplate.hasKey("notifications"))) {
-        log.info("Stream 'notifications' does not exist. Creating it with a dummy message...");
-        redisTemplate.opsForStream().add("notifications", Collections.singletonMap("_ign", "init_stream"));
-    }
-
-    try {
-        redisTemplate.opsForStream().createGroup("notifications", "notif-group");
-        log.info("Created consumer group 'notif-group' for stream 'notifications'");
-    } catch (Exception e) {
-        log.info("Consumer group 'notif-group' already exists or could not be created");
-    }
 
     String consumerName;
     try {
