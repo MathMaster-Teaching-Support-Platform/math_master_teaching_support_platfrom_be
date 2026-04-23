@@ -80,4 +80,21 @@ public interface UserSubscriptionRepository extends JpaRepository<UserSubscripti
           + "ORDER BY s.createdAt DESC")
   List<UserSubscription> findActiveSubscriptionsByUserIdForUpdate(
       @Param("userId") UUID userId, @Param("now") Instant now);
+
+  // Admin Financial Dashboard queries
+  long countByStatusAndCreatedAtBetween(UserSubscriptionStatus status, Instant start, Instant end);
+
+  @Query("SELECT COUNT(DISTINCT s.userId) FROM UserSubscription s WHERE s.status = :status AND s.deletedAt IS NULL")
+  long countDistinctUsersByStatus(@Param("status") UserSubscriptionStatus status);
+
+  @Query("SELECT COUNT(DISTINCT s.userId) FROM UserSubscription s WHERE s.status = :status AND s.createdAt < :before AND s.deletedAt IS NULL")
+  long countDistinctUsersByStatusAndCreatedAtBefore(@Param("status") UserSubscriptionStatus status, @Param("before") Instant before);
+
+  @Query("SELECT COUNT(s) FROM UserSubscription s WHERE s.status IN :statuses AND s.updatedAt BETWEEN :start AND :end AND s.deletedAt IS NULL")
+  long countByStatusInAndUpdatedAtBetween(@Param("statuses") List<UserSubscriptionStatus> statuses, @Param("start") Instant start, @Param("end") Instant end);
+
+  @Query("SELECT s FROM UserSubscription s WHERE s.createdAt BETWEEN :start AND :end AND s.deletedAt IS NULL")
+  List<UserSubscription> findByCreatedAtBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+  long countByCreatedAtBefore(Instant before);
 }
