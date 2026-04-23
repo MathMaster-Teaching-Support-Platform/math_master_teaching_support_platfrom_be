@@ -124,8 +124,8 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
 
     topic = topicRepository.save(topic);
     updateRoadmapProgress(topic.getRoadmapId());
-
-    LearningRoadmap roadmap = roadmapRepository.findById(topic.getRoadmapId()).orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+    LearningRoadmap roadmap = roadmapRepository.findById(topic.getRoadmapId())
+      .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
 
     log.info("Topic progress updated successfully: topicId={}", topic.getId());
     return mapToTopicResponse(topic, roadmap.getStudentId());
@@ -451,6 +451,7 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
         .status(topic.getStatus())
         .difficulty(topic.getDifficulty())
         .sequenceOrder(topic.getSequenceOrder())
+      .mark(topic.getMark())
         .courses(courseResponses)
         .totalLessons(topicTotalLessons)
         .completedLessons(topicCompletedLessons)

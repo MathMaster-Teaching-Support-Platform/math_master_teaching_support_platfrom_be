@@ -16,7 +16,9 @@ import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.dto.response.DistributeAssessmentPointsResponse;
+import com.fptu.math_master.dto.response.PagedDataResponse;
 import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
+import com.fptu.math_master.dto.response.QuestionResponse;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.service.AssessmentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -349,6 +351,34 @@ public class AssessmentController {
                 .result(assessmentService.getAssessmentQuestions(id))
                 .build();
     }
+
+  @GetMapping("/{id}/available-questions")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Get paged available questions for assessment",
+      description =
+          "Get paged question list that can be added to assessment. "
+              + "Already-added questions are excluded. Supports keyword/tag filters.")
+  public ApiResponse<PagedDataResponse<QuestionResponse>> getAvailableQuestions(
+      @PathVariable UUID id,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) String tag) {
+    log.info(
+        "REST request to get available questions for assessment {} with page={}, size={}, keyword={}, tag={}",
+        id,
+        page,
+        size,
+        keyword,
+        tag);
+
+    Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+    return ApiResponse.<PagedDataResponse<QuestionResponse>>builder()
+        .message("Available questions retrieved successfully")
+        .result(assessmentService.getAvailableQuestions(id, keyword, tag, pageable))
+        .build();
+  }
 
   @DeleteMapping("/{assessmentId}/questions/{questionId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")

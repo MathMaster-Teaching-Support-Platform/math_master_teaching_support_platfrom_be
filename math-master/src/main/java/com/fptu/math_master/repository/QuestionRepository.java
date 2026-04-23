@@ -103,6 +103,42 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       Pageable pageable);
 
   @Query(
+      nativeQuery = true,
+      value =
+          "SELECT q.* FROM questions q "
+              + "WHERE q.deleted_at IS NULL "
+              + "AND q.created_by = :createdBy "
+              + "AND q.id NOT IN ("
+              + "  SELECT aq.question_id FROM assessment_questions aq WHERE aq.assessment_id = :assessmentId"
+              + ") "
+              + "AND (CAST(:keyword AS text) IS NULL OR q.question_text ILIKE CAST(:keyword AS text)) "
+              + "AND (CAST(:tag AS text) IS NULL "
+              + "  OR EXISTS ("
+              + "    SELECT 1 FROM unnest(COALESCE(q.tags, ARRAY[]::text[])) t "
+              + "    WHERE t ILIKE CAST(:tag AS text)"
+              + "  )) "
+              + "ORDER BY q.created_at DESC",
+      countQuery =
+          "SELECT COUNT(*) FROM questions q "
+              + "WHERE q.deleted_at IS NULL "
+              + "AND q.created_by = :createdBy "
+              + "AND q.id NOT IN ("
+              + "  SELECT aq.question_id FROM assessment_questions aq WHERE aq.assessment_id = :assessmentId"
+              + ") "
+              + "AND (CAST(:keyword AS text) IS NULL OR q.question_text ILIKE CAST(:keyword AS text)) "
+              + "AND (CAST(:tag AS text) IS NULL "
+              + "  OR EXISTS ("
+              + "    SELECT 1 FROM unnest(COALESCE(q.tags, ARRAY[]::text[])) t "
+              + "    WHERE t ILIKE CAST(:tag AS text)"
+              + "  ))")
+  Page<Question> findAvailableByAssessmentId(
+      @Param("createdBy") UUID createdBy,
+      @Param("assessmentId") UUID assessmentId,
+      @Param("keyword") String keyword,
+      @Param("tag") String tag,
+      Pageable pageable);
+
+  @Query(
       "SELECT q FROM Question q WHERE q.questionBankId = :bankId AND q.deletedAt IS NULL ORDER BY q.createdAt DESC")
   Page<Question> findByQuestionBankIdAndNotDeleted(@Param("bankId") UUID bankId, Pageable pageable);
 

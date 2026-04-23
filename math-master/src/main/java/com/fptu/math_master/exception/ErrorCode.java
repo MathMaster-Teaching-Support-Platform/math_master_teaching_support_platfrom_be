@@ -227,6 +227,10 @@ public enum ErrorCode {
   DOCUMENT_NOT_FOUND(1129, "Document not found", HttpStatus.NOT_FOUND),
   SCHOOL_GRADE_ALREADY_EXISTS(1129, "School grade already exists", HttpStatus.BAD_REQUEST),
   ROADMAP_TOPIC_NOT_FOUND(1130, "Roadmap topic not found", HttpStatus.NOT_FOUND),
+    INVALID_TOPIC_POINT_ORDER(
+            1130_1,
+            "Topic points must be positive and strictly increasing by order",
+            HttpStatus.BAD_REQUEST),
   TEACHING_RESOURCE_NOT_FOUND(1131, "Teaching resource not found", HttpStatus.NOT_FOUND),
   TEACHING_RESOURCE_ACCESS_DENIED(
       1132, "You do not have permission to access this teaching resource", HttpStatus.FORBIDDEN),

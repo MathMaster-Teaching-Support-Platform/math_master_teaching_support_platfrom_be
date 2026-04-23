@@ -17,7 +17,9 @@ import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.dto.response.CognitiveLevelDistributionResponse;
 import com.fptu.math_master.dto.response.DistributeAssessmentPointsResponse;
+import com.fptu.math_master.dto.response.PagedDataResponse;
 import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
+import com.fptu.math_master.dto.response.QuestionResponse;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.AssessmentQuestion;
@@ -656,6 +658,38 @@ public class AssessmentServiceImpl implements AssessmentService {
         .toList();
   }
 
+      @Override
+      @Transactional(readOnly = true)
+      public PagedDataResponse<QuestionResponse> getAvailableQuestions(
+        UUID assessmentId, String keyword, String tag, Pageable pageable) {
+      log.info(
+        "Getting available questions for assessment {} with keyword='{}', tag='{}'",
+        assessmentId,
+        keyword,
+        tag);
+
+      Assessment assessment = loadAssessmentOrThrow(assessmentId);
+      UUID currentUserId = getCurrentUserId();
+      validateOwnerOrAdmin(assessment.getTeacherId(), currentUserId);
+
+      String normalizedKeyword = normalizeKeywordPattern(keyword);
+      String normalizedTag = normalizeKeywordPattern(tag);
+
+      Page<Question> page =
+        questionRepository.findAvailableByAssessmentId(
+          assessment.getTeacherId(), assessmentId, normalizedKeyword, normalizedTag, pageable);
+
+      List<QuestionResponse> items = page.getContent().stream().map(this::mapQuestionToResponse).toList();
+
+      return PagedDataResponse.<QuestionResponse>builder()
+        .data(items)
+        .page(page.getNumber())
+        .size(page.getSize())
+        .totalElements(page.getTotalElements())
+        .totalPages(page.getTotalPages())
+        .build();
+      }
+
   @Override
   @Transactional
   public AssessmentResponse removeQuestion(UUID assessmentId, UUID questionId) {
@@ -760,6 +794,41 @@ public class AssessmentServiceImpl implements AssessmentService {
     return assessmentRepository
         .findByIdAndNotDeleted(id)
         .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+  }
+
+  private String normalizeKeywordPattern(String value) {
+    if (value == null || value.trim().isEmpty()) {
+      return null;
+    }
+    return "%" + value.trim() + "%";
+  }
+
+  private QuestionResponse mapQuestionToResponse(Question question) {
+    String creatorName =
+        userRepository.findById(question.getCreatedBy()).map(User::getFullName).orElse(UNKNOWN_NAME);
+
+    return QuestionResponse.builder()
+        .id(question.getId())
+        .createdBy(question.getCreatedBy())
+        .creatorName(creatorName)
+        .questionText(question.getQuestionText())
+        .questionType(question.getQuestionType())
+        .options(question.getOptions())
+        .correctAnswer(question.getCorrectAnswer())
+        .explanation(question.getExplanation())
+        .solutionSteps(question.getSolutionSteps())
+        .diagramData(question.getDiagramData())
+        .points(question.getPoints())
+        .cognitiveLevel(question.getCognitiveLevel())
+        .questionStatus(question.getQuestionStatus())
+        .questionSourceType(question.getQuestionSourceType())
+        .tags(question.getTags())
+        .templateId(question.getTemplateId())
+        .canonicalQuestionId(question.getCanonicalQuestionId())
+        .questionBankId(question.getQuestionBankId())
+        .createdAt(question.getCreatedAt())
+        .updatedAt(question.getUpdatedAt())
+        .build();
   }
 
   private UUID getCurrentUserId() {
