@@ -227,6 +227,31 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
   @Override
   @Transactional
+  public QuestionTemplateResponse unpublishTemplate(UUID id) {
+    log.info("Unpublishing template: {}", id);
+
+    QuestionTemplate template =
+        questionTemplateRepository
+            .findByIdWithCreator(id)
+            .filter(t -> t.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    validateOwnerOrAdmin(template.getCreatedBy(), currentUserId);
+
+    if (template.getStatus() != TemplateStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.TEMPLATE_NOT_PUBLISHED);
+    }
+
+    template.setStatus(TemplateStatus.DRAFT);
+    template = questionTemplateRepository.save(template);
+
+    log.info("Template {} unpublished (reverted to DRAFT)", id);
+    return mapToResponse(template);
+  }
+
+  @Override
+  @Transactional
   public QuestionTemplateResponse archiveTemplate(UUID id) {
     log.info("Archiving template: {}", id);
 

@@ -201,6 +201,22 @@ public class QuestionTemplateController {
         .build();
   }
 
+  @PatchMapping("/{id}/unpublish")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Unpublish Question Template",
+      description =
+          "Revert a PUBLISHED template back to DRAFT status. "
+              + "Use this to edit a published template without archiving it. "
+              + "Template will no longer be available for question generation until re-published.")
+  public ApiResponse<QuestionTemplateResponse> unpublishTemplate(@PathVariable UUID id) {
+    log.info("REST request to unpublish template: {}", id);
+    return ApiResponse.<QuestionTemplateResponse>builder()
+        .message("Template unpublished successfully. Status reverted to DRAFT.")
+        .result(questionTemplateService.unpublishTemplate(id))
+        .build();
+  }
+
   @PatchMapping("/{id}/archive")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(

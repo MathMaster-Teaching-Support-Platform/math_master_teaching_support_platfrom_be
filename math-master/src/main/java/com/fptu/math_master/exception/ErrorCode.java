@@ -138,6 +138,7 @@ public enum ErrorCode {
       HttpStatus.BAD_REQUEST),
   TEMPLATE_ALREADY_PUBLISHED(1093, "Template is already published", HttpStatus.BAD_REQUEST),
   TEMPLATE_ALREADY_ARCHIVED(1094, "Template is already archived", HttpStatus.BAD_REQUEST),
+  TEMPLATE_NOT_PUBLISHED(1095, "Template is not published and cannot be unpublished", HttpStatus.BAD_REQUEST),
   TEMPLATE_ACCESS_DENIED(
       1100, "You do not have permission to access this template", HttpStatus.FORBIDDEN),
   LESSON_NOT_FOUND(1089, "Lesson not found", HttpStatus.NOT_FOUND),

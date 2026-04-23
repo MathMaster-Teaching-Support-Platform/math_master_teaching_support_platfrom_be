@@ -1,14 +1,19 @@
 package com.fptu.math_master.controller;
 
-import com.fptu.math_master.dto.request.CreateQuestionRequest;
-import com.fptu.math_master.dto.request.BulkAssignQuestionsToBankRequest;
 import com.fptu.math_master.dto.request.BulkApproveQuestionsRequest;
+import com.fptu.math_master.dto.request.BulkAssignQuestionsToBankRequest;
+import com.fptu.math_master.dto.request.CreateQuestionRequest;
 import com.fptu.math_master.dto.request.ImportQuestionsRequest;
+import com.fptu.math_master.dto.request.QuestionBatchImportRequest;
 import com.fptu.math_master.dto.request.UpdateQuestionRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.ImportQuestionsResponse;
+import com.fptu.math_master.dto.response.QuestionBatchImportResponse;
+import com.fptu.math_master.dto.response.QuestionExcelPreviewResponse;
 import com.fptu.math_master.dto.response.QuestionResponse;
+import com.fptu.math_master.service.QuestionExcelImportService;
 import com.fptu.math_master.service.QuestionService;
+import org.springframework.http.ResponseEntity;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -39,6 +44,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class QuestionController {
 
   QuestionService questionService;
+  QuestionExcelImportService questionExcelImportService;
 
   @PostMapping
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
@@ -317,5 +323,51 @@ public class QuestionController {
       log.error("Error reading file: {}", e.getMessage());
       throw new RuntimeException("Failed to read file: " + e.getMessage());
     }
+  }
+
+  @PostMapping(value = "/bulk-import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Preview Excel Bulk Import for Questions",
+      description = "Upload Excel file (.xlsx) and preview parsed questions with validation results.")
+  public ApiResponse<QuestionExcelPreviewResponse> previewBulkImport(
+      @RequestParam("file") MultipartFile file) {
+    log.info("REST request to preview question bulk import from Excel: {}", file.getOriginalFilename());
+    QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
+    String message =
+        String.format(
+            "Preview completed: %d valid, %d invalid rows out of %d total",
+            response.getValidRows(), response.getInvalidRows(), response.getTotalRows());
+    return ApiResponse.<QuestionExcelPreviewResponse>builder().message(message).result(response).build();
+  }
+
+  @PostMapping("/bulk-import/submit")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Submit Question Bulk Import",
+      description = "Import validated questions in batch. Returns success/failure summary.")
+  public ApiResponse<QuestionBatchImportResponse> submitBulkImport(
+      @Valid @RequestBody QuestionBatchImportRequest request) {
+    log.info("REST request to submit question bulk import with {} questions", request.getQuestions().size());
+    QuestionBatchImportResponse response = questionExcelImportService.importQuestionsBatch(request);
+    String message =
+        String.format(
+            "Import completed: %d succeeded, %d failed out of %d total",
+            response.getSuccessCount(), response.getFailedCount(), response.getTotalRows());
+    return ApiResponse.<QuestionBatchImportResponse>builder().message(message).result(response).build();
+  }
+
+  @GetMapping("/bulk-import/template")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Download Excel Template for Question Import",
+      description = "Download a blank Excel template with headers and example rows for bulk question import.")
+  public ResponseEntity<byte[]> downloadExcelTemplate() {
+    log.info("REST request to download question Excel import template");
+    byte[] excelBytes = questionExcelImportService.generateExcelTemplate();
+    return ResponseEntity.ok()
+        .header("Content-Disposition", "attachment; filename=question_import.xlsx")
+        .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .body(excelBytes);
   }
 }
