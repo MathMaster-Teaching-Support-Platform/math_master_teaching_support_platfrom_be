@@ -1,4 +1,4 @@
-package com.fptu.math_master.dto/response;
+package com.fptu.math_master.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
