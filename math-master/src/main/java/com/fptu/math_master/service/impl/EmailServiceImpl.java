@@ -101,4 +101,33 @@ public class EmailServiceImpl implements EmailService {
 
     sendEmail(to, "Đặt lại mật khẩu MathMaster của bạn", "password-reset", variables);
   }
+
+  // ─── Order Email Methods ─────────────────────────────────────────────────
+
+  @Override
+  public void sendOrderConfirmationEmail(String to, String studentName, String courseTitle, 
+      String orderNumber, String amount, String enrollmentUrl) {
+    Map<String, Object> variables = new HashMap<>();
+    variables.put("studentName", studentName);
+    variables.put("courseTitle", courseTitle);
+    variables.put("orderNumber", orderNumber);
+    variables.put("amount", amount);
+    variables.put("enrollmentUrl", enrollmentUrl);
+    variables.put("currentYear", java.time.Year.now().getValue());
+
+    sendEmail(to, "Xác nhận đăng ký khóa học - " + courseTitle, "order-confirmation", variables);
+  }
+
+  @Override
+  public void sendNewEnrollmentEmail(String to, String instructorName, String studentName, 
+      String courseTitle, String courseUrl) {
+    Map<String, Object> variables = new HashMap<>();
+    variables.put("instructorName", instructorName);
+    variables.put("studentName", studentName);
+    variables.put("courseTitle", courseTitle);
+    variables.put("courseUrl", courseUrl);
+    variables.put("currentYear", java.time.Year.now().getValue());
+
+    sendEmail(to, "Học viên mới đăng ký khóa học - " + courseTitle, "new-enrollment", variables);
+  }
 }

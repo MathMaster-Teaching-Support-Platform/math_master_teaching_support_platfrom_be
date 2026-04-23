@@ -20,6 +20,7 @@ public class NotificationRequest implements Serializable {
     private String content;
     private String recipientId; // User ID or "ALL"
     private String senderId;
+    private String actionUrl; // URL to navigate to when notification is clicked
     private Map<String, Object> metadata;
     private LocalDateTime timestamp;
 }

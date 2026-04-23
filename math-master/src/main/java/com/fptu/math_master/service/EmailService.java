@@ -14,4 +14,12 @@ public interface EmailService {
   void sendEmailConfirmation(String to, String userName, String confirmationUrl);
 
   void sendPasswordResetEmail(String to, String userName, String resetUrl);
+
+  // ─── Order Email Methods ─────────────────────────────────────────────────
+
+  void sendOrderConfirmationEmail(String to, String studentName, String courseTitle, 
+      String orderNumber, String amount, String enrollmentUrl);
+
+  void sendNewEnrollmentEmail(String to, String instructorName, String studentName, 
+      String courseTitle, String courseUrl);
 }

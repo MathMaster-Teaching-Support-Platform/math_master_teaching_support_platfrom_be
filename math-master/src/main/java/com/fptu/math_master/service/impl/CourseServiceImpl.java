@@ -4,6 +4,7 @@ import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
 import com.fptu.math_master.dto.request.CreateCourseRequest;
 import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
 import com.fptu.math_master.dto.request.UpdateCourseRequest;
+import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
@@ -40,12 +41,15 @@ import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.repository.TeacherProfileRepository;
 import com.fptu.math_master.repository.UserRepository;
+import com.fptu.math_master.component.StreamPublisher;
+import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.service.CourseService;
 import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -91,6 +95,7 @@ public class CourseServiceImpl implements CourseService {
   CourseReviewRepository courseReviewRepository;
   TeacherProfileRepository teacherProfileRepository;
   CustomCourseSectionRepository customCourseSectionRepository;
+  StreamPublisher streamPublisher;
 
   @Override
   public CourseResponse createCourse(CreateCourseRequest request, MultipartFile thumbnailFile) {
@@ -272,6 +277,7 @@ public class CourseServiceImpl implements CourseService {
 
     course.setStatus(com.fptu.math_master.enums.CourseStatus.PENDING_REVIEW);
     course = courseRepository.save(course);
+    notifyAdminsCoursePendingReview(course);
     log.info("Course {} submitted for review", courseId);
     return mapToResponse(course);
   }
@@ -293,6 +299,7 @@ public class CourseServiceImpl implements CourseService {
     course.setPublished(true);
     course.setRejectionReason(null);
     course = courseRepository.save(course);
+    notifyTeacherCourseApproved(course);
     log.info("Course {} approved and published by admin", courseId);
     return mapToResponse(course);
   }
@@ -304,8 +311,95 @@ public class CourseServiceImpl implements CourseService {
     course.setPublished(false);
     course.setRejectionReason(reason);
     course = courseRepository.save(course);
+    notifyTeacherCourseRejected(course, reason);
     log.info("Course {} rejected by admin. Reason: {}", courseId, reason);
     return mapToResponse(course);
+  }
+
+  private void notifyAdminsCoursePendingReview(Course course) {
+    List<UUID> adminIds = userRepository.findUserIdsByRoleName(PredefinedRole.ADMIN_ROLE);
+    if (adminIds.isEmpty()) {
+      return;
+    }
+
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("courseId", course.getId().toString());
+    metadata.put("status", course.getStatus().name());
+    metadata.put("event", "COURSE_SUBMITTED_FOR_REVIEW");
+
+    for (UUID adminId : adminIds) {
+      publishCourseNotification(
+          adminId,
+          "COURSE",
+          "Khoa hoc can duyet",
+          "Khoa hoc '" + course.getTitle() + "' vua duoc gui len de kiem duyet.",
+          metadata,
+          "/admin/courses/review");
+    }
+  }
+
+  private void notifyTeacherCourseApproved(Course course) {
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("courseId", course.getId().toString());
+    metadata.put("status", course.getStatus().name());
+    metadata.put("event", "COURSE_APPROVED");
+
+    publishCourseNotification(
+        course.getTeacherId(),
+        "COURSE",
+        "Khoa hoc da duoc phe duyet",
+        "Khoa hoc '" + course.getTitle() + "' da duoc phe duyet va xuat ban.",
+        metadata,
+        "/teacher/courses/" + course.getId());
+  }
+
+  private void notifyTeacherCourseRejected(Course course, String reason) {
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("courseId", course.getId().toString());
+    metadata.put("status", course.getStatus().name());
+    metadata.put("event", "COURSE_REJECTED");
+    if (reason != null) {
+      metadata.put("reason", reason);
+    }
+
+    String content = "Khoa hoc '" + course.getTitle() + "' bi tu choi";
+    if (StringUtils.hasText(reason)) {
+      content += ": " + reason;
+    }
+
+    publishCourseNotification(
+        course.getTeacherId(),
+        "COURSE",
+        "Khoa hoc bi tu choi",
+        content,
+        metadata,
+        "/teacher/courses/" + course.getId());
+  }
+
+  private void publishCourseNotification(
+      UUID recipientId,
+      String type,
+      String title,
+      String content,
+      Map<String, Object> metadata,
+      String actionUrl) {
+    try {
+      NotificationRequest notification =
+          NotificationRequest.builder()
+              .id(UUID.randomUUID().toString())
+              .type(type)
+              .title(title)
+              .content(content)
+              .recipientId(recipientId.toString())
+              .senderId("SYSTEM")
+              .timestamp(LocalDateTime.now())
+              .metadata(metadata)
+              .actionUrl(actionUrl)
+              .build();
+      streamPublisher.publish(notification);
+    } catch (Exception e) {
+      log.error("Failed to publish course notification for recipient {}", recipientId, e);
+    }
   }
 
   @Override
