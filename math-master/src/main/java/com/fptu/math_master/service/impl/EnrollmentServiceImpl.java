@@ -1,5 +1,7 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.component.StreamPublisher;
+import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.dto.response.EnrollmentResponse;
 import com.fptu.math_master.entity.Course;
 import com.fptu.math_master.entity.Enrollment;
@@ -22,16 +24,16 @@ import com.fptu.math_master.enums.TransactionStatus;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.time.Duration;
-import java.util.List;
+import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.Collections;
 import java.util.Set;
 import java.util.Map;
+import java.util.HashMap;
 import com.fptu.math_master.repository.CourseLessonRepository;
 import com.fptu.math_master.repository.LessonProgressRepository;
-import org.springframework.data.domain.PageRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -54,6 +56,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
   TransactionRepository transactionRepository;
   CourseLessonRepository courseLessonRepository;
   LessonProgressRepository lessonProgressRepository;
+  StreamPublisher streamPublisher;
 
   @Override
   public EnrollmentResponse enroll(UUID courseId) {
@@ -163,8 +166,53 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     enrollment.setEnrolledAt(Instant.now());
     enrollment = enrollmentRepository.save(enrollment);
 
+    publishEnrollmentNotifications(course, studentId);
+
     log.info("Student {} enrollment finalized for course {}", studentId, courseId);
     return mapToResponse(enrollment, course.getTitle(), studentId);
+  }
+
+  private void publishEnrollmentNotifications(Course course, UUID studentId) {
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("courseId", course.getId().toString());
+    metadata.put("event", "COURSE_ENROLLED");
+
+    try {
+      NotificationRequest studentNotification =
+          NotificationRequest.builder()
+              .id(UUID.randomUUID().toString())
+              .type("COURSE")
+              .title("Dang ky khoa hoc thanh cong")
+              .content("Ban da dang ky thanh cong khoa hoc '" + course.getTitle() + "'.")
+              .recipientId(studentId.toString())
+              .senderId("SYSTEM")
+              .timestamp(LocalDateTime.now())
+              .metadata(metadata)
+              .actionUrl("/student/courses")
+              .build();
+      streamPublisher.publish(studentNotification);
+    } catch (Exception e) {
+      log.error("Failed to publish enrollment notification for student {}", studentId, e);
+    }
+
+    try {
+      NotificationRequest teacherNotification =
+          NotificationRequest.builder()
+              .id(UUID.randomUUID().toString())
+              .type("COURSE")
+              .title("Hoc vien moi dang ky")
+              .content("Khoa hoc '" + course.getTitle() + "' vua co mot hoc vien moi dang ky.")
+              .recipientId(course.getTeacherId().toString())
+              .senderId("SYSTEM")
+              .timestamp(LocalDateTime.now())
+              .metadata(metadata)
+              .actionUrl("/teacher/courses/" + course.getId())
+              .build();
+      streamPublisher.publish(teacherNotification);
+    } catch (Exception e) {
+      log.error(
+          "Failed to publish enrollment notification for teacher {}", course.getTeacherId(), e);
+    }
   }
 
   @Override
@@ -185,80 +233,6 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     Course course = courseRepository
         .findByIdAndDeletedAtIsNull(enrollment.getCourseId())
         .orElse(null);
-
-    // ─── Refund Eligibility Check ─────────────────────────────────────────────
-    boolean isEligibleForRefund = true;
-    if (enrollment.getEnrolledAt() != null) {
-      Duration duration = Duration.between(enrollment.getEnrolledAt(), Instant.now());
-      if (duration.toHours() >= 24) {
-        log.info("Student {} dropping {}, beyond 24h limit ({}h). Skip refund.", studentId, enrollmentId, duration.toHours());
-        isEligibleForRefund = false;
-      }
-    }
-
-    if (isEligibleForRefund && course != null) {
-      int totalLessons = (int) courseLessonRepository.countByCourseIdAndNotDeleted(course.getId());
-      if (totalLessons > 0) {
-        int completedLessons = (int) lessonProgressRepository.countCompletedByEnrollmentId(enrollmentId);
-        double completionRate = (completedLessons * 100.0) / totalLessons;
-        if (completionRate >= 10.0) {
-          log.info("Student {} dropping {}, beyond 10% progress limit ({}%). Skip refund.", studentId, enrollmentId, completionRate);
-          isEligibleForRefund = false;
-        }
-      }
-    }
-
-    // ─── Refund Logic ─────────────────────────────────────────────────────────
-    if (isEligibleForRefund && course != null && course.getTeacherId() != null) {
-      Wallet studentWallet = walletRepository.findByUserId(studentId).orElse(null);
-      if (studentWallet != null) {
-        // Find recent purchase transaction for this course
-        // Note: Using PageRequest to get most recent txs, filter by title
-        List<Transaction> txs = transactionRepository.findByWalletId(studentWallet.getId(), PageRequest.of(0, 100))
-            .getContent();
-        Transaction purchaseTx = txs.stream()
-            .filter(t -> t.getType() == TransactionType.COURSE_PURCHASE 
-                      && t.getDescription().contains(course.getTitle()) 
-                      && t.getStatus() == TransactionStatus.SUCCESS)
-            .findFirst()
-            .orElse(null);
-
-        // FREE COURSE EXEMPTION:
-        if (purchaseTx != null && purchaseTx.getAmount().compareTo(BigDecimal.ZERO) > 0) {
-          log.info("Refunding {} to student {} for course {}", purchaseTx.getAmount(), studentId, course.getId());
-          walletService.addBalance(studentWallet.getId(), purchaseTx.getAmount());
-          
-          Transaction refundTx = Transaction.builder()
-              .wallet(studentWallet)
-              .amount(purchaseTx.getAmount())
-              .type(TransactionType.REFUND)
-              .status(TransactionStatus.SUCCESS)
-              .description("Refund for Course: " + course.getTitle())
-              .transactionDate(Instant.now())
-              .orderCode(System.currentTimeMillis())
-              .build();
-          transactionRepository.save(refundTx);
-
-          // Deduct from teacher's wallet
-          Wallet teacherWallet = walletRepository.findByUserId(course.getTeacherId()).orElse(null);
-          if (teacherWallet != null && purchaseTx.getInstructorEarnings() != null) {
-            log.info("Deducting refund {} from teacher {} for course {}", purchaseTx.getInstructorEarnings(), course.getTeacherId(), course.getId());
-            walletService.deductBalance(teacherWallet.getId(), purchaseTx.getInstructorEarnings());
-            
-            Transaction deductionTx = Transaction.builder()
-                .wallet(teacherWallet)
-                .amount(purchaseTx.getInstructorEarnings())
-                .type(TransactionType.REFUND)
-                .status(TransactionStatus.SUCCESS)
-                .description("Refund Deduction for Course: " + course.getTitle())
-                .transactionDate(Instant.now())
-                .orderCode(System.currentTimeMillis() + 1)
-                .build();
-            transactionRepository.save(deductionTx);
-          }
-        }
-      }
-    }
 
     log.info("Student {} dropped enrollment {}", studentId, enrollmentId);
     return mapToResponse(enrollment, course != null ? course.getTitle() : null, studentId);
