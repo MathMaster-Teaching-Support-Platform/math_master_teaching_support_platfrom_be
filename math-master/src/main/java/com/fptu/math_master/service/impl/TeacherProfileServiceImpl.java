@@ -252,7 +252,6 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
       streamNotif.setContent("Hồ sơ Giáo viên của bạn đã bị từ chối với lý do: " + request.getAdminComment());
       streamNotif.setActionUrl("/profile");
     }
-    }
 
     try {
       if (streamNotif.getType() != null) {

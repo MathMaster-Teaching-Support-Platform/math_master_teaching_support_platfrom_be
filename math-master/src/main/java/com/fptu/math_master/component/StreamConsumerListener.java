@@ -60,7 +60,6 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
                     recipient.setId(recipientId);
 
                     Notification notificationEntity = Notification.builder()
-                            .id(UUID.fromString(notificationMessage.getId()))
                             .recipient(recipient)
                             .type(notificationMessage.getType())
                             .title(notificationMessage.getTitle())
@@ -68,6 +67,7 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
                             .metadata(notificationMessage.getMetadata())
                             .isRead(false)
                             .build();
+                    notificationEntity.setId(UUID.fromString(notificationMessage.getId()));
 
                     // Use the stream message ID to maintain consistency between FCM and database
                     // Check if notification already exists to prevent duplicates
