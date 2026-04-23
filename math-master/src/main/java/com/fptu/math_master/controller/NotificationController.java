@@ -21,11 +21,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fptu.math_master.component.StreamPublisher;
+import com.fptu.math_master.configuration.properties.CentrifugoProperties;
 import com.fptu.math_master.dto.request.FcmTokenRequest;
 import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.dto.request.NotificationPreferenceRequest;
 import com.fptu.math_master.dto.response.NotificationResponse;
 import com.fptu.math_master.dto.response.NotificationPreferenceResponse;
+import com.fptu.math_master.service.CentrifugoService;
 import com.fptu.math_master.service.NotificationService;
 import com.fptu.math_master.service.NotificationPreferenceService;
 import com.fptu.math_master.service.PushNotificationService;
@@ -43,6 +45,8 @@ public class NotificationController {
     private final NotificationService notificationService;
     private final NotificationPreferenceService notificationPreferenceService;
     private final PushNotificationService pushNotificationService;
+    private final CentrifugoService centrifugoService;
+    private final CentrifugoProperties centrifugoProperties;
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
@@ -50,6 +54,18 @@ public class NotificationController {
         UUID userId = UUID.fromString(jwt.getSubject());
 
         return ResponseEntity.ok(notificationService.getNotifications(userId, pageable));
+    }
+
+    @GetMapping("/token")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> getCentrifugoToken(@AuthenticationPrincipal Jwt jwt) {
+        String userId = jwt.getSubject();
+        int ttl = centrifugoProperties.getTokenTtlHours() != null ? centrifugoProperties.getTokenTtlHours() : 1;
+        String token = centrifugoService.generateConnectionToken(userId, ttl);
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "wsUrl", centrifugoProperties.getWsUrl()
+        ));
     }
 
     @PatchMapping("/{id}/read")
