@@ -22,4 +22,7 @@ public interface CourseLessonService {
   CourseLessonResponse addMaterial(UUID courseId, UUID lessonId, MultipartFile file);
 
   CourseLessonResponse removeMaterial(UUID courseId, UUID lessonId, String materialId);
+
+  /** Returns a presigned download URL for a material file. Accessible to enrolled students, teacher owner, and admin. */
+  String getMaterialDownloadUrl(UUID courseId, UUID lessonId, String materialId);
 }

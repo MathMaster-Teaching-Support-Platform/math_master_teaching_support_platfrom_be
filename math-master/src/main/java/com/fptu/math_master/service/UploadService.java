@@ -38,6 +38,15 @@ public interface UploadService {
   String getPresignedUrl(String key, String bucketName);
 
   /**
+   * Get a pre-signed URL that forces the browser to download the file (Content-Disposition: attachment).
+   * @param key        Object key in the bucket
+   * @param bucketName The bucket containing the file
+   * @param fileName   The suggested file name shown in the browser Save-As dialog
+   * @return A pre-signed URL valid for a short period
+   */
+  String getPresignedDownloadUrl(String key, String bucketName, String fileName);
+
+  /**
    * Download a file from Minio
    * @param key Path/Key to the file
    * @param bucketName The bucket containing the file
