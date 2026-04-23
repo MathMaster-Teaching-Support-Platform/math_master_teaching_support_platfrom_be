@@ -86,5 +86,9 @@ public interface LessonSlideService {
 
     BinaryFileData getPublicGeneratedSlideThumbnailImage(UUID generatedFileId);
 
+  /** Re-renders a single slide's heading+content via QuickLaTeX and returns the image URL.
+   *  Returns null if the output format is not LATEX or if rendering fails. */
+  String renderSlidePreview(String heading, String content);
+
   record BinaryFileData(byte[] content, String fileName, String contentType) {}
 }

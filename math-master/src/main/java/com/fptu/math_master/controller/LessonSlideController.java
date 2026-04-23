@@ -1,6 +1,7 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.LessonSlideConfirmContentRequest;
+import com.fptu.math_master.dto.request.SlidePreviewRenderRequest;
 import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
@@ -275,6 +276,15 @@ public class LessonSlideController {
     lessonSlideService.deleteGeneratedSlide(generatedFileId);
     return ApiResponse.<Void>builder()
         .message("Generated slide deleted successfully")
+        .build();
+  }
+
+  @PostMapping("/render-slide-preview")
+  @Operation(summary = "Re-render a single slide heading+content via QuickLaTeX and return the image URL")
+  public ApiResponse<String> renderSlidePreview(
+      @RequestBody SlidePreviewRenderRequest request) {
+    return ApiResponse.<String>builder()
+        .result(lessonSlideService.renderSlidePreview(request.getHeading(), request.getContent()))
         .build();
   }
 
