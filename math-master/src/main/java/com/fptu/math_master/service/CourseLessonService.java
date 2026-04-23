@@ -25,4 +25,8 @@ public interface CourseLessonService {
 
   /** Returns a presigned download URL for a material file. Accessible to enrolled students, teacher owner, and admin. */
   String getMaterialDownloadUrl(UUID courseId, UUID lessonId, String materialId);
+
+  /** Fetches the raw bytes of a material file from MinIO for direct streaming to the client. */
+  record MaterialDownloadResult(byte[] content, String contentType, String fileName) {}
+  MaterialDownloadResult downloadMaterial(UUID courseId, UUID lessonId, String materialId);
 }

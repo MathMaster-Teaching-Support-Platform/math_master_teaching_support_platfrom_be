@@ -492,6 +492,38 @@ public class CourseLessonServiceImpl implements CourseLessonService {
         item.getKey(), minioProperties.getCourseMaterialsBucket(), item.getName());
   }
 
+  @Override
+  public CourseLessonService.MaterialDownloadResult downloadMaterial(
+      UUID courseId, UUID lessonId, String materialId) {
+    Course course = findCourseOrThrow(courseId);
+    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+
+    boolean isOwner = currentUserId != null && course.getTeacherId().equals(currentUserId);
+    if (!isOwner) {
+      boolean enrolled = currentUserId != null && enrollmentRepository
+          .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
+          .map(e -> "ACTIVE".equals(e.getStatus().name()))
+          .orElse(false);
+      if (!enrolled) {
+        throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+      }
+    }
+
+    CourseLesson cl = courseLessonRepository
+        .findByIdAndDeletedAtIsNull(lessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+
+    MaterialItem item = getMaterialList(cl.getMaterials()).stream()
+        .filter(m -> m.getId().equals(materialId))
+        .findFirst()
+        .orElseThrow(() -> new AppException(ErrorCode.INVALID_REQUEST));
+
+    byte[] content = uploadService.downloadFile(
+        item.getKey(), minioProperties.getCourseMaterialsBucket());
+    String ct = item.getContentType() != null ? item.getContentType() : "application/octet-stream";
+    return new CourseLessonService.MaterialDownloadResult(content, ct, item.getName());
+  }
+
   private List<MaterialItem> getMaterialList(String json) {
     if (json == null || json.isBlank()) return new ArrayList<>();
     try {
