@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -58,6 +59,20 @@ public class CourseLessonMaterialController {
         return ApiResponse.<CourseLessonResponse>builder()
                 .message("Material removed successfully")
                 .result(courseLessonService.removeMaterial(courseId, lessonId, materialId))
+                .build();
+    }
+
+    @Operation(summary = "Get a presigned download URL for a material file",
+               description = "Accessible by enrolled students, teacher owner, and admin. Returns a time-limited URL that forces browser download.")
+    @GetMapping("/{materialId}/download-url")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
+    public ApiResponse<String> getMaterialDownloadUrl(
+            @PathVariable UUID courseId,
+            @PathVariable UUID lessonId,
+            @PathVariable String materialId) {
+        log.info("GET /courses/{}/lessons/{}/materials/{}/download-url", courseId, lessonId, materialId);
+        return ApiResponse.<String>builder()
+                .result(courseLessonService.getMaterialDownloadUrl(courseId, lessonId, materialId))
                 .build();
     }
 }

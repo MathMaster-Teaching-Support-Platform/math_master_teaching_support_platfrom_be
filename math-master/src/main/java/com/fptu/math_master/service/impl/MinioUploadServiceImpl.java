@@ -152,6 +152,38 @@ public class MinioUploadServiceImpl implements UploadService {
     }
   }
 
+  @Override
+  public String getPresignedDownloadUrl(String key, String bucketName, String fileName) {
+    String normalizedKey = normalizeObjectKey(key, bucketName);
+    String safeFileName = (fileName != null && !fileName.isBlank()) ? fileName : "download";
+    // Percent-encode the filename so it is safe for an HTTP header value.
+    String encodedName;
+    try {
+      encodedName = java.net.URLEncoder.encode(safeFileName, java.nio.charset.StandardCharsets.UTF_8)
+          .replace("+", "%20");
+    } catch (Exception e) {
+      encodedName = safeFileName.replaceAll("[^\\w._-]", "_");
+    }
+    String contentDisposition = "attachment; filename*=UTF-8''" + encodedName;
+    try (S3Presigner presigner = buildPresigner()) {
+      PresignedGetObjectRequest presigned =
+          presigner.presignGetObject(
+              GetObjectPresignRequest.builder()
+                  .signatureDuration(Duration.ofHours(1))
+                  .getObjectRequest(
+                      GetObjectRequest.builder()
+                          .bucket(bucketName)
+                          .key(normalizedKey)
+                          .responseContentDisposition(contentDisposition)
+                          .build())
+                  .build());
+      return presigned.url().toString();
+    } catch (Exception e) {
+      log.error("Error generating presigned download URL for Minio: {}/{}", bucketName, normalizedKey, e);
+      throw new RuntimeException("Could not generate download URL", e);
+    }
+  }
+
   private S3Presigner buildPresigner() {
     String signingEndpoint = minioProperties.getPublicEndpoint();
     if (signingEndpoint == null || signingEndpoint.isBlank()) {

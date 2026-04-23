@@ -989,9 +989,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     return value
         .replace("\\r\\n", "\n")
         .replace("\\n", "\n")
-        // Strip a LONE trailing backslash (single \, not \\) that AI appends as a line-break
-        // marker in plain-text mode. (?<!\\) and (?!\\) ensure we do NOT strip LaTeX \\
-        // (double-backslash used in align, tabular, etc.).
+        // Convert LaTeX line-break command \\ at the end of a line to a real newline.
+        // AI frequently appends \\ as a section/paragraph separator; keeping them raw
+        // causes the UI to display literal "\\" characters.
+        .replaceAll("(?m)\\\\\\\\\\h*$", "\n")
+        // Strip any remaining lone trailing backslash (single \).
         .replaceAll("(?m)(?<!\\\\)\\\\(?!\\\\)\\h*$", "")
         .trim();
   }

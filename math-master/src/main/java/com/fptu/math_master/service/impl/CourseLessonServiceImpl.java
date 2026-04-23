@@ -460,6 +460,37 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     return mapToResponse(cl, getTitleForLesson(cl), true);
   }
 
+  @Override
+  public String getMaterialDownloadUrl(UUID courseId, UUID lessonId, String materialId) {
+    Course course = findCourseOrThrow(courseId);
+    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+
+    boolean isOwner = currentUserId != null && course.getTeacherId().equals(currentUserId);
+    boolean isAdmin = SecurityUtils.hasRole("ADMIN");
+
+    if (!isOwner && !isAdmin) {
+      boolean enrolled = currentUserId != null && enrollmentRepository
+          .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
+          .map(e -> "ACTIVE".equals(e.getStatus().name()))
+          .orElse(false);
+      if (!enrolled) {
+        throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+      }
+    }
+
+    CourseLesson cl = courseLessonRepository
+        .findByIdAndDeletedAtIsNull(lessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+
+    MaterialItem item = getMaterialList(cl.getMaterials()).stream()
+        .filter(m -> m.getId().equals(materialId))
+        .findFirst()
+        .orElseThrow(() -> new AppException(ErrorCode.INVALID_REQUEST));
+
+    return uploadService.getPresignedDownloadUrl(
+        item.getKey(), minioProperties.getCourseMaterialsBucket(), item.getName());
+  }
+
   private List<MaterialItem> getMaterialList(String json) {
     if (json == null || json.isBlank()) return new ArrayList<>();
     try {
