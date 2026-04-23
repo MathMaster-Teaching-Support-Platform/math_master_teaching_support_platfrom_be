@@ -616,8 +616,9 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     log.debug("Validating course: courseId={}, courseSubjectId={}, roadmapSubjectId={}", 
         courseId, course.getSubjectId(), roadmap.getSubjectId());
     
-    // TODO: Consider making this validation optional for multi-subject roadmaps
-    if (!course.getSubjectId().equals(roadmap.getSubjectId())) {
+    // Allow courses without subject (CUSTOM courses) or with matching subject
+    if (course.getSubjectId() != null && roadmap.getSubjectId() != null 
+        && !course.getSubjectId().equals(roadmap.getSubjectId())) {
       log.warn("Course subject mismatch: course {} has subjectId {}, but roadmap {} has subjectId {}. Allowing for flexibility.", 
           courseId, course.getSubjectId(), roadmap.getId(), roadmap.getSubjectId());
       // For now, allow cross-subject courses for flexibility
