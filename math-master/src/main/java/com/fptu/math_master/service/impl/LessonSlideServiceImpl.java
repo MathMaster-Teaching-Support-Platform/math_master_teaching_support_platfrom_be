@@ -133,7 +133,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   private static final String QUICKLATEX_PREAMBLE =
       "\\usepackage[utf8]{inputenc}\n"
-          + "\\usepackage[T1]{fontenc}\n"
+          + "\\usepackage[T5]{fontenc}\n"
           + "\\usepackage{lmodern}\n"
           + "\\usepackage{tikz}\n"
           + "\\usepackage{pgfplots}\n"
@@ -1160,7 +1160,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     try {
       XSLFPictureData pictureData = slideshow.addPicture(imageBytes, PictureData.PictureType.PNG);
       XSLFPictureShape pictureShape = slide.createPicture(pictureData);
-      pictureShape.setAnchor(anchor);
+      // Expand width by 1 inch (72 pt) so the image fills more of the slide horizontally.
+      Rectangle2D expandedAnchor = new Rectangle2D.Double(
+          anchor.getX(), anchor.getY(), anchor.getWidth() + 72.0, anchor.getHeight());
+      pictureShape.setAnchor(expandedAnchor);
     } catch (Exception ex) {
       log.warn("Failed to inject full-LaTeX image for slide {}: {}", item.getSlideNumber(), ex.getMessage());
     }
