@@ -17,6 +17,7 @@ import com.fptu.math_master.dto.response.RoadmapEntryTestInfoResponse;
 import com.fptu.math_master.dto.response.RoadmapEntryTestResultResponse;
 import com.fptu.math_master.dto.response.RoadmapEntryTestSnapshotResponse;
 import com.fptu.math_master.dto.response.RoadmapSummaryResponse;
+import com.fptu.math_master.dto.response.TopicMaterialResponse;
 import com.fptu.math_master.dto.response.RoadmapTopicResponse;
 import java.util.List;
 import java.util.UUID;
@@ -34,6 +35,8 @@ public interface RoadmapAdminService {
   RoadmapDetailResponse getRoadmap(UUID roadmapId);
 
   RoadmapDetailResponse getRoadmapForStudent(UUID studentId, UUID roadmapId);
+
+  List<TopicMaterialResponse> getTopicMaterials(UUID topicId);
 
   RoadmapDetailResponse updateRoadmap(UUID roadmapId, UpdateAdminRoadmapRequest request);
 
@@ -102,3 +105,4 @@ public interface RoadmapAdminService {
   RoadmapEntryTestResultResponse submitEntryTest(
       UUID studentId, UUID roadmapId, SubmitRoadmapEntryTestRequest request);
 }
+

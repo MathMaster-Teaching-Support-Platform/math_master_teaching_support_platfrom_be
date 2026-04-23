@@ -6,6 +6,7 @@ import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.DistributeAssessmentPointsRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
@@ -13,6 +14,7 @@ import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
+import com.fptu.math_master.dto.response.DistributeAssessmentPointsResponse;
 import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
 import com.fptu.math_master.enums.AssessmentStatus;
 import java.util.List;
@@ -129,4 +131,7 @@ public interface AssessmentService {
    */
   List<AssessmentQuestionResponse> autoDistributePoints(
       UUID assessmentId, AutoDistributePointsRequest request);
+
+  DistributeAssessmentPointsResponse distributeQuestionPoints(
+      UUID assessmentId, DistributeAssessmentPointsRequest request);
 }

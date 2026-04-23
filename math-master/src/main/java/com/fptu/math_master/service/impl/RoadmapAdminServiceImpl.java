@@ -39,6 +39,7 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   QuizAttemptRepository quizAttemptRepository;
   SubjectRepository subjectRepository;
   CourseRepository courseRepository;
+  TopicLearningMaterialRepository topicLearningMaterialRepository;
   UserRepository userRepository;
   LearningRoadmapService learningRoadmapService;
   StudentAssessmentService studentAssessmentService;
@@ -89,6 +90,14 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
     double bestScore = computeStudentBestScoreOnTenForRoadmap(studentId, roadmapId, null);
     response.setStudentBestScore(toPointScaleInt(bestScore));
     return response;
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<TopicMaterialResponse> getTopicMaterials(UUID topicId) {
+    return topicLearningMaterialRepository.findByTopicIdOrderBySequenceOrder(topicId).stream()
+        .map(this::mapToTopicMaterialResponse)
+        .toList();
   }
 
   @Override
@@ -460,11 +469,17 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   }
 
   @Override
-  @Transactional(readOnly = true)
   public RoadmapEntryTestResultResponse submitEntryTest(UUID studentId, UUID roadmapId,
       SubmitRoadmapEntryTestRequest request) {
     double prevBest = computeStudentBestScoreOnTenForRoadmap(studentId, roadmapId,
         request.getSubmissionId());
+
+    Submission submission = submissionRepository.findById(request.getSubmissionId())
+      .orElseThrow(() -> new AppException(ErrorCode.SUBMISSION_NOT_FOUND));
+    if (!studentId.equals(submission.getStudentId())) throw new AppException(ErrorCode.UNAUTHORIZED);
+    if (submission.getStatus() == SubmissionStatus.SUBMITTED)
+      gradingService.autoGradeSubmission(submission.getId());
+
     return evaluateEntryTestResult(studentId, roadmapId, request.getSubmissionId(), prevBest);
   }
 
@@ -654,5 +669,31 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         || subject.getSchoolGrade().getName().isBlank())
       throw new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND);
     return subject.getSchoolGrade().getName().trim();
+  }
+
+  private TopicMaterialResponse mapToTopicMaterialResponse(TopicLearningMaterial material) {
+    return TopicMaterialResponse.builder()
+        .id(material.getId())
+        .resourceTitle(material.getResourceTitle())
+        .resourceType(material.getResourceType())
+        .sequenceOrder(material.getSequenceOrder())
+        .isRequired(material.getIsRequired())
+        .lessonId(material.getLessonId())
+        .questionId(material.getQuestionId())
+        .assessmentId(material.getAssessmentId())
+        .mindmapId(material.getMindmapId())
+        .chapterId(material.getChapterId())
+        .resourceLink(buildMaterialResourceLink(material))
+        .build();
+  }
+
+  private String buildMaterialResourceLink(TopicLearningMaterial material) {
+    if (material.getLessonId() != null) return "/api/v1/lessons/" + material.getLessonId();
+    if (material.getQuestionId() != null) return "/api/v1/questions/" + material.getQuestionId();
+    if (material.getAssessmentId() != null)
+      return "/api/v1/assessments/" + material.getAssessmentId();
+    if (material.getMindmapId() != null) return "/api/v1/mindmaps/" + material.getMindmapId();
+    if (material.getChapterId() != null) return "/api/v1/chapters/" + material.getChapterId();
+    return null;
   }
 }

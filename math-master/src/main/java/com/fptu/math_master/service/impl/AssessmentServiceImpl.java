@@ -7,6 +7,7 @@ import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
 import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.DistributeAssessmentPointsRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
@@ -15,6 +16,7 @@ import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.dto.response.CognitiveLevelDistributionResponse;
+import com.fptu.math_master.dto.response.DistributeAssessmentPointsResponse;
 import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
@@ -1498,5 +1500,68 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     assessmentQuestionRepository.saveAll(toSave);
     return getAssessmentQuestions(assessmentId);
+  }
+
+  @Override
+  @Transactional
+  public DistributeAssessmentPointsResponse distributeQuestionPoints(
+      UUID assessmentId, DistributeAssessmentPointsRequest request) {
+    log.info(
+        "Distributing points for assessment {} with strategy {} and totalPoints {}",
+        assessmentId,
+        request.getStrategy(),
+        request.getTotalPoints());
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
+    }
+
+    if (request.getStrategy() != DistributeAssessmentPointsRequest.Strategy.EQUAL) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+
+    int scale = request.getScale() == null ? 2 : request.getScale();
+    BigDecimal totalPoints = request.getTotalPoints().setScale(scale, RoundingMode.HALF_UP);
+
+    List<AssessmentQuestion> allAQs =
+        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessmentId);
+    if (allAQs.isEmpty()) {
+      return DistributeAssessmentPointsResponse.builder()
+          .updated(0)
+          .pointPerQuestion(BigDecimal.ZERO.setScale(scale, RoundingMode.HALF_UP))
+          .totalPoints(totalPoints)
+          .scale(scale)
+          .strategy(request.getStrategy().name())
+          .build();
+    }
+
+    int questionCount = allAQs.size();
+    BigDecimal pointPerQuestion =
+        totalPoints.divide(BigDecimal.valueOf(questionCount), scale, RoundingMode.HALF_UP);
+
+    BigDecimal factor = BigDecimal.TEN.pow(scale);
+    long totalUnits = totalPoints.multiply(factor).longValueExact();
+    long baseUnits = totalUnits / questionCount;
+    int remainderUnits = (int) (totalUnits % questionCount);
+
+    for (int i = 0; i < questionCount; i++) {
+      long allocatedUnits = baseUnits + (i < remainderUnits ? 1 : 0);
+      BigDecimal allocated =
+          BigDecimal.valueOf(allocatedUnits).divide(factor, scale, RoundingMode.UNNECESSARY);
+      allAQs.get(i).setPointsOverride(allocated);
+    }
+
+    assessmentQuestionRepository.saveAll(allAQs);
+
+    return DistributeAssessmentPointsResponse.builder()
+        .updated(questionCount)
+        .pointPerQuestion(pointPerQuestion)
+        .totalPoints(totalPoints)
+        .scale(scale)
+        .strategy(request.getStrategy().name())
+        .build();
   }
 }

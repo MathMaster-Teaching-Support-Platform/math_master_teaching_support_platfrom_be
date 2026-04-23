@@ -6,6 +6,7 @@ import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
 import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.DistributeAssessmentPointsRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
@@ -14,6 +15,7 @@ import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
+import com.fptu.math_master.dto.response.DistributeAssessmentPointsResponse;
 import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.service.AssessmentService;
@@ -499,6 +501,25 @@ public class AssessmentController {
         .code(1000)
         .message("Points distributed successfully")
         .result(assessmentService.autoDistributePoints(id, request))
+        .build();
+  }
+
+  @PostMapping("/{id}/questions/distribute-points")
+  @Operation(
+      summary = "Distribute points equally for all assessment questions",
+      description =
+          "Distribute totalPoints across all questions using strategy EQUAL with configurable decimal scale. "
+              + "Ensures sum(points_override) equals totalPoints after rounding.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<DistributeAssessmentPointsResponse> distributeQuestionPoints(
+      @PathVariable UUID id,
+      @Valid @org.springframework.web.bind.annotation.RequestBody
+          DistributeAssessmentPointsRequest request) {
+    log.info("POST /api/v1/assessments/{}/questions/distribute-points", id);
+    return ApiResponse.<DistributeAssessmentPointsResponse>builder()
+        .code(1000)
+        .message("Points distributed successfully")
+        .result(assessmentService.distributeQuestionPoints(id, request))
         .build();
   }
 }
