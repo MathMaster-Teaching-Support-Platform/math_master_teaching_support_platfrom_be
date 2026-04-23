@@ -186,29 +186,123 @@ public class QuestionExcelImportServiceImpl implements QuestionExcelImportServic
 
       // Notes row
       Row notesRow = sheet.createRow(1);
-      notesRow.createCell(0).setCellValue("(Bắt buộc) Nội dung câu hỏi");
-      notesRow.createCell(1).setCellValue("(Bắt buộc) MULTIPLE_CHOICE | TRUE_FALSE | SHORT_ANSWER | ESSAY");
+      notesRow.createCell(0).setCellValue("(Bắt buộc) Nội dung câu hỏi - Dùng {{tên_tham_số}} cho câu hỏi động");
+      notesRow.createCell(1).setCellValue("(Bắt buộc) CHỈ MULTIPLE_CHOICE");
       notesRow.createCell(2).setCellValue("(Bắt buộc) NHAN_BIET | THONG_HIEU | VAN_DUNG | VAN_DUNG_CAO");
       notesRow.createCell(3).setCellValue("(Tuỳ chọn) Điểm, mặc định 1.0");
-      notesRow.createCell(4).setCellValue("(Tuỳ chọn) Đáp án đúng, ví dụ: A");
+      notesRow.createCell(4).setCellValue("(Bắt buộc) Đáp án đúng: A, B, C hoặc D");
       notesRow.createCell(5).setCellValue("(Tuỳ chọn) Giải thích đáp án");
       notesRow.createCell(6).setCellValue("(Tuỳ chọn) Nhãn phân cách bằng dấu phẩy, ví dụ: đại số, lớp 10");
-      notesRow.createCell(7).setCellValue("(Tuỳ chọn) JSON đáp án trắc nghiệm, ví dụ: {\"A\":\"Đáp án A\",\"B\":\"Đáp án B\"}");
+      notesRow.createCell(7).setCellValue("(Bắt buộc) JSON với đúng 4 đáp án A, B, C, D");
 
-      // Example row
-      Row example = sheet.createRow(2);
-      example.createCell(0).setCellValue("Số nào là số nguyên tố?");
-      example.createCell(1).setCellValue("MULTIPLE_CHOICE");
-      example.createCell(2).setCellValue("NHAN_BIET");
-      example.createCell(3).setCellValue("1");
-      example.createCell(4).setCellValue("C");
-      example.createCell(5).setCellValue("Số nguyên tố là số chỉ chia hết cho 1 và chính nó.");
-      example.createCell(6).setCellValue("toán, số học, lớp 6");
-      example.createCell(7).setCellValue("{\"A\":\"4\",\"B\":\"6\",\"C\":\"7\",\"D\":\"9\"}");
+      // Example row 1: Static question
+      Row example1 = sheet.createRow(2);
+      example1.createCell(0).setCellValue("Số nào là số nguyên tố?");
+      example1.createCell(1).setCellValue("MULTIPLE_CHOICE");
+      example1.createCell(2).setCellValue("NHAN_BIET");
+      example1.createCell(3).setCellValue("1");
+      example1.createCell(4).setCellValue("C");
+      example1.createCell(5).setCellValue("Số nguyên tố là số chỉ chia hết cho 1 và chính nó.");
+      example1.createCell(6).setCellValue("toán, số học, lớp 6");
+      example1.createCell(7).setCellValue("{\"A\":\"4\",\"B\":\"6\",\"C\":\"7\",\"D\":\"9\"}");
+
+      // Example row 2: Dynamic question with {{}} parameters
+      Row example2 = sheet.createRow(3);
+      example2.createCell(0).setCellValue("Tính diện tích hình tròn có bán kính {{r}} cm");
+      example2.createCell(1).setCellValue("MULTIPLE_CHOICE");
+      example2.createCell(2).setCellValue("THONG_HIEU");
+      example2.createCell(3).setCellValue("1");
+      example2.createCell(4).setCellValue("A");
+      example2.createCell(5).setCellValue("Công thức: S = π × r²");
+      example2.createCell(6).setCellValue("hình học, diện tích, lớp 9");
+      example2.createCell(7).setCellValue("{\"A\":\"{{3.14 * r * r}}\",\"B\":\"{{2 * 3.14 * r}}\",\"C\":\"{{r * r}}\",\"D\":\"{{3.14 * r}}\"}");
+
+      // Instructions sheet
+      Sheet instructionsSheet = workbook.createSheet("Hướng dẫn");
+      
+      int rowNum = 0;
+      Row titleRow = instructionsSheet.createRow(rowNum++);
+      titleRow.createCell(0).setCellValue("HƯỚNG DẪN IMPORT CÂU HỎI");
+      
+      instructionsSheet.createRow(rowNum++); // Empty row
+      
+      Row rule1 = instructionsSheet.createRow(rowNum++);
+      rule1.createCell(0).setCellValue("QUY TẮC BẮT BUỘC:");
+      
+      Row rule2 = instructionsSheet.createRow(rowNum++);
+      rule2.createCell(0).setCellValue("1. Loại câu hỏi CHỈ được là MULTIPLE_CHOICE (Trắc nghiệm)");
+      
+      Row rule3 = instructionsSheet.createRow(rowNum++);
+      rule3.createCell(0).setCellValue("2. Phải có đúng 4 đáp án với nhãn A, B, C, D");
+      
+      Row rule4 = instructionsSheet.createRow(rowNum++);
+      rule4.createCell(0).setCellValue("3. Đáp án đúng phải là A, B, C hoặc D");
+      
+      Row rule5 = instructionsSheet.createRow(rowNum++);
+      rule5.createCell(0).setCellValue("4. Định dạng options phải là JSON hợp lệ");
+      
+      instructionsSheet.createRow(rowNum++); // Empty row
+      
+      Row paramTitle = instructionsSheet.createRow(rowNum++);
+      paramTitle.createCell(0).setCellValue("ĐỊNH DẠNG THAM SỐ {{}}:");
+      
+      Row param1 = instructionsSheet.createRow(rowNum++);
+      param1.createCell(0).setCellValue("• Dùng {{tên_tham_số}} cho câu hỏi động");
+      
+      Row param2 = instructionsSheet.createRow(rowNum++);
+      param2.createCell(0).setCellValue("• Ví dụ: {{r}}, {{a}}, {{b}}, {{height}}");
+      
+      Row param3 = instructionsSheet.createRow(rowNum++);
+      param3.createCell(0).setCellValue("• KHÔNG dùng {tên} (ngoặc đơn)");
+      
+      Row param4 = instructionsSheet.createRow(rowNum++);
+      param4.createCell(0).setCellValue("• KHÔNG dùng $tên hoặc định dạng khác");
+      
+      instructionsSheet.createRow(rowNum++); // Empty row
+      
+      Row exampleTitle = instructionsSheet.createRow(rowNum++);
+      exampleTitle.createCell(0).setCellValue("VÍ DỤ OPTIONS JSON:");
+      
+      Row example1Title = instructionsSheet.createRow(rowNum++);
+      example1Title.createCell(0).setCellValue("Câu hỏi tĩnh:");
+      
+      Row example1Json = instructionsSheet.createRow(rowNum++);
+      example1Json.createCell(0).setCellValue("{\"A\":\"4\",\"B\":\"6\",\"C\":\"7\",\"D\":\"9\"}");
+      
+      instructionsSheet.createRow(rowNum++); // Empty row
+      
+      Row example2Title = instructionsSheet.createRow(rowNum++);
+      example2Title.createCell(0).setCellValue("Câu hỏi động với tham số:");
+      
+      Row example2Json = instructionsSheet.createRow(rowNum++);
+      example2Json.createCell(0).setCellValue("{\"A\":\"{{3.14 * r * r}}\",\"B\":\"{{2 * 3.14 * r}}\",\"C\":\"{{r * r}}\",\"D\":\"{{3.14 * r}}\"}");
+      
+      instructionsSheet.createRow(rowNum++); // Empty row
+      
+      Row errorTitle = instructionsSheet.createRow(rowNum++);
+      errorTitle.createCell(0).setCellValue("LỖI THƯỜNG GẶP:");
+      
+      Row error1 = instructionsSheet.createRow(rowNum++);
+      error1.createCell(0).setCellValue("❌ Dùng loại câu hỏi khác MULTIPLE_CHOICE");
+      
+      Row error2 = instructionsSheet.createRow(rowNum++);
+      error2.createCell(0).setCellValue("❌ Thiếu hoặc thừa đáp án (không đúng 4 đáp án)");
+      
+      Row error3 = instructionsSheet.createRow(rowNum++);
+      error3.createCell(0).setCellValue("❌ Đáp án đúng không phải A, B, C hoặc D");
+      
+      Row error4 = instructionsSheet.createRow(rowNum++);
+      error4.createCell(0).setCellValue("❌ JSON không hợp lệ (thiếu dấu ngoặc, dấu phẩy)");
+      
+      Row error5 = instructionsSheet.createRow(rowNum++);
+      error5.createCell(0).setCellValue("❌ Dùng {param} thay vì {{param}}");
 
       // Auto-size columns
       for (int i = 0; i < headers.length; i++) {
         sheet.autoSizeColumn(i);
+      }
+      for (int i = 0; i < 2; i++) {
+        instructionsSheet.autoSizeColumn(i);
       }
 
       workbook.write(out);
@@ -333,10 +427,47 @@ public class QuestionExcelImportServiceImpl implements QuestionExcelImportServic
 
   private List<String> validateRequest(CreateQuestionRequest request) {
     List<String> errors = new ArrayList<>();
+    
+    // Standard validation
     Set<ConstraintViolation<CreateQuestionRequest>> violations = validator.validate(request);
     for (ConstraintViolation<CreateQuestionRequest> violation : violations) {
       errors.add(violation.getPropertyPath() + ": " + violation.getMessage());
     }
+    
+    // RULE 1: Only MULTIPLE_CHOICE type is allowed
+    if (request.getQuestionType() != QuestionType.MULTIPLE_CHOICE) {
+      errors.add("Chỉ cho phép loại câu hỏi MULTIPLE_CHOICE (Trắc nghiệm). Loại hiện tại: " + request.getQuestionType());
+    }
+    
+    // RULE 2: Must have exactly 4 options (A, B, C, D)
+    if (request.getQuestionType() == QuestionType.MULTIPLE_CHOICE) {
+      if (request.getOptions() == null || request.getOptions().size() != 4) {
+        errors.add("Câu hỏi trắc nghiệm phải có đúng 4 đáp án (A, B, C, D). Số đáp án hiện tại: " 
+            + (request.getOptions() == null ? 0 : request.getOptions().size()));
+      } else {
+        // Check option keys are A, B, C, D
+        Set<String> expectedKeys = Set.of("A", "B", "C", "D");
+        Set<String> actualKeys = request.getOptions().keySet();
+        if (!actualKeys.equals(expectedKeys)) {
+          errors.add("Các đáp án phải được đánh nhãn A, B, C, D. Nhãn hiện tại: " + actualKeys);
+        }
+      }
+      
+      // Check correct answer is one of A, B, C, D
+      if (request.getCorrectAnswer() != null) {
+        String correctAnswer = request.getCorrectAnswer().trim().toUpperCase();
+        if (!correctAnswer.matches("^[A-D]$")) {
+          errors.add("Đáp án đúng phải là A, B, C hoặc D. Giá trị hiện tại: " + request.getCorrectAnswer());
+        }
+      }
+    }
+    
+    // RULE 3: Recommend {{}} parameter format (warning, not error)
+    if (request.getQuestionText() != null && !request.getQuestionText().contains("{{")) {
+      // This is just a warning - we'll log it but not block import
+      log.warn("Question text does not contain {{}} parameters. Consider using {{param}} format for dynamic questions.");
+    }
+    
     return errors;
   }
 }
