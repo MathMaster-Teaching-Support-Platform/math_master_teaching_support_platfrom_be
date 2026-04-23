@@ -333,7 +333,8 @@ public class CourseServiceImpl implements CourseService {
           "COURSE",
           "Khoa hoc can duyet",
           "Khoa hoc '" + course.getTitle() + "' vua duoc gui len de kiem duyet.",
-          metadata);
+          metadata,
+          "/admin/courses/review");
     }
   }
 
@@ -348,7 +349,8 @@ public class CourseServiceImpl implements CourseService {
         "COURSE",
         "Khoa hoc da duoc phe duyet",
         "Khoa hoc '" + course.getTitle() + "' da duoc phe duyet va xuat ban.",
-        metadata);
+        metadata,
+        "/teacher/courses/" + course.getId());
   }
 
   private void notifyTeacherCourseRejected(Course course, String reason) {
@@ -370,7 +372,8 @@ public class CourseServiceImpl implements CourseService {
         "COURSE",
         "Khoa hoc bi tu choi",
         content,
-        metadata);
+        metadata,
+        "/teacher/courses/" + course.getId());
   }
 
   private void publishCourseNotification(
@@ -378,7 +381,8 @@ public class CourseServiceImpl implements CourseService {
       String type,
       String title,
       String content,
-      Map<String, Object> metadata) {
+      Map<String, Object> metadata,
+      String actionUrl) {
     try {
       NotificationRequest notification =
           NotificationRequest.builder()
@@ -390,6 +394,7 @@ public class CourseServiceImpl implements CourseService {
               .senderId("SYSTEM")
               .timestamp(LocalDateTime.now())
               .metadata(metadata)
+              .actionUrl(actionUrl)
               .build();
       streamPublisher.publish(notification);
     } catch (Exception e) {

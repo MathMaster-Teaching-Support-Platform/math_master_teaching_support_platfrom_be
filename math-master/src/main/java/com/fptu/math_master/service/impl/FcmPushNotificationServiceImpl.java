@@ -5,6 +5,7 @@ import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.entity.UserFcmToken;
 import com.fptu.math_master.repository.UserFcmTokenRepository;
+import com.fptu.math_master.service.NotificationPreferenceService;
 import com.fptu.math_master.service.PushNotificationService;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
@@ -45,6 +46,7 @@ public class FcmPushNotificationServiceImpl implements PushNotificationService {
 
   private final UserFcmTokenRepository userFcmTokenRepository;
   private final FirebaseProperties firebaseProperties;
+  private final NotificationPreferenceService notificationPreferenceService;
 
   private volatile FirebaseMessaging firebaseMessaging;
 
@@ -108,8 +110,30 @@ public class FcmPushNotificationServiceImpl implements PushNotificationService {
       return;
     }
 
+    // Filter destinations based on user preferences
+    List<UserFcmToken> filteredDestinations = destinations.stream()
+        .filter(token -> {
+          try {
+            return notificationPreferenceService.shouldSendPushNotification(
+                token.getUser().getId(), 
+                notificationRequest.getType()
+            );
+          } catch (Exception e) {
+            log.warn("Failed to check push preference for user {}, defaulting to enabled", 
+                token.getUser().getId(), e);
+            return true; // Default to enabled on error
+          }
+        })
+        .collect(Collectors.toList());
+
+    if (filteredDestinations.isEmpty()) {
+      log.debug("No users want push notifications for type {} and recipientId={}", 
+          notificationRequest.getType(), notificationRequest.getRecipientId());
+      return;
+    }
+
     Map<String, String> data = toStringData(notificationRequest);
-    List<String> tokens = destinations.stream().map(UserFcmToken::getToken).distinct().collect(Collectors.toList());
+    List<String> tokens = filteredDestinations.stream().map(UserFcmToken::getToken).distinct().collect(Collectors.toList());
 
     for (int start = 0; start < tokens.size(); start += FCM_MULTICAST_BATCH) {
       int end = Math.min(start + FCM_MULTICAST_BATCH, tokens.size());
@@ -157,6 +181,7 @@ public class FcmPushNotificationServiceImpl implements PushNotificationService {
     putIfPresent(data, "content", request.getContent());
     putIfPresent(data, "recipientId", request.getRecipientId());
     putIfPresent(data, "senderId", request.getSenderId());
+    putIfPresent(data, "actionUrl", request.getActionUrl());
 
     if (request.getTimestamp() != null) {
       data.put("timestamp", request.getTimestamp().toString());

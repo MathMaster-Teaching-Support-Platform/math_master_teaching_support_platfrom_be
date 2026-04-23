@@ -190,6 +190,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
               .senderId("SYSTEM")
               .timestamp(LocalDateTime.now())
               .metadata(metadata)
+              .actionUrl("/student/courses")
               .build();
       streamPublisher.publish(studentNotification);
     } catch (Exception e) {
@@ -207,6 +208,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
               .senderId("SYSTEM")
               .timestamp(LocalDateTime.now())
               .metadata(metadata)
+              .actionUrl("/teacher/courses/" + course.getId())
               .build();
       streamPublisher.publish(teacherNotification);
     } catch (Exception e) {

@@ -5,6 +5,7 @@ import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.entity.Notification;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.repository.NotificationRepository;
+import com.fptu.math_master.service.NotificationPreferenceService;
 import com.fptu.math_master.service.PushNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
     private final PushNotificationService pushNotificationService;
     private final RedisTemplate<String, Object> redisTemplate;
     private final NotificationRepository notificationRepository;
+    private final NotificationPreferenceService notificationPreferenceService;
 
     private static final String STREAM_KEY = "notifications";
     private static final String GROUP_NAME = "notif-group";
@@ -50,27 +52,37 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
             // 1. Save to DB (only if recipientId is a valid UUID, i.e., not "ALL")
             String recipientIdStr = notificationMessage.getRecipientId();
             if (recipientIdStr != null && !recipientIdStr.equals("ALL")) {
-                User recipient = new User();
-                recipient.setId(UUID.fromString(recipientIdStr));
+                UUID recipientId = UUID.fromString(recipientIdStr);
+                
+                // Check if user wants in-app notifications for this type
+                if (notificationPreferenceService.shouldSendInAppNotification(recipientId, notificationMessage.getType())) {
+                    User recipient = new User();
+                    recipient.setId(recipientId);
 
-                Notification notificationEntity = Notification.builder()
-                        .recipient(recipient)
-                        .type(notificationMessage.getType())
-                        .title(notificationMessage.getTitle())
-                        .content(notificationMessage.getContent())
-                        .metadata(notificationMessage.getMetadata())
-                        .isRead(false)
-                        .build();
+                    Notification notificationEntity = Notification.builder()
+                            .id(UUID.fromString(notificationMessage.getId()))
+                            .recipient(recipient)
+                            .type(notificationMessage.getType())
+                            .title(notificationMessage.getTitle())
+                            .content(notificationMessage.getContent())
+                            .metadata(notificationMessage.getMetadata())
+                            .isRead(false)
+                            .build();
 
-                // Do NOT set the ID from the stream message — let JPA auto-generate it.
-                // Setting a specific UUID causes JPA to use merge() (update) semantics
-                // instead of persist() (insert), which fails with OptimisticLockingException.
-
-                notificationRepository.save(notificationEntity);
-                log.info("Notification saved to DB for user: {}", recipientIdStr);
+                    // Use the stream message ID to maintain consistency between FCM and database
+                    // Check if notification already exists to prevent duplicates
+                    if (!notificationRepository.existsById(UUID.fromString(notificationMessage.getId()))) {
+                        notificationRepository.save(notificationEntity);
+                        log.info("Notification saved to DB for user: {}", recipientIdStr);
+                    } else {
+                        log.info("Notification {} already exists, skipping save", notificationMessage.getId());
+                    }
+                } else {
+                    log.debug("User {} has disabled in-app notifications for type {}", recipientIdStr, notificationMessage.getType());
+                }
             }
 
-            // 2. Forward to FCM Push Service
+            // 2. Forward to FCM Push Service (with preference check inside the service)
             pushNotificationService.sendNotification(notificationMessage);
 
             // 3. ACK on success

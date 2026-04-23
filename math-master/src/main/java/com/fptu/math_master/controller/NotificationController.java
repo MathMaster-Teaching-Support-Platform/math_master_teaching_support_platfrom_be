@@ -21,8 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fptu.math_master.component.StreamPublisher;
 import com.fptu.math_master.dto.request.FcmTokenRequest;
 import com.fptu.math_master.dto.request.NotificationRequest;
+import com.fptu.math_master.dto.request.NotificationPreferenceRequest;
 import com.fptu.math_master.dto.response.NotificationResponse;
+import com.fptu.math_master.dto.response.NotificationPreferenceResponse;
 import com.fptu.math_master.service.NotificationService;
+import com.fptu.math_master.service.NotificationPreferenceService;
 import com.fptu.math_master.service.PushNotificationService;
 
 import jakarta.validation.Valid;
@@ -36,6 +39,7 @@ public class NotificationController {
 
     private final StreamPublisher streamPublisher;
     private final NotificationService notificationService;
+    private final NotificationPreferenceService notificationPreferenceService;
     private final PushNotificationService pushNotificationService;
 
     @GetMapping
@@ -118,10 +122,35 @@ public class NotificationController {
                 .recipientId("ALL")
                 .senderId("SYSTEM")
                 .timestamp(LocalDateTime.now())
+                .actionUrl("/notifications")
                 .build();
 
         streamPublisher.publish(message);
         return ResponseEntity.ok("System notification published to Redis Stream");
+    }
+
+    @GetMapping("/preferences")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<NotificationPreferenceResponse>> getMyPreferences(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(notificationPreferenceService.getMyPreferences(userId));
+    }
+
+    @PutMapping("/preferences")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<NotificationPreferenceResponse> updatePreference(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody NotificationPreferenceRequest request) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(notificationPreferenceService.updatePreference(userId, request));
+    }
+
+    @PostMapping("/preferences/reset")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> resetPreferencesToDefaults(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        notificationPreferenceService.resetToDefaults(userId);
+        return ResponseEntity.noContent().build();
     }
 }
 
