@@ -119,6 +119,9 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
   @Override
   public RoadmapDetailResponse updateRoadmap(UUID roadmapId, UpdateAdminRoadmapRequest request) {
     LearningRoadmap roadmap = getActiveRoadmapOrThrow(roadmapId);
+    if (request.getName() != null && !request.getName().trim().isEmpty()) {
+      roadmap.setName(request.getName().trim());
+    }
     if (request.getSubjectId() != null) {
       Subject subject = resolveSubject(request.getSubjectId());
       roadmap.setSubjectId(subject.getId());
