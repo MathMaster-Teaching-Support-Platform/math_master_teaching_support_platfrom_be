@@ -333,6 +333,8 @@ public class CourseLessonServiceImpl implements CourseLessonService {
           } catch (Exception e) {
             log.error("Error generating presigned URL for material {}", item.getId(), e);
           }
+          // Never expose the raw object key to clients — they must use the presigned url field.
+          item.setKey(null);
         }
       } else {
         // Lock materials for unauthorized/non-preview access
@@ -465,10 +467,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     Course course = findCourseOrThrow(courseId);
     UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
 
+    // Only the course owner (teacher) or students who have an ACTIVE enrollment may download.
     boolean isOwner = currentUserId != null && course.getTeacherId().equals(currentUserId);
-    boolean isAdmin = SecurityUtils.hasRole("ADMIN");
-
-    if (!isOwner && !isAdmin) {
+    if (!isOwner) {
       boolean enrolled = currentUserId != null && enrollmentRepository
           .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
           .map(e -> "ACTIVE".equals(e.getStatus().name()))
