@@ -325,7 +325,24 @@ public enum ErrorCode {
   COMMENT_REQUIRED(1182, "Comment is required", HttpStatus.BAD_REQUEST),
   COURSE_NOT_ENROLLED(1183, "You must be enrolled in the course to leave a review", HttpStatus.FORBIDDEN),
   ALREADY_REVIEWED(1184, "You have already reviewed this course", HttpStatus.BAD_REQUEST),
-  REVIEW_NOT_FOUND(1185, "Review not found", HttpStatus.NOT_FOUND);
+  REVIEW_NOT_FOUND(1185, "Review not found", HttpStatus.NOT_FOUND),
+  
+  // ─── Order & Refund Error Codes ──────────────────────────────────────────
+  ORDER_NOT_FOUND(1186, "Order not found", HttpStatus.NOT_FOUND),
+  ORDER_ACCESS_DENIED(1187, "You do not have permission to access this order", HttpStatus.FORBIDDEN),
+  ORDER_ALREADY_PROCESSED(1188, "Order has already been processed", HttpStatus.BAD_REQUEST),
+  ORDER_EXPIRED(1189, "Order has expired", HttpStatus.BAD_REQUEST),
+  ORDER_CANNOT_BE_CANCELLED(1190, "Order cannot be cancelled", HttpStatus.BAD_REQUEST),
+  ORDER_NOT_COMPLETED(1191, "Order is not completed", HttpStatus.BAD_REQUEST),
+  
+  REFUND_REQUEST_NOT_FOUND(1192, "Refund request not found", HttpStatus.NOT_FOUND),
+  REFUND_REQUEST_ACCESS_DENIED(1193, "You do not have permission to access this refund request", HttpStatus.FORBIDDEN),
+  REFUND_ALREADY_REQUESTED(1194, "Refund has already been requested for this order", HttpStatus.BAD_REQUEST),
+  REFUND_ALREADY_PROCESSED(1195, "Refund has already been processed", HttpStatus.BAD_REQUEST),
+  REFUND_REQUEST_NOT_PENDING(1196, "Refund request is not in pending status", HttpStatus.BAD_REQUEST),
+  REFUND_REQUEST_CANNOT_BE_CANCELLED(1197, "Refund request cannot be cancelled", HttpStatus.BAD_REQUEST),
+  REFUND_REJECTION_REASON_REQUIRED(1198, "Rejection reason is required", HttpStatus.BAD_REQUEST),
+  ENROLLMENT_NOT_ACTIVE(1199, "Enrollment is not active", HttpStatus.BAD_REQUEST);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {

@@ -39,6 +39,19 @@ import lombok.Setter;
 public class Transaction extends BaseEntity {
 
   /**
+   * order - reference to the order this transaction belongs to
+   */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "order_id")
+  private Order order;
+
+  /**
+   * order_number - denormalized for quick lookup
+   */
+  @Column(name = "order_number", length = 50)
+  private String orderNumber;
+
+  /**
    * wallet
    */
   @ManyToOne(fetch = FetchType.LAZY)

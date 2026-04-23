@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Học viên mới đăng ký</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            padding: 30px 20px;
+            text-align: center;
+            color: #ffffff;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .header .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 40px 30px;
+            color: #333333;
+            line-height: 1.6;
+        }
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #333333;
+        }
+        .message {
+            font-size: 16px;
+            margin-bottom: 30px;
+            color: #555555;
+        }
+        .enrollment-card {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border-radius: 8px;
+            padding: 25px;
+            margin: 30px 0;
+            border-left: 4px solid #2196F3;
+        }
+        .enrollment-card h2 {
+            margin: 0 0 20px 0;
+            font-size: 18px;
+            color: #1976D2;
+        }
+        .info-row {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.5);
+        }
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        .info-icon {
+            font-size: 24px;
+            margin-right: 15px;
+            min-width: 30px;
+        }
+        .info-content {
+            flex: 1;
+        }
+        .info-label {
+            font-size: 12px;
+            color: #1976D2;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .info-value {
+            font-size: 16px;
+            color: #0d47a1;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+        .cta-button {
+            display: inline-block;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            transition: transform 0.2s;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        .stats-container {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #2196F3;
+            display: block;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666666;
+            margin-top: 5px;
+        }
+        .tip-box {
+            background-color: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .tip-box p {
+            margin: 0;
+            color: #e65100;
+            font-size: 14px;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #666666;
+            font-size: 14px;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+        .divider {
+            height: 1px;
+            background-color: #e0e0e0;
+            margin: 30px 0;
+        }
+        @media only screen and (max-width: 600px) {
+            .content {
+                padding: 30px 20px;
+            }
+            .header h1 {
+                font-size: 24px;
+            }
+            .stats-container {
+                flex-direction: column;
+                gap: 20px;
+            }
+            .info-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="icon">🎓</div>
+            <h1>Học viên mới đăng ký!</h1>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <p class="greeting">Xin chào <strong th:text="${instructorName}">Giảng viên</strong>,</p>
+            
+            <p class="message">
+                Chúc mừng! Khóa học <strong th:text="${courseTitle}">Tên khóa học</strong> 
+                của bạn vừa có thêm một học viên mới. Đây là cơ hội tuyệt vời để chia sẻ kiến thức 
+                và truyền cảm hứng cho học viên.
+            </p>
+
+            <!-- Enrollment Card -->
+            <div class="enrollment-card">
+                <h2>👤 Thông tin học viên</h2>
+                
+                <div class="info-row">
+                    <div class="info-icon">👨‍🎓</div>
+                    <div class="info-content">
+                        <div class="info-label">Tên học viên</div>
+                        <div class="info-value" th:text="${studentName}">Nguyễn Văn A</div>
+                    </div>
+                </div>
+                
+                <div class="info-row">
+                    <div class="info-icon">📚</div>
+                    <div class="info-content">
+                        <div class="info-label">Khóa học</div>
+                        <div class="info-value" th:text="${courseTitle}">Tên khóa học</div>
+                    </div>
+                </div>
+                
+                <div class="info-row">
+                    <div class="info-icon">📅</div>
+                    <div class="info-content">
+                        <div class="info-label">Ngày đăng ký</div>
+                        <div class="info-value" th:text="${#temporals.format(#temporals.createNow(), 'dd/MM/yyyy HH:mm')}">23/04/2026 14:30</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CTA Button -->
+            <div style="text-align: center;">
+                <a th:href="${courseUrl}" class="cta-button">
+                    📊 Xem chi tiết khóa học
+                </a>
+            </div>
+
+            <!-- Stats (Optional - can be dynamic) -->
+            <div class="stats-container">
+                <div class="stat-item">
+                    <span class="stat-number">+1</span>
+                    <span class="stat-label">Học viên mới</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">🎯</span>
+                    <span class="stat-label">Mục tiêu</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">⭐</span>
+                    <span class="stat-label">Chất lượng</span>
+                </div>
+            </div>
+
+            <!-- Tip Box -->
+            <div class="tip-box">
+                <p>
+                    💡 <strong>Gợi ý:</strong> Hãy gửi lời chào mừng đến học viên mới để tạo 
+                    ấn tượng tốt và khuyến khích họ tích cực tham gia khóa học.
+                </p>
+            </div>
+
+            <div class="divider"></div>
+
+            <p style="font-size: 14px; color: #666666;">
+                Bạn có thể xem danh sách đầy đủ học viên và theo dõi tiến độ của họ trong 
+                trang quản lý khóa học.
+            </p>
+
+            <p style="margin-top: 30px; font-size: 16px; color: #333333;">
+                Chúc bạn giảng dạy hiệu quả!<br/>
+                <strong>Đội ngũ MathMaster</strong>
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>MathMaster</strong></p>
+            <p>Nền tảng học toán trực tuyến hàng đầu Việt Nam</p>
+            
+            <p style="margin-top: 20px; font-size: 12px; color: #999999;">
+                © <span th:text="${currentYear}">2026</span> MathMaster. All rights reserved.<br/>
+                Email này được gửi tự động, vui lòng không trả lời.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

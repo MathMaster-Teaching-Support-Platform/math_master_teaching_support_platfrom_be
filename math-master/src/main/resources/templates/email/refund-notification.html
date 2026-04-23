@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thông báo hoàn tiền</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+            padding: 30px 20px;
+            text-align: center;
+            color: #ffffff;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .header .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 40px 30px;
+            color: #333333;
+            line-height: 1.6;
+        }
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #333333;
+        }
+        .message {
+            font-size: 16px;
+            margin-bottom: 30px;
+            color: #555555;
+        }
+        .notification-card {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            border-radius: 8px;
+            padding: 25px;
+            margin: 30px 0;
+            border-left: 4px solid #FF9800;
+        }
+        .notification-card h2 {
+            margin: 0 0 20px 0;
+            font-size: 18px;
+            color: #E65100;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.5);
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        .detail-label {
+            font-weight: 600;
+            color: #E65100;
+        }
+        .detail-value {
+            color: #BF360C;
+            text-align: right;
+            font-weight: 500;
+        }
+        .deduction-amount {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 20px 0;
+            border: 2px solid #FF9800;
+        }
+        .deduction-amount .label {
+            font-size: 14px;
+            color: #666666;
+            margin-bottom: 8px;
+        }
+        .deduction-amount .amount {
+            font-size: 32px;
+            font-weight: 700;
+            color: #FF9800;
+        }
+        .deduction-amount .note {
+            font-size: 12px;
+            color: #999999;
+            margin-top: 8px;
+        }
+        .policy-box {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 30px 0;
+        }
+        .policy-box h3 {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            color: #333333;
+        }
+        .policy-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .policy-item:last-child {
+            margin-bottom: 0;
+        }
+        .policy-icon {
+            font-size: 18px;
+            margin-right: 10px;
+            min-width: 25px;
+        }
+        .policy-text {
+            font-size: 14px;
+            color: #555555;
+            line-height: 1.5;
+        }
+        .cta-button {
+            display: inline-block;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            transition: transform 0.2s;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        .info-box {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .info-box p {
+            margin: 0;
+            color: #1565C0;
+            font-size: 14px;
+        }
+        .stats-row {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #fff3e0;
+            border-radius: 8px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #E65100;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #BF360C;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #666666;
+            font-size: 14px;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+        .divider {
+            height: 1px;
+            background-color: #e0e0e0;
+            margin: 30px 0;
+        }
+        @media only screen and (max-width: 600px) {
+            .content {
+                padding: 30px 20px;
+            }
+            .header h1 {
+                font-size: 24px;
+            }
+            .detail-row {
+                flex-direction: column;
+            }
+            .detail-value {
+                text-align: left;
+                margin-top: 5px;
+            }
+            .deduction-amount .amount {
+                font-size: 28px;
+            }
+            .stats-row {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="icon">💰</div>
+            <h1>Thông báo hoàn tiền</h1>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <p class="greeting">Xin chào <strong th:text="${instructorName}">Giảng viên</strong>,</p>
+            
+            <p class="message">
+                Chúng tôi xin thông báo rằng một yêu cầu hoàn tiền cho khóa học 
+                <strong th:text="${courseTitle}">Tên khóa học</strong> của bạn đã được xử lý. 
+                Số tiền tương ứng đã được trừ từ ví của bạn theo chính sách hoàn tiền của MathMaster.
+            </p>
+
+            <!-- Deduction Amount -->
+            <div class="deduction-amount">
+                <div class="label">Số tiền đã trừ</div>
+                <div class="amount" th:text="${deductionAmount}">900,000 VND</div>
+                <div class="note">Đã trừ từ ví MathMaster của bạn</div>
+            </div>
+
+            <!-- Notification Details -->
+            <div class="notification-card">
+                <h2>📋 Chi tiết giao dịch</h2>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Học viên:</span>
+                    <span class="detail-value" th:text="${studentName}">Nguyễn Văn A</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Khóa học:</span>
+                    <span class="detail-value" th:text="${courseTitle}">Tên khóa học</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Số tiền trừ:</span>
+                    <span class="detail-value" th:text="${deductionAmount}">900,000 VND</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Ngày xử lý:</span>
+                    <span class="detail-value" th:text="${#temporals.format(#temporals.createNow(), 'dd/MM/yyyy HH:mm')}">23/04/2026 14:30</span>
+                </div>
+            </div>
+
+            <!-- Revenue Split Info -->
+            <div class="stats-row">
+                <div class="stat-item">
+                    <div class="stat-label">Phần giảng viên</div>
+                    <div class="stat-value">90%</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Phần nền tảng</div>
+                    <div class="stat-value">10%</div>
+                </div>
+            </div>
+
+            <!-- Policy Box -->
+            <div class="policy-box">
+                <h3>📜 Chính sách hoàn tiền</h3>
+                
+                <div class="policy-item">
+                    <div class="policy-icon">✓</div>
+                    <div class="policy-text">
+                        <strong>Hoàn tiền tự động:</strong> Trong vòng 24 giờ hoặc khi học viên 
+                        hoàn thành dưới 10% khóa học.
+                    </div>
+                </div>
+                
+                <div class="policy-item">
+                    <div class="policy-icon">✓</div>
+                    <div class="policy-text">
+                        <strong>Chia sẻ doanh thu:</strong> Giảng viên nhận 90%, nền tảng nhận 10% 
+                        từ mỗi giao dịch.
+                    </div>
+                </div>
+                
+                <div class="policy-item">
+                    <div class="policy-icon">✓</div>
+                    <div class="policy-text">
+                        <strong>Hoàn tiền công bằng:</strong> Số tiền hoàn lại được tính theo tỷ lệ 
+                        90/10 giống như khi thanh toán.
+                    </div>
+                </div>
+            </div>
+
+            <!-- CTA Button -->
+            <div style="text-align: center;">
+                <a href="http://localhost:3000/teacher/wallet" class="cta-button">
+                    💳 Xem ví của tôi
+                </a>
+            </div>
+
+            <!-- Info Box -->
+            <div class="info-box">
+                <p>
+                    💡 <strong>Lưu ý:</strong> Đây là một phần của chính sách hoàn tiền tiêu chuẩn 
+                    nhằm đảm bảo quyền lợi cho cả học viên và giảng viên. Chúng tôi luôn nỗ lực 
+                    tạo ra môi trường học tập công bằng và minh bạch.
+                </p>
+            </div>
+
+            <div class="divider"></div>
+
+            <p style="font-size: 14px; color: #666666;">
+                Nếu bạn có bất kỳ thắc mắc nào về giao dịch này hoặc muốn tìm hiểu thêm về 
+                chính sách hoàn tiền, vui lòng liên hệ với chúng tôi qua email 
+                <a href="mailto:support@mathmaster.vn" style="color: #FF9800;">support@mathmaster.vn</a>
+            </p>
+
+            <p style="margin-top: 30px; font-size: 16px; color: #333333;">
+                Cảm ơn bạn đã đồng hành cùng MathMaster!<br/>
+                <strong>Đội ngũ MathMaster</strong>
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>MathMaster</strong></p>
+            <p>Nền tảng học toán trực tuyến hàng đầu Việt Nam</p>
+            
+            <p style="margin-top: 20px; font-size: 12px; color: #999999;">
+                © <span th:text="${currentYear}">2026</span> MathMaster. All rights reserved.<br/>
+                Email này được gửi tự động, vui lòng không trả lời.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
