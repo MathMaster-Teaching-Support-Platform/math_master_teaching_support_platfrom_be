@@ -1,5 +1,7 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.component.StreamPublisher;
+import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.dto.response.EnrollmentResponse;
 import com.fptu.math_master.entity.Course;
 import com.fptu.math_master.entity.Enrollment;
@@ -23,12 +25,14 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.Collections;
 import java.util.Set;
 import java.util.Map;
+import java.util.HashMap;
 import com.fptu.math_master.repository.CourseLessonRepository;
 import com.fptu.math_master.repository.LessonProgressRepository;
 import org.springframework.data.domain.PageRequest;
@@ -54,6 +58,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
   TransactionRepository transactionRepository;
   CourseLessonRepository courseLessonRepository;
   LessonProgressRepository lessonProgressRepository;
+  StreamPublisher streamPublisher;
 
   @Override
   public EnrollmentResponse enroll(UUID courseId) {
@@ -163,8 +168,51 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     enrollment.setEnrolledAt(Instant.now());
     enrollment = enrollmentRepository.save(enrollment);
 
+    publishEnrollmentNotifications(course, studentId);
+
     log.info("Student {} enrollment finalized for course {}", studentId, courseId);
     return mapToResponse(enrollment, course.getTitle(), studentId);
+  }
+
+  private void publishEnrollmentNotifications(Course course, UUID studentId) {
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("courseId", course.getId().toString());
+    metadata.put("event", "COURSE_ENROLLED");
+
+    try {
+      NotificationRequest studentNotification =
+          NotificationRequest.builder()
+              .id(UUID.randomUUID().toString())
+              .type("COURSE")
+              .title("Dang ky khoa hoc thanh cong")
+              .content("Ban da dang ky thanh cong khoa hoc '" + course.getTitle() + "'.")
+              .recipientId(studentId.toString())
+              .senderId("SYSTEM")
+              .timestamp(LocalDateTime.now())
+              .metadata(metadata)
+              .build();
+      streamPublisher.publish(studentNotification);
+    } catch (Exception e) {
+      log.error("Failed to publish enrollment notification for student {}", studentId, e);
+    }
+
+    try {
+      NotificationRequest teacherNotification =
+          NotificationRequest.builder()
+              .id(UUID.randomUUID().toString())
+              .type("COURSE")
+              .title("Hoc vien moi dang ky")
+              .content("Khoa hoc '" + course.getTitle() + "' vua co mot hoc vien moi dang ky.")
+              .recipientId(course.getTeacherId().toString())
+              .senderId("SYSTEM")
+              .timestamp(LocalDateTime.now())
+              .metadata(metadata)
+              .build();
+      streamPublisher.publish(teacherNotification);
+    } catch (Exception e) {
+      log.error(
+          "Failed to publish enrollment notification for teacher {}", course.getTeacherId(), e);
+    }
   }
 
   @Override

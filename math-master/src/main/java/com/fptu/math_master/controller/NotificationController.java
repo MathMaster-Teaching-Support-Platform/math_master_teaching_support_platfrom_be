@@ -19,11 +19,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fptu.math_master.component.StreamPublisher;
-import com.fptu.math_master.configuration.properties.CentrifugoProperties;
 import com.fptu.math_master.dto.request.FcmTokenRequest;
 import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.dto.response.NotificationResponse;
-import com.fptu.math_master.service.CentrifugoService;
 import com.fptu.math_master.service.NotificationService;
 import com.fptu.math_master.service.PushNotificationService;
 
@@ -37,20 +35,8 @@ import lombok.RequiredArgsConstructor;
 public class NotificationController {
 
     private final StreamPublisher streamPublisher;
-    private final CentrifugoService centrifugoService;
     private final NotificationService notificationService;
-    private final CentrifugoProperties centrifugoProperties;
     private final PushNotificationService pushNotificationService;
-
-    @GetMapping("/token")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Map<String, String>> getConnectionToken(@AuthenticationPrincipal Jwt jwt) {
-        String userId = jwt.getSubject();
-
-        int ttlHours = centrifugoProperties.getTokenTtlHours() != null ? centrifugoProperties.getTokenTtlHours() : 1;
-        String token = centrifugoService.generateConnectionToken(userId, ttlHours);
-        return ResponseEntity.ok(Map.of("token", token));
-    }
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
@@ -138,3 +124,4 @@ public class NotificationController {
         return ResponseEntity.ok("System notification published to Redis Stream");
     }
 }
+
