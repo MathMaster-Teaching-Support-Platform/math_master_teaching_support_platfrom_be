@@ -22,6 +22,7 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
   List<Course> findByTeacherIdAndIsPublishedTrueAndDeletedAtIsNull(UUID teacherId);
 
   @Query("SELECT c FROM Course c WHERE c.isPublished = true AND c.deletedAt IS NULL " +
+      "AND c.status = com.fptu.math_master.enums.CourseStatus.PUBLISHED " +
          "AND (c.subjectId = :subjectId OR c.schoolGradeId = :gradeId) " +
          "AND c.id != :currentCourseId " +
          "ORDER BY c.rating DESC, c.createdAt DESC")
@@ -40,7 +41,7 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
           "SELECT c.* FROM courses c "
               + "LEFT JOIN subjects s ON s.id = c.subject_id "
               + "LEFT JOIN school_grades sg ON sg.id = c.school_grade_id "
-              + "WHERE c.is_published = true AND c.deleted_at IS NULL "
+              + "WHERE c.is_published = true AND c.status = 'PUBLISHED' AND c.deleted_at IS NULL "
               + "AND (c.subject_id IS NULL OR s.is_active = true) "
               + "AND (c.school_grade_id IS NULL OR sg.is_active = true) "
               + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "
@@ -51,7 +52,7 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
           "SELECT COUNT(*) FROM courses c "
               + "LEFT JOIN subjects s ON s.id = c.subject_id "
               + "LEFT JOIN school_grades sg ON sg.id = c.school_grade_id "
-              + "WHERE c.is_published = true AND c.deleted_at IS NULL "
+              + "WHERE c.is_published = true AND c.status = 'PUBLISHED' AND c.deleted_at IS NULL "
               + "AND (c.subject_id IS NULL OR s.is_active = true) "
               + "AND (c.school_grade_id IS NULL OR sg.is_active = true) "
               + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "

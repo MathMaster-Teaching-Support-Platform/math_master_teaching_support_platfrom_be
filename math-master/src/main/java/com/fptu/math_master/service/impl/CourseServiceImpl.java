@@ -232,6 +232,10 @@ public class CourseServiceImpl implements CourseService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
+    if (course.getStatus() == com.fptu.math_master.enums.CourseStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
+    }
+
     // FIX #2: Check for active enrollments
     if (enrollmentRepository.countActiveEnrollmentsByCourseId(courseId) > 0) {
       // Active students enrolled — convert to draft/unpublished only.
@@ -269,9 +273,8 @@ public class CourseServiceImpl implements CourseService {
       }
       course.setPublished(true);
     } else {
-      // Unpublishing: keep status as PUBLISHED but set isPublished to false
-      // This allows teacher to republish without admin re-approval
-      course.setPublished(false);
+      // Lock status after publish to avoid hiding courses that may already have buyers.
+      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
     }
 
     course = courseRepository.save(course);
@@ -345,6 +348,9 @@ public class CourseServiceImpl implements CourseService {
   public CourseResponse approveCourse(UUID courseId) {
     UUID currentAdminId = SecurityUtils.getCurrentUserId();
     Course course = findCourseOrThrow(courseId);
+    if (course.getStatus() != com.fptu.math_master.enums.CourseStatus.PENDING_REVIEW) {
+      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
+    }
     course.setStatus(com.fptu.math_master.enums.CourseStatus.PUBLISHED);
     course.setPublished(true);
     course.setRejectionReason(null);
@@ -363,6 +369,10 @@ public class CourseServiceImpl implements CourseService {
   public CourseResponse rejectCourse(UUID courseId, String reason) {
     UUID currentAdminId = SecurityUtils.getCurrentUserId();
     Course course = findCourseOrThrow(courseId);
+
+    if (course.getStatus() != com.fptu.math_master.enums.CourseStatus.PENDING_REVIEW) {
+      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
+    }
     
     course.setStatus(com.fptu.math_master.enums.CourseStatus.REJECTED);
     course.setPublished(false);
@@ -479,13 +489,16 @@ public class CourseServiceImpl implements CourseService {
   @Override
   @Transactional(readOnly = true)
   public CourseResponse getCourseById(UUID courseId) {
-    return mapToResponse(findCourseOrThrow(courseId));
+    Course course = findCourseOrThrow(courseId);
+    verifyPublicCourseVisibility(course);
+    return mapToResponse(course);
   }
 
   @Override
   @Transactional(readOnly = true)
   public CoursePreviewResponse getCoursePreview(UUID courseId) {
     Course course = findCourseOrThrow(courseId);
+    verifyPublicCourseVisibility(course);
     CourseResponse courseResponse = mapToResponse(course);
 
     List<CourseLessonPreviewResponse> lessons = courseLessonRepository.findByCourseIdAndNotDeleted(courseId)
@@ -621,6 +634,26 @@ public class CourseServiceImpl implements CourseService {
     if (!course.getTeacherId().equals(userId)) {
       throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
     }
+  }
+
+  private void verifyPublicCourseVisibility(Course course) {
+    boolean publiclyVisible = course.isPublished()
+        && course.getStatus() == com.fptu.math_master.enums.CourseStatus.PUBLISHED;
+    if (publiclyVisible) {
+      return;
+    }
+
+    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+    if (currentUserId != null) {
+      if (SecurityUtils.hasRole("ADMIN")) {
+        return;
+      }
+      if (course.getTeacherId() != null && course.getTeacherId().equals(currentUserId)) {
+        return;
+      }
+    }
+
+    throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
   }
 
   private StudentInCourseResponse buildStudentInCourseResponse(Enrollment e, int totalLessons) {
