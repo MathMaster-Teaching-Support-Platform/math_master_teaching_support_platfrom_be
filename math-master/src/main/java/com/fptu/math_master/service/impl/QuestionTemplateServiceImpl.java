@@ -87,6 +87,9 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       throw new AppException(ErrorCode.INVALID_TEMPLATE_SYNTAX);
     }
 
+    // Validate tags
+    validateTags(request.getTags());
+
     QuestionTemplate template =
         QuestionTemplate.builder()
             .questionBankId(bankId)
@@ -148,6 +151,9 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       log.error("Template validation failed: {}", validationErrors);
       throw new AppException(ErrorCode.INVALID_TEMPLATE_SYNTAX);
     }
+
+    // Validate tags
+    validateTags(request.getTags());
 
     template.setName(request.getName());
     template.setDescription(request.getDescription());
@@ -717,7 +723,16 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
                         (String) templateData.getOrDefault("cognitiveLevel", "UNDERSTAND")))
                 .tags(
                     ((List<?>) templateData.getOrDefault("tags", new ArrayList<>()))
-                        .toArray(new String[0]))
+                        .stream()
+                        .map(tag -> {
+                          try {
+                            return com.fptu.math_master.enums.QuestionTag.valueOf(tag.toString().trim().toUpperCase());
+                          } catch (IllegalArgumentException e) {
+                            return com.fptu.math_master.enums.QuestionTag.fromVietnameseName(tag.toString());
+                          }
+                        })
+                        .filter(java.util.Objects::nonNull)
+                        .collect(Collectors.toList()))
                 .isPublic(false)
                 .status(TemplateStatus.DRAFT)
                 .usageCount(0)
@@ -965,5 +980,21 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         && !SecurityUtils.hasRole("ADMIN")) {
       throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
     }
+  }
+
+  /**
+   * Validates tags for question template.
+   * - At least one tag is required
+   * - Maximum 5 tags allowed
+   * - All tags must be valid QuestionTag enum values
+   */
+  private void validateTags(List<com.fptu.math_master.enums.QuestionTag> tags) {
+    if (tags == null || tags.isEmpty()) {
+      throw new AppException(ErrorCode.TAGS_REQUIRED);
+    }
+    if (tags.size() > 5) {
+      throw new AppException(ErrorCode.TOO_MANY_TAGS);
+    }
+    // Enum validation is automatic - invalid values will cause deserialization error
   }
 }

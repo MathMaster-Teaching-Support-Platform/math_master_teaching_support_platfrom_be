@@ -258,19 +258,40 @@ public class LearningRoadmapServiceImpl implements LearningRoadmapService {
     if (roadmap == null) return;
 
     List<RoadmapTopic> topics = topicRepository.findByRoadmapIdOrderBySequenceOrder(roadmapId);
-    if (topics.isEmpty()) {
-      roadmap.setProgressPercentage(BigDecimal.ZERO);
-    } else {
-      BigDecimal totalProgress =
-          topics.stream()
-              .map(RoadmapTopic::getProgressPercentage)
-              .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-      BigDecimal avgProgress =
-          totalProgress.divide(BigDecimal.valueOf(topics.size()), 2, RoundingMode.HALF_UP);
-
-      roadmap.setProgressPercentage(avgProgress);
+    
+    // Calculate progress based on lessons (consistent with mapToDetailResponse)
+    int totalLessons = 0;
+    int completedLessons = 0;
+    
+    for (RoadmapTopic topic : topics) {
+      if (topic.getDeletedAt() != null) continue;
+      
+      List<TopicCourse> topicCourses = topicCourseRepository.findByTopicId(topic.getId());
+      for (TopicCourse topicCourse : topicCourses) {
+        Course course = courseRepository.findByIdAndDeletedAtIsNull(topicCourse.getCourseId()).orElse(null);
+        if (course != null) {
+          long courseTotalLessons = courseLessonRepository.countByCourseIdAndNotDeleted(course.getId());
+          totalLessons += courseTotalLessons;
+          
+          if (roadmap.getStudentId() != null) {
+            Enrollment enrollment = enrollmentRepository.findByStudentIdAndCourseIdAndDeletedAtIsNull(
+                roadmap.getStudentId(), course.getId()).orElse(null);
+            if (enrollment != null) {
+              int courseCompletedLessons = (int) lessonProgressRepository.countCompletedByEnrollmentId(enrollment.getId());
+              completedLessons += courseCompletedLessons;
+            }
+          }
+        }
+      }
     }
+    
+    BigDecimal calculatedProgress = BigDecimal.ZERO;
+    if (totalLessons > 0) {
+      calculatedProgress = BigDecimal.valueOf((completedLessons * 100.0) / totalLessons)
+          .setScale(2, RoundingMode.HALF_UP);
+    }
+    
+    roadmap.setProgressPercentage(calculatedProgress);
 
     Long completedCount =
         topics.stream().filter(t -> t.getStatus() == TopicStatus.COMPLETED).count();

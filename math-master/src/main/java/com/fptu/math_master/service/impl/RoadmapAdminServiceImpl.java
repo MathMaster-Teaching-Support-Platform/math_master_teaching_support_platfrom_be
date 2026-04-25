@@ -564,15 +564,22 @@ public class RoadmapAdminServiceImpl implements RoadmapAdminService {
         .toList();
 
     double previousMark = -1;
+    String previousTitle = null;
     for (TopicBatchItem item : activeItems) {
       Double mark = item.getMark();
+      String title = item.getTitle() != null ? item.getTitle() : "Chưa có tiêu đề";
+      
       if (mark == null || mark <= 0) {
+        log.error("Invalid topic mark: topic='{}', mark={}", title, mark);
         throw new AppException(ErrorCode.INVALID_TOPIC_POINT_ORDER);
       }
       if (previousMark >= 0 && mark <= previousMark) {
+        log.error("Topic marks not strictly increasing: topic='{}' (mark={}) must be > previous topic='{}' (mark={})", 
+                  title, mark, previousTitle, previousMark);
         throw new AppException(ErrorCode.INVALID_TOPIC_POINT_ORDER);
       }
       previousMark = mark;
+      previousTitle = title;
     }
   }
 

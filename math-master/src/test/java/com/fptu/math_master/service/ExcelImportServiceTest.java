@@ -11,6 +11,7 @@ import com.fptu.math_master.dto.response.ExcelPreviewResponse;
 import com.fptu.math_master.dto.response.TemplateBatchImportResponse;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.CognitiveLevel;
+import com.fptu.math_master.enums.QuestionTag;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.service.impl.ExcelImportServiceImpl;
@@ -70,7 +71,7 @@ class ExcelImportServiceTest {
             .parameters(parameters)
             .answerFormula("(-b)/a")
             .cognitiveLevel(CognitiveLevel.THONG_HIEU)
-            .tags(new String[] {"test", "algebra"})
+            .tags(List.of(QuestionTag.LINEAR_EQUATIONS, QuestionTag.PROBLEM_SOLVING))
             .isPublic(false)
             .build();
 

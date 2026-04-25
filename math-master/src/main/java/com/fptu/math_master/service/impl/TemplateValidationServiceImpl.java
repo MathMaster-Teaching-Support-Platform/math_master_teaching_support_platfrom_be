@@ -678,34 +678,28 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
   }
 
   private void validateTags(
-      String[] tags, List<ValidationIssue> warnings, List<ValidationIssue> info) {
+      java.util.List<com.fptu.math_master.enums.QuestionTag> tags, List<ValidationIssue> warnings, List<ValidationIssue> info) {
 
-    if (tags == null || tags.length == 0) {
+    if (tags == null || tags.isEmpty()) {
       warnings.add(
           ValidationIssue.builder()
               .category("TAGS")
               .field("tags")
               .message("No tags defined. Tags help organize and search templates.")
               .severity(IssueSeverity.WARNING)
-              .suggestion("Add tags like 'algebra', 'grade-8', 'chapter-1', 'linear-equations'")
+              .suggestion("Add tags like 'LINEAR_EQUATIONS', 'QUADRATIC_EQUATIONS', etc.")
               .build());
       return;
     }
 
-    // Check for empty tags
-    List<String> emptyTags = new ArrayList<>();
-    for (int i = 0; i < tags.length; i++) {
-      if (tags[i] == null || tags[i].trim().isEmpty()) {
-        emptyTags.add(String.valueOf(i));
-      }
-    }
-
-    if (!emptyTags.isEmpty()) {
+    // Check for null tags
+    long nullCount = tags.stream().filter(java.util.Objects::isNull).count();
+    if (nullCount > 0) {
       warnings.add(
           ValidationIssue.builder()
               .category("TAGS")
               .field("tags")
-              .message("Empty tags at indices: " + String.join(", ", emptyTags))
+              .message("Found " + nullCount + " null tag(s)")
               .severity(IssueSeverity.WARNING)
               .build());
     }
@@ -715,7 +709,7 @@ public class TemplateValidationServiceImpl implements TemplateValidationService 
         ValidationIssue.builder()
             .category("TAGS")
             .field("tags")
-            .message("Template has " + tags.length + " tag(s)")
+            .message("Template has " + tags.size() + " tag(s)")
             .severity(IssueSeverity.INFO)
             .build());
   }

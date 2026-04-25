@@ -261,11 +261,24 @@ public class ExcelImportServiceImpl implements ExcelImportService {
     }
 
     // Parse tags
-    String[] tags = null;
+    java.util.List<com.fptu.math_master.enums.QuestionTag> tags = new java.util.ArrayList<>();
     if (tagsStr != null && !tagsStr.isBlank()) {
-      tags = tagsStr.split(",");
-      for (int i = 0; i < tags.length; i++) {
-        tags[i] = tags[i].trim();
+      String[] tagArray = tagsStr.split(",");
+      for (String tagStr : tagArray) {
+        String trimmed = tagStr.trim();
+        if (!trimmed.isEmpty()) {
+          try {
+            // Try to parse as enum name
+            tags.add(com.fptu.math_master.enums.QuestionTag.valueOf(trimmed.toUpperCase()));
+          } catch (IllegalArgumentException e) {
+            // Try Vietnamese name lookup
+            com.fptu.math_master.enums.QuestionTag tag = 
+                com.fptu.math_master.enums.QuestionTag.fromVietnameseName(trimmed);
+            if (tag != null) {
+              tags.add(tag);
+            }
+          }
+        }
       }
     }
 

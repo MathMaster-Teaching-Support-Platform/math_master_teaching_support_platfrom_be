@@ -116,6 +116,6 @@ public class TemplateImportResponse {
     CognitiveLevel cognitiveLevel;
 
     /** Suggested tags */
-    String[] tags;
+    java.util.List<com.fptu.math_master.enums.QuestionTag> tags;
   }
 }
