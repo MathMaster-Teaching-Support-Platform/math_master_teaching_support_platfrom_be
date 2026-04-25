@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,6 +14,8 @@ import org.springframework.stereotype.Repository;
 
 import com.fptu.math_master.entity.Enrollment;
 import com.fptu.math_master.enums.EnrollmentStatus;
+
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
@@ -32,8 +33,21 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
 
   List<Enrollment> findByStudentIdAndDeletedAtIsNullOrderByEnrolledAtDesc(UUID studentId);
 
+    @Query(
+            "SELECT e FROM Enrollment e "
+                    + "JOIN FETCH e.course c "
+                    + "LEFT JOIN FETCH c.subject "
+                    + "WHERE e.studentId = :studentId "
+                    + "AND e.status = :status "
+                    + "AND e.deletedAt IS NULL "
+                    + "AND c.deletedAt IS NULL")
+    List<Enrollment> findByStudentIdAndStatusWithCourseAndSubject(
+            @Param("studentId") UUID studentId, @Param("status") EnrollmentStatus status);
+
     List<Enrollment> findByStudentIdAndStatusAndDeletedAtIsNullOrderByEnrolledAtDesc(
             UUID studentId, EnrollmentStatus status);
+
+    long countByStudentIdAndStatusAndDeletedAtIsNull(UUID studentId, EnrollmentStatus status);
 
   Page<Enrollment> findByCourseIdAndStatusAndDeletedAtIsNull(
       UUID courseId, EnrollmentStatus status, Pageable pageable);

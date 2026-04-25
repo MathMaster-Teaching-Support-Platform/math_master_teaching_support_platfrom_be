@@ -1,17 +1,20 @@
 package com.fptu.math_master.repository;
 
-import com.fptu.math_master.entity.Submission;
-import com.fptu.math_master.enums.SubmissionStatus;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import com.fptu.math_master.entity.Submission;
+import com.fptu.math_master.enums.SubmissionStatus;
 
 @Repository
 public interface SubmissionRepository extends JpaRepository<Submission, UUID> {
@@ -76,4 +79,48 @@ public interface SubmissionRepository extends JpaRepository<Submission, UUID> {
   List<Submission> findByStudentIdAndStatuses(
       @Param("studentId") UUID studentId,
       @Param("statuses") Collection<SubmissionStatus> statuses);
+
+  long countByStudentIdAndStatusInAndDeletedAtIsNull(
+      UUID studentId, Collection<SubmissionStatus> statuses);
+
+  @Query(
+      "SELECT AVG(COALESCE(s.finalScore, s.score, s.percentage)) FROM Submission s "
+          + "WHERE s.studentId = :studentId "
+          + "AND s.status = com.fptu.math_master.enums.SubmissionStatus.GRADED "
+          + "AND s.deletedAt IS NULL")
+  Double averageScoreOfGradedByStudentId(@Param("studentId") UUID studentId);
+
+  List<Submission> findTop10ByStudentIdAndStatusAndDeletedAtIsNullOrderByGradedAtDesc(
+      UUID studentId, SubmissionStatus status);
+
+  @Query(
+      "SELECT s FROM Submission s "
+          + "WHERE s.studentId = :studentId "
+          + "AND s.assessmentId IN :assessmentIds "
+          + "AND s.deletedAt IS NULL "
+          + "ORDER BY s.createdAt DESC")
+  List<Submission> findByStudentIdAndAssessmentIdInOrderByCreatedAtDesc(
+      @Param("studentId") UUID studentId, @Param("assessmentIds") Collection<UUID> assessmentIds);
+
+  @Query(
+      "SELECT s.submittedAt, COALESCE(s.timeSpentSeconds, 0) FROM Submission s "
+          + "WHERE s.studentId = :studentId "
+          + "AND s.deletedAt IS NULL "
+          + "AND s.submittedAt IS NOT NULL "
+          + "AND s.submittedAt >= :from "
+          + "AND s.submittedAt < :to")
+  List<Object[]> findSubmissionActivityForWindow(
+      @Param("studentId") UUID studentId,
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  @Query(
+      "SELECT s.submittedAt FROM Submission s "
+          + "WHERE s.studentId = :studentId "
+          + "AND s.deletedAt IS NULL "
+          + "AND s.submittedAt IS NOT NULL "
+          + "AND s.submittedAt >= :from")
+  List<Instant> findSubmittedAtAfter(
+      @Param("studentId") UUID studentId,
+      @Param("from") Instant from);
 }
