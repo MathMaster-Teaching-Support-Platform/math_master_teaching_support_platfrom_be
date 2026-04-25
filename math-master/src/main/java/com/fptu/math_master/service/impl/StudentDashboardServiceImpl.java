@@ -14,7 +14,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,6 +68,7 @@ public class StudentDashboardServiceImpl implements StudentDashboardService {
   private final LessonProgressRepository lessonProgressRepository;
 
   @Override
+  @Cacheable(cacheNames = "studentDashboardSummary", key = "T(com.fptu.math_master.util.SecurityUtils).getCurrentUserId()")
   public StudentDashboardSummaryResponse getSummary() {
     UUID studentId = SecurityUtils.getCurrentUserId();
     User student =
@@ -126,12 +129,14 @@ public class StudentDashboardServiceImpl implements StudentDashboardService {
   }
 
   @Override
+  @Cacheable(cacheNames = "studentDashboardUpcomingTasks", key = "T(com.fptu.math_master.util.SecurityUtils).getCurrentUserId()")
   public List<StudentDashboardUpcomingTaskResponse> getUpcomingTasks() {
     UUID studentId = SecurityUtils.getCurrentUserId();
     return buildPendingTasks(studentId, 10);
   }
 
   @Override
+  @Cacheable(cacheNames = "studentDashboardRecentGrades", key = "T(com.fptu.math_master.util.SecurityUtils).getCurrentUserId()")
   public List<StudentDashboardRecentGradeResponse> getRecentGrades() {
     UUID studentId = SecurityUtils.getCurrentUserId();
 
@@ -183,6 +188,7 @@ public class StudentDashboardServiceImpl implements StudentDashboardService {
   }
 
   @Override
+  @Cacheable(cacheNames = "studentDashboardLearningProgress", key = "T(com.fptu.math_master.util.SecurityUtils).getCurrentUserId()")
   public List<StudentDashboardLearningProgressResponse> getLearningProgress() {
     UUID studentId = SecurityUtils.getCurrentUserId();
     List<Enrollment> enrollments =
@@ -191,6 +197,28 @@ public class StudentDashboardServiceImpl implements StudentDashboardService {
 
     if (enrollments.isEmpty()) {
       return List.of();
+    }
+
+    List<UUID> courseIds =
+        enrollments.stream().map(Enrollment::getCourseId).distinct().collect(Collectors.toList());
+    List<UUID> enrollmentIds =
+        enrollments.stream().map(Enrollment::getId).collect(Collectors.toList());
+
+    Map<UUID, Long> totalLessonsByCourseId = new HashMap<>();
+    if (!courseIds.isEmpty()) {
+      List<Object[]> totalRows = courseLessonRepository.countByCourseIdsAndNotDeleted(courseIds);
+      for (Object[] row : totalRows) {
+        totalLessonsByCourseId.put((UUID) row[0], ((Number) row[1]).longValue());
+      }
+    }
+
+    Map<UUID, Long> completedLessonsByEnrollmentId = new HashMap<>();
+    if (!enrollmentIds.isEmpty()) {
+      List<Object[]> completedRows =
+          lessonProgressRepository.countCompletedByEnrollmentIds(enrollmentIds);
+      for (Object[] row : completedRows) {
+        completedLessonsByEnrollmentId.put((UUID) row[0], ((Number) row[1]).longValue());
+      }
     }
 
     Map<String, long[]> totalsBySubject = new HashMap<>();
@@ -203,8 +231,8 @@ public class StudentDashboardServiceImpl implements StudentDashboardService {
                   ? enrollment.getCourse().getTitle()
                   : "General");
 
-      long totalLessons = courseLessonRepository.countByCourseIdAndNotDeleted(enrollment.getCourseId());
-      long doneLessons = lessonProgressRepository.countCompletedByEnrollmentId(enrollment.getId());
+      long totalLessons = totalLessonsByCourseId.getOrDefault(enrollment.getCourseId(), 0L);
+      long doneLessons = completedLessonsByEnrollmentId.getOrDefault(enrollment.getId(), 0L);
 
       long[] accumulator = totalsBySubject.computeIfAbsent(subjectName, k -> new long[] {0L, 0L});
       accumulator[0] += doneLessons;
@@ -231,6 +259,7 @@ public class StudentDashboardServiceImpl implements StudentDashboardService {
   }
 
   @Override
+  @Cacheable(cacheNames = "studentDashboardWeeklyActivity", key = "T(com.fptu.math_master.util.SecurityUtils).getCurrentUserId()")
   public StudentDashboardWeeklyActivityResponse getWeeklyActivity() {
     UUID studentId = SecurityUtils.getCurrentUserId();
 
@@ -277,6 +306,7 @@ public class StudentDashboardServiceImpl implements StudentDashboardService {
   }
 
   @Override
+  @Cacheable(cacheNames = "studentDashboardStreak", key = "T(com.fptu.math_master.util.SecurityUtils).getCurrentUserId()")
   public StudentDashboardStreakResponse getStreak() {
     UUID studentId = SecurityUtils.getCurrentUserId();
     LocalDate today = LocalDate.now(DASHBOARD_ZONE);
@@ -314,6 +344,7 @@ public class StudentDashboardServiceImpl implements StudentDashboardService {
   }
 
   @Override
+  @Cacheable(cacheNames = "studentDashboardOverview", key = "T(com.fptu.math_master.util.SecurityUtils).getCurrentUserId()")
   public StudentDashboardOverviewResponse getOverview() {
     return StudentDashboardOverviewResponse.builder()
         .summary(getSummary())

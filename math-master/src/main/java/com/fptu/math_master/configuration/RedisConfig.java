@@ -5,7 +5,10 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.data.redis.cache.RedisCacheConfiguration;
+import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -22,6 +25,8 @@ import com.fptu.math_master.component.StreamConsumerListener;
 import java.time.Duration;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Configuration
@@ -53,6 +58,31 @@ public class RedisConfig {
 
     template.afterPropertiesSet();
     return template;
+  }
+
+  @Bean
+  public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+    RedisCacheConfiguration defaultConfig =
+        RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(Duration.ofSeconds(30))
+            .disableCachingNullValues();
+
+    Map<String, RedisCacheConfiguration> cacheConfigs = new HashMap<>();
+    cacheConfigs.put("adminDashboardStats", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("adminRevenueByMonth", defaultConfig.entryTtl(Duration.ofMinutes(10)));
+    cacheConfigs.put("adminSystemStatus", defaultConfig.entryTtl(Duration.ofSeconds(15)));
+    cacheConfigs.put("studentDashboardSummary", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("studentDashboardUpcomingTasks", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("studentDashboardRecentGrades", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("studentDashboardLearningProgress", defaultConfig.entryTtl(Duration.ofSeconds(60)));
+    cacheConfigs.put("studentDashboardWeeklyActivity", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("studentDashboardStreak", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("studentDashboardOverview", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+
+    return RedisCacheManager.builder(connectionFactory)
+        .cacheDefaults(defaultConfig)
+        .withInitialCacheConfigurations(cacheConfigs)
+        .build();
   }
 
   @Bean

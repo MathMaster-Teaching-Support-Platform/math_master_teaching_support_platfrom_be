@@ -2,6 +2,7 @@ package com.fptu.math_master.controller;
 
 import java.util.List;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,63 +38,84 @@ public class StudentDashboardController {
   @GetMapping("/summary")
   @PreAuthorize("hasRole('STUDENT')")
   @Operation(summary = "Get student dashboard summary")
-  public ApiResponse<StudentDashboardSummaryResponse> getSummary() {
-    return ApiResponse.<StudentDashboardSummaryResponse>builder()
-        .result(studentDashboardService.getSummary())
-        .build();
+  public ResponseEntity<ApiResponse<StudentDashboardSummaryResponse>> getSummary() {
+    return ResponseEntity.ok()
+        .header("Cache-Control", "private, max-age=30")
+        .body(
+            ApiResponse.<StudentDashboardSummaryResponse>builder()
+                .result(studentDashboardService.getSummary())
+                .build());
   }
 
   @GetMapping("/upcoming-tasks")
   @PreAuthorize("hasRole('STUDENT')")
   @Operation(summary = "Get upcoming tasks")
-  public ApiResponse<List<StudentDashboardUpcomingTaskResponse>> getUpcomingTasks() {
-    return ApiResponse.<List<StudentDashboardUpcomingTaskResponse>>builder()
-        .result(studentDashboardService.getUpcomingTasks())
-        .build();
+  public ResponseEntity<ApiResponse<List<StudentDashboardUpcomingTaskResponse>>> getUpcomingTasks() {
+    return ResponseEntity.ok()
+        .header("Cache-Control", "private, max-age=30")
+        .body(
+            ApiResponse.<List<StudentDashboardUpcomingTaskResponse>>builder()
+                .result(studentDashboardService.getUpcomingTasks())
+                .build());
   }
 
   @GetMapping("/recent-grades")
   @PreAuthorize("hasRole('STUDENT')")
   @Operation(summary = "Get recent grades")
-  public ApiResponse<List<StudentDashboardRecentGradeResponse>> getRecentGrades() {
-    return ApiResponse.<List<StudentDashboardRecentGradeResponse>>builder()
-        .result(studentDashboardService.getRecentGrades())
-        .build();
+  public ResponseEntity<ApiResponse<List<StudentDashboardRecentGradeResponse>>> getRecentGrades() {
+    return ResponseEntity.ok()
+        .header("Cache-Control", "private, max-age=30")
+        .body(
+            ApiResponse.<List<StudentDashboardRecentGradeResponse>>builder()
+                .result(studentDashboardService.getRecentGrades())
+                .build());
   }
 
   @GetMapping("/learning-progress")
   @PreAuthorize("hasRole('STUDENT')")
   @Operation(summary = "Get learning progress by subject")
-  public ApiResponse<List<StudentDashboardLearningProgressResponse>> getLearningProgress() {
-    return ApiResponse.<List<StudentDashboardLearningProgressResponse>>builder()
-        .result(studentDashboardService.getLearningProgress())
-        .build();
+  public ResponseEntity<ApiResponse<List<StudentDashboardLearningProgressResponse>>> getLearningProgress() {
+    return ResponseEntity.ok()
+        .header("Cache-Control", "private, max-age=60")
+        .body(
+            ApiResponse.<List<StudentDashboardLearningProgressResponse>>builder()
+                .result(studentDashboardService.getLearningProgress())
+                .build());
   }
 
   @GetMapping("/weekly-activity")
   @PreAuthorize("hasRole('STUDENT')")
   @Operation(summary = "Get weekly activity")
-  public ApiResponse<StudentDashboardWeeklyActivityResponse> getWeeklyActivity() {
-    return ApiResponse.<StudentDashboardWeeklyActivityResponse>builder()
-        .result(studentDashboardService.getWeeklyActivity())
-        .build();
+  public ResponseEntity<ApiResponse<StudentDashboardWeeklyActivityResponse>> getWeeklyActivity() {
+    return ResponseEntity.ok()
+        .header("Cache-Control", "private, max-age=30")
+        .body(
+            ApiResponse.<StudentDashboardWeeklyActivityResponse>builder()
+                .result(studentDashboardService.getWeeklyActivity())
+                .build());
   }
 
   @GetMapping("/streak")
   @PreAuthorize("hasRole('STUDENT')")
   @Operation(summary = "Get study streak")
-  public ApiResponse<StudentDashboardStreakResponse> getStreak() {
-    return ApiResponse.<StudentDashboardStreakResponse>builder()
-        .result(studentDashboardService.getStreak())
-        .build();
+  public ResponseEntity<ApiResponse<StudentDashboardStreakResponse>> getStreak() {
+    return ResponseEntity.ok()
+        .header("Cache-Control", "private, max-age=30")
+        .body(
+            ApiResponse.<StudentDashboardStreakResponse>builder()
+                .result(studentDashboardService.getStreak())
+                .build());
   }
 
   @GetMapping
   @PreAuthorize("hasRole('STUDENT')")
   @Operation(summary = "Get full dashboard payload")
-  public ApiResponse<StudentDashboardOverviewResponse> getOverview() {
-    return ApiResponse.<StudentDashboardOverviewResponse>builder()
-        .result(studentDashboardService.getOverview())
-        .build();
+  public ResponseEntity<ApiResponse<StudentDashboardOverviewResponse>> getOverview() {
+    return ResponseEntity.ok()
+        .header("Cache-Control", "private, max-age=30")
+        .body(
+            ApiResponse.<StudentDashboardOverviewResponse>builder()
+                .result(studentDashboardService.getOverview())
+                .build());
   }
 }

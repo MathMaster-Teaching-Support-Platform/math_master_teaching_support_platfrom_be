@@ -34,6 +34,16 @@ public interface LessonProgressRepository extends JpaRepository<LessonProgress, 
   long countCompletedByEnrollmentId(@Param("enrollmentId") UUID enrollmentId);
 
   @Query(
+      "SELECT lp.enrollmentId, COUNT(lp) FROM LessonProgress lp "
+          + "JOIN lp.courseLesson cl "
+          + "WHERE lp.enrollmentId IN :enrollmentIds "
+          + "AND lp.isCompleted = true "
+          + "AND lp.deletedAt IS NULL "
+          + "AND cl.deletedAt IS NULL "
+          + "GROUP BY lp.enrollmentId")
+  List<Object[]> countCompletedByEnrollmentIds(@Param("enrollmentIds") List<UUID> enrollmentIds);
+
+  @Query(
       "SELECT lp.lastWatchedAt, COALESCE(lp.watchedSeconds, 0) FROM LessonProgress lp "
           + "JOIN lp.enrollment e "
           + "WHERE e.studentId = :studentId "

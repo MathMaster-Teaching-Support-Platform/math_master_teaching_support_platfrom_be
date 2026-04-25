@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,6 +56,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
   @Override
   @Transactional(readOnly = true)
+  @Cacheable(cacheNames = "adminDashboardStats", key = "#month == null || #month.isBlank() ? 'current' : #month")
   public AdminDashboardStatsResponse getDashboardStats(String month) {
     YearMonth targetMonth = (month != null && !month.isBlank())
         ? YearMonth.parse(month)
@@ -108,6 +110,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
   @Override
   @Transactional(readOnly = true)
+  @Cacheable(cacheNames = "adminRevenueByMonth", key = "#year")
   public AdminRevenueByMonthResponse getRevenueByMonth(int year) {
     List<Object[]> rows = transactionRepository.sumRevenueByMonth(year);
     Map<Integer, Long> revenueMap = new HashMap<>();
@@ -157,6 +160,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
   }
 
   @Override
+  @Cacheable(cacheNames = "adminSystemStatus", key = "'global'")
   public AdminSystemStatusResponse getSystemStatus() {
     List<AdminSystemStatusResponse.ServiceStatus> services = new ArrayList<>();
 
