@@ -244,6 +244,7 @@ public class CourseServiceImpl implements CourseService {
       // Active students enrolled — convert to draft/unpublished only.
       course.setPublished(false);
       course.setStatus(com.fptu.math_master.enums.CourseStatus.DRAFT);
+      validateStatusPublishConsistency(course);
       courseRepository.save(course);
       log.info("Course {} has active enrollments; converted to draft/unpublished instead of deleting", courseId);
       return;
@@ -258,6 +259,7 @@ public class CourseServiceImpl implements CourseService {
     course.setPublished(false);
     course.setDeletedAt(Instant.now());
     course.setDeletedBy(currentUserId);
+    validateStatusPublishConsistency(course);
     courseRepository.save(course);
     log.info("Course soft-deleted: {}", courseId);
   }
@@ -280,6 +282,7 @@ public class CourseServiceImpl implements CourseService {
       throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
     }
 
+    validateStatusPublishConsistency(course);
     course = courseRepository.save(course);
     log.info("Course {} {}", courseId, publish ? "published" : "unpublished");
     return mapToResponse(course);
@@ -314,6 +317,8 @@ public class CourseServiceImpl implements CourseService {
     }
 
     course.setStatus(com.fptu.math_master.enums.CourseStatus.PENDING_REVIEW);
+    course.setPublished(false);
+    validateStatusPublishConsistency(course);
     course = courseRepository.save(course);
     notifyAdminsCoursePendingReview(course);
     log.info("Course {} submitted for review with {} lessons", courseId, lessonCount);
@@ -361,6 +366,7 @@ public class CourseServiceImpl implements CourseService {
     course.setApprovedAt(Instant.now());
     course.setRejectedBy(null);
     course.setRejectedAt(null);
+    validateStatusPublishConsistency(course);
 
     course = courseRepository.save(course);
     notifyTeacherCourseApproved(course);
@@ -386,6 +392,7 @@ public class CourseServiceImpl implements CourseService {
     // FIX #6: Clear approval metadata when rejecting
     course.setApprovedBy(null);
     course.setApprovedAt(null);
+    validateStatusPublishConsistency(course);
 
     course = courseRepository.save(course);
     notifyTeacherCourseRejected(course, reason);
@@ -640,8 +647,7 @@ public class CourseServiceImpl implements CourseService {
   }
 
   private void verifyPublicCourseVisibility(Course course) {
-    boolean publiclyVisible = course.isPublished()
-        && course.getStatus() == com.fptu.math_master.enums.CourseStatus.PUBLISHED;
+    boolean publiclyVisible = isPubliclyVisibleCourse(course);
     if (publiclyVisible) {
       return;
     }
@@ -657,6 +663,19 @@ public class CourseServiceImpl implements CourseService {
     }
 
     throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+  }
+
+  private boolean isPubliclyVisibleCourse(Course course) {
+    return course.isPublished()
+        && course.getStatus() == com.fptu.math_master.enums.CourseStatus.PUBLISHED;
+  }
+
+  private void validateStatusPublishConsistency(Course course) {
+    boolean statusPublished = course.getStatus() == com.fptu.math_master.enums.CourseStatus.PUBLISHED;
+    boolean publishedFlag = course.isPublished();
+    if (statusPublished != publishedFlag) {
+      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
+    }
   }
 
   private StudentInCourseResponse buildStudentInCourseResponse(Enrollment e, int totalLessons) {
