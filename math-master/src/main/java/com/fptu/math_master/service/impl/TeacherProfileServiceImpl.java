@@ -217,6 +217,8 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
           .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
       Set<Role> roles = new HashSet<>(user.getRoles());
+      // Enforce teacher-student exclusivity: remove STUDENT role when adding TEACHER role
+      roles.removeIf(role -> PredefinedRole.STUDENT_ROLE.equals(role.getName()));
       roles.add(teacherRole);
       user.setRoles(roles);
       userRepository.save(user);
