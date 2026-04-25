@@ -64,6 +64,13 @@ public class ExamMatrix extends BaseEntity {
   @Column(name = "grade_level")
   private Integer gradeLevel;
 
+  /**
+   * Cache of the subject ID for this matrix.
+   * Auto-populated from the first question bank added to the matrix.
+   */
+  @Column(name = "subject_id")
+  private UUID subjectId;
+
   @Size(max = 255)
   @Nationalized
   @Column(name = "name", length = 255, nullable = false)

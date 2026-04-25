@@ -13,6 +13,8 @@ public interface ExamMatrixRowRepository extends JpaRepository<ExamMatrixRow, UU
 
   List<ExamMatrixRow> findByExamMatrixIdOrderByOrderIndex(UUID examMatrixId);
 
+  List<ExamMatrixRow> findByExamMatrixId(UUID examMatrixId);
+
   @Query(
       """
       SELECT r FROM ExamMatrixRow r

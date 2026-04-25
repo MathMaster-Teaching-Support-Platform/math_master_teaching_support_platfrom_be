@@ -116,8 +116,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
               + "  OR EXISTS ("
               + "    SELECT 1 FROM unnest(COALESCE(q.tags, ARRAY[]::text[])) t "
               + "    WHERE t ILIKE CAST(:tag AS text)"
-              + "  )) "
-              + "ORDER BY q.created_at DESC",
+              + "  ))",
       countQuery =
           "SELECT COUNT(*) FROM questions q "
               + "WHERE q.deleted_at IS NULL "

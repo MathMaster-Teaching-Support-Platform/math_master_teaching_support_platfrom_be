@@ -23,10 +23,14 @@ import com.fptu.math_master.dto.response.QuestionResponse;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.AssessmentQuestion;
+import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.entity.ExamMatrix;
 import com.fptu.math_master.entity.ExamMatrixBankMapping;
+import com.fptu.math_master.entity.ExamMatrixRow;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.Question;
+import com.fptu.math_master.entity.QuestionBank;
+import com.fptu.math_master.entity.Subject;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
@@ -50,7 +54,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -73,6 +79,9 @@ public class AssessmentServiceImpl implements AssessmentService {
   ExamMatrixBankMappingRepository examMatrixBankMappingRepository;
   ExamMatrixRowRepository examMatrixRowRepository;
   LessonRepository lessonRepository;
+  ChapterRepository chapterRepository;
+  SubjectRepository subjectRepository;
+  QuestionBankRepository questionBankRepository;
   QuestionSelectionService questionSelectionService;
   QuestionRepository questionRepository;
 
@@ -85,8 +94,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     validateTeacherRole(currentUserId);
     validateDates(request.getStartDate(), request.getEndDate());
     ExamMatrix matrix = validateAndGetAccessibleMatrix(request.getExamMatrixId(), currentUserId);
-    List<UUID> lessonIds = normalizeLessonIds(request.getLessonIds());
-    validateLessonSelectionForMatrix(matrix.getId(), lessonIds);
+    // Lessons are now auto-populated from matrix, no need for manual selection
 
     Assessment assessment =
         Assessment.builder()
@@ -115,7 +123,9 @@ public class AssessmentServiceImpl implements AssessmentService {
             .build();
 
     assessment = assessmentRepository.save(assessment);
-    syncAssessmentLessons(assessment.getId(), lessonIds);
+    
+    // BUG FIX #4: Auto-populate lessons from matrix instead of manual selection
+    autoPopulateLessonsFromMatrix(assessment.getId(), matrix.getId());
 
     // Auto-map questions right after creating assessment when matrix already has mappings.
     autoMapQuestionsFromMatrixOnCreate(assessment.getId(), matrix.getId());
@@ -142,8 +152,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     validateDates(request.getStartDate(), request.getEndDate());
     ExamMatrix matrix = validateAndGetAccessibleMatrix(request.getExamMatrixId(), currentUserId);
-    List<UUID> lessonIds = normalizeLessonIds(request.getLessonIds());
-    validateLessonSelectionForMatrix(matrix.getId(), lessonIds);
+    // Lessons are now auto-populated from matrix, no need for manual selection
 
     assessment.setTitle(request.getTitle());
     assessment.setDescription(request.getDescription());
@@ -177,7 +186,10 @@ public class AssessmentServiceImpl implements AssessmentService {
     }
 
     assessment = assessmentRepository.save(assessment);
-    syncAssessmentLessons(assessment.getId(), lessonIds);
+    
+    // BUG FIX #4: Auto-populate lessons from matrix when matrix changes
+    autoPopulateLessonsFromMatrix(assessment.getId(), matrix.getId());
+    
     log.info("Assessment updated successfully: {}", id);
     return mapToResponse(assessment);
   }
@@ -675,9 +687,16 @@ public class AssessmentServiceImpl implements AssessmentService {
       String normalizedKeyword = normalizeKeywordPattern(keyword);
       String normalizedTag = normalizeKeywordPattern(tag);
 
+      // Create Pageable with correct column name for native query (snake_case)
+      Pageable sortedPageable = PageRequest.of(
+          pageable.getPageNumber(),
+          pageable.getPageSize(),
+          Sort.by(Sort.Direction.DESC, "created_at")
+      );
+
       Page<Question> page =
         questionRepository.findAvailableByAssessmentId(
-          assessment.getTeacherId(), assessmentId, normalizedKeyword, normalizedTag, pageable);
+          assessment.getTeacherId(), assessmentId, normalizedKeyword, normalizedTag, sortedPageable);
 
       List<QuestionResponse> items = page.getContent().stream().map(this::mapQuestionToResponse).toList();
 
@@ -755,6 +774,9 @@ public class AssessmentServiceImpl implements AssessmentService {
       throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
     }
 
+    // BUG FIX #4: Auto-populate lessons from matrix
+    autoPopulateLessonsFromMatrix(assessmentId, matrix.getId());
+
     // Regenerate from blueprint to keep assessment deterministic and aligned with matrix.
     assessmentQuestionRepository.deleteAllByAssessmentId(assessmentId);
 
@@ -783,6 +805,36 @@ public class AssessmentServiceImpl implements AssessmentService {
           "%d questions selected from Question Bank based on Exam Matrix rules. Total points: %d",
           totalQuestionsGenerated, totalPoints))
       .build();
+  }
+
+  private void autoPopulateLessonsFromMatrix(UUID assessmentId, UUID matrixId) {
+    // Get all question banks used in matrix rows
+    List<UUID> bankIds = examMatrixRowRepository.findByExamMatrixId(matrixId)
+        .stream()
+        .map(ExamMatrixRow::getQuestionBankId)
+        .distinct()
+        .toList();
+    
+    // Get all chapters from those banks
+    List<UUID> chapterIds = questionBankRepository.findAllById(bankIds)
+        .stream()
+        .map(QuestionBank::getChapterId)
+        .filter(java.util.Objects::nonNull)
+        .distinct()
+        .toList();
+    
+    // Get all lessons from those chapters
+    List<UUID> lessonIds = lessonRepository.findByChapterIdIn(chapterIds)
+        .stream()
+        .map(Lesson::getId)
+        .toList();
+    
+    // Sync assessment lessons
+    if (!lessonIds.isEmpty()) {
+      syncAssessmentLessons(assessmentId, lessonIds);
+      log.info("Auto-populated {} lessons for assessment {} from matrix {}", 
+          lessonIds.size(), assessmentId, matrixId);
+    }
   }
 
   private boolean isMatrixReusableForGeneration(ExamMatrix matrix) {
@@ -978,6 +1030,49 @@ public class AssessmentServiceImpl implements AssessmentService {
     List<String> lessonTitles =
       lessonIds.stream().map(id -> lessonTitleById.getOrDefault(id, UNKNOWN_NAME)).toList();
 
+    // BUG FIX #4: Build detailed lesson information with subject and grade
+    List<AssessmentResponse.AssessmentLessonInfo> lessons = 
+        lessonRepository.findByIdInAndNotDeleted(lessonIds).stream()
+            .map(lesson -> {
+              String chapterName = "Unknown Chapter";
+              String subjectName = null;
+              Integer gradeLevel = null;
+              String gradeName = null;
+              
+              // Get chapter information
+              if (lesson.getChapterId() != null) {
+                Chapter chapter = chapterRepository.findById(lesson.getChapterId()).orElse(null);
+                if (chapter != null) {
+                  chapterName = chapter.getTitle();
+                  
+                  // Get subject and grade information from chapter
+                  if (chapter.getSubjectId() != null) {
+                    Subject subject = subjectRepository.findById(chapter.getSubjectId()).orElse(null);
+                    if (subject != null) {
+                      subjectName = subject.getName();
+                      
+                      // Get grade from subject's school grade
+                      if (subject.getSchoolGrade() != null) {
+                        gradeLevel = subject.getSchoolGrade().getGradeLevel();
+                        gradeName = subject.getSchoolGrade().getName();
+                      }
+                    }
+                  }
+                }
+              }
+              
+              return AssessmentResponse.AssessmentLessonInfo.builder()
+                  .lessonId(lesson.getId())
+                  .lessonName(lesson.getTitle())
+                  .chapterName(chapterName)
+                  .orderIndex(lesson.getOrderIndex())
+                  .subjectName(subjectName)
+                  .gradeLevel(gradeLevel)
+                  .gradeName(gradeName)
+                  .build();
+            })
+            .toList();
+
     // Get ExamMatrix info if exists
     String examMatrixName = null;
     Integer examMatrixGradeLevel = null;
@@ -996,6 +1091,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         .teacherName(teacherName)
         .lessonIds(lessonIds)
         .lessonTitles(lessonTitles)
+        .lessons(lessons)  // BUG FIX #4: Add detailed lesson info
         .title(assessment.getTitle())
         .description(assessment.getDescription())
         .assessmentType(assessment.getAssessmentType())

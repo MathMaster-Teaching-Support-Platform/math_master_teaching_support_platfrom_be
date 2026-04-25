@@ -47,4 +47,22 @@ public class AssessmentResponse {
   private Long submissionCount;
   private Instant createdAt;
   private Instant updatedAt;
+  
+  // BUG FIX #4: Detailed lesson information from matrix
+  private List<AssessmentLessonInfo> lessons;
+  
+  @Data
+  @Builder
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class AssessmentLessonInfo {
+    private UUID lessonId;
+    private String lessonName;
+    private String chapterName;
+    private Integer orderIndex;
+    // Subject and grade information from chapter
+    private String subjectName;      // e.g., "Toán", "Vật lý"
+    private Integer gradeLevel;      // e.g., 10, 11, 12
+    private String gradeName;        // e.g., "Lớp 10", "Lớp 11"
+  }
 }

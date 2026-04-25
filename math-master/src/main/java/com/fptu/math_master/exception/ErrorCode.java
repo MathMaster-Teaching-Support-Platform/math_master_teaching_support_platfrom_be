@@ -349,7 +349,14 @@ public enum ErrorCode {
   COURSE_MUST_HAVE_LESSONS(1197, "Course must have at least one lesson before submission", HttpStatus.BAD_REQUEST),
   COURSE_ALREADY_SUBMITTED(1198, "Course is already submitted for review", HttpStatus.BAD_REQUEST),
   INVALID_DISCOUNT_PRICE(1199, "Discounted price must be less than original price", HttpStatus.BAD_REQUEST),
-  COURSE_RESUBMISSION_TOO_SOON(1200, "Please wait before resubmitting the course", HttpStatus.TOO_MANY_REQUESTS);
+  COURSE_RESUBMISSION_TOO_SOON(1200, "Please wait before resubmitting the course", HttpStatus.TOO_MANY_REQUESTS),
+  
+  // ─── Question Template & Matrix Error Codes ───────────────────────────────
+  TAGS_REQUIRED(1201, "At least one tag is required", HttpStatus.BAD_REQUEST),
+  TOO_MANY_TAGS(1202, "Maximum 5 tags allowed", HttpStatus.BAD_REQUEST),
+  BANK_MISSING_CHAPTER(1203, "Question bank must be linked to a chapter", HttpStatus.BAD_REQUEST),
+  BANK_GRADE_MISMATCH(1204, "Question bank grade does not match matrix grade", HttpStatus.BAD_REQUEST),
+  BANK_SUBJECT_MISMATCH(1205, "Question bank subject does not match matrix subject", HttpStatus.BAD_REQUEST);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
