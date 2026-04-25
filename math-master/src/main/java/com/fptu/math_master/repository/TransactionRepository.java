@@ -138,4 +138,123 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
   /** Find transactions by date range */
   List<Transaction> findByCreatedAtBetween(Instant start, Instant end);
+
+  // ─── Cash Flow aggregation queries ───────────────────────────────────────────
+  // INFLOW types:  DEPOSIT, PAYMENT, COURSE_PURCHASE
+  // OUTFLOW types: WITHDRAWAL, INSTRUCTOR_REVENUE
+
+  /**
+   * Sum of INFLOW or OUTFLOW amounts for a date range.
+   * type_list is a PostgreSQL array literal, e.g. 'DEPOSIT','PAYMENT','COURSE_PURCHASE'
+   */
+  @Query(value =
+      "SELECT COALESCE(SUM(t.amount), 0) FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.type IN (:types) " +
+      "  AND t.created_at >= :from AND t.created_at < :to",
+      nativeQuery = true)
+  BigDecimal sumCashFlowByTypesAndDateRange(
+      @Param("types") List<String> types,
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Daily inflow vs outflow — used for 'day' chart grouping.
+   * Columns: [0]=label (YYYY-MM-DD), [1]=inflow, [2]=outflow
+   */
+  @Query(value =
+      "SELECT TO_CHAR(DATE_TRUNC('day', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS label, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT','COURSE_PURCHASE')), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL','INSTRUCTOR_REVENUE')), 0) AS outflow " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "GROUP BY DATE_TRUNC('day', t.created_at AT TIME ZONE 'UTC') " +
+      "ORDER BY label",
+      nativeQuery = true)
+  List<Object[]> findCashFlowDailyAggregates(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Weekly inflow vs outflow.
+   * Columns: [0]=label (YYYY-MM-DD of the week's Monday), [1]=inflow, [2]=outflow
+   */
+  @Query(value =
+      "SELECT TO_CHAR(DATE_TRUNC('week', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS label, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT','COURSE_PURCHASE')), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL','INSTRUCTOR_REVENUE')), 0) AS outflow " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "GROUP BY DATE_TRUNC('week', t.created_at AT TIME ZONE 'UTC') " +
+      "ORDER BY label",
+      nativeQuery = true)
+  List<Object[]> findCashFlowWeeklyAggregates(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Monthly inflow vs outflow.
+   * Columns: [0]=label (YYYY-MM), [1]=inflow, [2]=outflow
+   */
+  @Query(value =
+      "SELECT TO_CHAR(DATE_TRUNC('month', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM') AS label, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT','COURSE_PURCHASE')), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL','INSTRUCTOR_REVENUE')), 0) AS outflow " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "GROUP BY DATE_TRUNC('month', t.created_at AT TIME ZONE 'UTC') " +
+      "ORDER BY label",
+      nativeQuery = true)
+  List<Object[]> findCashFlowMonthlyAggregates(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Category breakdown: sums per TransactionType within a date range.
+   * Columns: [0]=type (TransactionType name), [1]=total
+   */
+  @Query(value =
+      "SELECT t.type AS category, COALESCE(SUM(t.amount), 0) AS total " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "  AND t.type IN ('DEPOSIT','PAYMENT','COURSE_PURCHASE','WITHDRAWAL','INSTRUCTOR_REVENUE') " +
+      "GROUP BY t.type " +
+      "ORDER BY total DESC",
+      nativeQuery = true)
+  List<Object[]> findCashFlowCategoryBreakdown(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Paginated transactions for cash-flow view, filtered by type list and date range.
+   * Eagerly fetches wallet + user for display purposes.
+   */
+  @Query(
+      value = "SELECT t FROM Transaction t LEFT JOIN FETCH t.wallet w LEFT JOIN FETCH w.user u " +
+              "WHERE t.status = 'SUCCESS' " +
+              "AND t.type IN :types " +
+              "AND t.createdAt >= :from AND t.createdAt < :to " +
+              "AND (:search = '' " +
+              "  OR LOWER(u.fullName) LIKE CONCAT('%', LOWER(:search), '%') " +
+              "  OR LOWER(t.description) LIKE CONCAT('%', LOWER(:search), '%') " +
+              "  OR CAST(t.orderCode AS string) LIKE CONCAT('%', :search, '%'))",
+      countQuery = "SELECT COUNT(t) FROM Transaction t LEFT JOIN t.wallet w LEFT JOIN w.user u " +
+                   "WHERE t.status = 'SUCCESS' " +
+                   "AND t.type IN :types " +
+                   "AND t.createdAt >= :from AND t.createdAt < :to " +
+                   "AND (:search = '' " +
+                   "  OR LOWER(u.fullName) LIKE CONCAT('%', LOWER(:search), '%') " +
+                   "  OR LOWER(t.description) LIKE CONCAT('%', LOWER(:search), '%') " +
+                   "  OR CAST(t.orderCode AS string) LIKE CONCAT('%', :search, '%'))")
+  Page<Transaction> findCashFlowTransactions(
+      @Param("types") List<TransactionType> types,
+      @Param("from") Instant from,
+      @Param("to") Instant to,
+      @Param("search") String search,
+      Pageable pageable);
 }
+
