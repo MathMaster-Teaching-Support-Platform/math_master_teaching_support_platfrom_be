@@ -36,24 +36,20 @@ public class CashFlowService {
 
     private static final List<String> INFLOW_TYPES_STR = List.of(
         TransactionType.DEPOSIT.name(),
-        TransactionType.PAYMENT.name(),
-        TransactionType.COURSE_PURCHASE.name()
+        TransactionType.PAYMENT.name()
     );
 
     private static final List<String> OUTFLOW_TYPES_STR = List.of(
-        TransactionType.WITHDRAWAL.name(),
-        TransactionType.INSTRUCTOR_REVENUE.name()
+        TransactionType.WITHDRAWAL.name()
     );
 
     private static final List<TransactionType> INFLOW_TYPES = List.of(
         TransactionType.DEPOSIT,
-        TransactionType.PAYMENT,
-        TransactionType.COURSE_PURCHASE
+        TransactionType.PAYMENT
     );
 
     private static final List<TransactionType> OUTFLOW_TYPES = List.of(
-        TransactionType.WITHDRAWAL,
-        TransactionType.INSTRUCTOR_REVENUE
+        TransactionType.WITHDRAWAL
     );
 
     // ─── Summary ──────────────────────────────────────────────────────────────
@@ -272,6 +268,7 @@ public class CashFlowService {
             case COURSE_PURCHASE -> "Mua khóa học";
             case WITHDRAWAL -> "Rút tiền";
             case INSTRUCTOR_REVENUE -> "Thu nhập giảng viên";
+            case PLATFORM_COMMISSION -> "Hoa hồng nền tảng";
             default -> t.name();
         };
         String color = switch (t) {
@@ -280,6 +277,7 @@ public class CashFlowService {
             case COURSE_PURCHASE -> "#a855f7";
             case WITHDRAWAL -> "#ef4444";
             case INSTRUCTOR_REVENUE -> "#f59e0b";
+            case PLATFORM_COMMISSION -> "#8b5cf6";
             default -> "#9ca3af";
         };
         String icon = switch (t) {
@@ -288,6 +286,7 @@ public class CashFlowService {
             case COURSE_PURCHASE -> "book-open";
             case WITHDRAWAL -> "arrow-down-circle";
             case INSTRUCTOR_REVENUE -> "user-check";
+            case PLATFORM_COMMISSION -> "briefcase";
             default -> "circle";
         };
 

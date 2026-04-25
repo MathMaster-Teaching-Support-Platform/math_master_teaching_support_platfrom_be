@@ -380,6 +380,42 @@ public class OrderServiceImpl implements OrderService {
         instructorTx.setStatus(TransactionStatus.SUCCESS);
         transactionRepository.save(instructorTx);
 
+        if (order.getPlatformCommission().compareTo(BigDecimal.ZERO) > 0) {
+            // 10. Get Admin wallet
+            List<UUID> adminIds = userRepository.findUserIdsByRoleName("ADMIN");
+            if (adminIds.isEmpty()) {
+                throw new RuntimeException("System missing ADMIN user for commission distribution");
+            }
+            UUID adminId = adminIds.get(0);
+            Wallet adminWallet = walletRepository.findByUserId(adminId)
+                .orElseGet(() -> {
+                    walletService.createWallet(adminId);
+                    return walletRepository.findByUserId(adminId)
+                        .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
+                });
+
+            // 11. Create PENDING platform commission transaction
+            Transaction adminTx = Transaction.builder()
+                .wallet(adminWallet)
+                .order(order)
+                .orderNumber(order.getOrderNumber())
+                .amount(order.getPlatformCommission())
+                .type(TransactionType.PLATFORM_COMMISSION)
+                .status(TransactionStatus.PENDING)
+                .description("Platform Commission from Course: " + course.getTitle())
+                .transactionDate(Instant.now())
+                .orderCode(System.currentTimeMillis() + 2)
+                .build();
+            adminTx = transactionRepository.save(adminTx);
+
+            // 12. Add to admin wallet
+            walletService.addBalance(adminWallet.getId(), order.getPlatformCommission());
+
+            // 13. Update admin transaction to SUCCESS
+            adminTx.setStatus(TransactionStatus.SUCCESS);
+            transactionRepository.save(adminTx);
+        }
+
         log.info("Payment processed for order {}: Student paid {}, Instructor earned {}, Platform commission {}",
             order.getOrderNumber(), order.getFinalPrice(), order.getInstructorEarnings(), order.getPlatformCommission());
     }

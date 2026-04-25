@@ -87,6 +87,13 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
       @Param("type") TransactionType type,
       @Param("status") TransactionStatus status);
 
+  /** Total amount for a wallet matching multiple types */
+  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t WHERE t.wallet.id = :walletId AND t.type IN :types AND t.status = :status")
+  BigDecimal sumByWalletIdAndTypeInAndStatus(
+      @Param("walletId") UUID walletId,
+      @Param("types") List<TransactionType> types,
+      @Param("status") TransactionStatus status);
+
   /** Total transaction count for a wallet */
   long countByWalletId(UUID walletId);
 
@@ -164,8 +171,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
    */
   @Query(value =
       "SELECT TO_CHAR(DATE_TRUNC('day', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS label, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT','COURSE_PURCHASE')), 0) AS inflow, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL','INSTRUCTOR_REVENUE')), 0) AS outflow " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT')), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL')), 0) AS outflow " +
       "FROM transactions t " +
       "WHERE t.status = 'SUCCESS' " +
       "  AND t.created_at >= :from AND t.created_at < :to " +
@@ -182,8 +189,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
    */
   @Query(value =
       "SELECT TO_CHAR(DATE_TRUNC('week', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS label, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT','COURSE_PURCHASE')), 0) AS inflow, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL','INSTRUCTOR_REVENUE')), 0) AS outflow " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT')), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL')), 0) AS outflow " +
       "FROM transactions t " +
       "WHERE t.status = 'SUCCESS' " +
       "  AND t.created_at >= :from AND t.created_at < :to " +
@@ -200,8 +207,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
    */
   @Query(value =
       "SELECT TO_CHAR(DATE_TRUNC('month', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM') AS label, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT','COURSE_PURCHASE')), 0) AS inflow, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL','INSTRUCTOR_REVENUE')), 0) AS outflow " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT')), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL')), 0) AS outflow " +
       "FROM transactions t " +
       "WHERE t.status = 'SUCCESS' " +
       "  AND t.created_at >= :from AND t.created_at < :to " +
@@ -221,7 +228,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
       "FROM transactions t " +
       "WHERE t.status = 'SUCCESS' " +
       "  AND t.created_at >= :from AND t.created_at < :to " +
-      "  AND t.type IN ('DEPOSIT','PAYMENT','COURSE_PURCHASE','WITHDRAWAL','INSTRUCTOR_REVENUE') " +
+      "  AND t.type IN ('DEPOSIT','PAYMENT','WITHDRAWAL') " +
       "GROUP BY t.type " +
       "ORDER BY total DESC",
       nativeQuery = true)

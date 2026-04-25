@@ -155,10 +155,14 @@ public class WalletService {
   }
 
   private WalletResponse mapToWalletResponse(Wallet wallet) {
-    BigDecimal totalDeposited = transactionRepository.sumByWalletIdAndTypeAndStatus(
-        wallet.getId(), TransactionType.DEPOSIT, TransactionStatus.SUCCESS);
-    BigDecimal totalSpent = transactionRepository.sumByWalletIdAndTypeAndStatus(
-        wallet.getId(), TransactionType.PAYMENT, TransactionStatus.SUCCESS);
+    BigDecimal totalDeposited = transactionRepository.sumByWalletIdAndTypeInAndStatus(
+        wallet.getId(), 
+        java.util.List.of(TransactionType.DEPOSIT, TransactionType.INSTRUCTOR_REVENUE), 
+        TransactionStatus.SUCCESS);
+    BigDecimal totalSpent = transactionRepository.sumByWalletIdAndTypeInAndStatus(
+        wallet.getId(), 
+        java.util.List.of(TransactionType.PAYMENT, TransactionType.COURSE_PURCHASE, TransactionType.WITHDRAWAL), 
+        TransactionStatus.SUCCESS);
     long transactionCount = transactionRepository.countByWalletId(wallet.getId());
 
     return WalletResponse.builder()
