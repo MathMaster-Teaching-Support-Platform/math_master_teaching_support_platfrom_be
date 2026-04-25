@@ -268,22 +268,79 @@ public class CourseLessonServiceImpl implements CourseLessonService {
 
   @Override
   @Transactional(readOnly = true)
+  public String getAdminVideoUrl(UUID courseId, UUID courseLessonId) {
+    UUID currentAdminId = SecurityUtils.getCurrentUserId();
+    log.info("Admin {} requesting video URL for lesson {} in course {}", 
+        currentAdminId, courseLessonId, courseId);
+    
+    Course course = findCourseOrThrow(courseId);
+    
+    CourseLesson courseLesson = courseLessonRepository
+        .findByIdAndDeletedAtIsNull(courseLessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+
+    if (!courseLesson.getCourseId().equals(courseId)) {
+      throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
+    }
+
+    if (!org.springframework.util.StringUtils.hasText(courseLesson.getVideoUrl())) {
+      throw new AppException(ErrorCode.VIDEO_NOT_FOUND);
+    }
+
+    // Generate presigned URL for admin access
+    String presignedUrl = uploadService.getPresignedUrl(
+        courseLesson.getVideoUrl(),
+        minioProperties.getCourseVideosBucket()
+    );
+    
+    log.info("✅ Admin {} granted video access to lesson {}", currentAdminId, courseLessonId);
+    return presignedUrl;
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<CourseLessonResponse> getLessons(UUID courseId) {
     Course course = findCourseOrThrow(courseId);
     UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
 
     boolean isAuthorized = false;
+    final String[] authReasonHolder = {"not authenticated"}; // Use array to make it effectively final
+    
     if (currentUserId != null) {
-      if (course.getTeacherId().equals(currentUserId) || SecurityUtils.hasRole("ADMIN")) {
+      // IMPORTANT: Check admin role FIRST before other checks
+      boolean isAdmin = SecurityUtils.hasRole("ADMIN");
+      boolean isOwner = course.getTeacherId().equals(currentUserId);
+      
+      log.info("Course {} lesson access check: userId={}, isAdmin={}, isOwner={}, courseStatus={}", 
+          courseId, currentUserId, isAdmin, isOwner, course.getStatus());
+      
+      if (isAdmin) {
         isAuthorized = true;
+        authReasonHolder[0] = "admin role";
+        log.info("✅ Admin user {} granted access to course {} lessons", currentUserId, courseId);
+      } else if (isOwner) {
+        isAuthorized = true;
+        authReasonHolder[0] = "course owner";
       } else {
+        // Check student enrollment
         isAuthorized =
             enrollmentRepository
                 .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
-                .map(e -> "ACTIVE".equals(e.getStatus().name()))
+                .map(e -> {
+                  boolean active = "ACTIVE".equals(e.getStatus().name());
+                  if (active) {
+                    authReasonHolder[0] = "enrolled student";
+                  }
+                  return active;
+                })
                 .orElse(false);
       }
+    } else {
+      log.warn("❌ Unauthenticated access attempt to course {} lessons", courseId);
     }
+    
+    log.info("Course {} lesson access result: userId={}, authorized={}, reason={}", 
+        courseId, currentUserId, isAuthorized, authReasonHolder[0]);
 
     // Udemy-style access: only enrolled/owner/admin can access all lessons.
     // Non-enrolled users can access only lessons explicitly marked as free preview.

@@ -4,9 +4,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -20,6 +22,13 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
   Optional<Enrollment> findByIdAndDeletedAtIsNull(UUID id);
 
   Optional<Enrollment> findByStudentIdAndCourseIdAndDeletedAtIsNull(UUID studentId, UUID courseId);
+
+  // FIX #3: Add pessimistic locking to prevent concurrent enrollment duplicates
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT e FROM Enrollment e WHERE e.studentId = :studentId AND e.courseId = :courseId AND e.deletedAt IS NULL")
+  Optional<Enrollment> findByStudentIdAndCourseIdAndDeletedAtIsNullWithLock(
+      @Param("studentId") UUID studentId, 
+      @Param("courseId") UUID courseId);
 
   List<Enrollment> findByStudentIdAndDeletedAtIsNullOrderByEnrolledAtDesc(UUID studentId);
 

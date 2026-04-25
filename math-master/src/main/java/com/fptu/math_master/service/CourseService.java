@@ -41,6 +41,15 @@ public interface CourseService {
 
   CoursePreviewResponse getCoursePreview(UUID courseId);
 
+  /**
+   * Get full course preview for admin review.
+   * Bypasses enrollment checks and provides complete access to course content.
+   * 
+   * @param courseId the course ID
+   * @return complete course preview with all lessons
+   */
+  CoursePreviewResponse getAdminCoursePreview(UUID courseId);
+
   /** Filter theo schoolGradeId, subjectId, keyword */
   Page<CourseResponse> getPublicCourses(UUID schoolGradeId, UUID subjectId, String keyword, Pageable pageable);
 

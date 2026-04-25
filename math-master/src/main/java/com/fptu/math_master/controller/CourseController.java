@@ -104,6 +104,20 @@ public class CourseController {
         .build();
   }
 
+  @Operation(
+      summary = "Admin: Get full course preview for review",
+      description = "Allows admins to view complete course content including all lessons, videos, and materials for approval review"
+  )
+  @GetMapping("/admin/{courseId}/preview")
+  @PreAuthorize("hasRole('ADMIN')")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<com.fptu.math_master.dto.response.CoursePreviewResponse> getAdminCoursePreview(@PathVariable UUID courseId) {
+    log.info("GET /courses/admin/{}/preview - Admin course review", courseId);
+    return ApiResponse.<com.fptu.math_master.dto.response.CoursePreviewResponse>builder()
+        .result(courseService.getAdminCoursePreview(courseId))
+        .build();
+  }
+
   @Operation(summary = "Update course")
   @PutMapping(value = "/{courseId}", consumes = MediaType.APPLICATION_JSON_VALUE)
   @PreAuthorize("hasRole('TEACHER')")
