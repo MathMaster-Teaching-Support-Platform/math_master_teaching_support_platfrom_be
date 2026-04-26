@@ -2,8 +2,12 @@ package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
+import com.fptu.math_master.dto.request.AutoDistributePointsRequest;
+import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
+import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.DistributeAssessmentPointsRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
@@ -12,14 +16,21 @@ import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
 import com.fptu.math_master.dto.response.CognitiveLevelDistributionResponse;
+import com.fptu.math_master.dto.response.DistributeAssessmentPointsResponse;
+import com.fptu.math_master.dto.response.PagedDataResponse;
 import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
+import com.fptu.math_master.dto.response.QuestionResponse;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.AssessmentQuestion;
+import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.entity.ExamMatrix;
 import com.fptu.math_master.entity.ExamMatrixBankMapping;
+import com.fptu.math_master.entity.ExamMatrixRow;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.Question;
+import com.fptu.math_master.entity.QuestionBank;
+import com.fptu.math_master.entity.Subject;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
@@ -43,7 +54,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -66,6 +79,9 @@ public class AssessmentServiceImpl implements AssessmentService {
   ExamMatrixBankMappingRepository examMatrixBankMappingRepository;
   ExamMatrixRowRepository examMatrixRowRepository;
   LessonRepository lessonRepository;
+  ChapterRepository chapterRepository;
+  SubjectRepository subjectRepository;
+  QuestionBankRepository questionBankRepository;
   QuestionSelectionService questionSelectionService;
   QuestionRepository questionRepository;
 
@@ -78,8 +94,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     validateTeacherRole(currentUserId);
     validateDates(request.getStartDate(), request.getEndDate());
     ExamMatrix matrix = validateAndGetAccessibleMatrix(request.getExamMatrixId(), currentUserId);
-    List<UUID> lessonIds = normalizeLessonIds(request.getLessonIds());
-    validateLessonSelectionForMatrix(matrix.getId(), lessonIds);
+    // Lessons are now auto-populated from matrix, no need for manual selection
 
     Assessment assessment =
         Assessment.builder()
@@ -108,7 +123,9 @@ public class AssessmentServiceImpl implements AssessmentService {
             .build();
 
     assessment = assessmentRepository.save(assessment);
-    syncAssessmentLessons(assessment.getId(), lessonIds);
+    
+    // BUG FIX #4: Auto-populate lessons from matrix instead of manual selection
+    autoPopulateLessonsFromMatrix(assessment.getId(), matrix.getId());
 
     // Auto-map questions right after creating assessment when matrix already has mappings.
     autoMapQuestionsFromMatrixOnCreate(assessment.getId(), matrix.getId());
@@ -135,8 +152,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     validateDates(request.getStartDate(), request.getEndDate());
     ExamMatrix matrix = validateAndGetAccessibleMatrix(request.getExamMatrixId(), currentUserId);
-    List<UUID> lessonIds = normalizeLessonIds(request.getLessonIds());
-    validateLessonSelectionForMatrix(matrix.getId(), lessonIds);
+    // Lessons are now auto-populated from matrix, no need for manual selection
 
     assessment.setTitle(request.getTitle());
     assessment.setDescription(request.getDescription());
@@ -170,7 +186,10 @@ public class AssessmentServiceImpl implements AssessmentService {
     }
 
     assessment = assessmentRepository.save(assessment);
-    syncAssessmentLessons(assessment.getId(), lessonIds);
+    
+    // BUG FIX #4: Auto-populate lessons from matrix when matrix changes
+    autoPopulateLessonsFromMatrix(assessment.getId(), matrix.getId());
+    
     log.info("Assessment updated successfully: {}", id);
     return mapToResponse(assessment);
   }
@@ -638,17 +657,57 @@ public class AssessmentServiceImpl implements AssessmentService {
                   .questionId(question.getId())
                   .orderIndex(aq.getOrderIndex())
                   .points(effectivePoints)
-                  .pointsOverride(aq.getPointsOverride())
                   .questionType(question.getQuestionType())
                   .questionText(question.getQuestionText())
                   .options(question.getOptions())
                   .correctAnswer(question.getCorrectAnswer())
                   .explanation(question.getExplanation())
+                  .tags(question.getTags())
+                  .cognitiveLevel(question.getCognitiveLevel())
                   .createdAt(question.getCreatedAt())
                   .build();
             })
         .toList();
   }
+
+      @Override
+      @Transactional(readOnly = true)
+      public PagedDataResponse<QuestionResponse> getAvailableQuestions(
+        UUID assessmentId, String keyword, String tag, Pageable pageable) {
+      log.info(
+        "Getting available questions for assessment {} with keyword='{}', tag='{}'",
+        assessmentId,
+        keyword,
+        tag);
+
+      Assessment assessment = loadAssessmentOrThrow(assessmentId);
+      UUID currentUserId = getCurrentUserId();
+      validateOwnerOrAdmin(assessment.getTeacherId(), currentUserId);
+
+      String normalizedKeyword = normalizeKeywordPattern(keyword);
+      String normalizedTag = normalizeKeywordPattern(tag);
+
+      // Create Pageable with correct column name for native query (snake_case)
+      Pageable sortedPageable = PageRequest.of(
+          pageable.getPageNumber(),
+          pageable.getPageSize(),
+          Sort.by(Sort.Direction.DESC, "created_at")
+      );
+
+      Page<Question> page =
+        questionRepository.findAvailableByAssessmentId(
+          assessment.getTeacherId(), assessmentId, normalizedKeyword, normalizedTag, sortedPageable);
+
+      List<QuestionResponse> items = page.getContent().stream().map(this::mapQuestionToResponse).toList();
+
+      return PagedDataResponse.<QuestionResponse>builder()
+        .data(items)
+        .page(page.getNumber())
+        .size(page.getSize())
+        .totalElements(page.getTotalElements())
+        .totalPages(page.getTotalPages())
+        .build();
+      }
 
   @Override
   @Transactional
@@ -715,6 +774,9 @@ public class AssessmentServiceImpl implements AssessmentService {
       throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
     }
 
+    // BUG FIX #4: Auto-populate lessons from matrix
+    autoPopulateLessonsFromMatrix(assessmentId, matrix.getId());
+
     // Regenerate from blueprint to keep assessment deterministic and aligned with matrix.
     assessmentQuestionRepository.deleteAllByAssessmentId(assessmentId);
 
@@ -745,6 +807,36 @@ public class AssessmentServiceImpl implements AssessmentService {
       .build();
   }
 
+  private void autoPopulateLessonsFromMatrix(UUID assessmentId, UUID matrixId) {
+    // Get all question banks used in matrix rows
+    List<UUID> bankIds = examMatrixRowRepository.findByExamMatrixId(matrixId)
+        .stream()
+        .map(ExamMatrixRow::getQuestionBankId)
+        .distinct()
+        .toList();
+    
+    // Get all chapters from those banks
+    List<UUID> chapterIds = questionBankRepository.findAllById(bankIds)
+        .stream()
+        .map(QuestionBank::getChapterId)
+        .filter(java.util.Objects::nonNull)
+        .distinct()
+        .toList();
+    
+    // Get all lessons from those chapters
+    List<UUID> lessonIds = lessonRepository.findByChapterIdIn(chapterIds)
+        .stream()
+        .map(Lesson::getId)
+        .toList();
+    
+    // Sync assessment lessons
+    if (!lessonIds.isEmpty()) {
+      syncAssessmentLessons(assessmentId, lessonIds);
+      log.info("Auto-populated {} lessons for assessment {} from matrix {}", 
+          lessonIds.size(), assessmentId, matrixId);
+    }
+  }
+
   private boolean isMatrixReusableForGeneration(ExamMatrix matrix) {
     return matrix.getStatus() == MatrixStatus.APPROVED
         || matrix.getStatus() == MatrixStatus.LOCKED;
@@ -754,6 +846,41 @@ public class AssessmentServiceImpl implements AssessmentService {
     return assessmentRepository
         .findByIdAndNotDeleted(id)
         .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+  }
+
+  private String normalizeKeywordPattern(String value) {
+    if (value == null || value.trim().isEmpty()) {
+      return null;
+    }
+    return "%" + value.trim() + "%";
+  }
+
+  private QuestionResponse mapQuestionToResponse(Question question) {
+    String creatorName =
+        userRepository.findById(question.getCreatedBy()).map(User::getFullName).orElse(UNKNOWN_NAME);
+
+    return QuestionResponse.builder()
+        .id(question.getId())
+        .createdBy(question.getCreatedBy())
+        .creatorName(creatorName)
+        .questionText(question.getQuestionText())
+        .questionType(question.getQuestionType())
+        .options(question.getOptions())
+        .correctAnswer(question.getCorrectAnswer())
+        .explanation(question.getExplanation())
+        .solutionSteps(question.getSolutionSteps())
+        .diagramData(question.getDiagramData())
+        .points(question.getPoints())
+        .cognitiveLevel(question.getCognitiveLevel())
+        .questionStatus(question.getQuestionStatus())
+        .questionSourceType(question.getQuestionSourceType())
+        .tags(question.getTags())
+        .templateId(question.getTemplateId())
+        .canonicalQuestionId(question.getCanonicalQuestionId())
+        .questionBankId(question.getQuestionBankId())
+        .createdAt(question.getCreatedAt())
+        .updatedAt(question.getUpdatedAt())
+        .build();
   }
 
   private UUID getCurrentUserId() {
@@ -903,6 +1030,49 @@ public class AssessmentServiceImpl implements AssessmentService {
     List<String> lessonTitles =
       lessonIds.stream().map(id -> lessonTitleById.getOrDefault(id, UNKNOWN_NAME)).toList();
 
+    // BUG FIX #4: Build detailed lesson information with subject and grade
+    List<AssessmentResponse.AssessmentLessonInfo> lessons = 
+        lessonRepository.findByIdInAndNotDeleted(lessonIds).stream()
+            .map(lesson -> {
+              String chapterName = "Unknown Chapter";
+              String subjectName = null;
+              Integer gradeLevel = null;
+              String gradeName = null;
+              
+              // Get chapter information
+              if (lesson.getChapterId() != null) {
+                Chapter chapter = chapterRepository.findById(lesson.getChapterId()).orElse(null);
+                if (chapter != null) {
+                  chapterName = chapter.getTitle();
+                  
+                  // Get subject and grade information from chapter
+                  if (chapter.getSubjectId() != null) {
+                    Subject subject = subjectRepository.findById(chapter.getSubjectId()).orElse(null);
+                    if (subject != null) {
+                      subjectName = subject.getName();
+                      
+                      // Get grade from subject's school grade
+                      if (subject.getSchoolGrade() != null) {
+                        gradeLevel = subject.getSchoolGrade().getGradeLevel();
+                        gradeName = subject.getSchoolGrade().getName();
+                      }
+                    }
+                  }
+                }
+              }
+              
+              return AssessmentResponse.AssessmentLessonInfo.builder()
+                  .lessonId(lesson.getId())
+                  .lessonName(lesson.getTitle())
+                  .chapterName(chapterName)
+                  .orderIndex(lesson.getOrderIndex())
+                  .subjectName(subjectName)
+                  .gradeLevel(gradeLevel)
+                  .gradeName(gradeName)
+                  .build();
+            })
+            .toList();
+
     // Get ExamMatrix info if exists
     String examMatrixName = null;
     Integer examMatrixGradeLevel = null;
@@ -921,6 +1091,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         .teacherName(teacherName)
         .lessonIds(lessonIds)
         .lessonTitles(lessonTitles)
+        .lessons(lessons)  // BUG FIX #4: Add detailed lesson info
         .title(assessment.getTitle())
         .description(assessment.getDescription())
         .assessmentType(assessment.getAssessmentType())
@@ -1336,5 +1507,226 @@ public class AssessmentServiceImpl implements AssessmentService {
         .forEach(assessmentLessonRepository::delete);
 
     log.info("Unlinked assessment {} from lesson {} by user {}", assessmentId, lessonId, currentUserId);
+  }
+
+  // ─────────────────────────────── Batch operations ───────────────────────────────
+
+  @Override
+  @Transactional
+  public List<AssessmentQuestionResponse> batchAddQuestions(
+      UUID assessmentId, BatchAddQuestionsRequest request) {
+    log.info("Batch-adding {} questions to assessment {}", request.getQuestionIds().size(), assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() != AssessmentStatus.DRAFT) {
+      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
+    }
+    if (assessment.getExamMatrixId() != null) {
+      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
+    }
+
+    for (UUID questionId : request.getQuestionIds()) {
+      questionRepository
+          .findByIdAndNotDeleted(questionId)
+          .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+      boolean isDuplicate =
+          assessmentQuestionRepository.findByAssessmentIdAndQuestionId(assessmentId, questionId).isPresent();
+      if (isDuplicate) {
+        log.debug("Question {} already in assessment {}, skipping", questionId, assessmentId);
+        continue;
+      }
+
+      Integer maxOrder = assessmentQuestionRepository.findMaxOrderIndex(assessmentId);
+      int nextOrder = (maxOrder != null ? maxOrder : 0) + 1;
+
+      AssessmentQuestion aq =
+          AssessmentQuestion.builder()
+              .assessmentId(assessmentId)
+              .questionId(questionId)
+              .orderIndex(nextOrder)
+              .build();
+      assessmentQuestionRepository.save(aq);
+    }
+
+    return getAssessmentQuestions(assessmentId);
+  }
+
+  @Override
+  @Transactional
+  public List<AssessmentQuestionResponse> batchUpdatePoints(
+      UUID assessmentId, BatchUpdatePointsRequest request) {
+    log.info("Batch-updating points for {} questions in assessment {}", request.getQuestions().size(), assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
+    }
+
+    List<AssessmentQuestion> toSave = new java.util.ArrayList<>();
+    for (BatchUpdatePointsRequest.QuestionPointItem item : request.getQuestions()) {
+      AssessmentQuestion aq =
+          assessmentQuestionRepository
+              .findByAssessmentIdAndQuestionId(assessmentId, item.getId())
+              .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_QUESTION_NOT_FOUND));
+      aq.setPointsOverride(item.getPoint());
+      toSave.add(aq);
+    }
+    assessmentQuestionRepository.saveAll(toSave);
+
+    return getAssessmentQuestions(assessmentId);
+  }
+
+  @Override
+  @Transactional
+  public List<AssessmentQuestionResponse> autoDistributePoints(
+      UUID assessmentId, AutoDistributePointsRequest request) {
+    log.info("Auto-distributing {} total points for assessment {}", request.getTotalPoints(), assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
+    }
+
+    List<AssessmentQuestion> allAQs =
+        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessmentId);
+    if (allAQs.isEmpty()) {
+      return java.util.Collections.emptyList();
+    }
+
+    java.math.BigDecimal totalPoints = request.getTotalPoints();
+    java.util.Map<String, Integer> distribution =
+        (request.getDistribution() != null) ? request.getDistribution() : java.util.Collections.emptyMap();
+
+    // Group AssessmentQuestion by cognitiveLevel of underlying question
+    java.util.Map<String, List<AssessmentQuestion>> byLevel = new java.util.LinkedHashMap<>();
+    List<AssessmentQuestion> unmatched = new java.util.ArrayList<>();
+
+    for (AssessmentQuestion aq : allAQs) {
+      Question q =
+          questionRepository
+              .findByIdAndNotDeleted(aq.getQuestionId())
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+      String levelKey =
+          (q.getCognitiveLevel() != null) ? q.getCognitiveLevel().name() : null;
+      if (levelKey != null && distribution.containsKey(levelKey)) {
+        byLevel.computeIfAbsent(levelKey, k -> new java.util.ArrayList<>()).add(aq);
+      } else {
+        unmatched.add(aq);
+      }
+    }
+
+    // Calculate total allocated percentage
+    int allocatedPct = distribution.values().stream().mapToInt(Integer::intValue).sum();
+    int remainingPct = Math.max(0, 100 - allocatedPct);
+
+    List<AssessmentQuestion> toSave = new java.util.ArrayList<>();
+
+    for (java.util.Map.Entry<String, Integer> entry : distribution.entrySet()) {
+      List<AssessmentQuestion> group = byLevel.getOrDefault(entry.getKey(), java.util.Collections.emptyList());
+      if (group.isEmpty()) continue;
+      java.math.BigDecimal groupPoints =
+          totalPoints.multiply(java.math.BigDecimal.valueOf(entry.getValue()))
+              .divide(java.math.BigDecimal.valueOf(100), 10, java.math.RoundingMode.HALF_UP);
+      java.math.BigDecimal perQuestion =
+          groupPoints.divide(java.math.BigDecimal.valueOf(group.size()), 2, java.math.RoundingMode.HALF_UP);
+      for (AssessmentQuestion aq : group) {
+        aq.setPointsOverride(perQuestion);
+        toSave.add(aq);
+      }
+    }
+
+    // Distribute remaining points to unmatched questions
+    if (!unmatched.isEmpty() && remainingPct > 0) {
+      java.math.BigDecimal remainingPoints =
+          totalPoints.multiply(java.math.BigDecimal.valueOf(remainingPct))
+              .divide(java.math.BigDecimal.valueOf(100), 10, java.math.RoundingMode.HALF_UP);
+      java.math.BigDecimal perQuestion =
+          remainingPoints.divide(java.math.BigDecimal.valueOf(unmatched.size()), 2, java.math.RoundingMode.HALF_UP);
+      for (AssessmentQuestion aq : unmatched) {
+        aq.setPointsOverride(perQuestion);
+        toSave.add(aq);
+      }
+    } else if (!unmatched.isEmpty()) {
+      // No percentage reserved — split totalPoints equally among unmatched
+      java.math.BigDecimal perQuestion =
+          totalPoints.divide(java.math.BigDecimal.valueOf(allAQs.size()), 2, java.math.RoundingMode.HALF_UP);
+      for (AssessmentQuestion aq : unmatched) {
+        aq.setPointsOverride(perQuestion);
+        toSave.add(aq);
+      }
+    }
+
+    assessmentQuestionRepository.saveAll(toSave);
+    return getAssessmentQuestions(assessmentId);
+  }
+
+  @Override
+  @Transactional
+  public DistributeAssessmentPointsResponse distributeQuestionPoints(
+      UUID assessmentId, DistributeAssessmentPointsRequest request) {
+    log.info(
+        "Distributing points for assessment {} with strategy {} and totalPoints {}",
+        assessmentId,
+        request.getStrategy(),
+        request.getTotalPoints());
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
+    }
+
+    if (request.getStrategy() != DistributeAssessmentPointsRequest.Strategy.EQUAL) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+
+    int scale = request.getScale() == null ? 2 : request.getScale();
+    BigDecimal totalPoints = request.getTotalPoints().setScale(scale, RoundingMode.HALF_UP);
+
+    List<AssessmentQuestion> allAQs =
+        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessmentId);
+    if (allAQs.isEmpty()) {
+      return DistributeAssessmentPointsResponse.builder()
+          .updated(0)
+          .pointPerQuestion(BigDecimal.ZERO.setScale(scale, RoundingMode.HALF_UP))
+          .totalPoints(totalPoints)
+          .scale(scale)
+          .strategy(request.getStrategy().name())
+          .build();
+    }
+
+    int questionCount = allAQs.size();
+    BigDecimal pointPerQuestion =
+        totalPoints.divide(BigDecimal.valueOf(questionCount), scale, RoundingMode.HALF_UP);
+
+    BigDecimal factor = BigDecimal.TEN.pow(scale);
+    long totalUnits = totalPoints.multiply(factor).longValueExact();
+    long baseUnits = totalUnits / questionCount;
+    int remainderUnits = (int) (totalUnits % questionCount);
+
+    for (int i = 0; i < questionCount; i++) {
+      long allocatedUnits = baseUnits + (i < remainderUnits ? 1 : 0);
+      BigDecimal allocated =
+          BigDecimal.valueOf(allocatedUnits).divide(factor, scale, RoundingMode.UNNECESSARY);
+      allAQs.get(i).setPointsOverride(allocated);
+    }
+
+    assessmentQuestionRepository.saveAll(allAQs);
+
+    return DistributeAssessmentPointsResponse.builder()
+        .updated(questionCount)
+        .pointPerQuestion(pointPerQuestion)
+        .totalPoints(totalPoints)
+        .scale(scale)
+        .strategy(request.getStrategy().name())
+        .build();
   }
 }

@@ -1,16 +1,18 @@
 package com.fptu.math_master.repository;
 
-import com.fptu.math_master.entity.Course;
-import com.fptu.math_master.enums.CourseStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import com.fptu.math_master.entity.Course;
+import com.fptu.math_master.enums.CourseStatus;
 
 @Repository
 public interface CourseRepository extends JpaRepository<Course, UUID> {
@@ -22,6 +24,7 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
   List<Course> findByTeacherIdAndIsPublishedTrueAndDeletedAtIsNull(UUID teacherId);
 
   @Query("SELECT c FROM Course c WHERE c.isPublished = true AND c.deletedAt IS NULL " +
+      "AND c.status = com.fptu.math_master.enums.CourseStatus.PUBLISHED " +
          "AND (c.subjectId = :subjectId OR c.schoolGradeId = :gradeId) " +
          "AND c.id != :currentCourseId " +
          "ORDER BY c.rating DESC, c.createdAt DESC")
@@ -40,7 +43,7 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
           "SELECT c.* FROM courses c "
               + "LEFT JOIN subjects s ON s.id = c.subject_id "
               + "LEFT JOIN school_grades sg ON sg.id = c.school_grade_id "
-              + "WHERE c.is_published = true AND c.deleted_at IS NULL "
+              + "WHERE c.is_published = true AND c.status = 'PUBLISHED' AND c.deleted_at IS NULL "
               + "AND (c.subject_id IS NULL OR s.is_active = true) "
               + "AND (c.school_grade_id IS NULL OR sg.is_active = true) "
               + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "
@@ -51,7 +54,7 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
           "SELECT COUNT(*) FROM courses c "
               + "LEFT JOIN subjects s ON s.id = c.subject_id "
               + "LEFT JOIN school_grades sg ON sg.id = c.school_grade_id "
-              + "WHERE c.is_published = true AND c.deleted_at IS NULL "
+              + "WHERE c.is_published = true AND c.status = 'PUBLISHED' AND c.deleted_at IS NULL "
               + "AND (c.subject_id IS NULL OR s.is_active = true) "
               + "AND (c.school_grade_id IS NULL OR sg.is_active = true) "
               + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "
@@ -79,4 +82,10 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
       Pageable pageable);
 
     Page<Course> findByStatusAndDeletedAtIsNullOrderByCreatedAtAsc(CourseStatus status, Pageable pageable);
+    
+    Page<Course> findByStatusAndDeletedAtIsNullOrderByUpdatedAtDesc(CourseStatus status, Pageable pageable);
+    
+    Page<Course> findByDeletedAtIsNullOrderByUpdatedAtDesc(Pageable pageable);
+
+  List<Course> findByTeacherIdAndDeletedAtIsNull(UUID teacherId);
 }

@@ -5,7 +5,10 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.data.redis.cache.RedisCacheConfiguration;
+import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -15,15 +18,16 @@ import org.springframework.data.redis.connection.stream.ReadOffset;
 import org.springframework.data.redis.connection.stream.StreamOffset;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.data.redis.stream.StreamMessageListenerContainer;
 import com.fptu.math_master.component.StreamConsumerListener;
-import com.fptu.math_master.dto.request.NotificationRequest;
 
 import java.time.Duration;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Configuration
@@ -58,23 +62,38 @@ public class RedisConfig {
   }
 
   @Bean
+  public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+    GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer();
+
+    RedisCacheConfiguration defaultConfig =
+        RedisCacheConfiguration.defaultCacheConfig()
+            .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer))
+            .entryTtl(Duration.ofSeconds(30))
+            .disableCachingNullValues();
+
+    Map<String, RedisCacheConfiguration> cacheConfigs = new HashMap<>();
+    cacheConfigs.put("adminDashboardStats", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("adminRevenueByMonth", defaultConfig.entryTtl(Duration.ofMinutes(10)));
+    cacheConfigs.put("adminSystemStatus", defaultConfig.entryTtl(Duration.ofSeconds(15)));
+    cacheConfigs.put("studentDashboardSummary", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("studentDashboardUpcomingTasks", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("studentDashboardRecentGrades", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("studentDashboardLearningProgress", defaultConfig.entryTtl(Duration.ofSeconds(60)));
+    cacheConfigs.put("studentDashboardWeeklyActivity", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("studentDashboardStreak", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+    cacheConfigs.put("studentDashboardOverview", defaultConfig.entryTtl(Duration.ofSeconds(30)));
+
+    return RedisCacheManager.builder(connectionFactory)
+        .cacheDefaults(defaultConfig)
+        .withInitialCacheConfigurations(cacheConfigs)
+        .build();
+  }
+
+  @Bean
   public StreamMessageListenerContainer<String, MapRecord<String, String, String>> streamMessageListenerContainer(
       RedisConnectionFactory connectionFactory,
       StreamConsumerListener streamConsumerListener,
       RedisTemplate<String, Object> redisTemplate) {
-
-    // Ensure stream exists before creating group
-    if (Boolean.FALSE.equals(redisTemplate.hasKey("notifications"))) {
-        log.info("Stream 'notifications' does not exist. Creating it with a dummy message...");
-        redisTemplate.opsForStream().add("notifications", Collections.singletonMap("_ign", "init_stream"));
-    }
-
-    try {
-        redisTemplate.opsForStream().createGroup("notifications", "notif-group");
-        log.info("Created consumer group 'notif-group' for stream 'notifications'");
-    } catch (Exception e) {
-        log.info("Consumer group 'notif-group' already exists or could not be created");
-    }
 
     String consumerName;
     try {

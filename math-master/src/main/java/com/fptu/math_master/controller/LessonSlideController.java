@@ -1,6 +1,7 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.LessonSlideConfirmContentRequest;
+import com.fptu.math_master.dto.request.SlidePreviewRenderRequest;
 import com.fptu.math_master.dto.request.LessonSlideGenerateContentRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxFromJsonRequest;
 import com.fptu.math_master.dto.request.LessonSlideGeneratePptxRequest;
@@ -26,6 +27,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -266,6 +268,24 @@ public class LessonSlideController {
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(fileData.contentType()))
         .body(fileData.content());
+  }
+
+  @DeleteMapping("/generated/{generatedFileId}")
+  @Operation(summary = "Delete a generated slide file (soft-delete + removes MinIO object)")
+  public ApiResponse<Void> deleteGeneratedSlide(@PathVariable UUID generatedFileId) {
+    lessonSlideService.deleteGeneratedSlide(generatedFileId);
+    return ApiResponse.<Void>builder()
+        .message("Generated slide deleted successfully")
+        .build();
+  }
+
+  @PostMapping("/render-slide-preview")
+  @Operation(summary = "Re-render a single slide heading+content via QuickLaTeX and return the image URL")
+  public ApiResponse<String> renderSlidePreview(
+      @RequestBody SlidePreviewRenderRequest request) {
+    return ApiResponse.<String>builder()
+        .result(lessonSlideService.renderSlidePreview(request.getHeading(), request.getContent()))
+        .build();
   }
 
   private String contentDisposition(String fileName) {

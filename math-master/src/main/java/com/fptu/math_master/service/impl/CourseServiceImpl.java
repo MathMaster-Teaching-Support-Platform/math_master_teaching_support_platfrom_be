@@ -1,18 +1,43 @@
 package com.fptu.math_master.service.impl;
 
-import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
-import com.fptu.math_master.dto.request.CreateCourseRequest;
-import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
-import com.fptu.math_master.dto.request.UpdateCourseRequest;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fptu.math_master.component.StreamPublisher;
+import com.fptu.math_master.configuration.properties.MinioProperties;
+import com.fptu.math_master.constant.PredefinedRole;
+import com.fptu.math_master.dto.request.AddAssessmentToCourseRequest;
+import com.fptu.math_master.dto.request.CreateCourseRequest;
+import com.fptu.math_master.dto.request.NotificationRequest;
+import com.fptu.math_master.dto.request.UpdateCourseAssessmentRequest;
+import com.fptu.math_master.dto.request.UpdateCourseRequest;
 import com.fptu.math_master.dto.response.AvailableCourseAssessmentResponse;
 import com.fptu.math_master.dto.response.CourseAssessmentResponse;
-import com.fptu.math_master.dto.response.CoursePreviewResponse;
 import com.fptu.math_master.dto.response.CourseLessonPreviewResponse;
+import com.fptu.math_master.dto.response.CoursePreviewResponse;
 import com.fptu.math_master.dto.response.CourseResponse;
 import com.fptu.math_master.dto.response.StudentInCourseResponse;
-import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.Course;
@@ -34,8 +59,8 @@ import com.fptu.math_master.repository.CourseRepository;
 import com.fptu.math_master.repository.CourseReviewRepository;
 import com.fptu.math_master.repository.CustomCourseSectionRepository;
 import com.fptu.math_master.repository.EnrollmentRepository;
-import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.LessonProgressRepository;
+import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.repository.TeacherProfileRepository;
@@ -43,29 +68,11 @@ import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.CourseService;
 import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.util.SecurityUtils;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -91,6 +98,7 @@ public class CourseServiceImpl implements CourseService {
   CourseReviewRepository courseReviewRepository;
   TeacherProfileRepository teacherProfileRepository;
   CustomCourseSectionRepository customCourseSectionRepository;
+  StreamPublisher streamPublisher;
 
   @Override
   public CourseResponse createCourse(CreateCourseRequest request, MultipartFile thumbnailFile) {
@@ -125,9 +133,10 @@ public class CourseServiceImpl implements CourseService {
 
     String thumbnailUrl = resolveThumbnailForWrite(thumbnailFile);
 
+    // FIX #9: Validate discount price is less than original price
     if (request.getOriginalPrice() != null && request.getDiscountedPrice() != null) {
-      if (request.getDiscountedPrice().compareTo(request.getOriginalPrice()) > 0) {
-        throw new AppException(ErrorCode.INVALID_AMOUNT);
+      if (request.getDiscountedPrice().compareTo(request.getOriginalPrice()) >= 0) {
+        throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
       }
     }
 
@@ -144,13 +153,15 @@ public class CourseServiceImpl implements CourseService {
         .targetAudience(request.getTargetAudience())
         .subtitle(request.getSubtitle())
         .language(StringUtils.hasText(request.getLanguage()) ? request.getLanguage() : "Tiếng Việt")
+        .level(request.getLevel() != null ? request.getLevel() : com.fptu.math_master.enums.CourseLevel.ALL_LEVELS)
         .originalPrice(request.getOriginalPrice())
         .discountedPrice(request.getDiscountedPrice())
         .discountExpiryDate(request.getDiscountExpiryDate())
         .build();
 
     course = courseRepository.save(course);
-    log.info("Course created: {} by teacher: {} [provider={}]", course.getId(), teacherId, course.getProvider());
+    log.info("Course created: {} by teacher: {} [provider={}, level={}]", course.getId(), teacherId,
+        course.getProvider(), course.getLevel());
     return mapToResponse(course, subject, schoolGrade);
   }
 
@@ -166,13 +177,20 @@ public class CourseServiceImpl implements CourseService {
     if (request.getDescription() != null)
       course.setDescription(request.getDescription());
 
-    // Validate prices before updating
+    // FIX #9: Validate prices before updating
     java.math.BigDecimal activeOriginal = request.getOriginalPrice() != null ? request.getOriginalPrice() : course.getOriginalPrice();
-    java.math.BigDecimal activeDiscounted = request.getDiscountedPrice() != null ? request.getDiscountedPrice() : course.getDiscountedPrice();
+    java.math.BigDecimal activeDiscounted;
     
+    // Explicit null check to allow removing discount
+    if (request.getOriginalPrice() != null && request.getDiscountedPrice() == null) {
+        activeDiscounted = null;
+    } else {
+        activeDiscounted = request.getDiscountedPrice() != null ? request.getDiscountedPrice() : course.getDiscountedPrice();
+    }
+
     if (activeOriginal != null && activeDiscounted != null) {
-      if (activeDiscounted.compareTo(activeOriginal) > 0) {
-        throw new AppException(ErrorCode.INVALID_AMOUNT);
+      if (activeDiscounted.compareTo(activeOriginal) >= 0) {
+        throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
       }
     }
     if (request.getWhatYouWillLearn() != null)
@@ -185,14 +203,25 @@ public class CourseServiceImpl implements CourseService {
       course.setSubtitle(request.getSubtitle());
     if (request.getLanguage() != null)
       course.setLanguage(StringUtils.hasText(request.getLanguage()) ? request.getLanguage() : "Tiếng Việt");
+    if (request.getLevel() != null)
+      course.setLevel(request.getLevel());
     if (request.getOriginalPrice() != null)
       course.setOriginalPrice(request.getOriginalPrice());
-    if (request.getDiscountedPrice() != null)
+    
+    // Fix: Explicitly allow setting discounted price to null
+    if (request.getOriginalPrice() != null && request.getDiscountedPrice() == null) {
+      course.setDiscountedPrice(null);
+    } else if (request.getDiscountedPrice() != null) {
       course.setDiscountedPrice(request.getDiscountedPrice());
+    }
     if (request.getDiscountExpiryDate() != null)
       course.setDiscountExpiryDate(request.getDiscountExpiryDate());
 
     if (thumbnailFile != null && !thumbnailFile.isEmpty()) {
+      // Fix MinIO resource leak: delete old thumbnail if exists
+      if (StringUtils.hasText(course.getThumbnailUrl())) {
+        uploadService.deleteFile(course.getThumbnailUrl(), minioProperties.getTemplateBucket());
+      }
       course.setThumbnailUrl(resolveThumbnailForWrite(thumbnailFile));
     }
 
@@ -206,42 +235,33 @@ public class CourseServiceImpl implements CourseService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
+    if (course.getStatus() == com.fptu.math_master.enums.CourseStatus.PUBLISHED) {
+      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
+    }
+
+    // FIX #2: Check for active enrollments
     if (enrollmentRepository.countActiveEnrollmentsByCourseId(courseId) > 0) {
-      // Keep course data for existing students, only hide it from catalog.
+      // Active students enrolled — convert to draft/unpublished only.
       course.setPublished(false);
       course.setStatus(com.fptu.math_master.enums.CourseStatus.DRAFT);
+      validateStatusPublishConsistency(course);
       courseRepository.save(course);
       log.info("Course {} has active enrollments; converted to draft/unpublished instead of deleting", courseId);
       return;
     }
 
-    // MinIO Cleanup: Course Thumbnail
-    if (org.springframework.util.StringUtils.hasText(course.getThumbnailUrl())) {
-      uploadService.deleteFile(course.getThumbnailUrl(), minioProperties.getTemplateBucket());
-    }
-
-    // MinIO Cleanup: Loop through all lessons and trigger their cleanup
-    List<com.fptu.math_master.entity.CourseLesson> lessons =
-        courseLessonRepository.findByCourseIdAndNotDeleted(courseId);
-    for (var lesson : lessons) {
-      // Cleanup video
-      if (org.springframework.util.StringUtils.hasText(lesson.getVideoUrl())) {
-        uploadService.deleteFile(lesson.getVideoUrl(), minioProperties.getCourseVideosBucket());
-      }
-      // Cleanup materials
-      List<com.fptu.math_master.dto.response.MaterialItem> items =
-          getMaterialListStatic(lesson.getMaterials());
-      for (var item : items) {
-        if (org.springframework.util.StringUtils.hasText(item.getKey())) {
-          uploadService.deleteFile(item.getKey(), minioProperties.getCourseMaterialsBucket());
-        }
-      }
-    }
-
+    // FIX #2: Check for pending or completed orders before deletion
+    // Note: This requires OrderRepository - will be added in next iteration
+    // For now, we rely on soft delete to preserve financial records
+    
+    // Always soft-delete regardless of historical orders/transactions,
+    // so that financial records referencing this course remain intact.
+    course.setPublished(false);
     course.setDeletedAt(Instant.now());
     course.setDeletedBy(currentUserId);
+    validateStatusPublishConsistency(course);
     courseRepository.save(course);
-    log.info("Course soft-deleted and all associated MinIO resources cleaned up: {}", courseId);
+    log.info("Course soft-deleted: {}", courseId);
   }
 
   @Override
@@ -250,11 +270,19 @@ public class CourseServiceImpl implements CourseService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
-    if (publish && course.getStatus() != com.fptu.math_master.enums.CourseStatus.PUBLISHED) {
-       throw new AppException(ErrorCode.COURSE_NOT_APPROVED);
+    // FIX #1: Sync isPublished with status to prevent inconsistent state
+    if (publish) {
+      // Can only publish if course is PUBLISHED status (approved by admin)
+      if (course.getStatus() != com.fptu.math_master.enums.CourseStatus.PUBLISHED) {
+        throw new AppException(ErrorCode.COURSE_NOT_APPROVED);
+      }
+      course.setPublished(true);
+    } else {
+      // Lock status after publish to avoid hiding courses that may already have buyers.
+      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
     }
 
-    course.setPublished(publish);
+    validateStatusPublishConsistency(course);
     course = courseRepository.save(course);
     log.info("Course {} {}", courseId, publish ? "published" : "unpublished");
     return mapToResponse(course);
@@ -266,13 +294,34 @@ public class CourseServiceImpl implements CourseService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
+    // FIX #7: Prevent submission from PUBLISHED status
     if (course.getStatus() == com.fptu.math_master.enums.CourseStatus.PUBLISHED) {
       throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
     }
 
+    // FIX #7: Prevent immediate resubmission after rejection without changes
+    if (course.getStatus() == com.fptu.math_master.enums.CourseStatus.REJECTED) {
+      // Check if course was updated after rejection
+      if (course.getRejectedAt() != null && course.getUpdatedAt() != null) {
+        if (course.getUpdatedAt().isBefore(course.getRejectedAt()) || 
+            course.getUpdatedAt().equals(course.getRejectedAt())) {
+          throw new AppException(ErrorCode.COURSE_ALREADY_SUBMITTED);
+        }
+      }
+    }
+
+    // FIX #12: Validate course has at least one lesson
+    long lessonCount = courseLessonRepository.countByCourseIdAndNotDeleted(courseId);
+    if (lessonCount == 0) {
+      throw new AppException(ErrorCode.COURSE_MUST_HAVE_LESSONS);
+    }
+
     course.setStatus(com.fptu.math_master.enums.CourseStatus.PENDING_REVIEW);
+    course.setPublished(false);
+    validateStatusPublishConsistency(course);
     course = courseRepository.save(course);
-    log.info("Course {} submitted for review", courseId);
+    notifyAdminsCoursePendingReview(course);
+    log.info("Course {} submitted for review with {} lessons", courseId, lessonCount);
     return mapToResponse(course);
   }
 
@@ -287,25 +336,153 @@ public class CourseServiceImpl implements CourseService {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public Page<CourseResponse> getCourseReviewsForAdmin(String status, Pageable pageable) {
+    if (org.springframework.util.StringUtils.hasText(status) && !status.equalsIgnoreCase("ALL")) {
+       try {
+           com.fptu.math_master.enums.CourseStatus enumStatus = com.fptu.math_master.enums.CourseStatus.valueOf(status.toUpperCase());
+           return courseRepository.findByStatusAndDeletedAtIsNullOrderByUpdatedAtDesc(enumStatus, pageable)
+                .map(this::mapToResponse);
+       } catch (IllegalArgumentException e) {
+           // Invalid status, return all
+       }
+    }
+    // Return all for full history
+    return courseRepository.findByDeletedAtIsNullOrderByUpdatedAtDesc(pageable)
+         .map(this::mapToResponse);
+  }
+
+  @Override
   public CourseResponse approveCourse(UUID courseId) {
+    UUID currentAdminId = SecurityUtils.getCurrentUserId();
     Course course = findCourseOrThrow(courseId);
+    if (course.getStatus() != com.fptu.math_master.enums.CourseStatus.PENDING_REVIEW) {
+      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
+    }
     course.setStatus(com.fptu.math_master.enums.CourseStatus.PUBLISHED);
     course.setPublished(true);
     course.setRejectionReason(null);
+    course.setApprovedBy(currentAdminId);
+    course.setApprovedAt(Instant.now());
+    course.setRejectedBy(null);
+    course.setRejectedAt(null);
+    validateStatusPublishConsistency(course);
+
     course = courseRepository.save(course);
-    log.info("Course {} approved and published by admin", courseId);
+    notifyTeacherCourseApproved(course);
+    log.info("Course {} approved and published by admin {}", courseId, currentAdminId);
     return mapToResponse(course);
   }
 
   @Override
   public CourseResponse rejectCourse(UUID courseId, String reason) {
+    UUID currentAdminId = SecurityUtils.getCurrentUserId();
     Course course = findCourseOrThrow(courseId);
+
+    if (course.getStatus() != com.fptu.math_master.enums.CourseStatus.PENDING_REVIEW) {
+      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
+    }
+    
     course.setStatus(com.fptu.math_master.enums.CourseStatus.REJECTED);
     course.setPublished(false);
     course.setRejectionReason(reason);
+    course.setRejectedBy(currentAdminId);
+    course.setRejectedAt(Instant.now());
+    
+    // FIX #6: Clear approval metadata when rejecting
+    course.setApprovedBy(null);
+    course.setApprovedAt(null);
+    validateStatusPublishConsistency(course);
+
     course = courseRepository.save(course);
-    log.info("Course {} rejected by admin. Reason: {}", courseId, reason);
+    notifyTeacherCourseRejected(course, reason);
+    log.info("Course {} rejected by admin {}. Reason: {}", courseId, currentAdminId, reason);
     return mapToResponse(course);
+  }
+
+  private void notifyAdminsCoursePendingReview(Course course) {
+    List<UUID> adminIds = userRepository.findUserIdsByRoleName(PredefinedRole.ADMIN_ROLE);
+    if (adminIds.isEmpty()) {
+      return;
+    }
+
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("courseId", course.getId().toString());
+    metadata.put("status", course.getStatus().name());
+    metadata.put("event", "COURSE_SUBMITTED_FOR_REVIEW");
+
+    for (UUID adminId : adminIds) {
+      publishCourseNotification(
+          adminId,
+          "COURSE",
+          "Khoa hoc can duyet",
+          "Khoa hoc '" + course.getTitle() + "' vua duoc gui len de kiem duyet.",
+          metadata,
+          "/admin/courses/review");
+    }
+  }
+
+  private void notifyTeacherCourseApproved(Course course) {
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("courseId", course.getId().toString());
+    metadata.put("status", course.getStatus().name());
+    metadata.put("event", "COURSE_APPROVED");
+
+    publishCourseNotification(
+        course.getTeacherId(),
+        "COURSE",
+        "Khoa hoc da duoc phe duyet",
+        "Khoa hoc '" + course.getTitle() + "' da duoc phe duyet va xuat ban.",
+        metadata,
+        "/teacher/courses/" + course.getId());
+  }
+
+  private void notifyTeacherCourseRejected(Course course, String reason) {
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("courseId", course.getId().toString());
+    metadata.put("status", course.getStatus().name());
+    metadata.put("event", "COURSE_REJECTED");
+    if (reason != null) {
+      metadata.put("reason", reason);
+    }
+
+    String content = "Khoa hoc '" + course.getTitle() + "' bi tu choi";
+    if (StringUtils.hasText(reason)) {
+      content += ": " + reason;
+    }
+
+    publishCourseNotification(
+        course.getTeacherId(),
+        "COURSE",
+        "Khoa hoc bi tu choi",
+        content,
+        metadata,
+        "/teacher/courses/" + course.getId());
+  }
+
+  private void publishCourseNotification(
+      UUID recipientId,
+      String type,
+      String title,
+      String content,
+      Map<String, Object> metadata,
+      String actionUrl) {
+    try {
+      NotificationRequest notification = NotificationRequest.builder()
+          .id(UUID.randomUUID().toString())
+          .type(type)
+          .title(title)
+          .content(content)
+          .recipientId(recipientId.toString())
+          .senderId("SYSTEM")
+          .timestamp(LocalDateTime.now())
+          .metadata(metadata)
+          .actionUrl(actionUrl)
+          .build();
+      streamPublisher.publish(notification);
+    } catch (Exception e) {
+      log.error("Failed to publish course notification for recipient {}", recipientId, e);
+    }
   }
 
   @Override
@@ -322,15 +499,18 @@ public class CourseServiceImpl implements CourseService {
   @Override
   @Transactional(readOnly = true)
   public CourseResponse getCourseById(UUID courseId) {
-    return mapToResponse(findCourseOrThrow(courseId));
+    Course course = findCourseOrThrow(courseId);
+    verifyPublicCourseVisibility(course);
+    return mapToResponse(course);
   }
 
   @Override
   @Transactional(readOnly = true)
   public CoursePreviewResponse getCoursePreview(UUID courseId) {
     Course course = findCourseOrThrow(courseId);
+    verifyPublicCourseVisibility(course);
     CourseResponse courseResponse = mapToResponse(course);
-    
+
     List<CourseLessonPreviewResponse> lessons = courseLessonRepository.findByCourseIdAndNotDeleted(courseId)
         .stream()
         .map(cl -> {
@@ -345,8 +525,10 @@ public class CourseServiceImpl implements CourseService {
               .courseId(cl.getCourseId())
               .sectionId(cl.getSectionId())
               .lessonTitle(lessonTitle)
+              .customTitle(cl.getCustomTitle())
               .customDescription(cl.getCustomDescription())
               .videoTitle(cl.getVideoTitle())
+              .videoUrl(cl.getVideoUrl())
               .durationSeconds(cl.getDurationSeconds())
               .orderIndex(cl.getOrderIndex())
               .isFreePreview(cl.isFreePreview())
@@ -355,6 +537,55 @@ public class CourseServiceImpl implements CourseService {
               .build();
         })
         .collect(Collectors.toList());
+
+    return CoursePreviewResponse.builder()
+        .course(courseResponse)
+        .lessons(lessons)
+        .build();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public CoursePreviewResponse getAdminCoursePreview(UUID courseId) {
+    UUID currentAdminId = SecurityUtils.getCurrentUserId();
+    log.info("Admin {} requesting full preview of course {}", currentAdminId, courseId);
+    
+    Course course = findCourseOrThrow(courseId);
+    CourseResponse courseResponse = mapToResponse(course);
+
+    // Admin gets full access to all lessons regardless of enrollment or course status
+    List<CourseLessonPreviewResponse> lessons = courseLessonRepository
+        .findByCourseIdAndNotDeleted(courseId)
+        .stream()
+        .map(cl -> {
+          String lessonTitle = cl.getCustomTitle();
+          if (cl.getLessonId() != null) {
+            lessonTitle = lessonRepository.findByIdAndNotDeleted(cl.getLessonId())
+                .map(Lesson::getTitle)
+                .orElse(lessonTitle);
+          }
+          
+          // Build full lesson preview with all details
+          return CourseLessonPreviewResponse.builder()
+              .id(cl.getId())
+              .courseId(cl.getCourseId())
+              .sectionId(cl.getSectionId())
+              .lessonTitle(lessonTitle)
+              .customTitle(cl.getCustomTitle())
+              .customDescription(cl.getCustomDescription())
+              .videoTitle(cl.getVideoTitle())
+              .videoUrl(cl.getVideoUrl())
+              .durationSeconds(cl.getDurationSeconds())
+              .orderIndex(cl.getOrderIndex())
+              .isFreePreview(cl.isFreePreview())
+              .createdAt(cl.getCreatedAt())
+              .updatedAt(cl.getUpdatedAt())
+              .build();
+        })
+        .sorted(Comparator.comparing(CourseLessonPreviewResponse::getOrderIndex))
+        .collect(Collectors.toList());
+
+    log.info("✅ Admin {} retrieved {} lessons for course {}", currentAdminId, lessons.size(), courseId);
 
     return CoursePreviewResponse.builder()
         .course(courseResponse)
@@ -415,6 +646,38 @@ public class CourseServiceImpl implements CourseService {
     }
   }
 
+  private void verifyPublicCourseVisibility(Course course) {
+    boolean publiclyVisible = isPubliclyVisibleCourse(course);
+    if (publiclyVisible) {
+      return;
+    }
+
+    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+    if (currentUserId != null) {
+      if (SecurityUtils.hasRole("ADMIN")) {
+        return;
+      }
+      if (course.getTeacherId() != null && course.getTeacherId().equals(currentUserId)) {
+        return;
+      }
+    }
+
+    throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+  }
+
+  private boolean isPubliclyVisibleCourse(Course course) {
+    return course.isPublished()
+        && course.getStatus() == com.fptu.math_master.enums.CourseStatus.PUBLISHED;
+  }
+
+  private void validateStatusPublishConsistency(Course course) {
+    boolean statusPublished = course.getStatus() == com.fptu.math_master.enums.CourseStatus.PUBLISHED;
+    boolean publishedFlag = course.isPublished();
+    if (statusPublished != publishedFlag) {
+      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
+    }
+  }
+
   private StudentInCourseResponse buildStudentInCourseResponse(Enrollment e, int totalLessons) {
     User student = userRepository.findById(e.getStudentId()).orElse(null);
     int completedLessons = (int) lessonProgressRepository.countCompletedByEnrollmentId(e.getId());
@@ -459,6 +722,18 @@ public class CourseServiceImpl implements CourseService {
       }
     }
 
+    // Check if discount has expired
+    BigDecimal activeDiscountedPrice = course.getDiscountedPrice();
+    Instant activeDiscountExpiryDate = course.getDiscountExpiryDate();
+
+    if (activeDiscountedPrice != null && activeDiscountExpiryDate != null) {
+      if (activeDiscountExpiryDate.isBefore(Instant.now())) {
+        // Discount has expired, don't show it
+        activeDiscountedPrice = null;
+        activeDiscountExpiryDate = null;
+      }
+    }
+
     return CourseResponse.builder()
         .id(course.getId())
         .teacherId(course.getTeacherId())
@@ -476,6 +751,10 @@ public class CourseServiceImpl implements CourseService {
         .isPublished(course.isPublished())
         .status(course.getStatus())
         .rejectionReason(course.getRejectionReason())
+        .approvedBy(course.getApprovedBy())
+        .approvedAt(course.getApprovedAt())
+        .rejectedBy(course.getRejectedBy())
+        .rejectedAt(course.getRejectedAt())
         .rating(course.getRating())
         .ratingCount(ratingCount)
         .studentsCount(studentsCount)
@@ -493,8 +772,8 @@ public class CourseServiceImpl implements CourseService {
         .articlesCount(course.getArticlesCount())
         .resourcesCount(course.getResourcesCount())
         .originalPrice(course.getOriginalPrice())
-        .discountedPrice(course.getDiscountedPrice())
-        .discountExpiryDate(course.getDiscountExpiryDate())
+        .discountedPrice(activeDiscountedPrice)
+        .discountExpiryDate(activeDiscountExpiryDate)
         .isEnrolled(isEnrolled)
         .completedLessons(completedLessons)
         .totalLessons(lessonsCount)
@@ -966,7 +1245,8 @@ public class CourseServiceImpl implements CourseService {
     try {
       return objectMapper.readValue(
           json,
-          new TypeReference<List<com.fptu.math_master.dto.response.MaterialItem>>() {});
+          new TypeReference<List<com.fptu.math_master.dto.response.MaterialItem>>() {
+          });
     } catch (Exception e) {
       log.warn("Invalid materials JSON while deleting course assets: {}", json, e);
       return new ArrayList<>();
@@ -1000,7 +1280,8 @@ public class CourseServiceImpl implements CourseService {
       String materialsJson = cl.getMaterials();
       if (StringUtils.hasText(materialsJson)) {
         try {
-          List<?> materials = objectMapper.readValue(materialsJson, new TypeReference<List<Object>>() {});
+          List<?> materials = objectMapper.readValue(materialsJson, new TypeReference<List<Object>>() {
+          });
           resourcesCount += materials.size();
         } catch (Exception e) {
           log.warn("Failed to parse materials JSON for lesson {}: {}", cl.getId(), e.getMessage());
@@ -1015,7 +1296,7 @@ public class CourseServiceImpl implements CourseService {
     course.setResourcesCount(resourcesCount);
 
     courseRepository.save(course);
-    log.info("Synced metrics for course {}: {}h, {} articles, {} resources", 
+    log.info("Synced metrics for course {}: {}h, {} articles, {} resources",
         courseId, totalVideoHours, articlesCount, resourcesCount);
   }
 }

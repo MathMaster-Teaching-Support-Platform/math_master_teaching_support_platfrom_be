@@ -17,8 +17,10 @@ public class CourseLessonPreviewResponse {
   private UUID courseId;
   private UUID sectionId;
   private String lessonTitle;
+  private String customTitle;
   private String customDescription;
   private String videoTitle;
+  private String videoUrl;
   private Integer durationSeconds;
   private Integer orderIndex;
   @JsonProperty("isFreePreview")

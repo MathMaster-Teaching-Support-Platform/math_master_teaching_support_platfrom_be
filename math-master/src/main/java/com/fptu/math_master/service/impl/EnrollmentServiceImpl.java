@@ -1,5 +1,7 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.component.StreamPublisher;
+import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.dto.response.EnrollmentResponse;
 import com.fptu.math_master.entity.Course;
 import com.fptu.math_master.entity.Enrollment;
@@ -22,16 +24,16 @@ import com.fptu.math_master.enums.TransactionStatus;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.time.Duration;
-import java.util.List;
+import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.Collections;
 import java.util.Set;
 import java.util.Map;
+import java.util.HashMap;
 import com.fptu.math_master.repository.CourseLessonRepository;
 import com.fptu.math_master.repository.LessonProgressRepository;
-import org.springframework.data.domain.PageRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -54,6 +56,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
   TransactionRepository transactionRepository;
   CourseLessonRepository courseLessonRepository;
   LessonProgressRepository lessonProgressRepository;
+  StreamPublisher streamPublisher;
 
   @Override
   public EnrollmentResponse enroll(UUID courseId) {
@@ -63,18 +66,25 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         .findByIdAndDeletedAtIsNull(courseId)
         .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
 
-    if (!course.isPublished()) {
+    // FIX #5: Validate both isPublished AND status
+    if (!course.isPublished() || course.getStatus() != com.fptu.math_master.enums.CourseStatus.PUBLISHED) {
       throw new AppException(ErrorCode.COURSE_NOT_PUBLISHED);
     }
 
-    // 1. Check early for idempotency
-    var existingEnrollment = enrollmentRepository.findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, courseId);
+    // 1. Check early for idempotency with pessimistic lock to prevent race conditions
+    // FIX #3: Use pessimistic locking to prevent concurrent enrollment duplicates
+    var existingEnrollment = enrollmentRepository
+        .findByStudentIdAndCourseIdAndDeletedAtIsNullWithLock(studentId, courseId);
 
     if (existingEnrollment.isPresent()) {
       Enrollment e = existingEnrollment.get();
       if (e.getStatus() == EnrollmentStatus.ACTIVE) {
         log.info("Student {} already active in course {}. Returning existing record.", studentId, courseId);
         return mapToResponse(e, course.getTitle(), studentId);
+      }
+      // If PENDING, another request is processing - reject this one
+      if (e.getStatus() == EnrollmentStatus.PENDING) {
+        throw new AppException(ErrorCode.ENROLLMENT_IN_PROGRESS);
       }
     }
 
@@ -94,77 +104,136 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     }
     enrollment = enrollmentRepository.saveAndFlush(enrollment);
 
-    // 3. Process Payment and Split
-    BigDecimal activePrice = course.getOriginalPrice();
-    if (course.getDiscountedPrice() != null) {
-      if (course.getDiscountExpiryDate() == null || course.getDiscountExpiryDate().isAfter(Instant.now())) {
-        activePrice = course.getDiscountedPrice();
+    try {
+      // 3. Process Payment and Split
+      BigDecimal activePrice = course.getOriginalPrice();
+      if (course.getDiscountedPrice() != null) {
+        if (course.getDiscountExpiryDate() == null || course.getDiscountExpiryDate().isAfter(Instant.now())) {
+          activePrice = course.getDiscountedPrice();
+        }
       }
+
+      if (activePrice != null && activePrice.compareTo(BigDecimal.ZERO) > 0) {
+        // FIX #4: Ensure wallets exist BEFORE any payment operations
+        Wallet studentWallet = walletRepository.findByUserIdWithLock(studentId)
+            .orElseGet(() -> {
+              log.info("Creating wallet for student {}", studentId);
+              walletService.createWallet(studentId);
+              // Refetch with lock to ensure consistency
+              return walletRepository.findByUserIdWithLock(studentId)
+                  .orElseThrow(() -> new AppException(ErrorCode.WALLET_CREATION_FAILED));
+            });
+
+        Wallet instructorWallet = walletRepository.findByUserIdWithLock(course.getTeacherId())
+            .orElseGet(() -> {
+              log.info("Creating wallet for instructor {}", course.getTeacherId());
+              walletService.createWallet(course.getTeacherId());
+              // Refetch with lock to ensure consistency
+              return walletRepository.findByUserIdWithLock(course.getTeacherId())
+                  .orElseThrow(() -> new AppException(ErrorCode.WALLET_CREATION_FAILED));
+            });
+
+        // Deduct full amount from student
+        walletService.deductBalance(studentWallet.getId(), activePrice);
+
+        // Calculate Split
+        BigDecimal instructorEarnings = activePrice.multiply(new BigDecimal("0.9"))
+            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal platformCommission = activePrice.subtract(instructorEarnings);
+
+        // Record Student Transaction (COURSE_PURCHASE)
+        Transaction studentTx = Transaction.builder()
+            .wallet(studentWallet)
+            .amount(activePrice)
+            .type(TransactionType.COURSE_PURCHASE)
+            .status(TransactionStatus.SUCCESS)
+            .description("Purchased Course: " + course.getTitle())
+            .transactionDate(Instant.now())
+            .orderCode(System.currentTimeMillis())
+            .instructorEarnings(instructorEarnings)
+            .platformCommission(platformCommission)
+            .build();
+        transactionRepository.save(studentTx);
+
+        // Deposit to Instructor
+        walletService.addBalance(instructorWallet.getId(), instructorEarnings);
+
+        // Record Instructor Transaction (INSTRUCTOR_REVENUE)
+        Transaction instructorTx = Transaction.builder()
+            .wallet(instructorWallet)
+            .amount(instructorEarnings)
+            .type(TransactionType.INSTRUCTOR_REVENUE)
+            .status(TransactionStatus.SUCCESS)
+            .description("Revenue from Course: " + course.getTitle())
+            .transactionDate(Instant.now())
+            .orderCode(System.currentTimeMillis() + 1)
+            .build();
+        transactionRepository.save(instructorTx);
+
+        log.info("Enrollment payment success: Student {} paid {}, Instructor {} earned {}",
+            studentId, activePrice, course.getTeacherId(), instructorEarnings);
+      }
+
+      // 4. Finalize Enrollment
+      enrollment.setStatus(EnrollmentStatus.ACTIVE);
+      enrollment.setEnrolledAt(Instant.now());
+      enrollment = enrollmentRepository.save(enrollment);
+
+      publishEnrollmentNotifications(course, studentId);
+
+      log.info("Student {} enrollment finalized for course {}", studentId, courseId);
+      return mapToResponse(enrollment, course.getTitle(), studentId);
+      
+    } catch (Exception e) {
+      // FIX #10: Rollback enrollment to DROPPED on any failure
+      log.error("Enrollment failed for student {} in course {}: {}", studentId, courseId, e.getMessage(), e);
+      enrollment.setStatus(EnrollmentStatus.DROPPED);
+      enrollmentRepository.save(enrollment);
+      throw e; // Re-throw to trigger transaction rollback
+    }
+  }
+
+  private void publishEnrollmentNotifications(Course course, UUID studentId) {
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("courseId", course.getId().toString());
+    metadata.put("event", "COURSE_ENROLLED");
+
+    try {
+      NotificationRequest studentNotification =
+          NotificationRequest.builder()
+              .id(UUID.randomUUID().toString())
+              .type("COURSE")
+              .title("Dang ky khoa hoc thanh cong")
+              .content("Ban da dang ky thanh cong khoa hoc '" + course.getTitle() + "'.")
+              .recipientId(studentId.toString())
+              .senderId("SYSTEM")
+              .timestamp(LocalDateTime.now())
+              .metadata(metadata)
+              .actionUrl("/student/courses")
+              .build();
+      streamPublisher.publish(studentNotification);
+    } catch (Exception e) {
+      log.error("Failed to publish enrollment notification for student {}", studentId, e);
     }
 
-    if (activePrice != null && activePrice.compareTo(BigDecimal.ZERO) > 0) {
-      Wallet studentWallet = walletRepository.findByUserId(studentId)
-          .orElseGet(() -> {
-            walletService.createWallet(studentId);
-            return walletRepository.findByUserId(studentId)
-                .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-          });
-
-      // Deduct full amount from student
-      walletService.deductBalance(studentWallet.getId(), activePrice);
-
-      // Calculate Split
-      BigDecimal instructorEarnings = activePrice.multiply(new BigDecimal("0.9"))
-          .setScale(2, RoundingMode.HALF_UP);
-      BigDecimal platformCommission = activePrice.subtract(instructorEarnings);
-
-      // Record Student Transaction (COURSE_PURCHASE)
-      Transaction studentTx = Transaction.builder()
-          .wallet(studentWallet)
-          .amount(activePrice)
-          .type(TransactionType.COURSE_PURCHASE)
-          .status(TransactionStatus.SUCCESS)
-          .description("Purchased Course: " + course.getTitle())
-          .transactionDate(Instant.now())
-          .orderCode(System.currentTimeMillis())
-          .instructorEarnings(instructorEarnings)
-          .platformCommission(platformCommission)
-          .build();
-      transactionRepository.save(studentTx);
-
-      // Deposit to Instructor
-      Wallet instructorWallet = walletRepository.findByUserId(course.getTeacherId())
-          .orElseGet(() -> {
-            walletService.createWallet(course.getTeacherId());
-            return walletRepository.findByUserId(course.getTeacherId())
-                .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-          });
-
-      walletService.addBalance(instructorWallet.getId(), instructorEarnings);
-
-      // Record Instructor Transaction (INSTRUCTOR_REVENUE)
-      Transaction instructorTx = Transaction.builder()
-          .wallet(instructorWallet)
-          .amount(instructorEarnings)
-          .type(TransactionType.INSTRUCTOR_REVENUE)
-          .status(TransactionStatus.SUCCESS)
-          .description("Revenue from Course: " + course.getTitle())
-          .transactionDate(Instant.now())
-          .orderCode(System.currentTimeMillis() + 1)
-          .build();
-      transactionRepository.save(instructorTx);
-
-      log.info("Enrollment payment success: Student {} paid {}, Teacher {} earned {}",
-          studentId, activePrice, instructorEarnings);
+    try {
+      NotificationRequest teacherNotification =
+          NotificationRequest.builder()
+              .id(UUID.randomUUID().toString())
+              .type("COURSE")
+              .title("Hoc vien moi dang ky")
+              .content("Khoa hoc '" + course.getTitle() + "' vua co mot hoc vien moi dang ky.")
+              .recipientId(course.getTeacherId().toString())
+              .senderId("SYSTEM")
+              .timestamp(LocalDateTime.now())
+              .metadata(metadata)
+              .actionUrl("/teacher/courses/" + course.getId())
+              .build();
+      streamPublisher.publish(teacherNotification);
+    } catch (Exception e) {
+      log.error(
+          "Failed to publish enrollment notification for teacher {}", course.getTeacherId(), e);
     }
-
-    // 4. Finalize Enrollment
-    enrollment.setStatus(EnrollmentStatus.ACTIVE);
-    enrollment.setEnrolledAt(Instant.now());
-    enrollment = enrollmentRepository.save(enrollment);
-
-    log.info("Student {} enrollment finalized for course {}", studentId, courseId);
-    return mapToResponse(enrollment, course.getTitle(), studentId);
   }
 
   @Override
@@ -185,80 +254,6 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     Course course = courseRepository
         .findByIdAndDeletedAtIsNull(enrollment.getCourseId())
         .orElse(null);
-
-    // ─── Refund Eligibility Check ─────────────────────────────────────────────
-    boolean isEligibleForRefund = true;
-    if (enrollment.getEnrolledAt() != null) {
-      Duration duration = Duration.between(enrollment.getEnrolledAt(), Instant.now());
-      if (duration.toHours() >= 24) {
-        log.info("Student {} dropping {}, beyond 24h limit ({}h). Skip refund.", studentId, enrollmentId, duration.toHours());
-        isEligibleForRefund = false;
-      }
-    }
-
-    if (isEligibleForRefund && course != null) {
-      int totalLessons = (int) courseLessonRepository.countByCourseIdAndNotDeleted(course.getId());
-      if (totalLessons > 0) {
-        int completedLessons = (int) lessonProgressRepository.countCompletedByEnrollmentId(enrollmentId);
-        double completionRate = (completedLessons * 100.0) / totalLessons;
-        if (completionRate >= 10.0) {
-          log.info("Student {} dropping {}, beyond 10% progress limit ({}%). Skip refund.", studentId, enrollmentId, completionRate);
-          isEligibleForRefund = false;
-        }
-      }
-    }
-
-    // ─── Refund Logic ─────────────────────────────────────────────────────────
-    if (isEligibleForRefund && course != null && course.getTeacherId() != null) {
-      Wallet studentWallet = walletRepository.findByUserId(studentId).orElse(null);
-      if (studentWallet != null) {
-        // Find recent purchase transaction for this course
-        // Note: Using PageRequest to get most recent txs, filter by title
-        List<Transaction> txs = transactionRepository.findByWalletId(studentWallet.getId(), PageRequest.of(0, 100))
-            .getContent();
-        Transaction purchaseTx = txs.stream()
-            .filter(t -> t.getType() == TransactionType.COURSE_PURCHASE 
-                      && t.getDescription().contains(course.getTitle()) 
-                      && t.getStatus() == TransactionStatus.SUCCESS)
-            .findFirst()
-            .orElse(null);
-
-        // FREE COURSE EXEMPTION:
-        if (purchaseTx != null && purchaseTx.getAmount().compareTo(BigDecimal.ZERO) > 0) {
-          log.info("Refunding {} to student {} for course {}", purchaseTx.getAmount(), studentId, course.getId());
-          walletService.addBalance(studentWallet.getId(), purchaseTx.getAmount());
-          
-          Transaction refundTx = Transaction.builder()
-              .wallet(studentWallet)
-              .amount(purchaseTx.getAmount())
-              .type(TransactionType.REFUND)
-              .status(TransactionStatus.SUCCESS)
-              .description("Refund for Course: " + course.getTitle())
-              .transactionDate(Instant.now())
-              .orderCode(System.currentTimeMillis())
-              .build();
-          transactionRepository.save(refundTx);
-
-          // Deduct from teacher's wallet
-          Wallet teacherWallet = walletRepository.findByUserId(course.getTeacherId()).orElse(null);
-          if (teacherWallet != null && purchaseTx.getInstructorEarnings() != null) {
-            log.info("Deducting refund {} from teacher {} for course {}", purchaseTx.getInstructorEarnings(), course.getTeacherId(), course.getId());
-            walletService.deductBalance(teacherWallet.getId(), purchaseTx.getInstructorEarnings());
-            
-            Transaction deductionTx = Transaction.builder()
-                .wallet(teacherWallet)
-                .amount(purchaseTx.getInstructorEarnings())
-                .type(TransactionType.REFUND)
-                .status(TransactionStatus.SUCCESS)
-                .description("Refund Deduction for Course: " + course.getTitle())
-                .transactionDate(Instant.now())
-                .orderCode(System.currentTimeMillis() + 1)
-                .build();
-            transactionRepository.save(deductionTx);
-          }
-        }
-      }
-    }
 
     log.info("Student {} dropped enrollment {}", studentId, enrollmentId);
     return mapToResponse(enrollment, course != null ? course.getTitle() : null, studentId);

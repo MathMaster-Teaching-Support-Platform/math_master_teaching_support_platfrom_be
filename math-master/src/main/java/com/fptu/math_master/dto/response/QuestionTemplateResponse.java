@@ -34,7 +34,7 @@ public class QuestionTemplateResponse {
   private String topic;
   private String[] constraints;
   private CognitiveLevel cognitiveLevel;
-  private String[] tags;
+  private java.util.List<com.fptu.math_master.enums.QuestionTag> tags;
   private Boolean isPublic;
   private TemplateStatus status;
   private Integer usageCount;

@@ -453,6 +453,27 @@ public class QuestionServiceImpl implements QuestionService {
   }
 
   @Override
+  public Page<QuestionResponse> searchByKeywordAndTags(
+      String keyword, List<String> tags, Pageable pageable) {
+    UUID currentUserId = getCurrentUserId();
+    String keywordPattern =
+        (keyword != null && !keyword.isBlank()) ? "%" + keyword.trim() + "%" : null;
+    String tagsParam =
+        (tags != null && !tags.isEmpty())
+            ? tags.stream()
+                .filter(t -> t != null && !t.isBlank())
+                .map(String::toLowerCase)
+                .collect(java.util.stream.Collectors.joining(","))
+            : null;
+    if (tagsParam != null && tagsParam.isBlank()) tagsParam = null;
+
+    Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+    return questionRepository
+        .searchByKeywordAndTags(currentUserId, keywordPattern, tagsParam, unsorted)
+        .map(this::mapToResponse);
+  }
+
+  @Override
   public Page<QuestionResponse> searchQuestions(
       String searchTerm, String type, Pageable pageable) {
     UUID currentUserId = getCurrentUserId();

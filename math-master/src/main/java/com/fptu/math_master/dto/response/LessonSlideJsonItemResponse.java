@@ -15,4 +15,11 @@ public class LessonSlideJsonItemResponse {
   private String slideType;
   private String heading;
   private String content;
+
+  /**
+   * When outputFormat=LATEX, contains the QuickLaTeX-rendered image URL for this slide.
+   * FE should display &lt;img src={previewImageUrl}/&gt; instead of raw content text.
+   * Null for PLAIN_TEXT and HYBRID modes.
+   */
+  private String previewImageUrl;
 }

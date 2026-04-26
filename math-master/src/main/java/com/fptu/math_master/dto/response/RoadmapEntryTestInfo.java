@@ -15,4 +15,8 @@ public class RoadmapEntryTestInfo {
     private String name;
     private String description;
     private Integer totalQuestions;
+    private String studentStatus;
+    private Boolean canStart;
+    private String cannotStartReason;
+    private UUID activeAttemptId;
 }

@@ -4,6 +4,9 @@
 .env.local
 .env.*.local
 
+# Local secrets
+.secrets/
+
 # IntelliJ / JetBrains
 .idea/
 *.idea/
@@ -15,3 +18,8 @@ target/
 logs/*.log
 logs/*.txt
 *.logs
+*.settings/
+*.md
+*.classpath
+*.org.eclipse.jdt.core.prefs
+.org.eclipse.jdt.core.prefs

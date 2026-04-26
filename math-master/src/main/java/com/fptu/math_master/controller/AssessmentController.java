@@ -1,8 +1,12 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
+import com.fptu.math_master.dto.request.AutoDistributePointsRequest;
+import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
+import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.DistributeAssessmentPointsRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
@@ -11,7 +15,10 @@ import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
+import com.fptu.math_master.dto.response.DistributeAssessmentPointsResponse;
+import com.fptu.math_master.dto.response.PagedDataResponse;
 import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
+import com.fptu.math_master.dto.response.QuestionResponse;
 import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.service.AssessmentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -345,6 +352,34 @@ public class AssessmentController {
                 .build();
     }
 
+  @GetMapping("/{id}/available-questions")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Get paged available questions for assessment",
+      description =
+          "Get paged question list that can be added to assessment. "
+              + "Already-added questions are excluded. Supports keyword/tag filters.")
+  public ApiResponse<PagedDataResponse<QuestionResponse>> getAvailableQuestions(
+      @PathVariable UUID id,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) String tag) {
+    log.info(
+        "REST request to get available questions for assessment {} with page={}, size={}, keyword={}, tag={}",
+        id,
+        page,
+        size,
+        keyword,
+        tag);
+
+    Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+    return ApiResponse.<PagedDataResponse<QuestionResponse>>builder()
+        .message("Available questions retrieved successfully")
+        .result(assessmentService.getAvailableQuestions(id, keyword, tag, pageable))
+        .build();
+  }
+
   @DeleteMapping("/{assessmentId}/questions/{questionId}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
@@ -452,6 +487,69 @@ public class AssessmentController {
     return ApiResponse.<Void>builder()
         .code(1000)
         .message("Unlinked assessment from lesson successfully")
+        .build();
+  }
+
+  // ─────────────────────────────── Batch endpoints ───────────────────────────────
+
+  @PostMapping("/{id}/questions/batch")
+  @Operation(summary = "Batch add questions to assessment", description = "Add multiple questions by ID at once. Duplicates are silently skipped.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<List<AssessmentQuestionResponse>> batchAddQuestions(
+      @PathVariable UUID id,
+      @Valid @org.springframework.web.bind.annotation.RequestBody BatchAddQuestionsRequest request) {
+    log.info("POST /api/v1/assessments/{}/questions/batch size={}", id, request.getQuestionIds().size());
+    return ApiResponse.<List<AssessmentQuestionResponse>>builder()
+        .code(1000)
+        .message("Questions added successfully")
+        .result(assessmentService.batchAddQuestions(id, request))
+        .build();
+  }
+
+  @org.springframework.web.bind.annotation.PutMapping("/{id}/questions/points")
+  @Operation(summary = "Batch update question points", description = "Update points for multiple questions in one transactional request.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<List<AssessmentQuestionResponse>> batchUpdatePoints(
+      @PathVariable UUID id,
+      @Valid @org.springframework.web.bind.annotation.RequestBody BatchUpdatePointsRequest request) {
+    log.info("PUT /api/v1/assessments/{}/questions/points", id);
+    return ApiResponse.<List<AssessmentQuestionResponse>>builder()
+        .code(1000)
+        .message("Points updated successfully")
+        .result(assessmentService.batchUpdatePoints(id, request))
+        .build();
+  }
+
+  @PostMapping("/{id}/auto-distribute")
+  @Operation(summary = "Auto-distribute total points", description = "Distribute totalPoints across all questions based on cognitive-level percentages.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<List<AssessmentQuestionResponse>> autoDistributePoints(
+      @PathVariable UUID id,
+      @Valid @org.springframework.web.bind.annotation.RequestBody AutoDistributePointsRequest request) {
+    log.info("POST /api/v1/assessments/{}/auto-distribute", id);
+    return ApiResponse.<List<AssessmentQuestionResponse>>builder()
+        .code(1000)
+        .message("Points distributed successfully")
+        .result(assessmentService.autoDistributePoints(id, request))
+        .build();
+  }
+
+  @PostMapping("/{id}/questions/distribute-points")
+  @Operation(
+      summary = "Distribute points equally for all assessment questions",
+      description =
+          "Distribute totalPoints across all questions using strategy EQUAL with configurable decimal scale. "
+              + "Ensures sum(points_override) equals totalPoints after rounding.")
+  @SecurityRequirement(name = "bearerAuth")
+  public ApiResponse<DistributeAssessmentPointsResponse> distributeQuestionPoints(
+      @PathVariable UUID id,
+      @Valid @org.springframework.web.bind.annotation.RequestBody
+          DistributeAssessmentPointsRequest request) {
+    log.info("POST /api/v1/assessments/{}/questions/distribute-points", id);
+    return ApiResponse.<DistributeAssessmentPointsResponse>builder()
+        .code(1000)
+        .message("Points distributed successfully")
+        .result(assessmentService.distributeQuestionPoints(id, request))
         .build();
   }
 }

@@ -1,10 +1,12 @@
 package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.dto.request.LatexRenderRequest;
+import com.fptu.math_master.entity.DiagramCache;
 import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.exception.LatexCompileException;
 import com.fptu.math_master.exception.LatexRenderProxyException;
 import com.fptu.math_master.exception.LatexRenderTimeoutException;
+import com.fptu.math_master.repository.DiagramCacheRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.service.LatexRenderService;
 import java.net.URI;
@@ -27,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -50,11 +53,12 @@ public class LatexRenderServiceImpl implements LatexRenderService {
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(20);
 
   QuestionRepository questionRepository;
+  DiagramCacheRepository diagramCacheRepository;
 
   HttpClient httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
 
   @Override
-  @Transactional
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public String render(LatexRenderRequest request) {
     String rawLatex = request.getLatex();
     if (rawLatex == null || rawLatex.isBlank()) {
@@ -69,6 +73,16 @@ public class LatexRenderServiceImpl implements LatexRenderService {
       return questionCachedUrl;
     }
 
+    // 1. Check standalone DiagramCache (covers renders without a questionId)
+    Optional<String> diagramCachedUrl = diagramCacheRepository.findByLatexHash(latexHash)
+        .map(DiagramCache::getImageUrl);
+    if (diagramCachedUrl.isPresent()) {
+      log.debug("DiagramCache hit for hash={}", latexHash);
+      persistQuestionCache(targetQuestion, latexHash, diagramCachedUrl.get());
+      return diagramCachedUrl.get();
+    }
+
+    // 2. Fall back to global Question-level cache
     Optional<String> globalCachedUrl =
       questionRepository
         .findFirstByRenderedLatexHashAndRenderedImageUrlIsNotNullAndDeletedAtIsNullOrderByCreatedAtDesc(
@@ -76,11 +90,14 @@ public class LatexRenderServiceImpl implements LatexRenderService {
         .map(Question::getRenderedImageUrl);
     if (globalCachedUrl.isPresent()) {
       persistQuestionCache(targetQuestion, latexHash, globalCachedUrl.get());
+      persistDiagramCache(latexHash, normalizedLatex, globalCachedUrl.get());
       return globalCachedUrl.get();
     }
 
+    // 3. Call QuickLaTeX and store in both caches
     String renderedImageUrl = callQuickLatex(normalizedLatex, request.getOptions(), rawLatex);
     persistQuestionCache(targetQuestion, latexHash, renderedImageUrl);
+    persistDiagramCache(latexHash, normalizedLatex, renderedImageUrl);
     return renderedImageUrl;
   }
 
@@ -140,6 +157,23 @@ public class LatexRenderServiceImpl implements LatexRenderService {
     question.setRenderedLatexHash(latexHash);
     question.setRenderedImageUrl(imageUrl);
     questionRepository.save(question);
+  }
+
+  private void persistDiagramCache(String latexHash, String latexContent, String imageUrl) {
+    try {
+      if (diagramCacheRepository.findByLatexHash(latexHash).isEmpty()) {
+        diagramCacheRepository.save(
+            DiagramCache.builder()
+                .latexHash(latexHash)
+                .latexContent(latexContent)
+                .imageUrl(imageUrl)
+                .build());
+        log.debug("DiagramCache stored for hash={}", latexHash);
+      }
+    } catch (Exception e) {
+      // Cache write failure must not break rendering – log and continue.
+      log.warn("Failed to persist DiagramCache for hash={}: {}", latexHash, e.getMessage());
+    }
   }
 
   private String callQuickLatex(

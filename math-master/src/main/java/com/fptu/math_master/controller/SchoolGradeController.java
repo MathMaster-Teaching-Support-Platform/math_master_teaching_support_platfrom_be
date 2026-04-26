@@ -73,7 +73,7 @@ public class SchoolGradeController {
   @GetMapping
   @Operation(summary = "List school grades")
   public ApiResponse<List<SchoolGradeResponse>> getAll(
-      @RequestParam(value = "activeOnly", defaultValue = "true") boolean activeOnly) {
+      @RequestParam(value = "activeOnly", defaultValue = "false") boolean activeOnly) {
     return ApiResponse.<List<SchoolGradeResponse>>builder()
         .result(schoolGradeService.getAll(activeOnly))
         .build();

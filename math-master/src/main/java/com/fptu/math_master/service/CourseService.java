@@ -29,6 +29,8 @@ public interface CourseService {
 
   Page<CourseResponse> getPendingReviewCourses(Pageable pageable);
 
+  Page<CourseResponse> getCourseReviewsForAdmin(String status, Pageable pageable);
+
   CourseResponse approveCourse(UUID courseId);
 
   CourseResponse rejectCourse(UUID courseId, String reason);
@@ -38,6 +40,15 @@ public interface CourseService {
   CourseResponse getCourseById(UUID courseId);
 
   CoursePreviewResponse getCoursePreview(UUID courseId);
+
+  /**
+   * Get full course preview for admin review.
+   * Bypasses enrollment checks and provides complete access to course content.
+   * 
+   * @param courseId the course ID
+   * @return complete course preview with all lessons
+   */
+  CoursePreviewResponse getAdminCoursePreview(UUID courseId);
 
   /** Filter theo schoolGradeId, subjectId, keyword */
   Page<CourseResponse> getPublicCourses(UUID schoolGradeId, UUID subjectId, String keyword, Pageable pageable);

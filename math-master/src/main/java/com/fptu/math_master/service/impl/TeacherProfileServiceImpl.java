@@ -217,6 +217,8 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
           .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
       Set<Role> roles = new HashSet<>(user.getRoles());
+      // Enforce teacher-student exclusivity: remove STUDENT role when adding TEACHER role
+      roles.removeIf(role -> PredefinedRole.STUDENT_ROLE.equals(role.getName()));
       roles.add(teacherRole);
       user.setRoles(roles);
       userRepository.save(user);
@@ -244,11 +246,13 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
       streamNotif.setTitle("Hồ sơ Giáo viên được phê duyệt");
       streamNotif.setContent("Chúc mừng " + teacherName
           + ", yêu cầu nâng cấp tài khoản Giáo viên của bạn đã được quản trị viên phê duyệt thành công!");
+      streamNotif.setActionUrl("/profile");
     } else if (request.getStatus() == ProfileStatus.REJECTED) {
       emailService.sendTeacherRejectionEmail(teacherEmail, teacherName, request.getAdminComment());
       streamNotif.setType("PROFILE_VERIFICATION");
       streamNotif.setTitle("Hồ sơ Giáo viên bị từ chối");
       streamNotif.setContent("Hồ sơ Giáo viên của bạn đã bị từ chối với lý do: " + request.getAdminComment());
+      streamNotif.setActionUrl("/profile");
     }
 
     try {

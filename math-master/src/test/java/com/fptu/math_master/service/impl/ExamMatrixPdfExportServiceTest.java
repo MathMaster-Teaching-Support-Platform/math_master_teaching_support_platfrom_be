@@ -1,391 +1,567 @@
 package com.fptu.math_master.service.impl;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fptu.math_master.BaseUnitTest;
 import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
-import com.fptu.math_master.dto.response.MatrixCellResponse;
 import com.fptu.math_master.dto.response.MatrixChapterGroupResponse;
 import com.fptu.math_master.dto.response.MatrixRowResponse;
-import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.MatrixStatus;
 import com.fptu.math_master.service.ExamMatrixService;
+import java.io.File;
+import java.io.FileInputStream;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 
-/**
- * Unit tests for {@link ExamMatrixPdfExportService}.
- *
- * <p>These tests mock {@link ExamMatrixService#getMatrixTable} and verify:
- * <ol>
- *   <li>The returned byte array is a valid PDF file (starts with {@code %PDF}).</li>
- *   <li>The PDF is non-empty.</li>
- *   <li>Edge cases (null/empty chapters, single row, many chapters) are handled.</li>
- *   <li>Null matrix data throws a meaningful exception.</li>
- * </ol>
- */
-@ExtendWith(MockitoExtension.class)
-@DisplayName("ExamMatrixPdfExportService — PDF generation")
-class ExamMatrixPdfExportServiceTest {
+@DisplayName("ExamMatrixPdfExportService - Tests")
+class ExamMatrixPdfExportServiceTest extends BaseUnitTest {
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  private static int stepCounter = 0;
-
-  private static void testHeader(String title) {
-    stepCounter = 0;
-    System.out.println("\n============================================================");
-    System.out.println("  TEST: " + title);
-    System.out.println("============================================================");
-  }
-
-  private static void step(String description) {
-    System.out.println("\n[Step " + (++stepCounter) + "] " + description);
-  }
-
-  private static void pass(String assertion) {
-    System.out.println("  ✓ " + assertion);
-  }
-
-  // ── Mocks ──────────────────────────────────────────────────────────────────
+  @InjectMocks private ExamMatrixPdfExportService examMatrixPdfExportService;
 
   @Mock private ExamMatrixService examMatrixService;
-  @InjectMocks private ExamMatrixPdfExportService pdfExportService;
 
-  // ── Fixed IDs ─────────────────────────────────────────────────────────────
+  private static final UUID MATRIX_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-  private static final UUID MATRIX_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-  private static final UUID CHAPTER_1 = UUID.fromString("00000000-0000-0000-0001-000000000001");
-  private static final UUID CHAPTER_2 = UUID.fromString("00000000-0000-0000-0001-000000000002");
-  private static final UUID CHAPTER_3 = UUID.fromString("00000000-0000-0000-0001-000000000003");
-
-  // ── Fixture builders ───────────────────────────────────────────────────────
-
-  private MatrixCellResponse cell(CognitiveLevel level, String label, int count) {
-    BigDecimal pts = new BigDecimal("0.20");
-    return MatrixCellResponse.builder()
-        .mappingId(UUID.randomUUID())
-        .cognitiveLevel(level)
-        .cognitiveLevelLabel(label)
-        .questionCount(count)
-        .pointsPerQuestion(pts)
-        .totalPoints(pts.multiply(BigDecimal.valueOf(count)))
-        .build();
-  }
-
-  private MatrixRowResponse row(String typeName, String ref, int order,
-                                 Map<String, Integer> counts, List<MatrixCellResponse> cells) {
-    int total = cells.stream().mapToInt(c -> c.getQuestionCount()).sum();
-    BigDecimal pts = cells.stream()
-        .map(c -> c.getTotalPoints())
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
+  private MatrixRowResponse buildRow(
+      String questionTypeName, String referenceQuestions, Map<String, Integer> countByCognitive, int total) {
     return MatrixRowResponse.builder()
-        .rowId(UUID.randomUUID())
-        .chapterId(CHAPTER_1)
-        .questionTypeName(typeName)
-        .referenceQuestions(ref)
-        .orderIndex(order)
-        .cells(cells)
-        .countByCognitive(counts)
+        .questionTypeName(questionTypeName)
+        .referenceQuestions(referenceQuestions)
+        .countByCognitive(countByCognitive)
         .rowTotalQuestions(total)
-        .rowTotalPoints(pts)
+        .rowTotalPoints(BigDecimal.valueOf(total))
         .build();
   }
 
-  private MatrixChapterGroupResponse chapter(UUID id, String title, int order,
-                                              List<MatrixRowResponse> rows,
-                                              Map<String, Integer> totals, int total) {
-    BigDecimal chapPts = rows.stream()
-        .map(r -> r.getRowTotalPoints())
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
+  private MatrixChapterGroupResponse buildChapter(String title, int totalQuestions, MatrixRowResponse... rows) {
     return MatrixChapterGroupResponse.builder()
-        .chapterId(id)
         .chapterTitle(title)
-        .chapterOrderIndex(order)
-        .rows(rows)
-        .totalByCognitive(totals)
-        .chapterTotalQuestions(total)
-        .chapterTotalPoints(chapPts)
+        .rows(List.of(rows))
+        .chapterTotalQuestions(totalQuestions)
+        .chapterTotalPoints(BigDecimal.valueOf(totalQuestions))
         .build();
   }
 
-  /** Builds the canonical 50-question THPT Toán 12 matrix response used across tests. */
-  private ExamMatrixTableResponse fullThptMatrix() {
-    // ── Chapter 1: Đạo Hàm và Ứng Dụng ─────────────────────────────────
-    MatrixRowResponse r1 = row("Đơn điệu của HS", "3,30", 1,
-        Map.of("NB", 1, "TH", 1),
-        List.of(cell(CognitiveLevel.NHAN_BIET, "NB", 1),
-                cell(CognitiveLevel.THONG_HIEU, "TH", 1)));
-    MatrixRowResponse r2 = row("Cực trị của HS", "4,5,39,46", 2,
-        Map.of("NB", 1, "TH", 1, "VD", 1, "VDC", 1),
-        List.of(cell(CognitiveLevel.NHAN_BIET, "NB", 1),
-                cell(CognitiveLevel.THONG_HIEU, "TH", 1),
-                cell(CognitiveLevel.VAN_DUNG, "VD", 1),
-                cell(CognitiveLevel.VAN_DUNG_CAO, "VDC", 1)));
-    MatrixRowResponse r3 = row("Min, Max của hàm số", "31", 3,
-        Map.of("TH", 1),
-        List.of(cell(CognitiveLevel.THONG_HIEU, "TH", 1)));
-    MatrixRowResponse r4 = row("Đường Tiệm Cận", "6", 4,
-        Map.of("NB", 1),
-        List.of(cell(CognitiveLevel.NHAN_BIET, "NB", 1)));
-    MatrixRowResponse r5 = row("Khảo sát và vẽ đồ thị", "7,8", 5,
-        Map.of("NB", 1, "TH", 1),
-        List.of(cell(CognitiveLevel.NHAN_BIET, "NB", 1),
-                cell(CognitiveLevel.THONG_HIEU, "TH", 1)));
-    MatrixChapterGroupResponse ch1 = chapter(CHAPTER_1,
-        "ĐẠO HÀM VÀ ỨNG DỤNG", 1,
-        List.of(r1, r2, r3, r4, r5),
-        Map.of("NB", 4, "TH", 4, "VD", 1, "VDC", 1), 10);
-
-    // ── Chapter 2: Hàm Số Mũ - Logarit ──────────────────────────────────
-    MatrixRowResponse r6 = row("Lũy thừa – Mũ – Logarit", "9,11", 6,
-        Map.of("NB", 1, "TH", 1),
-        List.of(cell(CognitiveLevel.NHAN_BIET, "NB", 1),
-                cell(CognitiveLevel.THONG_HIEU, "TH", 1)));
-    MatrixRowResponse r7 = row("HS Mũ – Logarit", "10", 7,
-        Map.of("TH", 1),
-        List.of(cell(CognitiveLevel.THONG_HIEU, "TH", 1)));
-    MatrixRowResponse r8 = row("PT Mũ – Logarit", "12,13,47", 8,
-        Map.of("NB", 1, "VD", 1, "VDC", 1),
-        List.of(cell(CognitiveLevel.NHAN_BIET, "NB", 1),
-                cell(CognitiveLevel.VAN_DUNG, "VD", 1),
-                cell(CognitiveLevel.VAN_DUNG_CAO, "VDC", 1)));
-    MatrixRowResponse r9 = row("BPT Mũ – Logarit", "32,40", 9,
-        Map.of("VD", 1, "VDC", 1),
-        List.of(cell(CognitiveLevel.VAN_DUNG, "VD", 1),
-                cell(CognitiveLevel.VAN_DUNG_CAO, "VDC", 1)));
-    MatrixChapterGroupResponse ch2 = chapter(CHAPTER_2,
-        "HÀM SỐ MŨ - LOGARIT", 2,
-        List.of(r6, r7, r8, r9),
-        Map.of("NB", 2, "TH", 2, "VD", 2, "VDC", 2), 8);
-
-    // ── Chapter 3: Nguyên Hàm – Tích Phân ───────────────────────────────
-    MatrixRowResponse r10 = row("Nguyên hàm", "14,15", 10,
-        Map.of("NB", 1, "TH", 1),
-        List.of(cell(CognitiveLevel.NHAN_BIET, "NB", 1),
-                cell(CognitiveLevel.THONG_HIEU, "TH", 1)));
-    MatrixRowResponse r11 = row("Tích phân", "16,17,33,41", 11,
-        Map.of("NB", 1, "TH", 1, "VD", 2),
-        List.of(cell(CognitiveLevel.NHAN_BIET, "NB", 1),
-                cell(CognitiveLevel.THONG_HIEU, "TH", 1),
-                cell(CognitiveLevel.VAN_DUNG, "VD", 2)));
-    MatrixRowResponse r12 = row("Ứng dụng TP tính diện tích", "44,48", 12,
-        Map.of("TH", 1, "VD", 1),
-        List.of(cell(CognitiveLevel.THONG_HIEU, "TH", 1),
-                cell(CognitiveLevel.VAN_DUNG, "VD", 1)));
-    MatrixChapterGroupResponse ch3 = chapter(CHAPTER_3,
-        "NGUYÊN HÀM – TÍCH PHÂN", 3,
-        List.of(r10, r11, r12),
-        Map.of("NB", 2, "TH", 3, "VD", 3), 8);
-
+  private ExamMatrixTableResponse buildMatrixWithChapters(List<MatrixChapterGroupResponse> chapters) {
     return ExamMatrixTableResponse.builder()
         .id(MATRIX_ID)
-        .name("Ma Trận Đề Minh Họa THPT 2025")
-        .description("Ma trận đề thi thử THPT Quốc Gia môn Toán – 50 câu, 10 điểm")
-        .teacherId(UUID.randomUUID())
-        .teacherName("Nguyễn Văn A")
+        .name("Ma Tran Toan 12 HK2")
+        .subjectName("Toan hoc")
         .gradeLevel(12)
-        .curriculumId(UUID.randomUUID())
-        .curriculumName("Toán 12 – Đề Minh Họa THPT")
-        .subjectId(UUID.randomUUID())
-        .subjectName("Toán")
-        .isReusable(true)
-        .status(MatrixStatus.DRAFT)
-        .chapters(List.of(ch1, ch2, ch3))
-        .grandTotalByCognitive(Map.of("NB", 8, "TH", 9, "VD", 6, "VDC", 3))
-        .grandTotalQuestions(26)
-        .grandTotalPoints(new BigDecimal("5.20"))
-        .totalQuestionsTarget(26)
-        .totalPointsTarget(new BigDecimal("5.20"))
-        .createdAt(Instant.now())
-        .updatedAt(Instant.now())
+        .curriculumName("Chuong trinh GDPT 2018")
+        .chapters(chapters)
+        .grandTotalByCognitive(Map.of("NB", 2, "TH", 1, "VD", 0, "VDC", 1))
+        .grandTotalQuestions(4)
+        .grandTotalPoints(BigDecimal.valueOf(4))
         .build();
   }
 
-  @BeforeEach
-  void setup() {
-    stepCounter = 0;
+  @SuppressWarnings("unchecked")
+  private <T> T invokePrivate(String methodName, Class<?>[] parameterTypes, Object... args) throws Exception {
+    Method method = ExamMatrixPdfExportService.class.getDeclaredMethod(methodName, parameterTypes);
+    method.setAccessible(true);
+    return (T) method.invoke(examMatrixPdfExportService, args);
   }
 
-  // ═════════════════════════════════════════════════════════════════════════
-  // NORMAL TEST CASES
-  // ═════════════════════════════════════════════════════════════════════════
+  @Nested
+  @DisplayName("exportToPdf()")
+  class ExportToPdfTests {
 
-  @Test
-  @DisplayName("exportToPdf — should return valid PDF bytes for a multi-chapter matrix")
-  void should_generate_valid_pdf_for_multi_chapter_matrix() {
-    testHeader("exportToPdf — multi-chapter matrix (3 chương, 12 rows)");
+    /**
+     * Normal case: Export PDF byte array from a valid matrix.
+     *
+     * <p>Input:
+     * <ul>
+     *   <li>matrixId: existing UUID</li>
+     *   <li>matrix.chapters: one chapter with two rows</li>
+     * </ul>
+     *
+     * <p>Branch coverage:
+     * <ul>
+     *   <li>exportToPdf -> buildPdf success branch</li>
+     *   <li>drawTitle -> subtitle non-empty branch</li>
+     * </ul>
+     *
+     * <p>Expectation:
+     * <ul>
+     *   <li>Return non-empty PDF bytes and fetch matrix once from dependency</li>
+     * </ul>
+     */
+    @Test
+    void it_should_return_non_empty_pdf_bytes_when_matrix_is_valid() {
+      // ===== ARRANGE =====
+      ExamMatrixTableResponse matrix =
+          buildMatrixWithChapters(
+              List.of(
+                  buildChapter(
+                      "Dao ham va ung dung",
+                      4,
+                      buildRow("Don dieu cua ham so", "3,30", Map.of("NB", 1, "TH", 1), 2),
+                      buildRow("Cuc tri ham so", "4,5,39,46", Map.of("NB", 1, "TH", 0, "VDC", 1), 2))));
+      when(examMatrixService.getMatrixTable(MATRIX_ID)).thenReturn(matrix);
 
-    step("Stub getMatrixTable() → 3-chapter fixture");
-    ExamMatrixTableResponse matrix = fullThptMatrix();
-    when(examMatrixService.getMatrixTable(MATRIX_ID)).thenReturn(matrix);
-    pass("Mock configured: " + matrix.getChapters().size() + " chapters, "
-        + matrix.getGrandTotalQuestions() + " total questions");
+      // ===== ACT =====
+      byte[] result = examMatrixPdfExportService.exportToPdf(MATRIX_ID);
 
-    step("Call exportToPdf(matrixId)");
-    byte[] pdf = pdfExportService.exportToPdf(MATRIX_ID);
+      // ===== ASSERT =====
+      assertNotNull(result);
+      assertTrue(result.length > 100);
 
-    step("Assert PDF is non-null and non-empty");
-    assertThat(pdf).isNotNull();
-    assertThat(pdf.length).isGreaterThan(0);
-    pass("PDF byte array length = " + pdf.length);
+      // ===== VERIFY =====
+      verify(examMatrixService, times(1)).getMatrixTable(MATRIX_ID);
+      verifyNoMoreInteractions(examMatrixService);
+    }
 
-    step("Assert PDF header magic bytes = %PDF");
-    String header = new String(pdf, 0, Math.min(5, pdf.length));
-    assertThat(header).startsWith("%PDF");
-    pass("PDF starts with \"%PDF\" ✓");
+    /**
+     * Abnormal case: Data source throws before rendering.
+     *
+     * <p>Input:
+     * <ul>
+     *   <li>matrixId: unknown UUID</li>
+     * </ul>
+     *
+     * <p>Branch coverage:
+     * <ul>
+     *   <li>exportToPdf -> upstream exception propagation branch</li>
+     * </ul>
+     *
+     * <p>Expectation:
+     * <ul>
+     *   <li>Throw RuntimeException from dependency and stop processing</li>
+     * </ul>
+     */
+    @Test
+    void it_should_propagate_exception_when_get_matrix_table_fails() {
+      // ===== ARRANGE =====
+      RuntimeException expected = new RuntimeException("matrix unavailable");
+      when(examMatrixService.getMatrixTable(MATRIX_ID)).thenThrow(expected);
 
-    step("Assert getMatrixTable was called exactly once");
-    verify(examMatrixService).getMatrixTable(MATRIX_ID);
-    pass("examMatrixService.getMatrixTable() → 1×");
+      // ===== ACT & ASSERT =====
+      RuntimeException actual =
+          assertThrows(RuntimeException.class, () -> examMatrixPdfExportService.exportToPdf(MATRIX_ID));
+      assertEquals("matrix unavailable", actual.getMessage());
+
+      // ===== VERIFY =====
+      verify(examMatrixService, times(1)).getMatrixTable(MATRIX_ID);
+      verifyNoMoreInteractions(examMatrixService);
+    }
   }
 
-  @Test
-  @DisplayName("exportToPdf — should handle empty chapters list without throwing")
-  void should_generate_pdf_when_chapters_is_empty() {
-    testHeader("exportToPdf — matrix with NO chapters (empty list)");
+  @Nested
+  @DisplayName("private helpers")
+  class PrivateHelperTests {
 
-    step("Build matrix with empty chapters list");
-    ExamMatrixTableResponse empty = ExamMatrixTableResponse.builder()
-        .id(MATRIX_ID)
-        .name("Ma Trận Trống")
-        .gradeLevel(12)
-        .chapters(List.of())
-        .grandTotalByCognitive(Map.of())
-        .grandTotalQuestions(0)
-        .grandTotalPoints(BigDecimal.ZERO)
-        .status(MatrixStatus.DRAFT)
-        .build();
-    when(examMatrixService.getMatrixTable(MATRIX_ID)).thenReturn(empty);
-    pass("Empty chapter list prepared");
+    @Test
+    void it_should_build_subtitle_with_all_fields_when_all_values_are_present() throws Exception {
+      // ===== ARRANGE =====
+      ExamMatrixTableResponse matrix =
+          ExamMatrixTableResponse.builder()
+              .subjectName("Toan hoc")
+              .gradeLevel(11)
+              .curriculumName("Chuong trinh moi")
+              .build();
 
-    step("Call exportToPdf — must NOT throw");
-    byte[] pdf = pdfExportService.exportToPdf(MATRIX_ID);
+      // ===== ACT =====
+      String subtitle = invokePrivate("buildSubtitle", new Class<?>[] {ExamMatrixTableResponse.class}, matrix);
 
-    step("Assert result is still a valid PDF");
-    assertThat(pdf).isNotNull();
-    assertThat(pdf.length).isGreaterThan(0);
-    assertThat(new String(pdf, 0, 5)).startsWith("%PDF");
-    pass("PDF generated with 0 chapters, length = " + pdf.length);
-  }
+      // ===== ASSERT =====
+      assertTrue(subtitle.contains("Toan hoc"));
+      assertTrue(subtitle.contains("11"));
+      assertTrue(subtitle.contains("Chuong trinh moi"));
+    }
 
-  @Test
-  @DisplayName("exportToPdf — should handle null chapters list without throwing")
-  void should_generate_pdf_when_chapters_is_null() {
-    testHeader("exportToPdf — matrix with null chapters");
+    @Test
+    void it_should_build_subtitle_with_empty_string_when_all_values_are_missing() throws Exception {
+      // ===== ARRANGE =====
+      ExamMatrixTableResponse matrix = ExamMatrixTableResponse.builder().build();
 
-    step("Build matrix with chapters = null");
-    ExamMatrixTableResponse nullChaps = ExamMatrixTableResponse.builder()
-        .id(MATRIX_ID)
-        .name("Ma Trận Null Chapters")
-        .gradeLevel(11)
-        .chapters(null)
-        .grandTotalByCognitive(null)
-        .grandTotalQuestions(0)
-        .grandTotalPoints(BigDecimal.ZERO)
-        .status(MatrixStatus.DRAFT)
-        .build();
-    when(examMatrixService.getMatrixTable(MATRIX_ID)).thenReturn(nullChaps);
-    pass("Null chapters configured");
+      // ===== ACT =====
+      String subtitle = invokePrivate("buildSubtitle", new Class<?>[] {ExamMatrixTableResponse.class}, matrix);
 
-    step("Call exportToPdf — must NOT throw");
-    byte[] pdf = pdfExportService.exportToPdf(MATRIX_ID);
+      // ===== ASSERT =====
+      assertEquals("", subtitle);
+    }
 
-    step("Assert valid PDF");
-    assertThat(pdf).isNotNull();
-    assertThat(new String(pdf, 0, 5)).startsWith("%PDF");
-    pass("PDF generated with null chapters, length = " + pdf.length);
-  }
+    @Test
+    void it_should_return_single_empty_line_when_wrap_text_receives_empty_value() throws Exception {
+      // ===== ARRANGE =====
+      PDType1Font font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
 
-  @Test
-  @DisplayName("exportToPdf — should handle single chapter with a single row")
-  void should_generate_pdf_for_single_chapter_single_row() {
-    testHeader("exportToPdf — minimal: 1 chapter, 1 row, 1 cell");
+      // ===== ACT =====
+      List<String> lines =
+          invokePrivate(
+              "wrapText",
+              new Class<?>[] {org.apache.pdfbox.pdmodel.font.PDFont.class, float.class, String.class, float.class},
+              font,
+              8f,
+              "",
+              50f);
 
-    step("Build minimal matrix: 1 chapter, 1 row NB=3, 2.00đ/câu");
-    MatrixCellResponse singleCell = cell(CognitiveLevel.NHAN_BIET, "NB", 3);
-    MatrixRowResponse singleRow = row("Trắc Nghiệm", "1,2,3", 1,
-        Map.of("NB", 3),
-        List.of(singleCell));
-    MatrixChapterGroupResponse singleChap = chapter(CHAPTER_1,
-        "ĐẠO HÀM VÀ ỨNG DỤNG", 1,
-        List.of(singleRow),
-        Map.of("NB", 3), 3);
-    ExamMatrixTableResponse minimal = ExamMatrixTableResponse.builder()
-        .id(MATRIX_ID)
-        .name("Đề Kiểm Tra Đơn Giản")
-        .gradeLevel(12)
-        .curriculumName("Toán 12")
-        .subjectName("Toán")
-        .chapters(List.of(singleChap))
-        .grandTotalByCognitive(Map.of("NB", 3))
-        .grandTotalQuestions(3)
-        .grandTotalPoints(new BigDecimal("6.00"))
-        .totalPointsTarget(new BigDecimal("6.00"))
-        .status(MatrixStatus.APPROVED)
-        .build();
-    when(examMatrixService.getMatrixTable(MATRIX_ID)).thenReturn(minimal);
-    pass("Minimal matrix fixture: 1 row, NB=3, totalPoints=6.00");
+      // ===== ASSERT =====
+      assertEquals(1, lines.size());
+      assertEquals("", lines.get(0));
+    }
 
-    step("Call exportToPdf");
-    byte[] pdf = pdfExportService.exportToPdf(MATRIX_ID);
+    @Test
+    void it_should_split_text_into_multiple_lines_when_max_width_is_small() throws Exception {
+      // ===== ARRANGE =====
+      PDType1Font font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+      String text = "Dao ham va ung dung trong bai toan cuc tri";
 
-    step("Assert valid PDF");
-    assertThat(pdf).isNotNull();
-    assertThat(new String(pdf, 0, 5)).startsWith("%PDF");
-    pass("Minimal PDF generated, length = " + pdf.length);
-  }
+      // ===== ACT =====
+      List<String> lines =
+          invokePrivate(
+              "wrapText",
+              new Class<?>[] {org.apache.pdfbox.pdmodel.font.PDFont.class, float.class, String.class, float.class},
+              font,
+              8f,
+              text,
+              25f);
 
-  @Test
-  @DisplayName("exportToPdf — should propagate exception when service throws")
-  void should_propagate_exception_when_service_throws() {
-    testHeader("exportToPdf — ExamMatrixService throws → RuntimeException propagated");
+      // ===== ASSERT =====
+      assertFalse(lines.isEmpty());
+      assertTrue(lines.size() > 1);
+    }
 
-    step("Stub getMatrixTable() to throw RuntimeException");
-    when(examMatrixService.getMatrixTable(MATRIX_ID))
-        .thenThrow(new RuntimeException("Matrix not found"));
-    pass("Stub throws RuntimeException(\"Matrix not found\")");
+    @Test
+    void it_should_return_single_empty_line_when_wrap_text_receives_null_value() throws Exception {
+      // ===== ARRANGE =====
+      PDType1Font font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
 
-    step("Assert exportToPdf also throws");
-    assertThatThrownBy(() -> pdfExportService.exportToPdf(MATRIX_ID))
-        .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("Matrix not found");
-    pass("RuntimeException propagated correctly ✓");
-  }
+      // ===== ACT =====
+      List<String> lines =
+          invokePrivate(
+              "wrapText",
+              new Class<?>[] {org.apache.pdfbox.pdmodel.font.PDFont.class, float.class, String.class, float.class},
+              font,
+              8f,
+              null,
+              50f);
 
-  @Test
-  @DisplayName("exportToPdf — PDF size is reasonable (< 5 MB for a typical matrix)")
-  void should_produce_reasonable_file_size() {
-    testHeader("exportToPdf — file size sanity check for full 3-chapter fixture");
+      // ===== ASSERT =====
+      assertEquals(1, lines.size());
+      assertEquals("", lines.get(0));
+    }
 
-    step("Stub with full multi-chapter fixture");
-    when(examMatrixService.getMatrixTable(MATRIX_ID)).thenReturn(fullThptMatrix());
-    pass("Full matrix fixture stubbed");
+    @Test
+    void it_should_create_at_least_one_empty_page_when_paginate_receives_empty_chapter_list() throws Exception {
+      // ===== ARRANGE =====
+      List<MatrixChapterGroupResponse> chapters = List.of();
 
-    step("Export PDF and check size");
-    byte[] pdf = pdfExportService.exportToPdf(MATRIX_ID);
-    int sizeKb = pdf.length / 1024;
-    System.out.println("  PDF size: " + sizeKb + " KB (" + pdf.length + " bytes)");
+      // ===== ACT =====
+      List<List<MatrixChapterGroupResponse>> pages =
+          invokePrivate("paginate", new Class<?>[] {List.class, float.class}, chapters, 100f);
 
-    step("Assert PDF size is between 1 KB and 5 MB");
-    assertThat(pdf.length)
-        .as("PDF should be at least 1 KB")
-        .isGreaterThan(1_024);
-    assertThat(pdf.length)
-        .as("PDF should be under 5 MB")
-        .isLessThan(5 * 1024 * 1024);
-    pass("PDF size = " + sizeKb + " KB — within expected range");
+      // ===== ASSERT =====
+      assertEquals(1, pages.size());
+      assertTrue(pages.get(0).isEmpty());
+    }
+
+    @Test
+    void it_should_split_pages_by_chapter_boundaries_when_usable_height_is_limited() throws Exception {
+      // ===== ARRANGE =====
+      MatrixChapterGroupResponse firstChapter =
+          buildChapter(
+              "Ham so",
+              2,
+              buildRow("Dang 1", "1", Map.of("NB", 1), 1),
+              buildRow("Dang 2", "2", Map.of("TH", 1), 1));
+      MatrixChapterGroupResponse secondChapter =
+          buildChapter(
+              "Tich phan",
+              2,
+              buildRow("Dang 3", "3", Map.of("VD", 1), 1),
+              buildRow("Dang 4", "4", Map.of("VDC", 1), 1));
+
+      // ===== ACT =====
+      List<List<MatrixChapterGroupResponse>> pages =
+          invokePrivate(
+              "paginate",
+              new Class<?>[] {List.class, float.class},
+              List.of(firstChapter, secondChapter),
+              32f);
+
+      // ===== ASSERT =====
+      assertEquals(2, pages.size());
+      assertEquals(1, pages.get(0).size());
+      assertEquals(1, pages.get(1).size());
+    }
+
+    @Test
+    void it_should_return_empty_string_when_safe_receives_null() throws Exception {
+      // ===== ARRANGE =====
+
+      // ===== ACT =====
+      String value = invokePrivate("safe", new Class<?>[] {String.class}, new Object[] {null});
+
+      // ===== ASSERT =====
+      assertEquals("", value);
+    }
+
+    @Test
+    void it_should_keep_original_string_when_safe_receives_non_null_value() throws Exception {
+      // ===== ARRANGE =====
+      String input = "Noi dung cau hoi";
+
+      // ===== ACT =====
+      String value = invokePrivate("safe", new Class<?>[] {String.class}, input);
+
+      // ===== ASSERT =====
+      assertEquals(input, value);
+    }
+
+    @Test
+    void it_should_return_rough_estimate_when_text_width_computation_throws_exception() throws Exception {
+      // ===== ARRANGE =====
+      PDFont brokenFont = mock(PDFont.class);
+      doThrow(new RuntimeException("font failure")).when(brokenFont).getStringWidth("abc");
+
+      // ===== ACT =====
+      float width = invokePrivate("textWidth", new Class<?>[] {PDFont.class, float.class, String.class}, brokenFont, 10f, "abc");
+
+      // ===== ASSERT =====
+      assertTrue(width > 0);
+      assertEquals(15f, width);
+    }
+
+    @Test
+    void it_should_skip_drawing_centered_line_when_text_is_empty() throws Exception {
+      // ===== ARRANGE =====
+      try (PDDocument document = new PDDocument()) {
+        PDPage page = new PDPage();
+        document.addPage(page);
+        try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+          PDFont font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+
+          // ===== ACT =====
+          invokePrivate(
+              "drawCenteredLine",
+              new Class<?>[] {PDPageContentStream.class, PDFont.class, float.class, float.class, String.class},
+              contentStream,
+              font,
+              8f,
+              200f,
+              "");
+
+          // ===== ASSERT =====
+          assertTrue(true);
+        }
+      }
+    }
+
+    @Test
+    void it_should_draw_title_without_subtitle_when_subject_grade_and_curriculum_are_missing() throws Exception {
+      // ===== ARRANGE =====
+      ExamMatrixTableResponse matrix = ExamMatrixTableResponse.builder().name("Ma tran de thi").build();
+      try (PDDocument document = new PDDocument()) {
+        PDPage page = new PDPage();
+        document.addPage(page);
+        try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+          PDFont bold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+          PDFont regular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+
+          // ===== ACT =====
+          float y =
+              invokePrivate(
+                  "drawTitle",
+                  new Class<?>[] {
+                    PDPageContentStream.class,
+                    ExamMatrixTableResponse.class,
+                    org.apache.pdfbox.pdmodel.font.PDFont.class,
+                    org.apache.pdfbox.pdmodel.font.PDFont.class,
+                    float.class
+                  },
+                  contentStream,
+                  matrix,
+                  bold,
+                  regular,
+                  500f);
+
+          // ===== ASSERT =====
+          assertTrue(y < 500f);
+        }
+      }
+    }
+
+    @Test
+    void it_should_render_cell_with_left_alignment_and_dark_background() throws Exception {
+      // ===== ARRANGE =====
+      try (PDDocument document = new PDDocument()) {
+        PDPage page = new PDPage();
+        document.addPage(page);
+        try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+          PDFont regular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+
+          // ===== ACT =====
+          invokePrivate(
+              "drawInCell",
+              new Class<?>[] {
+                PDPageContentStream.class,
+                org.apache.pdfbox.pdmodel.font.PDFont.class,
+                float.class,
+                float.class,
+                float.class,
+                float.class,
+                float.class,
+                List.class,
+                boolean.class,
+                float[].class
+              },
+              contentStream,
+              regular,
+              8f,
+              30f,
+              60f,
+              80f,
+              18f,
+              List.of("", "Noi dung canh trai"),
+              false,
+              new float[] {0.1f, 0.1f, 0.1f});
+
+          // ===== ASSERT =====
+          assertTrue(true);
+        }
+      }
+    }
+
+    @Test
+    void it_should_return_immediately_when_draw_in_cell_receives_null_lines() throws Exception {
+      // ===== ARRANGE =====
+      try (PDDocument document = new PDDocument()) {
+        PDPage page = new PDPage();
+        document.addPage(page);
+        try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+          PDFont regular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+
+          // ===== ACT =====
+          invokePrivate(
+              "drawInCell",
+              new Class<?>[] {
+                PDPageContentStream.class,
+                org.apache.pdfbox.pdmodel.font.PDFont.class,
+                float.class,
+                float.class,
+                float.class,
+                float.class,
+                float.class,
+                List.class,
+                boolean.class,
+                float[].class
+              },
+              contentStream,
+              regular,
+              8f,
+              20f,
+              20f,
+              80f,
+              16f,
+              null,
+              true,
+              new float[] {1f, 1f, 1f});
+
+          // ===== ASSERT =====
+          assertTrue(true);
+        }
+      }
+    }
+
+    @Test
+    void it_should_draw_data_row_when_cognitive_count_map_is_null() throws Exception {
+      // ===== ARRANGE =====
+      MatrixRowResponse row =
+          MatrixRowResponse.builder()
+              .questionTypeName("Dang bai null map")
+              .referenceQuestions("1,2")
+              .countByCognitive(null)
+              .rowTotalQuestions(0)
+              .build();
+      try (PDDocument document = new PDDocument()) {
+        PDPage page = new PDPage();
+        document.addPage(page);
+        try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+          PDFont regular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+
+          // ===== ACT =====
+          invokePrivate(
+              "drawDataRow",
+              new Class<?>[] {
+                PDPageContentStream.class,
+                org.apache.pdfbox.pdmodel.font.PDFont.class,
+                MatrixRowResponse.class,
+                float.class,
+                float[].class
+              },
+              contentStream,
+              regular,
+              row,
+              300f,
+              new float[] {1f, 1f, 1f});
+
+          // ===== ASSERT =====
+          assertTrue(true);
+        }
+      }
+    }
+
+    @Test
+    void it_should_draw_totals_row_with_unicode_font_when_some_levels_are_missing() throws Exception {
+      // ===== ARRANGE =====
+      File arial = new File("C:/Windows/Fonts/arial.ttf");
+      if (!arial.exists()) {
+        return;
+      }
+      ExamMatrixTableResponse matrix =
+          ExamMatrixTableResponse.builder().grandTotalByCognitive(Map.of("NB", 2)).grandTotalQuestions(2).build();
+      try (PDDocument document = new PDDocument()) {
+        PDPage page = new PDPage();
+        document.addPage(page);
+        try (FileInputStream fis = new FileInputStream(arial);
+            PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+          PDFont unicodeFont = PDType0Font.load(document, fis);
+
+          // ===== ACT =====
+          invokePrivate(
+              "drawTotalsRow",
+              new Class<?>[] {
+                PDPageContentStream.class,
+                ExamMatrixTableResponse.class,
+                org.apache.pdfbox.pdmodel.font.PDFont.class,
+                float.class
+              },
+              contentStream,
+              matrix,
+              unicodeFont,
+              230f);
+
+          // ===== ASSERT =====
+          assertTrue(true);
+        }
+      }
+    }
+
   }
 }

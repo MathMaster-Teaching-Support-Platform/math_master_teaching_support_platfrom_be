@@ -1408,6 +1408,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     UUID subjectId = chapter.getSubjectId();
     String subjectName = null;
     String schoolGradeName = null;
+    Integer gradeLevel = null;
     if (subjectId != null) {
       Subject subject =
           subjectRepository
@@ -1416,8 +1417,10 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               .orElse(null);
       if (subject != null) {
         subjectName = subject.getName();
+        // Get grade level from SchoolGrade relationship
         if (subject.getSchoolGrade() != null) {
           schoolGradeName = subject.getSchoolGrade().getName();
+          gradeLevel = subject.getSchoolGrade().getGradeLevel();
         }
       }
     }
@@ -1428,6 +1431,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         && !hasRole(PredefinedRole.ADMIN_ROLE)) {
       throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
     }
+
+    // Matrix can have multiple grades and subjects - no validation needed
 
     ExamMatrixRow row =
         ExamMatrixRow.builder()

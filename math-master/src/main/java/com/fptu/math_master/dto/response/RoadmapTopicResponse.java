@@ -42,6 +42,9 @@ public class RoadmapTopicResponse {
   @Schema(description = "Visual order in the roadmap (guidance only, not a lock gate)")
   private Integer sequenceOrder;
 
+  @Schema(description = "Entry test score checkpoint of this topic")
+  private Double mark;
+
   @Schema(description = "The courses linked to this topic")
   private List<RoadmapTopicCourseResponse> courses;
 

@@ -98,4 +98,19 @@ public class CourseLessonController {
     courseLessonService.reorderLessons(courseId, request);
     return ApiResponse.<Void>builder().message("Lessons reordered successfully").build();
   }
+
+  @Operation(
+      summary = "Admin: Get video URL for course review",
+      description = "Allows admins to access lesson videos for course approval review"
+  )
+  @GetMapping("/admin/{courseLessonId}/video-url")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<String> getAdminVideoUrl(
+      @PathVariable UUID courseId,
+      @PathVariable UUID courseLessonId) {
+    log.info("GET /courses/{}/lessons/admin/{}/video-url - Admin video access", courseId, courseLessonId);
+    return ApiResponse.<String>builder()
+        .result(courseLessonService.getAdminVideoUrl(courseId, courseLessonId))
+        .build();
+  }
 }

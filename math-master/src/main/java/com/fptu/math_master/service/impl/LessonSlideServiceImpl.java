@@ -29,7 +29,9 @@ import com.fptu.math_master.repository.LessonSlideGeneratedFileRepository;
 import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SlideTemplateRepository;
 import com.fptu.math_master.repository.SubjectRepository;
+import com.fptu.math_master.dto.request.LatexRenderRequest;
 import com.fptu.math_master.service.GeminiService;
+import com.fptu.math_master.service.LatexRenderService;
 import com.fptu.math_master.service.LessonSlideService;
 import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.service.UserSubscriptionService;
@@ -39,6 +41,7 @@ import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import java.awt.Dimension;
 import java.time.Instant;
@@ -50,7 +53,12 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.text.Normalizer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -123,6 +131,20 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private static final String JPG_MIME = "image/jpeg";
   private static final String WEBP_MIME = "image/webp";
 
+  private static final String QUICKLATEX_PREAMBLE =
+      "\\usepackage[utf8]{inputenc}\n"
+          + "\\usepackage[T5]{fontenc}\n"
+          + "\\usepackage{lmodern}\n"
+          + "\\usepackage{tikz}\n"
+          + "\\usepackage{pgfplots}\n"
+          + "\\usepackage{tkz-euclide}\n"
+          + "\\usepackage{tkz-tab}\n"
+          + "\\usepackage{amsmath}\n"
+          + "\\usepackage{amssymb}\n"
+          + "\\pgfplotsset{compat=newest}";
+  private static final HttpClient IMAGE_HTTP_CLIENT =
+      HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+
   LessonRepository lessonRepository;
   ChapterRepository chapterRepository;
   SchoolGradeRepository schoolGradeRepository;
@@ -132,6 +154,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   MinioClient minioClient;
   MinioProperties minioProperties;
   GeminiService geminiService;
+  LatexRenderService latexRenderService;
   UserSubscriptionService userSubscriptionService;
   UploadService uploadService;
   ObjectMapper objectMapper;
@@ -183,7 +206,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     LessonSlideOutputFormat outputFormat = resolveOutputFormat(request.getOutputFormat());
     DeckSections deckSections =
         buildDeckSectionsWithAi(lesson, request.getAdditionalPrompt(), outputFormat, slideCount);
-    List<LessonSlideJsonItemResponse> slides = buildPreviewSlides(deckSections, slideCount);
+    List<LessonSlideJsonItemResponse> slides = buildPreviewSlides(deckSections, slideCount, outputFormat);
 
     return LessonSlideGeneratedContentResponse.builder()
         .subjectId(subject.getId())
@@ -551,7 +574,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             .toList();
 
     byte[] templateBytes = readObject(template.getBucketName(), template.getObjectKey());
-    byte[] generated = injectTemplateWithJson(templateBytes, lesson, sortedSlides);
+    LessonSlideOutputFormat outputFormat =
+        request.getOutputFormat() != null
+            ? request.getOutputFormat()
+            : LessonSlideOutputFormat.PLAIN_TEXT;
+    byte[] generated = injectTemplateWithJson(templateBytes, lesson, sortedSlides, outputFormat);
     String outputName = buildOutputFileName(lesson.getTitle());
     persistGeneratedSlideFile(lesson, template, generated, outputName);
     return new BinaryFileData(generated, outputName, PPTX_MIME);
@@ -640,6 +667,37 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     generatedFile.setIsPublic(Boolean.FALSE);
     generatedFile.setPublishedAt(null);
     return toGeneratedFileResponse(lessonSlideGeneratedFileRepository.save(generatedFile));
+  }
+
+  @Override
+  @Transactional
+  public void deleteGeneratedSlide(UUID generatedFileId) {
+    validateTeacherRole();
+    LessonSlideGeneratedFile generatedFile =
+        lessonSlideGeneratedFileRepository
+            .findByIdAndNotDeleted(generatedFileId)
+            .orElseThrow(() -> new AppException(ErrorCode.GENERATED_SLIDE_NOT_FOUND));
+
+    validateGeneratedFileOwnerOrAdmin(generatedFile);
+
+    // Soft-delete the DB record.
+    generatedFile.setDeletedAt(Instant.now());
+    lessonSlideGeneratedFileRepository.save(generatedFile);
+
+    // Best-effort deletion of the actual object from MinIO.
+    try {
+      minioClient.removeObject(
+          RemoveObjectArgs.builder()
+              .bucket(generatedFile.getBucketName())
+              .object(generatedFile.getObjectKey())
+              .build());
+    } catch (Exception ex) {
+      log.warn(
+          "Failed to remove MinIO object during slide deletion. bucket={}, key={}: {}",
+          generatedFile.getBucketName(),
+          generatedFile.getObjectKey(),
+          ex.getMessage());
+    }
   }
 
   @Override
@@ -800,6 +858,12 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         resolveImageContentTypeFromObjectKey(generatedFile.getThumbnail()));
   }
 
+  @Override
+  public String renderSlidePreview(String heading, String content) {
+    return renderSlidePreviewUrl(
+        normalizeAiGeneratedText(heading), normalizeAiGeneratedText(content));
+  }
+
   private byte[] injectTemplate(byte[] templateBytes, DeckSections deckSections) {
     try (XMLSlideShow slideshow = new XMLSlideShow(new ByteArrayInputStream(templateBytes));
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -836,6 +900,35 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       replaced = replaced.replace(entry.getKey(), entry.getValue());
     }
     return normalizeEscapedLineBreaks(replaced);
+  }
+
+  /** Replaces placeholder tags in every text shape of a slide. */
+  private void replacePlaceholdersInSlide(
+      XMLSlideShow slideshow, XSLFSlide slide, Map<String, String> values) {
+    replacePlaceholdersInSlideExcept(slideshow, slide, values, null);
+  }
+
+  /**
+   * Replaces placeholder tags in every text shape of a slide, skipping {@code excludeShape}.
+   * Pass {@code null} for {@code excludeShape} to process all shapes.
+   */
+  private void replacePlaceholdersInSlideExcept(
+      XMLSlideShow slideshow,
+      XSLFSlide slide,
+      Map<String, String> values,
+      XSLFTextShape excludeShape) {
+    List<XSLFShape> shapesSnapshot = new ArrayList<>(slide.getShapes());
+    for (XSLFShape shape : shapesSnapshot) {
+      if (shape instanceof XSLFTextShape textShape) {
+        if (textShape == excludeShape) continue;
+        String text = textShape.getText();
+        if (text == null || text.isBlank()) continue;
+        String replaced = replacePlaceholders(text, values);
+        if (!text.equals(replaced)) {
+          applyTextAndLatex(slideshow, slide, textShape, replaced);
+        }
+      }
+    }
   }
 
   private BinaryFileData convertPptxToPdf(byte[] pptxContent, String fileName) {
@@ -893,7 +986,16 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     if (value == null || value.isEmpty()) {
       return value;
     }
-    return value.replace("\\r\\n", "\n").replace("\\n", "\n");
+    return value
+        .replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        // Convert LaTeX line-break command \\ at the end of a line to a real newline.
+        // AI frequently appends \\ as a section/paragraph separator; keeping them raw
+        // causes the UI to display literal "\\" characters.
+        .replaceAll("(?m)\\\\\\\\\\h*$", "\n")
+        // Strip any remaining lone trailing backslash (single \).
+        .replaceAll("(?m)(?<!\\\\)\\\\(?!\\\\)\\h*$", "")
+        .trim();
   }
 
   private String normalizeLatexInput(String value) {
@@ -962,7 +1064,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   }
 
   private byte[] injectTemplateWithJson(
-      byte[] templateBytes, Lesson lesson, List<LessonSlideJsonItemRequest> slides) {
+      byte[] templateBytes,
+      Lesson lesson,
+      List<LessonSlideJsonItemRequest> slides,
+      LessonSlideOutputFormat outputFormat) {
     try (XMLSlideShow slideshow = new XMLSlideShow(new ByteArrayInputStream(templateBytes));
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
 
@@ -974,30 +1079,48 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       }
 
       if (requestedSlideCount > templateSlideCount) {
-        log.warn(
-            "Template slide count is insufficient. templateSlides={}, requestedSlides={}",
-            templateSlideCount,
-            requestedSlideCount);
-        throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+        // Template has fewer slides than requested. Clone the first MAIN_CONTENT slide
+        // (index 3 = slide 4 in a 10-slide template) to fill the gap.
+        // The clones are inserted right after the existing MAIN_CONTENT block so that
+        // EXAMPLE / PRACTICE / SUMMARY / CLOSING remain at the tail.
+        int extraNeeded = requestedSlideCount - templateSlideCount;
+        // Index 3 = MAIN_CONTENT slide 1 (0-based). Guard: use last slide if template < 4 slides.
+        int contentTemplateIndex = Math.min(3, templateSlideCount - 1);
+        XSLFSlide contentTemplate = slideshow.getSlides().get(contentTemplateIndex);
+        for (int extra = 0; extra < extraNeeded; extra++) {
+          XSLFSlide newSlide = slideshow.createSlide();
+          newSlide.importContent(contentTemplate);
+          // Insert right after contentTemplateIndex (shift subsequent extras forward).
+          slideshow.setSlideOrder(newSlide, contentTemplateIndex + 1 + extra);
+        }
+        templateSlideCount = slideshow.getSlides().size(); // now == requestedSlideCount
+        log.info(
+            "Cloned {} extra MAIN_CONTENT slide(s) from template index {}. Total slides now: {}",
+            extraNeeded, contentTemplateIndex, templateSlideCount);
       }
+
+      boolean useFullLatexImage = outputFormat == LessonSlideOutputFormat.LATEX;
 
       int applyCount = requestedSlideCount;
       for (int i = 0; i < applyCount; i++) {
         XSLFSlide slide = slideshow.getSlides().get(i);
         LessonSlideJsonItemRequest item = slides.get(i);
+
         Map<String, String> slideValues = buildJsonSlidePlaceholders(item, lesson);
-        List<XSLFShape> shapesSnapshot = new ArrayList<>(slide.getShapes());
-        for (XSLFShape shape : shapesSnapshot) {
-          if (shape instanceof XSLFTextShape textShape) {
-            String text = textShape.getText();
-            if (text == null || text.isBlank()) {
-              continue;
-            }
-            String replaced = replacePlaceholders(text, slideValues);
-            if (!text.equals(replaced)) {
-              applyTextAndLatex(slideshow, slide, textShape, replaced);
-            }
-          }
+
+        if (useFullLatexImage) {
+          // Step 1 (LATEX): Replace placeholders only on title/decoration shapes.
+          // The main content shape is intentionally skipped here — step 2 will render
+          // heading+content as a full PNG and inject it, so we must NOT pre-fill that
+          // shape with text (which would cause text and image to appear simultaneously).
+          XSLFTextShape contentShape = findLargestTextShape(slide);
+          replacePlaceholdersInSlideExcept(slideshow, slide, slideValues, contentShape);
+
+          // Step 2 (LATEX): Render entire content as one PNG image and inject it.
+          applySlideAsFullLatexImage(slideshow, slide, item);
+        } else {
+          // PLAIN_TEXT / HYBRID: replace all placeholder tags in every shape.
+          replacePlaceholdersInSlide(slideshow, slide, slideValues);
         }
       }
 
@@ -1016,6 +1139,291 @@ public class LessonSlideServiceImpl implements LessonSlideService {
           ex.getMessage(),
           ex);
       throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+    }
+  }
+
+  /**
+   * Renders the entire content of a slide (heading + body LaTeX/TikZ) as a single PNG image via
+   * QuickLaTeX, then injects that image into the largest content text-shape area of the slide,
+   * hiding the original text shape. This enables full geometry (TikZ) rendering in PPTX output.
+   */
+  private void applySlideAsFullLatexImage(
+      XMLSlideShow slideshow, XSLFSlide slide, LessonSlideJsonItemRequest item) {
+
+    String heading = normalizeAiGeneratedText(item.getHeading());
+    String content = normalizeAiGeneratedText(item.getContent());
+
+    // Find the largest text shape that holds body content — we'll replace it with the image.
+    XSLFTextShape targetShape = findLargestTextShape(slide);
+    if (targetShape == null) {
+      log.warn("No usable text shape found in slide {} for full-LaTeX injection", item.getSlideNumber());
+      return;
+    }
+
+    byte[] imageBytes = renderSlideAsFullLatexImage(heading, content);
+    if (imageBytes.length == 0) {
+      // Render failed — placeholder text was already replaced by the normal loop in step 1.
+      log.debug("LATEX render returned empty bytes for slide {}, keeping replaced text", item.getSlideNumber());
+      return;
+    }
+
+    Rectangle2D anchor = targetShape.getAnchor();
+    if (anchor == null) {
+      log.warn("Text shape anchor is null for slide {}", item.getSlideNumber());
+      return;
+    }
+
+    // Clear the target shape safely: clearText() removes all paragraphs, but OOXML requires
+    // at least one <a:p> in a txBody — add an empty one to keep the XML valid.
+    targetShape.clearText();
+    targetShape.addNewTextParagraph();
+
+    try {
+      XSLFPictureData pictureData = slideshow.addPicture(imageBytes, PictureData.PictureType.PNG);
+      XSLFPictureShape pictureShape = slide.createPicture(pictureData);
+      // Expand width by 1 inch (72 pt) and height by 0.5 inch (36 pt) so the image
+      // fills the content area without clipping tall content.
+      Rectangle2D expandedAnchor = new Rectangle2D.Double(
+          anchor.getX(), anchor.getY(), anchor.getWidth() + 72.0, anchor.getHeight() + 36.0);
+      pictureShape.setAnchor(expandedAnchor);
+    } catch (Exception ex) {
+      log.warn("Failed to inject full-LaTeX image for slide {}: {}", item.getSlideNumber(), ex.getMessage());
+    }
+  }
+
+  /**
+   * Returns the text shape with the largest area that is likely the main content area.
+   * Skips shapes that are probably title shapes (small height).
+   */
+  // Placeholders that mark a shape as the main slide CONTENT area.
+  private static final List<String> CONTENT_PLACEHOLDER_KEYS = List.of(
+      "{{LESSON_CONTENT}}", "{{LESSON_SUMMARY}}", "{{SLIDE_CONTENT}}",
+      "{{LEARNING_OBJECTIVES}}", "{{ADDITIONAL_PROMPT}}");
+
+  /**
+   * Finds the best target shape for LATEX full-image injection.
+   *
+   * <p>Priority:
+   * <ol>
+   *   <li>A shape whose text contains a recognised content placeholder tag
+   *       ({@code {{LESSON_CONTENT}}}, {@code {{LESSON_SUMMARY}}}, etc.).
+   *   <li>Fallback: the text shape with the largest area that does NOT contain
+   *       {@code {{LESSON_TITLE}}} — so title shapes are never hijacked as content areas.
+   * </ol>
+   */
+  private XSLFTextShape findLargestTextShape(XSLFSlide slide) {
+    XSLFTextShape contentTagged = null;
+    XSLFTextShape largest = null;
+    double bestArea = 0;
+
+    for (XSLFShape shape : slide.getShapes()) {
+      if (!(shape instanceof XSLFTextShape ts)) continue;
+      Rectangle2D anchor = ts.getAnchor();
+      if (anchor == null) continue;
+
+      String text = safe(ts.getText());
+
+      // Prefer a shape explicitly tagged as a content area.
+      if (contentTagged == null) {
+        for (String key : CONTENT_PLACEHOLDER_KEYS) {
+          if (text.contains(key)) {
+            contentTagged = ts;
+            break;
+          }
+        }
+      }
+
+      // Track largest non-title shape as fallback.
+      if (!text.contains("{{LESSON_TITLE}}")) {
+        double area = anchor.getWidth() * anchor.getHeight();
+        if (area > bestArea) {
+          bestArea = area;
+          largest = ts;
+        }
+      }
+    }
+
+    return contentTagged != null ? contentTagged : largest;
+  }
+
+  /**
+   * Builds a self-contained LaTeX body combining heading and content, then renders it via
+   * QuickLaTeX (mode=1 for full-document support including TikZ geometry). Returns the PNG bytes.
+   */
+  private byte[] renderSlideAsFullLatexImage(String heading, String content) {
+    String imageUrl = renderSlidePreviewUrl(heading, content);
+    if (imageUrl == null) return new byte[0];
+    return downloadImageBytes(imageUrl);
+  }
+
+  /**
+   * Renders heading + content via QuickLaTeX and returns the hosted image URL.
+   * Returns null on failure.
+   */
+  private String renderSlidePreviewUrl(String heading, String content) {
+    String latexBody = buildLatexSlideBody(heading, content);
+    try {
+      LatexRenderRequest renderRequest =
+          LatexRenderRequest.builder()
+              .latex(latexBody)
+              .options(
+                  LatexRenderRequest.LatexRenderOptions.builder()
+                      .mode(1) // Full LaTeX body mode — supports TikZ, pgfplots, etc.
+                      .preamble(QUICKLATEX_PREAMBLE)
+                      .fontSize("14px")
+                      .build())
+              .build();
+      return latexRenderService.render(renderRequest);
+    } catch (Exception ex) {
+      log.warn("Full-LaTeX slide preview render failed (heading={}): {}", heading, ex.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Wraps heading and body content into a LaTeX snippet suitable for QuickLaTeX mode=1.
+   * Plain text lines are wrapped in \text{} so they render correctly alongside math/TikZ.
+   */
+  private String buildLatexSlideBody(String heading, String body) {
+    StringBuilder sb = new StringBuilder();
+    if (heading != null && !heading.isBlank()) {
+      sb.append("{\\Large\\textbf{").append(escapeLatexText(heading)).append("}}\\\\[6pt]\n");
+    }
+    if (body == null || body.isBlank()) {
+      return sb.toString().isBlank() ? "\\phantom{x}" : sb.toString();
+    }
+
+    // Verbatim path: emit the body as-is when it already uses LaTeX commands.
+    // This covers:
+    //   (a) explicit environments like \begin{itemize}...\end{itemize}
+    //   (b) bare \item or \textbf{} lines that AI emits without a surrounding environment
+    // Running these through escapeLatexText() would double-escape the backslashes and braces,
+    // producing broken output like "\{}item" instead of a rendered bullet.
+    boolean hasLatexCommands = body.contains("\\begin{")
+        || body.contains("\\item ")
+        || body.contains("\\item\n")
+        || body.contains("\\textbf{")
+        || body.contains("\\textit{")
+        || body.contains("\\section{")
+        || body.contains("\\subsection{");
+    if (hasLatexCommands) {
+      String latexBody = body.trim();
+      // Auto-wrap bare \item lines in an itemize environment if none is present.
+      if (!latexBody.contains("\\begin{") && latexBody.contains("\\item ")) {
+        latexBody = "\\begin{itemize}\n" + latexBody + "\n\\end{itemize}";
+      }
+      sb.append(latexBody).append("\n");
+      return sb.toString();
+    }
+
+    // Line-by-line processing for plain / inline-math content.
+    for (String line : body.split("\n")) {
+      String trimmed = line.trim();
+      if (trimmed.isEmpty()) {
+        sb.append("\\\\[4pt]\n");
+        continue;
+      }
+      if (isBlockLatexLine(trimmed)) {
+        sb.append(trimmed).append("\\\\[4pt]\n");
+      } else {
+        // Mixed line: might contain plain text, inline $...$, or both.
+        // Wrap text segments in \text{} and keep $...$ math segments as-is.
+        sb.append(buildMixedLatexLine(trimmed)).append("\\\\[4pt]\n");
+      }
+    }
+    return sb.toString();
+  }
+
+  /**
+   * Returns true only for block-level LaTeX constructs (environments, display math).
+   * Inline math ($...$) is handled by buildMixedLatexLine instead.
+   */
+  private boolean isBlockLatexLine(String line) {
+    return line.contains("\\begin{") || line.contains("\\end{")
+        || line.contains("\\[")
+        || line.contains("\\]");
+  }
+
+  /**
+   * Converts a line that may contain a mix of plain text and inline {@code $...$} math into
+   * a LaTeX fragment where text segments are wrapped in {@code \text{}} and math segments
+   * are emitted verbatim.
+   *
+   * <p>Examples:
+   * <ul>
+   *   <li>{@code "abc"} → {@code \text{abc}}
+   *   <li>{@code "Prove $a+b=c$"} → {@code \text{Prove }$a+b=c$}
+   *   <li>{@code "$x^2$ and $y^2$"} → {@code $x^2$\text{ and }$y^2$}
+   * </ul>
+   */
+  private String buildMixedLatexLine(String line) {
+    if (!line.contains("$")) {
+      return "\\text{" + escapeLatexText(line) + "}";
+    }
+    StringBuilder sb = new StringBuilder();
+    int i = 0;
+    boolean changed = false;
+    while (i < line.length()) {
+      int dollarStart = line.indexOf('$', i);
+      if (dollarStart == -1) {
+        // Remaining text
+        sb.append("\\text{").append(escapeLatexText(line.substring(i))).append("}");
+        changed = true;
+        break;
+      }
+      // Text before $
+      if (dollarStart > i) {
+        sb.append("\\text{").append(escapeLatexText(line.substring(i, dollarStart))).append("}");
+        changed = true;
+      }
+      // Find closing $
+      int dollarEnd = line.indexOf('$', dollarStart + 1);
+      if (dollarEnd == -1) {
+        // Unclosed $: treat everything from here as text
+        sb.append("\\text{").append(escapeLatexText(line.substring(dollarStart))).append("}");
+        changed = true;
+        break;
+      }
+      // Emit $...$ verbatim
+      sb.append(line, dollarStart, dollarEnd + 1);
+      i = dollarEnd + 1;
+    }
+    return changed ? sb.toString() : "\\text{" + escapeLatexText(line) + "}";
+  }
+
+  private String escapeLatexText(String text) {
+    return text
+        .replace("\\", "\\textbackslash{}")
+        .replace("&", "\\&")
+        .replace("%", "\\%")
+        .replace("$", "\\$")
+        .replace("#", "\\#")
+        .replace("_", "\\_")
+        .replace("{", "\\{")
+        .replace("}", "\\}")
+        .replace("~", "\\textasciitilde{}")
+        .replace("^", "\\textasciicircum{}");
+  }
+
+  /** Downloads the image at the given URL and returns its raw bytes, or empty array on failure. */
+  private byte[] downloadImageBytes(String imageUrl) {
+    try {
+      HttpRequest req =
+          HttpRequest.newBuilder()
+              .uri(URI.create(imageUrl))
+              .timeout(Duration.ofSeconds(15))
+              .GET()
+              .build();
+      HttpResponse<byte[]> response =
+          IMAGE_HTTP_CLIENT.send(req, HttpResponse.BodyHandlers.ofByteArray());
+      if (response.statusCode() >= 200 && response.statusCode() < 300) {
+        return response.body();
+      }
+      log.warn("Image download non-2xx: url={} status={}", imageUrl, response.statusCode());
+      return new byte[0];
+    } catch (Exception ex) {
+      log.warn("Failed to download image from {}: {}", imageUrl, ex.getMessage());
+      return new byte[0];
     }
   }
 
@@ -1210,21 +1618,22 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     return values;
   }
 
-  private List<LessonSlideJsonItemResponse> buildPreviewSlides(DeckSections deck, int slideCount) {
+  private List<LessonSlideJsonItemResponse> buildPreviewSlides(
+      DeckSections deck, int slideCount, LessonSlideOutputFormat outputFormat) {
     List<LessonSlideJsonItemResponse> slides = new ArrayList<>();
 
     // 10-slide canonical structure.
     if (slideCount == 10) {
-      slides.add(buildPreviewSlide(1, "COVER", "Cover", deck.coverSummary()));
-      slides.add(buildPreviewSlide(2, "OBJECTIVES", "Muc tieu", deck.learningObjectives()));
-      slides.add(buildPreviewSlide(3, "OPENING", "Khoi dong", deck.opening()));
-      slides.add(buildPreviewSlide(4, "MAIN_CONTENT", "Noi dung chinh 1", deck.mainPart1()));
-      slides.add(buildPreviewSlide(5, "MAIN_CONTENT", "Noi dung chinh 2", deck.mainPart2()));
-      slides.add(buildPreviewSlide(6, "MAIN_CONTENT", "Noi dung chinh 3", deck.mainPart3()));
-      slides.add(buildPreviewSlide(7, "EXAMPLE", "Vi du", deck.examplePart()));
-      slides.add(buildPreviewSlide(8, "PRACTICE", "Luyen tap", deck.practicePart()));
-      slides.add(buildPreviewSlide(9, "SUMMARY", "Tong ket", deck.closingSummary()));
-      slides.add(buildPreviewSlide(10, "CLOSING", "Cam on / Q&A", deck.lessonTitle()));
+      slides.add(buildPreviewSlide(1,  "COVER",        "Cover",            deck.coverSummary(),        outputFormat));
+      slides.add(buildPreviewSlide(2,  "OBJECTIVES",   "Muc tieu",         deck.learningObjectives(),  outputFormat));
+      slides.add(buildPreviewSlide(3,  "OPENING",      "Khoi dong",        deck.opening(),             outputFormat));
+      slides.add(buildPreviewSlide(4,  "MAIN_CONTENT", "Noi dung chinh 1", deck.mainPart1(),           outputFormat));
+      slides.add(buildPreviewSlide(5,  "MAIN_CONTENT", "Noi dung chinh 2", deck.mainPart2(),           outputFormat));
+      slides.add(buildPreviewSlide(6,  "MAIN_CONTENT", "Noi dung chinh 3", deck.mainPart3(),           outputFormat));
+      slides.add(buildPreviewSlide(7,  "EXAMPLE",      "Vi du",            deck.examplePart(),         outputFormat));
+      slides.add(buildPreviewSlide(8,  "PRACTICE",     "Luyen tap",        deck.practicePart(),        outputFormat));
+      slides.add(buildPreviewSlide(9,  "SUMMARY",      "Tong ket",         deck.closingSummary(),      outputFormat));
+      slides.add(buildPreviewSlide(10, "CLOSING",      "Cam on / Q&A",     deck.lessonTitle(),         outputFormat));
       return slides;
     }
 
@@ -1232,9 +1641,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     int middleCount = normalizedCount - 5;
     List<String> middleChunks = splitIntoChunks(deck.fullLessonContent(), middleCount);
 
-    slides.add(buildPreviewSlide(1, "COVER", "Cover", deck.coverSummary()));
-    slides.add(buildPreviewSlide(2, "OBJECTIVES", "Muc tieu", deck.learningObjectives()));
-    slides.add(buildPreviewSlide(3, "OPENING", "Khoi dong", deck.opening()));
+    slides.add(buildPreviewSlide(1, "COVER",      "Cover",     deck.coverSummary(),       outputFormat));
+    slides.add(buildPreviewSlide(2, "OBJECTIVES", "Muc tieu",  deck.learningObjectives(), outputFormat));
+    slides.add(buildPreviewSlide(3, "OPENING",    "Khoi dong", deck.opening(),            outputFormat));
 
     for (int i = 0; i < middleChunks.size(); i++) {
       String type = "MAIN_CONTENT";
@@ -1247,23 +1656,58 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         type = "PRACTICE";
         heading = "Luyen tap";
       }
-      slides.add(buildPreviewSlide(4 + i, type, heading, middleChunks.get(i)));
+      slides.add(buildPreviewSlide(4 + i, type, heading, middleChunks.get(i), outputFormat));
     }
 
-    slides.add(
-        buildPreviewSlide(normalizedCount - 1, "SUMMARY", "Tong ket", deck.closingSummary()));
-    slides.add(buildPreviewSlide(normalizedCount, "CLOSING", "Cam on / Q&A", deck.lessonTitle()));
+    slides.add(buildPreviewSlide(normalizedCount - 1, "SUMMARY", "Tong ket",      deck.closingSummary(), outputFormat));
+    slides.add(buildPreviewSlide(normalizedCount,     "CLOSING", "Cam on / Q&A",  deck.lessonTitle(),    outputFormat));
     return slides;
   }
 
   private LessonSlideJsonItemResponse buildPreviewSlide(
-      int slideNumber, String slideType, String heading, String content) {
+      int slideNumber, String slideType, String heading, String content,
+      LessonSlideOutputFormat outputFormat) {
+    String normalizedContent = truncateToWordLimit(normalizeAiGeneratedText(content), 50);
+    String normalizedHeading = normalizeAiGeneratedText(heading);
+
+    String previewImageUrl = null;
+    if (outputFormat == LessonSlideOutputFormat.LATEX) {
+      previewImageUrl = renderSlidePreviewUrl(normalizedHeading, normalizedContent);
+      if (previewImageUrl != null) {
+        log.info("Slide {} ({}) preview URL generated: {}", slideNumber, slideType, previewImageUrl);
+      } else {
+        log.warn("Slide {} ({}) preview URL is NULL — QuickLaTeX render failed", slideNumber, slideType);
+      }
+    }
+
     return LessonSlideJsonItemResponse.builder()
         .slideNumber(slideNumber)
         .slideType(slideType)
-        .heading(heading)
-        .content(safe(content))
+        .heading(normalizedHeading)
+        .content(normalizedContent)
+        .previewImageUrl(previewImageUrl)
         .build();
+  }
+
+  /**
+   * Truncates text to at most maxWords words, preserving line structure within the kept portion.
+   */
+  private String truncateToWordLimit(String text, int maxWords) {
+    if (text == null || text.isBlank() || maxWords <= 0) return text;
+    String[] words = text.split("\\s+");
+    if (words.length <= maxWords) return text;
+    // Reconstruct from original text up to the position of the maxWords-th word.
+    int count = 0;
+    int pos = 0;
+    while (pos < text.length() && count < maxWords) {
+      // skip whitespace
+      while (pos < text.length() && Character.isWhitespace(text.charAt(pos))) pos++;
+      if (pos >= text.length()) break;
+      // advance through the word
+      while (pos < text.length() && !Character.isWhitespace(text.charAt(pos))) pos++;
+      count++;
+    }
+    return text.substring(0, pos).stripTrailing();
   }
 
   private List<String> splitIntoChunks(String content, int chunkCount) {
@@ -1493,7 +1937,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         - Tránh văn xuôi dài; ưu tiên gạch đầu dòng hoặc câu ngắn tách dòng.
         - Tổng độ dài mỗi phần nên trong khoảng 60-90 từ, không lan man.
         - Nội dung phải cụ thể, không lặp lại cùng một câu giữa các phần.
-        - Mỗi mục mainPart1/mainPart2/mainPart3/examplePart/practicePart cần có nhiều ý (dạng gạch đầu dòng ngắn, tách dòng bằng ký tự xuống dòng \n).
+        - Mỗi mục mainPart1/mainPart2/mainPart3/examplePart/practicePart cần có nhiều ý (dạng gạch đầu dòng ngắn, xuống dòng THẬT bằng Enter).
+        - Không ghi literal \n hoặc /n trong nội dung.
         - closingSummary phải tóm tắt được kiến thức trọng tâm và nhấn mạnh cách áp dụng.
         - outputFormat: %s
         %s
@@ -1555,6 +2000,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         - Ưu tiên gạch đầu dòng/câu ngắn, tránh đoạn văn dài.
         - Tổng độ dài mỗi phần nên trong khoảng 60-90 từ.
         - Mỗi phần mainPart1/mainPart2/mainPart3/examplePart/practicePart có nhiều ý và xuống dòng rõ ràng.
+        - Không ghi literal \n hoặc /n trong nội dung.
         - outputFormat: %s
         %s
         - Chỉ trả về đúng định dạng marker dưới đây, không thêm markdown.
@@ -1625,7 +2071,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     if (value.startsWith(":")) {
       value = value.substring(1).trim();
     }
-    return value;
+    return normalizeAiGeneratedText(value);
   }
 
   private int findNextTaggedSectionStart(String raw, int fromIndex) {
@@ -1645,29 +2091,42 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   private String buildFormatGuidance(LessonSlideOutputFormat outputFormat, boolean jsonMode) {
     return switch (outputFormat) {
-      case LATEX ->
-          jsonMode
-              ? "- Tất cả biểu thức toán học phải viết bằng LaTeX. KHÔNG dùng diễn đạt công thức dạng chữ thuần."
-                  + "\\n- Vì output là JSON string, bắt buộc escape dấu \\\\ trong LaTeX (ví dụ: \\\\frac, \\\\sqrt, \\\\left, \\\\right)."
-              : "- Tất cả biểu thức toán học phải viết bằng LaTeX."
-                  + "\\n- Dùng delimiters chuẩn: inline \\( ... \\), block \\[ ... \\].";
-      case HYBRID ->
-          jsonMode
-              ? "- Ưu tiên nội dung tiếng Việt dễ hiểu, nhưng công thức/ký hiệu toán phải dùng LaTeX."
-                  + "\\n- Vì output là JSON string, bắt buộc escape dấu \\\\ trong LaTeX (ví dụ: \\\\frac, \\\\sqrt)."
-              : "- Nội dung mô tả bằng tiếng Việt, công thức/ký hiệu toán thể hiện bằng LaTeX."
-                  + "\\n- Dùng delimiters chuẩn: inline \\( ... \\), block \\[ ... \\].";
+      case LATEX -> jsonMode
+          ? "- Tất cả biểu thức toán học PHẢI dùng LaTeX inline ($...$) hoặc display (\\\\[ ... \\\\]).\n"
+              + "- Danh sách bước/ý: dùng \\\\begin{itemize} \\\\item ... \\\\end{itemize}. KHÔNG dùng dấu gạch đầu dòng thủ công.\n"
+              + "- Vì output là JSON string, PHẢI escape backslash: \\\\frac, \\\\item, \\\\begin, \\\\end, \\\\textbf, v.v.\n"
+              + "- KHÔNG thêm ký tự \\\\ ở cuối dòng văn bản thường.\n"
+              + "- KHÔNG viết công thức dạng chữ thuần túy."
+          : "- Tất cả biểu thức toán học PHẢI dùng LaTeX inline ($...$) hoặc display (\\[ ... \\]).\n"
+              + "- Danh sách bước/ý: dùng \\begin{itemize} \\item ... \\end{itemize}. KHÔNG dùng dấu gạch đầu dòng thủ công.\n"
+              + "- KHÔNG thêm ký tự \\ ở cuối dòng văn bản thường.\n"
+              + "- KHÔNG viết công thức dạng chữ thuần túy.";
+      case HYBRID -> jsonMode
+          ? "- Nội dung mô tả bằng tiếng Việt, công thức/ký hiệu toán dùng LaTeX inline ($...$).\n"
+              + "- Vì output là JSON string, PHẢI escape backslash: \\\\frac, \\\\sqrt, v.v.\n"
+              + "- KHÔNG thêm ký tự \\\\ ở cuối dòng văn bản thường."
+          : "- Nội dung mô tả bằng tiếng Việt, công thức/ký hiệu toán dùng LaTeX inline ($...$).\n"
+              + "- KHÔNG thêm ký tự \\ ở cuối dòng văn bản thường.";
       case PLAIN_TEXT ->
-          "- Dùng văn bản thuần như hiện tại, không bắt buộc LaTeX."
-              + "\\n- Nếu có công thức thì giữ ở dạng dễ đọc bằng chữ.";
+          "- Dùng văn bản thuần, không bắt buộc LaTeX.\n"
+              + "- Nếu có công thức thì giữ dạng dễ đọc bằng chữ.";
     };
   }
 
   private String nonBlankOrDefault(String value, String fallback) {
-    if (value == null || value.isBlank()) {
-      return safe(fallback);
+    String normalizedValue = normalizeAiGeneratedText(value);
+    if (normalizedValue.isBlank()) {
+      return normalizeAiGeneratedText(fallback);
     }
-    return value.trim();
+    return normalizedValue;
+  }
+
+  private String normalizeAiGeneratedText(String value) {
+    String safeValue = safe(value);
+    if (safeValue.isEmpty()) {
+      return safeValue;
+    }
+    return normalizeEscapedLineBreaks(safeValue).trim();
   }
 
   private String joinSections(String... sections) {

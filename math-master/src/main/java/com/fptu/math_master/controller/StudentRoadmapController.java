@@ -8,6 +8,7 @@ import com.fptu.math_master.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +48,15 @@ public class StudentRoadmapController {
     UUID studentId = SecurityUtils.getCurrentUserId();
     return ApiResponse.<RoadmapDetailResponse>builder()
         .result(roadmapAdminService.getRoadmapForStudent(studentId, id)).build();
+  }
+
+  @GetMapping("/roadmaps/topics/{topicId}/materials")
+  @PreAuthorize("hasRole('STUDENT')")
+  @Operation(summary = "Get topic learning materials")
+  public ApiResponse<List<TopicMaterialResponse>> getTopicMaterials(@PathVariable UUID topicId) {
+    return ApiResponse.<List<TopicMaterialResponse>>builder()
+        .result(roadmapAdminService.getTopicMaterials(topicId))
+        .build();
   }
 
   @PostMapping("/roadmaps/{roadmapId}/entry-test/submit")

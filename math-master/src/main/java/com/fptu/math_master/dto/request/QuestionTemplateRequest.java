@@ -47,7 +47,8 @@ public class QuestionTemplateRequest {
   private CognitiveLevel cognitiveLevel;
 
   @NotEmpty(message = "At least one tag is required")
-  private String[] tags;
+  @Size(max = 5, message = "Maximum 5 tags allowed")
+  private java.util.List<com.fptu.math_master.enums.QuestionTag> tags;
 
   private Boolean isPublic;
 

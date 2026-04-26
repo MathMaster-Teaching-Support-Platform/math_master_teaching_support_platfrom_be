@@ -87,10 +87,181 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
       @Param("type") TransactionType type,
       @Param("status") TransactionStatus status);
 
+  /** Total amount for a wallet matching multiple types */
+  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t WHERE t.wallet.id = :walletId AND t.type IN :types AND t.status = :status")
+  BigDecimal sumByWalletIdAndTypeInAndStatus(
+      @Param("walletId") UUID walletId,
+      @Param("types") List<TransactionType> types,
+      @Param("status") TransactionStatus status);
+
   /** Total transaction count for a wallet */
   long countByWalletId(UUID walletId);
 
   /** Find PENDING transactions whose expiresAt is in the past */
   @Query("SELECT t FROM Transaction t WHERE t.status = 'PENDING' AND t.expiresAt IS NOT NULL AND t.expiresAt < :now")
   List<Transaction> findExpiredPendingTransactions(@Param("now") Instant now);
+
+  /** Sum transactions by wallet, type, status, and date range */
+  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
+         "WHERE t.wallet.id = :walletId AND t.type = :type AND t.status = :status " +
+         "AND t.createdAt >= :startDate AND t.createdAt <= :endDate")
+  BigDecimal sumByWalletIdAndTypeAndStatusAndDateRange(
+      @Param("walletId") UUID walletId,
+      @Param("type") TransactionType type,
+      @Param("status") TransactionStatus status,
+      @Param("startDate") Instant startDate,
+      @Param("endDate") Instant endDate);
+
+  /** Find transactions by wallet and type with pagination */
+  Page<Transaction> findByWalletIdAndType(UUID walletId, TransactionType type, Pageable pageable);
+
+  /** Sum instructor revenue for a specific course */
+  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
+         "WHERE t.wallet.id = :walletId AND t.order.courseId = :courseId " +
+         "AND t.type = 'INSTRUCTOR_REVENUE' AND t.status = :status")
+  BigDecimal sumInstructorRevenueForCourse(
+      @Param("walletId") UUID walletId,
+      @Param("courseId") UUID courseId,
+      @Param("status") TransactionStatus status);
+
+  /** Sum transactions by type, status, and date range */
+  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
+         "WHERE t.type = :type AND t.status = :status " +
+         "AND t.createdAt >= :startDate AND t.createdAt <= :endDate")
+  BigDecimal sumByTypeAndStatusAndDateRange(
+      @Param("type") TransactionType type,
+      @Param("status") TransactionStatus status,
+      @Param("startDate") Instant startDate,
+      @Param("endDate") Instant endDate);
+
+  /** Count transactions by status */
+  long countByStatus(TransactionStatus status);
+
+  /** Count transactions by status and date range */
+  long countByStatusAndCreatedAtBetween(TransactionStatus status, Instant start, Instant end);
+
+  /** Count transactions by status list and date range */
+  long countByStatusInAndCreatedAtBetween(List<TransactionStatus> statuses, Instant start, Instant end);
+
+  /** Find transactions by date range */
+  List<Transaction> findByCreatedAtBetween(Instant start, Instant end);
+
+  // ─── Cash Flow aggregation queries ───────────────────────────────────────────
+  // INFLOW types:  DEPOSIT, PAYMENT, COURSE_PURCHASE
+  // OUTFLOW types: WITHDRAWAL, INSTRUCTOR_REVENUE
+
+  /**
+   * Sum of INFLOW or OUTFLOW amounts for a date range.
+   * type_list is a PostgreSQL array literal, e.g. 'DEPOSIT','PAYMENT','COURSE_PURCHASE'
+   */
+  @Query(value =
+      "SELECT COALESCE(SUM(t.amount), 0) FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.type IN (:types) " +
+      "  AND t.created_at >= :from AND t.created_at < :to",
+      nativeQuery = true)
+  BigDecimal sumCashFlowByTypesAndDateRange(
+      @Param("types") List<String> types,
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Daily inflow vs outflow — used for 'day' chart grouping.
+   * Columns: [0]=label (YYYY-MM-DD), [1]=inflow, [2]=outflow
+   */
+  @Query(value =
+      "SELECT TO_CHAR(DATE_TRUNC('day', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS label, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT')), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL')), 0) AS outflow " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "GROUP BY DATE_TRUNC('day', t.created_at AT TIME ZONE 'UTC') " +
+      "ORDER BY label",
+      nativeQuery = true)
+  List<Object[]> findCashFlowDailyAggregates(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Weekly inflow vs outflow.
+   * Columns: [0]=label (YYYY-MM-DD of the week's Monday), [1]=inflow, [2]=outflow
+   */
+  @Query(value =
+      "SELECT TO_CHAR(DATE_TRUNC('week', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS label, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT')), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL')), 0) AS outflow " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "GROUP BY DATE_TRUNC('week', t.created_at AT TIME ZONE 'UTC') " +
+      "ORDER BY label",
+      nativeQuery = true)
+  List<Object[]> findCashFlowWeeklyAggregates(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Monthly inflow vs outflow.
+   * Columns: [0]=label (YYYY-MM), [1]=inflow, [2]=outflow
+   */
+  @Query(value =
+      "SELECT TO_CHAR(DATE_TRUNC('month', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM') AS label, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT')), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL')), 0) AS outflow " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "GROUP BY DATE_TRUNC('month', t.created_at AT TIME ZONE 'UTC') " +
+      "ORDER BY label",
+      nativeQuery = true)
+  List<Object[]> findCashFlowMonthlyAggregates(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Category breakdown: sums per TransactionType within a date range.
+   * Columns: [0]=type (TransactionType name), [1]=total
+   */
+  @Query(value =
+      "SELECT t.type AS category, COALESCE(SUM(t.amount), 0) AS total " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "  AND t.type IN ('DEPOSIT','PAYMENT','WITHDRAWAL') " +
+      "GROUP BY t.type " +
+      "ORDER BY total DESC",
+      nativeQuery = true)
+  List<Object[]> findCashFlowCategoryBreakdown(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Paginated transactions for cash-flow view, filtered by type list and date range.
+   * Eagerly fetches wallet + user for display purposes.
+   */
+  @Query(
+      value = "SELECT t FROM Transaction t LEFT JOIN FETCH t.wallet w LEFT JOIN FETCH w.user u " +
+              "WHERE t.status = 'SUCCESS' " +
+              "AND t.type IN :types " +
+              "AND t.createdAt >= :from AND t.createdAt < :to " +
+              "AND (:search = '' " +
+              "  OR LOWER(u.fullName) LIKE CONCAT('%', LOWER(:search), '%') " +
+              "  OR LOWER(t.description) LIKE CONCAT('%', LOWER(:search), '%') " +
+              "  OR CAST(t.orderCode AS string) LIKE CONCAT('%', :search, '%'))",
+      countQuery = "SELECT COUNT(t) FROM Transaction t LEFT JOIN t.wallet w LEFT JOIN w.user u " +
+                   "WHERE t.status = 'SUCCESS' " +
+                   "AND t.type IN :types " +
+                   "AND t.createdAt >= :from AND t.createdAt < :to " +
+                   "AND (:search = '' " +
+                   "  OR LOWER(u.fullName) LIKE CONCAT('%', LOWER(:search), '%') " +
+                   "  OR LOWER(t.description) LIKE CONCAT('%', LOWER(:search), '%') " +
+                   "  OR CAST(t.orderCode AS string) LIKE CONCAT('%', :search, '%'))")
+  Page<Transaction> findCashFlowTransactions(
+      @Param("types") List<TransactionType> types,
+      @Param("from") Instant from,
+      @Param("to") Instant to,
+      @Param("search") String search,
+      Pageable pageable);
 }
+

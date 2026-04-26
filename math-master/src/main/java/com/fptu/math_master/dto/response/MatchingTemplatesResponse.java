@@ -62,7 +62,7 @@ public class MatchingTemplatesResponse {
     private String description;
     private QuestionType templateType;
     private CognitiveLevel cognitiveLevel;
-    private String[] tags;
+    private java.util.List<com.fptu.math_master.enums.QuestionTag> tags;
 
     /** Whether this template was created by the requesting teacher. */
     private boolean mine;

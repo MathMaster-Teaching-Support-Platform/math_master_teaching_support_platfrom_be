@@ -56,4 +56,7 @@ public interface LessonRepository
 
   @Query("SELECT l FROM Lesson l WHERE l.id IN :ids AND l.deletedAt IS NULL")
   List<Lesson> findByIdInAndNotDeleted(@Param("ids") Collection<UUID> ids);
+
+  @Query("SELECT l FROM Lesson l WHERE l.chapterId IN :chapterIds AND l.deletedAt IS NULL ORDER BY l.orderIndex, l.createdAt")
+  List<Lesson> findByChapterIdIn(@Param("chapterIds") List<UUID> chapterIds);
 }

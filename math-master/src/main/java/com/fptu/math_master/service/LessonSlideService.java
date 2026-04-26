@@ -78,11 +78,17 @@ public interface LessonSlideService {
 
     BinaryFileData downloadPublicGeneratedSlide(UUID generatedFileId);
 
+    void deleteGeneratedSlide(UUID generatedFileId);
+
     BinaryFileData getPublicGeneratedSlidePreviewPdf(UUID generatedFileId);
 
     String getPublicGeneratedSlidePreviewUrl(UUID generatedFileId);
 
     BinaryFileData getPublicGeneratedSlideThumbnailImage(UUID generatedFileId);
+
+  /** Re-renders a single slide's heading+content via QuickLaTeX and returns the image URL.
+   *  Returns null if the output format is not LATEX or if rendering fails. */
+  String renderSlidePreview(String heading, String content);
 
   record BinaryFileData(byte[] content, String fileName, String contentType) {}
 }

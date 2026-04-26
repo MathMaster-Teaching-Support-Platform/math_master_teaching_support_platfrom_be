@@ -8,6 +8,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,23 +47,29 @@ public class AdminDashboardController {
   @Operation(
       summary = "Get dashboard stats",
       description = "Returns total users, revenue, enrollments and transactions for the given month, each with growth % vs previous month.")
-  public ApiResponse<AdminDashboardStatsResponse> getDashboardStats(
+  public ResponseEntity<ApiResponse<AdminDashboardStatsResponse>> getDashboardStats(
       @RequestParam(required = false) String month) {
-    return ApiResponse.<AdminDashboardStatsResponse>builder()
-        .result(adminDashboardService.getDashboardStats(month))
-        .build();
+    return ResponseEntity.ok()
+        .header("Cache-Control", "private, max-age=30")
+        .body(
+            ApiResponse.<AdminDashboardStatsResponse>builder()
+                .result(adminDashboardService.getDashboardStats(month))
+                .build());
   }
 
   @GetMapping("/dashboard/revenue-by-month")
   @Operation(
       summary = "Get monthly revenue for a year",
       description = "Returns 12 monthly revenue totals (VNĐ) for the specified year.")
-  public ApiResponse<AdminRevenueByMonthResponse> getRevenueByMonth(
+  public ResponseEntity<ApiResponse<AdminRevenueByMonthResponse>> getRevenueByMonth(
       @RequestParam(required = false) Integer year) {
     int targetYear = (year != null) ? year : Year.now().getValue();
-    return ApiResponse.<AdminRevenueByMonthResponse>builder()
-        .result(adminDashboardService.getRevenueByMonth(targetYear))
-        .build();
+    return ResponseEntity.ok()
+        .header("Cache-Control", "private, max-age=600")
+        .body(
+            ApiResponse.<AdminRevenueByMonthResponse>builder()
+                .result(adminDashboardService.getRevenueByMonth(targetYear))
+                .build());
   }
 
   @GetMapping("/dashboard/quick-stats")
@@ -79,10 +86,13 @@ public class AdminDashboardController {
   @Operation(
       summary = "Get system service status",
       description = "Returns real-time status of Web Server, Database, AI Service, and Storage.")
-  public ApiResponse<AdminSystemStatusResponse> getSystemStatus() {
-    return ApiResponse.<AdminSystemStatusResponse>builder()
-        .result(adminDashboardService.getSystemStatus())
-        .build();
+  public ResponseEntity<ApiResponse<AdminSystemStatusResponse>> getSystemStatus() {
+    return ResponseEntity.ok()
+        .header("Cache-Control", "private, max-age=15")
+        .body(
+            ApiResponse.<AdminSystemStatusResponse>builder()
+                .result(adminDashboardService.getSystemStatus())
+                .build());
   }
 
   @GetMapping("/transactions")

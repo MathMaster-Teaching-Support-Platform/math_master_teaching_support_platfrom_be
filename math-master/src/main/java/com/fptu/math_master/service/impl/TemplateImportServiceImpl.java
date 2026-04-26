@@ -462,7 +462,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
               .parameters(buildParametersFromNode(templateNode.path("parameters")))
               .answerFormula(templateNode.path("answerFormula").asText())
               .cognitiveLevel(parseCognitiveLevel(templateNode.path("cognitiveLevel").asText()))
-              .tags(parseStringArray(templateNode.path("tags")).toArray(new String[0]))
+              .tags(parseTagsFromStringArray(parseStringArray(templateNode.path("tags"))))
               .build();
 
       // Build response with initial warnings
@@ -637,7 +637,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
             .parameters(new HashMap<>())
             .answerFormula("")
             .cognitiveLevel(CognitiveLevel.APPLY)
-            .tags(new String[] {"imported"})
+            .tags(java.util.Arrays.asList(com.fptu.math_master.enums.QuestionTag.PROBLEM_SOLVING))
             .build();
 
     return TemplateImportResponse.builder()
@@ -712,6 +712,33 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     List<String> result = new ArrayList<>();
     if (node.isArray()) {
       node.forEach(item -> result.add(item.asText()));
+    }
+    return result;
+  }
+
+  /**
+   * Parse string array to QuestionTag enum list
+   */
+  private java.util.List<com.fptu.math_master.enums.QuestionTag> parseTagsFromStringArray(List<String> tags) {
+    java.util.List<com.fptu.math_master.enums.QuestionTag> result = new java.util.ArrayList<>();
+    for (String tag : tags) {
+      if (tag != null && !tag.trim().isEmpty()) {
+        try {
+          // Try to parse as enum name
+          result.add(com.fptu.math_master.enums.QuestionTag.valueOf(tag.trim().toUpperCase()));
+        } catch (IllegalArgumentException e) {
+          // Try Vietnamese name lookup
+          com.fptu.math_master.enums.QuestionTag enumTag = 
+              com.fptu.math_master.enums.QuestionTag.fromVietnameseName(tag.trim());
+          if (enumTag != null) {
+            result.add(enumTag);
+          }
+        }
+      }
+    }
+    // If no valid tags found, add default
+    if (result.isEmpty()) {
+      result.add(com.fptu.math_master.enums.QuestionTag.PROBLEM_SOLVING);
     }
     return result;
   }
@@ -852,7 +879,9 @@ public class TemplateImportServiceImpl implements TemplateImportService {
                 draft.getCognitiveLevel() != null
                     ? draft.getCognitiveLevel()
                     : CognitiveLevel.APPLY)
-            .tags(draft.getTags() != null ? draft.getTags() : new String[] {"imported"})
+            .tags(draft.getTags() != null && !draft.getTags().isEmpty() 
+                ? draft.getTags() 
+                : java.util.Arrays.asList(com.fptu.math_master.enums.QuestionTag.PROBLEM_SOLVING))
             .status(TemplateStatus.DRAFT)
             .isPublic(false)
             .usageCount(0)

@@ -153,6 +153,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     }
 
     if (videoFile != null && !videoFile.isEmpty()) {
+      if (org.springframework.util.StringUtils.hasText(courseLesson.getVideoUrl())) {
+        uploadService.deleteFile(courseLesson.getVideoUrl(), minioProperties.getCourseVideosBucket());
+      }
       courseLesson.setVideoUrl(uploadService.uploadFile(videoFile, "course-videos", minioProperties.getCourseVideosBucket()));
     }
     if (request.getVideoTitle() != null) courseLesson.setVideoTitle(request.getVideoTitle());
@@ -191,6 +194,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
       throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
     }
 
+    // Store the orderIndex of the deleted lesson
+    int deletedOrderIndex = courseLesson.getOrderIndex();
+
     // MinIO Cleanup: Delete video file
     if (org.springframework.util.StringUtils.hasText(courseLesson.getVideoUrl())) {
       uploadService.deleteFile(courseLesson.getVideoUrl(), minioProperties.getCourseVideosBucket());
@@ -209,6 +215,25 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     courseLessonRepository.save(courseLesson);
     log.info("CourseLesson soft-deleted and resources cleaned up: {}", courseLessonId);
     
+    // Reorder remaining lessons to fill the gap
+    List<CourseLesson> remainingLessons = courseLessonRepository.findByCourseIdAndNotDeleted(courseId);
+    remainingLessons.stream()
+        .filter(lesson -> {
+            if (course.getProvider() == com.fptu.math_master.enums.CourseProvider.CUSTOM) {
+                return java.util.Objects.equals(lesson.getSectionId(), courseLesson.getSectionId()) 
+                    && lesson.getOrderIndex() > deletedOrderIndex;
+            }
+            return lesson.getOrderIndex() > deletedOrderIndex;
+        })
+        .forEach(lesson -> {
+          lesson.setOrderIndex(lesson.getOrderIndex() - 1);
+          courseLessonRepository.save(lesson);
+        });
+    
+    log.info("Reordered {} lessons after deletion of lesson {}", 
+        remainingLessons.stream().filter(l -> l.getOrderIndex() >= deletedOrderIndex).count(), 
+        courseLessonId);
+    
     courseService.syncCourseMetrics(courseId);
   }
 
@@ -218,6 +243,15 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
+    // Validate: Check for duplicate orderIndex values
+    java.util.Set<Integer> orderIndexSet = new java.util.HashSet<>();
+    for (var order : request.getOrders()) {
+      if (!orderIndexSet.add(order.getOrderIndex())) {
+        throw new AppException(ErrorCode.DUPLICATE_ORDER_INDEX);
+      }
+    }
+
+    // Validate: All lessons belong to this course
     for (var order : request.getOrders()) {
       CourseLesson lesson = courseLessonRepository.findByIdAndDeletedAtIsNull(order.getLessonId())
           .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
@@ -229,7 +263,38 @@ public class CourseLessonServiceImpl implements CourseLessonService {
       lesson.setOrderIndex(order.getOrderIndex());
       courseLessonRepository.save(lesson);
     }
-    log.info("Batch reordered lessons for course: {}", courseId);
+    log.info("Batch reordered {} lessons for course: {}", request.getOrders().size(), courseId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public String getAdminVideoUrl(UUID courseId, UUID courseLessonId) {
+    UUID currentAdminId = SecurityUtils.getCurrentUserId();
+    log.info("Admin {} requesting video URL for lesson {} in course {}", 
+        currentAdminId, courseLessonId, courseId);
+    
+    Course course = findCourseOrThrow(courseId);
+    
+    CourseLesson courseLesson = courseLessonRepository
+        .findByIdAndDeletedAtIsNull(courseLessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+
+    if (!courseLesson.getCourseId().equals(courseId)) {
+      throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
+    }
+
+    if (!org.springframework.util.StringUtils.hasText(courseLesson.getVideoUrl())) {
+      throw new AppException(ErrorCode.VIDEO_NOT_FOUND);
+    }
+
+    // Generate presigned URL for admin access
+    String presignedUrl = uploadService.getPresignedUrl(
+        courseLesson.getVideoUrl(),
+        minioProperties.getCourseVideosBucket()
+    );
+    
+    log.info("✅ Admin {} granted video access to lesson {}", currentAdminId, courseLessonId);
+    return presignedUrl;
   }
 
   @Override
@@ -239,17 +304,43 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
 
     boolean isAuthorized = false;
+    final String[] authReasonHolder = {"not authenticated"}; // Use array to make it effectively final
+    
     if (currentUserId != null) {
-      if (course.getTeacherId().equals(currentUserId) || SecurityUtils.hasRole("ADMIN")) {
+      // IMPORTANT: Check admin role FIRST before other checks
+      boolean isAdmin = SecurityUtils.hasRole("ADMIN");
+      boolean isOwner = course.getTeacherId().equals(currentUserId);
+      
+      log.info("Course {} lesson access check: userId={}, isAdmin={}, isOwner={}, courseStatus={}", 
+          courseId, currentUserId, isAdmin, isOwner, course.getStatus());
+      
+      if (isAdmin) {
         isAuthorized = true;
+        authReasonHolder[0] = "admin role";
+        log.info("✅ Admin user {} granted access to course {} lessons", currentUserId, courseId);
+      } else if (isOwner) {
+        isAuthorized = true;
+        authReasonHolder[0] = "course owner";
       } else {
+        // Check student enrollment
         isAuthorized =
             enrollmentRepository
                 .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
-                .map(e -> "ACTIVE".equals(e.getStatus().name()))
+                .map(e -> {
+                  boolean active = "ACTIVE".equals(e.getStatus().name());
+                  if (active) {
+                    authReasonHolder[0] = "enrolled student";
+                  }
+                  return active;
+                })
                 .orElse(false);
       }
+    } else {
+      log.warn("❌ Unauthenticated access attempt to course {} lessons", courseId);
     }
+    
+    log.info("Course {} lesson access result: userId={}, authorized={}, reason={}", 
+        courseId, currentUserId, isAuthorized, authReasonHolder[0]);
 
     // Udemy-style access: only enrolled/owner/admin can access all lessons.
     // Non-enrolled users can access only lessons explicitly marked as free preview.
@@ -297,8 +388,17 @@ public class CourseLessonServiceImpl implements CourseLessonService {
                 uploadService.getPresignedUrl(
                     item.getKey(), minioProperties.getCourseMaterialsBucket()));
           } catch (Exception e) {
-            log.error("Error generating presigned URL for material {}", item.getId(), e);
+            // Legacy: file was uploaded to template bucket before course-materials bucket existed
+            try {
+              item.setUrl(
+                  uploadService.getPresignedUrl(
+                      item.getKey(), minioProperties.getTemplateBucket()));
+            } catch (Exception ex) {
+              log.error("Error generating presigned URL for material {}", item.getId(), ex);
+            }
           }
+          // Never expose the raw object key to clients — they must use the presigned url field.
+          item.setKey(null);
         }
       } else {
         // Lock materials for unauthorized/non-preview access
@@ -363,7 +463,8 @@ public class CourseLessonServiceImpl implements CourseLessonService {
       throw new AppException(ErrorCode.INVALID_REQUEST);
     }
 
-    String objectKey = uploadService.uploadFile(file, minioProperties.getCourseMaterialsBucket());
+    String objectKey = uploadService.uploadFile(
+        file, "course-materials", minioProperties.getCourseMaterialsBucket());
 
     MaterialItem newItem =
         MaterialItem.builder()
@@ -424,6 +525,83 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     }
 
     return mapToResponse(cl, getTitleForLesson(cl), true);
+  }
+
+  @Override
+  public String getMaterialDownloadUrl(UUID courseId, UUID lessonId, String materialId) {
+    Course course = findCourseOrThrow(courseId);
+    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+
+    // Only the course owner (teacher) or students who have an ACTIVE enrollment may download.
+    boolean isOwner = currentUserId != null && course.getTeacherId().equals(currentUserId);
+    if (!isOwner) {
+      boolean enrolled = currentUserId != null && enrollmentRepository
+          .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
+          .map(e -> "ACTIVE".equals(e.getStatus().name()))
+          .orElse(false);
+      if (!enrolled) {
+        throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+      }
+    }
+
+    CourseLesson cl = courseLessonRepository
+        .findByIdAndDeletedAtIsNull(lessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+
+    MaterialItem item = getMaterialList(cl.getMaterials()).stream()
+        .filter(m -> m.getId().equals(materialId))
+        .findFirst()
+        .orElseThrow(() -> new AppException(ErrorCode.INVALID_REQUEST));
+
+    try {
+      return uploadService.getPresignedDownloadUrl(
+          item.getKey(), minioProperties.getCourseMaterialsBucket(), item.getName());
+    } catch (Exception e) {
+      // Legacy fallback: file stored in template bucket before course-materials bucket existed
+      log.warn("Material not in course-materials bucket, falling back to template bucket for key: {}", item.getKey());
+      return uploadService.getPresignedDownloadUrl(
+          item.getKey(), minioProperties.getTemplateBucket(), item.getName());
+    }
+  }
+
+  @Override
+  public CourseLessonService.MaterialDownloadResult downloadMaterial(
+      UUID courseId, UUID lessonId, String materialId) {
+    Course course = findCourseOrThrow(courseId);
+    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+
+    boolean isOwner = currentUserId != null && course.getTeacherId().equals(currentUserId);
+    if (!isOwner) {
+      boolean enrolled = currentUserId != null && enrollmentRepository
+          .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
+          .map(e -> "ACTIVE".equals(e.getStatus().name()))
+          .orElse(false);
+      if (!enrolled) {
+        throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
+      }
+    }
+
+    CourseLesson cl = courseLessonRepository
+        .findByIdAndDeletedAtIsNull(lessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+
+    MaterialItem item = getMaterialList(cl.getMaterials()).stream()
+        .filter(m -> m.getId().equals(materialId))
+        .findFirst()
+        .orElseThrow(() -> new AppException(ErrorCode.INVALID_REQUEST));
+
+    byte[] content;
+    try {
+      content = uploadService.downloadFile(
+          item.getKey(), minioProperties.getCourseMaterialsBucket());
+    } catch (Exception e) {
+      // Legacy fallback: file stored in template bucket before course-materials bucket existed
+      log.warn("Material not in course-materials bucket, falling back to template bucket for key: {}", item.getKey());
+      content = uploadService.downloadFile(
+          item.getKey(), minioProperties.getTemplateBucket());
+    }
+    String ct = item.getContentType() != null ? item.getContentType() : "application/octet-stream";
+    return new CourseLessonService.MaterialDownloadResult(content, ct, item.getName());
   }
 
   private List<MaterialItem> getMaterialList(String json) {

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác nhận đăng ký khóa học</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px 20px;
+            text-align: center;
+            color: #ffffff;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .header .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 40px 30px;
+            color: #333333;
+            line-height: 1.6;
+        }
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #333333;
+        }
+        .message {
+            font-size: 16px;
+            margin-bottom: 30px;
+            color: #555555;
+        }
+        .order-details {
+            background-color: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 4px;
+        }
+        .order-details h2 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            color: #333333;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        .detail-label {
+            font-weight: 600;
+            color: #666666;
+        }
+        .detail-value {
+            color: #333333;
+            text-align: right;
+        }
+        .amount {
+            font-size: 20px;
+            font-weight: 700;
+            color: #667eea;
+        }
+        .cta-button {
+            display: inline-block;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            transition: transform 0.2s;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        .info-box {
+            background-color: #e8f4fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .info-box p {
+            margin: 0;
+            color: #1976D2;
+            font-size: 14px;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #666666;
+            font-size: 14px;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-links a {
+            display: inline-block;
+            margin: 0 10px;
+            color: #667eea;
+            text-decoration: none;
+        }
+        .divider {
+            height: 1px;
+            background-color: #e0e0e0;
+            margin: 30px 0;
+        }
+        @media only screen and (max-width: 600px) {
+            .content {
+                padding: 30px 20px;
+            }
+            .header h1 {
+                font-size: 24px;
+            }
+            .detail-row {
+                flex-direction: column;
+            }
+            .detail-value {
+                text-align: left;
+                margin-top: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="icon">✅</div>
+            <h1>Đăng ký thành công!</h1>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <p class="greeting">Xin chào <strong th:text="${studentName}">Học viên</strong>,</p>
+            
+            <p class="message">
+                Chúc mừng! Bạn đã đăng ký thành công khóa học 
+                <strong th:text="${courseTitle}">Tên khóa học</strong>. 
+                Chúng tôi rất vui mừng được đồng hành cùng bạn trong hành trình học tập này.
+            </p>
+
+            <!-- Order Details -->
+            <div class="order-details">
+                <h2>📋 Chi tiết đơn hàng</h2>
+                <div class="detail-row">
+                    <span class="detail-label">Mã đơn hàng:</span>
+                    <span class="detail-value" th:text="${orderNumber}">ORD-20260423-1234</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Khóa học:</span>
+                    <span class="detail-value" th:text="${courseTitle}">Tên khóa học</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Số tiền thanh toán:</span>
+                    <span class="detail-value amount" th:text="${amount}">1,000,000 VND</span>
+                </div>
+            </div>
+
+            <!-- CTA Button -->
+            <div style="text-align: center;">
+                <a th:href="${enrollmentUrl}" class="cta-button">
+                    🚀 Bắt đầu học ngay
+                </a>
+            </div>
+
+            <!-- Info Box -->
+            <div class="info-box">
+                <p>
+                    💡 <strong>Mẹo:</strong> Bạn có thể truy cập khóa học bất cứ lúc nào từ trang 
+                    "Khóa học của tôi" trong tài khoản của bạn.
+                </p>
+            </div>
+
+            <div class="divider"></div>
+
+            <p style="font-size: 14px; color: #666666;">
+                Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ với chúng tôi qua email 
+                <a href="mailto:support@mathmaster.vn" style="color: #667eea;">support@mathmaster.vn</a>
+            </p>
+
+            <p style="margin-top: 30px; font-size: 16px; color: #333333;">
+                Chúc bạn học tập hiệu quả!<br/>
+                <strong>Đội ngũ MathMaster</strong>
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>MathMaster</strong></p>
+            <p>Nền tảng học toán trực tuyến hàng đầu Việt Nam</p>
+            
+            <div class="social-links">
+                <a href="#">Facebook</a> | 
+                <a href="#">YouTube</a> | 
+                <a href="#">Instagram</a>
+            </div>
+            
+            <p style="margin-top: 20px; font-size: 12px; color: #999999;">
+                © <span th:text="${currentYear}">2026</span> MathMaster. All rights reserved.<br/>
+                Email này được gửi tự động, vui lòng không trả lời.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

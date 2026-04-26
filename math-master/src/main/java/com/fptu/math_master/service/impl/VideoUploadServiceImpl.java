@@ -368,8 +368,9 @@ public class VideoUploadServiceImpl implements VideoUploadService {
             .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
 
         boolean isOwner = requesterId != null && course.getTeacherId().equals(requesterId);
+        boolean isAdmin = SecurityUtils.hasRole("ADMIN");
 
-        if (!isOwner) {
+        if (!isOwner && !isAdmin) {
           throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
         }
       }

@@ -1,8 +1,12 @@
 package com.fptu.math_master.service;
 
+import com.fptu.math_master.dto.request.AutoDistributePointsRequest;
+import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
+import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
 import com.fptu.math_master.dto.request.CloneAssessmentRequest;
+import com.fptu.math_master.dto.request.DistributeAssessmentPointsRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
 import com.fptu.math_master.dto.request.PointsOverrideRequest;
@@ -10,7 +14,10 @@ import com.fptu.math_master.dto.response.AssessmentGenerationResponse;
 import com.fptu.math_master.dto.response.AssessmentQuestionResponse;
 import com.fptu.math_master.dto.response.AssessmentResponse;
 import com.fptu.math_master.dto.response.AssessmentSummary;
+import com.fptu.math_master.dto.response.DistributeAssessmentPointsResponse;
+import com.fptu.math_master.dto.response.PagedDataResponse;
 import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
+import com.fptu.math_master.dto.response.QuestionResponse;
 import com.fptu.math_master.enums.AssessmentStatus;
 import java.util.List;
 import java.util.UUID;
@@ -54,6 +61,9 @@ public interface AssessmentService {
   AssessmentResponse addQuestion(UUID assessmentId, AddQuestionToAssessmentRequest request);
 
   List<AssessmentQuestionResponse> getAssessmentQuestions(UUID assessmentId);
+
+    PagedDataResponse<QuestionResponse> getAvailableQuestions(
+            UUID assessmentId, String keyword, String tag, Pageable pageable);
 
   AssessmentResponse removeQuestion(UUID assessmentId, UUID questionId);
 
@@ -111,4 +121,22 @@ public interface AssessmentService {
    * @param lessonId Lesson ID
    */
   void unlinkAssessmentFromLesson(UUID assessmentId, UUID lessonId);
+
+  /** Batch add questions to a direct assessment (no exam matrix). Skips duplicates. */
+  List<AssessmentQuestionResponse> batchAddQuestions(
+      UUID assessmentId, BatchAddQuestionsRequest request);
+
+  /** Batch update points for questions in an assessment. Transactional. */
+  List<AssessmentQuestionResponse> batchUpdatePoints(
+      UUID assessmentId, BatchUpdatePointsRequest request);
+
+  /**
+   * Auto-distribute total points across questions by cognitive level percentages.
+   * Questions not matching any distribution key are split evenly from remaining points.
+   */
+  List<AssessmentQuestionResponse> autoDistributePoints(
+      UUID assessmentId, AutoDistributePointsRequest request);
+
+  DistributeAssessmentPointsResponse distributeQuestionPoints(
+      UUID assessmentId, DistributeAssessmentPointsRequest request);
 }
