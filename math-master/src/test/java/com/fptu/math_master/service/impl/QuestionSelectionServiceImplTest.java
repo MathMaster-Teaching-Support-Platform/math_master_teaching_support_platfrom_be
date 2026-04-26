@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -196,8 +195,9 @@ class QuestionSelectionServiceImplTest extends BaseUnitTest {
       when(questionRepository.findAllById(any()))
           .thenAnswer(
               inv ->
-                  ((List<UUID>) inv.getArgument(0)).stream()
-                      .map(id -> QuestionSelectionServiceImplTest.this.buildQuestion(id))
+                  ((List<?>) inv.getArgument(0)).stream()
+                      .map(UUID.class::cast)
+                      .map(QuestionSelectionServiceImplTest.this::buildQuestion)
                       .toList());
 
       // ===== ACT =====
@@ -256,8 +256,9 @@ class QuestionSelectionServiceImplTest extends BaseUnitTest {
       when(questionRepository.findAllById(any()))
           .thenAnswer(
               inv ->
-                  ((List<UUID>) inv.getArgument(0)).stream()
-                      .map(id -> QuestionSelectionServiceImplTest.this.buildQuestion(id))
+                  ((List<?>) inv.getArgument(0)).stream()
+                      .map(UUID.class::cast)
+                      .map(QuestionSelectionServiceImplTest.this::buildQuestion)
                       .toList());
 
       // ===== ACT & ASSERT =====
