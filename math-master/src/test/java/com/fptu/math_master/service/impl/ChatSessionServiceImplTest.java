@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -854,6 +855,194 @@ class ChatSessionServiceImplTest extends BaseUnitTest {
       // ===== VERIFY =====
       verify(geminiService, times(1)).sendMessage(any());
       verify(valueOperations, times(1)).set(eq("chat:ctx:" + SESSION_ID), any(), eq(ChatSessionServiceImpl.MEMORY_TTL));
+    }
+  }
+
+  @Nested
+  @DisplayName("inner memory dto classes")
+  class InnerMemoryDtoClassTests {
+
+    @Test
+    void it_should_cover_memory_message_lombok_contract_for_equals_hashcode_builder_and_null_variants() {
+      // ===== ARRANGE =====
+      Instant createdAt = Instant.parse("2026-04-26T02:00:00Z");
+      ChatSessionServiceImpl.MemoryMessage base = new ChatSessionServiceImpl.MemoryMessage();
+      base.setRole("USER");
+      base.setContent("Xin giai bai toan");
+      base.setWordCount(4);
+      base.setCreatedAt(createdAt);
+
+      ChatSessionServiceImpl.MemoryMessage same =
+          ChatSessionServiceImpl.MemoryMessage.builder()
+              .role("USER")
+              .content("Xin giai bai toan")
+              .wordCount(4)
+              .createdAt(createdAt)
+              .build();
+      ChatSessionServiceImpl.MemoryMessage diffRole =
+          ChatSessionServiceImpl.MemoryMessage.builder()
+              .role("ASSISTANT")
+              .content("Xin giai bai toan")
+              .wordCount(4)
+              .createdAt(createdAt)
+              .build();
+      ChatSessionServiceImpl.MemoryMessage diffContent =
+          ChatSessionServiceImpl.MemoryMessage.builder()
+              .role("USER")
+              .content("Noi dung khac")
+              .wordCount(4)
+              .createdAt(createdAt)
+              .build();
+      ChatSessionServiceImpl.MemoryMessage diffWordCount =
+          ChatSessionServiceImpl.MemoryMessage.builder()
+              .role("USER")
+              .content("Xin giai bai toan")
+              .wordCount(5)
+              .createdAt(createdAt)
+              .build();
+      ChatSessionServiceImpl.MemoryMessage diffCreatedAt =
+          ChatSessionServiceImpl.MemoryMessage.builder()
+              .role("USER")
+              .content("Xin giai bai toan")
+              .wordCount(4)
+              .createdAt(Instant.parse("2026-04-26T02:00:01Z"))
+              .build();
+      ChatSessionServiceImpl.MemoryMessage nullFields =
+          new ChatSessionServiceImpl.MemoryMessage(null, null, null, null);
+      ChatSessionServiceImpl.MemoryMessage nullFieldsSame =
+          new ChatSessionServiceImpl.MemoryMessage(null, null, null, null);
+
+      // ===== ACT & ASSERT =====
+      assertEquals("USER", base.getRole());
+      assertEquals("Xin giai bai toan", base.getContent());
+      assertEquals(4, base.getWordCount());
+      assertEquals(createdAt, base.getCreatedAt());
+      assertEquals(base, same);
+      assertEquals(nullFields, nullFieldsSame);
+      assertNotEquals(base, diffRole);
+      assertNotEquals(base, diffContent);
+      assertNotEquals(base, diffWordCount);
+      assertNotEquals(base, diffCreatedAt);
+      assertNotEquals(base, nullFields);
+      assertNotEquals(base, null);
+      assertNotEquals(base, "not-memory-message");
+      assertNotEquals(base.hashCode(), diffRole.hashCode());
+      assertTrue(base.toString().contains("MemoryMessage"));
+
+      // ===== VERIFY =====
+      verifyNoMoreInteractions(chatSessionRepository, chatMessageRepository, geminiService);
+    }
+
+    @Test
+    void it_should_cover_chat_memory_context_lombok_contract_for_equals_hashcode_builder_and_defaults() {
+      // ===== ARRANGE =====
+      ChatSessionServiceImpl.MemoryMessage msg =
+          ChatSessionServiceImpl.MemoryMessage.builder()
+              .role("USER")
+              .content("Hoc toan")
+              .wordCount(2)
+              .createdAt(Instant.parse("2026-04-26T02:01:00Z"))
+              .build();
+
+      ChatSessionServiceImpl.ChatMemoryContext defaults =
+          ChatSessionServiceImpl.ChatMemoryContext.builder().build();
+      ChatSessionServiceImpl.ChatMemoryContext base =
+          ChatSessionServiceImpl.ChatMemoryContext.builder()
+              .messages(new ArrayList<>(List.of(msg)))
+              .totalWords(2)
+              .build();
+      ChatSessionServiceImpl.ChatMemoryContext same =
+          ChatSessionServiceImpl.ChatMemoryContext.builder()
+              .messages(new ArrayList<>(List.of(msg)))
+              .totalWords(2)
+              .build();
+      ChatSessionServiceImpl.ChatMemoryContext diffMessages =
+          ChatSessionServiceImpl.ChatMemoryContext.builder()
+              .messages(new ArrayList<>())
+              .totalWords(2)
+              .build();
+      ChatSessionServiceImpl.ChatMemoryContext diffTotalWords =
+          ChatSessionServiceImpl.ChatMemoryContext.builder()
+              .messages(new ArrayList<>(List.of(msg)))
+              .totalWords(3)
+              .build();
+      ChatSessionServiceImpl.ChatMemoryContext nullFields =
+          new ChatSessionServiceImpl.ChatMemoryContext(null, null);
+      ChatSessionServiceImpl.ChatMemoryContext nullFieldsSame =
+          new ChatSessionServiceImpl.ChatMemoryContext(null, null);
+
+      // ===== ACT & ASSERT =====
+      assertNotNull(defaults.getMessages());
+      assertEquals(0, defaults.getTotalWords());
+      assertEquals(base, same);
+      assertEquals(nullFields, nullFieldsSame);
+      assertNotEquals(base, diffMessages);
+      assertNotEquals(base, diffTotalWords);
+      assertNotEquals(base, nullFields);
+      assertNotEquals(base, null);
+      assertNotEquals(base, "not-chat-memory-context");
+      assertNotEquals(base.hashCode(), diffMessages.hashCode());
+      assertTrue(base.toString().contains("ChatMemoryContext"));
+
+      // ===== VERIFY =====
+      verifyNoMoreInteractions(chatSessionRepository, chatMessageRepository, geminiService);
+    }
+
+    @Test
+    void it_should_cover_memory_message_equals_branches_for_null_mismatch_pairs() {
+      // ===== ARRANGE =====
+      Instant at = Instant.parse("2026-04-26T02:05:00Z");
+      ChatSessionServiceImpl.MemoryMessage nullRole =
+          new ChatSessionServiceImpl.MemoryMessage(null, "A", 1, at);
+      ChatSessionServiceImpl.MemoryMessage nonNullRole =
+          new ChatSessionServiceImpl.MemoryMessage("USER", "A", 1, at);
+      ChatSessionServiceImpl.MemoryMessage nullContent =
+          new ChatSessionServiceImpl.MemoryMessage("USER", null, 1, at);
+      ChatSessionServiceImpl.MemoryMessage nonNullContent =
+          new ChatSessionServiceImpl.MemoryMessage("USER", "A", 1, at);
+      ChatSessionServiceImpl.MemoryMessage nullWordCount =
+          new ChatSessionServiceImpl.MemoryMessage("USER", "A", null, at);
+      ChatSessionServiceImpl.MemoryMessage nonNullWordCount =
+          new ChatSessionServiceImpl.MemoryMessage("USER", "A", 1, at);
+      ChatSessionServiceImpl.MemoryMessage nullCreatedAt =
+          new ChatSessionServiceImpl.MemoryMessage("USER", "A", 1, null);
+      ChatSessionServiceImpl.MemoryMessage nonNullCreatedAt =
+          new ChatSessionServiceImpl.MemoryMessage("USER", "A", 1, at);
+
+      // ===== ACT & ASSERT =====
+      assertNotEquals(nullRole, nonNullRole);
+      assertNotEquals(nonNullRole, nullRole);
+      assertNotEquals(nullContent, nonNullContent);
+      assertNotEquals(nonNullContent, nullContent);
+      assertNotEquals(nullWordCount, nonNullWordCount);
+      assertNotEquals(nonNullWordCount, nullWordCount);
+      assertNotEquals(nullCreatedAt, nonNullCreatedAt);
+      assertNotEquals(nonNullCreatedAt, nullCreatedAt);
+
+      // ===== VERIFY =====
+      verifyNoMoreInteractions(chatSessionRepository, chatMessageRepository, geminiService);
+    }
+
+    @Test
+    void it_should_cover_chat_memory_context_equals_branches_for_null_mismatch_pairs() {
+      // ===== ARRANGE =====
+      ChatSessionServiceImpl.ChatMemoryContext nullMessages =
+          new ChatSessionServiceImpl.ChatMemoryContext(null, 2);
+      ChatSessionServiceImpl.ChatMemoryContext nonNullMessages =
+          new ChatSessionServiceImpl.ChatMemoryContext(new ArrayList<>(), 2);
+      ChatSessionServiceImpl.ChatMemoryContext nullTotalWords =
+          new ChatSessionServiceImpl.ChatMemoryContext(new ArrayList<>(), null);
+      ChatSessionServiceImpl.ChatMemoryContext nonNullTotalWords =
+          new ChatSessionServiceImpl.ChatMemoryContext(new ArrayList<>(), 2);
+
+      // ===== ACT & ASSERT =====
+      assertNotEquals(nullMessages, nonNullMessages);
+      assertNotEquals(nonNullMessages, nullMessages);
+      assertNotEquals(nullTotalWords, nonNullTotalWords);
+      assertNotEquals(nonNullTotalWords, nullTotalWords);
+
+      // ===== VERIFY =====
+      verifyNoMoreInteractions(chatSessionRepository, chatMessageRepository, geminiService);
     }
   }
 }
