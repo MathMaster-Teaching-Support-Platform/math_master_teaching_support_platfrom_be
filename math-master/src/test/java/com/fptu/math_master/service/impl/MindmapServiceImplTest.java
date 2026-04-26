@@ -2,6 +2,7 @@ package com.fptu.math_master.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -1809,6 +1810,242 @@ class MindmapServiceImplTest extends BaseUnitTest {
 
       assertEquals("Unknown", response.getTeacherName());
       assertEquals(3, response.getNodeCount());
+    }
+  }
+
+  @Nested
+  @DisplayName("inner structure classes")
+  class InnerStructureClassTests {
+
+    @Test
+    void it_should_cover_lombok_data_contract_for_node_structure() throws Exception {
+      // ===== ARRANGE =====
+      Class<?> nodeClass =
+          Class.forName("com.fptu.math_master.service.impl.MindmapServiceImpl$NodeStructure");
+      Object first = nodeClass.getDeclaredConstructor().newInstance();
+      Object second = nodeClass.getDeclaredConstructor().newInstance();
+      Object third = nodeClass.getDeclaredConstructor().newInstance();
+      Object child = nodeClass.getDeclaredConstructor().newInstance();
+      nodeClass.getMethod("setContent", String.class).invoke(first, "Phương trình bậc hai");
+      nodeClass.getMethod("setColor", String.class).invoke(first, "#4A90E2");
+      nodeClass.getMethod("setIcon", String.class).invoke(first, "book");
+      nodeClass.getMethod("setDisplayOrder", Integer.class).invoke(first, 1);
+      nodeClass.getMethod("setChildren", List.class).invoke(first, List.of(child));
+
+      nodeClass.getMethod("setContent", String.class).invoke(second, "Phương trình bậc hai");
+      nodeClass.getMethod("setColor", String.class).invoke(second, "#4A90E2");
+      nodeClass.getMethod("setIcon", String.class).invoke(second, "book");
+      nodeClass.getMethod("setDisplayOrder", Integer.class).invoke(second, 1);
+      nodeClass.getMethod("setChildren", List.class).invoke(second, List.of(child));
+
+      nodeClass.getMethod("setContent", String.class).invoke(third, "Lượng giác");
+      nodeClass.getMethod("setColor", String.class).invoke(third, "#50C878");
+      nodeClass.getMethod("setIcon", String.class).invoke(third, "star");
+      nodeClass.getMethod("setDisplayOrder", Integer.class).invoke(third, 2);
+      nodeClass.getMethod("setChildren", List.class).invoke(third, List.of());
+
+      // ===== ACT =====
+      String firstContent = (String) nodeClass.getMethod("getContent").invoke(first);
+      Integer firstDisplayOrder = (Integer) nodeClass.getMethod("getDisplayOrder").invoke(first);
+      int firstHash = first.hashCode();
+      int secondHash = second.hashCode();
+      String firstText = first.toString();
+
+      // ===== ASSERT =====
+      assertEquals("Phương trình bậc hai", firstContent);
+      assertEquals(1, firstDisplayOrder);
+      assertEquals(first, first);
+      assertEquals(first, second);
+      assertEquals(second, first);
+      assertNotEquals(first, third);
+      assertNotEquals(first, null);
+      assertNotEquals(first, "not-node-structure");
+      assertEquals(firstHash, secondHash);
+      assertTrue(firstText.contains("NodeStructure"));
+
+      // ===== VERIFY =====
+      verifyNoInteractions(mindmapRepository, mindmapNodeRepository);
+    }
+
+    @Test
+    void it_should_cover_no_args_and_all_args_constructor_for_node_structure() throws Exception {
+      // ===== ARRANGE =====
+      Class<?> nodeClass =
+          Class.forName("com.fptu.math_master.service.impl.MindmapServiceImpl$NodeStructure");
+      Object child = nodeClass.getDeclaredConstructor().newInstance();
+      nodeClass.getMethod("setContent", String.class).invoke(child, "Nút con");
+      var allArgsCtor =
+          nodeClass.getDeclaredConstructor(
+              String.class, String.class, String.class, Integer.class, List.class);
+
+      // ===== ACT =====
+      Object created =
+          allArgsCtor.newInstance("Nút gốc", "#FFD93D", "lightbulb", 0, List.of(child));
+
+      // ===== ASSERT =====
+      assertEquals("Nút gốc", nodeClass.getMethod("getContent").invoke(created));
+      assertEquals("#FFD93D", nodeClass.getMethod("getColor").invoke(created));
+      assertEquals("lightbulb", nodeClass.getMethod("getIcon").invoke(created));
+      assertEquals(0, nodeClass.getMethod("getDisplayOrder").invoke(created));
+      assertEquals(1, ((List<?>) nodeClass.getMethod("getChildren").invoke(created)).size());
+
+      // ===== VERIFY =====
+      verifyNoInteractions(mindmapRepository, mindmapNodeRepository);
+    }
+
+    @Test
+    void it_should_cover_lombok_data_contract_for_mindmap_structure() throws Exception {
+      // ===== ARRANGE =====
+      Class<?> nodeClass =
+          Class.forName("com.fptu.math_master.service.impl.MindmapServiceImpl$NodeStructure");
+      Class<?> structureClass =
+          Class.forName("com.fptu.math_master.service.impl.MindmapServiceImpl$MindmapStructure");
+      Object node = nodeClass.getDeclaredConstructor().newInstance();
+      nodeClass.getMethod("setContent", String.class).invoke(node, "Giới hạn hàm số");
+      nodeClass.getMethod("setDisplayOrder", Integer.class).invoke(node, 0);
+      nodeClass.getMethod("setChildren", List.class).invoke(node, List.of());
+
+      Object first = structureClass.getDeclaredConstructor().newInstance();
+      Object second = structureClass.getDeclaredConstructor().newInstance();
+      Object third = structureClass.getDeclaredConstructor().newInstance();
+      structureClass.getMethod("setTitle", String.class).invoke(first, "Toán 12");
+      structureClass.getMethod("setDescription", String.class).invoke(first, "Sơ đồ tư duy học kỳ 2");
+      structureClass.getMethod("setNodes", List.class).invoke(first, List.of(node));
+
+      structureClass.getMethod("setTitle", String.class).invoke(second, "Toán 12");
+      structureClass.getMethod("setDescription", String.class).invoke(second, "Sơ đồ tư duy học kỳ 2");
+      structureClass.getMethod("setNodes", List.class).invoke(second, List.of(node));
+
+      structureClass.getMethod("setTitle", String.class).invoke(third, "Đại số tuyến tính");
+      structureClass.getMethod("setDescription", String.class).invoke(third, "Ma trận và định thức");
+      structureClass.getMethod("setNodes", List.class).invoke(third, List.of());
+
+      // ===== ACT =====
+      String title = (String) structureClass.getMethod("getTitle").invoke(first);
+      int firstHash = first.hashCode();
+      int secondHash = second.hashCode();
+      String firstText = first.toString();
+
+      // ===== ASSERT =====
+      assertEquals("Toán 12", title);
+      assertEquals(first, first);
+      assertEquals(first, second);
+      assertEquals(second, first);
+      assertNotEquals(first, third);
+      assertNotEquals(first, null);
+      assertNotEquals(first, "not-mindmap-structure");
+      assertEquals(firstHash, secondHash);
+      assertTrue(firstText.contains("MindmapStructure"));
+
+      // ===== VERIFY =====
+      verifyNoInteractions(mindmapRepository, mindmapNodeRepository);
+    }
+
+    @Test
+    void it_should_cover_all_args_constructor_for_mindmap_structure() throws Exception {
+      // ===== ARRANGE =====
+      Class<?> nodeClass =
+          Class.forName("com.fptu.math_master.service.impl.MindmapServiceImpl$NodeStructure");
+      Class<?> structureClass =
+          Class.forName("com.fptu.math_master.service.impl.MindmapServiceImpl$MindmapStructure");
+      Object node = nodeClass.getDeclaredConstructor().newInstance();
+      nodeClass.getMethod("setContent", String.class).invoke(node, "Hệ tọa độ Oxy");
+      nodeClass.getMethod("setChildren", List.class).invoke(node, List.of());
+      var allArgsCtor =
+          structureClass.getDeclaredConstructor(String.class, String.class, List.class);
+
+      // ===== ACT =====
+      Object created = allArgsCtor.newInstance("Hình học phẳng", "Các chuyên đề nền tảng", List.of(node));
+
+      // ===== ASSERT =====
+      assertEquals("Hình học phẳng", structureClass.getMethod("getTitle").invoke(created));
+      assertEquals("Các chuyên đề nền tảng", structureClass.getMethod("getDescription").invoke(created));
+      assertEquals(1, ((List<?>) structureClass.getMethod("getNodes").invoke(created)).size());
+
+      // ===== VERIFY =====
+      verifyNoInteractions(mindmapRepository, mindmapNodeRepository);
+    }
+
+    @Test
+    void it_should_cover_node_structure_equals_branches_for_null_and_different_fields()
+        throws Exception {
+      // ===== ARRANGE =====
+      Class<?> nodeClass =
+          Class.forName("com.fptu.math_master.service.impl.MindmapServiceImpl$NodeStructure");
+      var nodeCtor =
+          nodeClass.getDeclaredConstructor(
+              String.class, String.class, String.class, Integer.class, List.class);
+      Object child = nodeCtor.newInstance("Nút con", "#FF6B6B", "star", 0, List.of());
+      Object base =
+          nodeCtor.newInstance("Nút gốc", "#4A90E2", "book", 1, List.of(child));
+      Object same =
+          nodeCtor.newInstance("Nút gốc", "#4A90E2", "book", 1, List.of(child));
+      Object nullFields = nodeCtor.newInstance(null, null, null, null, null);
+      Object nullFieldsSame = nodeCtor.newInstance(null, null, null, null, null);
+      Object diffContent =
+          nodeCtor.newInstance("Nút khác", "#4A90E2", "book", 1, List.of(child));
+      Object diffColor =
+          nodeCtor.newInstance("Nút gốc", "#50C878", "book", 1, List.of(child));
+      Object diffIcon =
+          nodeCtor.newInstance("Nút gốc", "#4A90E2", "target", 1, List.of(child));
+      Object diffOrder =
+          nodeCtor.newInstance("Nút gốc", "#4A90E2", "book", 2, List.of(child));
+      Object diffChildren =
+          nodeCtor.newInstance("Nút gốc", "#4A90E2", "book", 1, List.of());
+
+      // ===== ACT & ASSERT =====
+      assertEquals(base, same);
+      assertEquals(nullFields, nullFieldsSame);
+      assertNotEquals(base, diffContent);
+      assertNotEquals(base, diffColor);
+      assertNotEquals(base, diffIcon);
+      assertNotEquals(base, diffOrder);
+      assertNotEquals(base, diffChildren);
+      assertNotEquals(base, nullFields);
+      assertNotEquals(nullFields, base);
+      assertNotEquals(base.hashCode(), diffContent.hashCode());
+      assertTrue(base.toString().contains("content=Nút gốc"));
+
+      // ===== VERIFY =====
+      verifyNoInteractions(mindmapRepository, mindmapNodeRepository);
+    }
+
+    @Test
+    void it_should_cover_mindmap_structure_equals_branches_for_null_and_different_fields()
+        throws Exception {
+      // ===== ARRANGE =====
+      Class<?> nodeClass =
+          Class.forName("com.fptu.math_master.service.impl.MindmapServiceImpl$NodeStructure");
+      Class<?> structureClass =
+          Class.forName("com.fptu.math_master.service.impl.MindmapServiceImpl$MindmapStructure");
+      var nodeCtor =
+          nodeClass.getDeclaredConstructor(
+              String.class, String.class, String.class, Integer.class, List.class);
+      var structureCtor =
+          structureClass.getDeclaredConstructor(String.class, String.class, List.class);
+      Object node = nodeCtor.newInstance("Giải tích", "#4A90E2", "book", 0, List.of());
+
+      Object base = structureCtor.newInstance("Toán 12", "Ôn tập học kỳ", List.of(node));
+      Object same = structureCtor.newInstance("Toán 12", "Ôn tập học kỳ", List.of(node));
+      Object nullFields = structureCtor.newInstance(null, null, null);
+      Object nullFieldsSame = structureCtor.newInstance(null, null, null);
+      Object diffTitle = structureCtor.newInstance("Toán 11", "Ôn tập học kỳ", List.of(node));
+      Object diffDescription = structureCtor.newInstance("Toán 12", "Luyện đề", List.of(node));
+      Object diffNodes = structureCtor.newInstance("Toán 12", "Ôn tập học kỳ", List.of());
+
+      // ===== ACT & ASSERT =====
+      assertEquals(base, same);
+      assertEquals(nullFields, nullFieldsSame);
+      assertNotEquals(base, diffTitle);
+      assertNotEquals(base, diffDescription);
+      assertNotEquals(base, diffNodes);
+      assertNotEquals(base, nullFields);
+      assertNotEquals(nullFields, base);
+      assertNotEquals(base.hashCode(), diffTitle.hashCode());
+      assertTrue(base.toString().contains("title=Toán 12"));
+
+      // ===== VERIFY =====
+      verifyNoInteractions(mindmapRepository, mindmapNodeRepository);
     }
   }
 }
