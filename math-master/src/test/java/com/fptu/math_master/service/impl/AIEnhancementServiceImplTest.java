@@ -969,6 +969,51 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
     }
 
     /**
+     * Abnormal case: MCQ có {@code enhancedOptions} bằng {@code null}.
+     *
+     * <p>Input:
+     * <ul>
+     *   <li>questionType: MULTIPLE_CHOICE</li>
+     *   <li>enhancedOptions: null</li>
+     * </ul>
+     *
+     * <p>Branch coverage:
+     * <ul>
+     *   <li>{@code enhancedOptions == null || size != 4} → nhánh {@code enhancedOptions == null}</li>
+     *   <li>ternary log count {@code enhancedOptions == null ? 0 : size} → nhánh {@code 0}</li>
+     * </ul>
+     *
+     * <p>Expectation:
+     * <ul>
+     *   <li>Trả về {@code false} và chứa lỗi số lượng option</li>
+     * </ul>
+     */
+    @Test
+    void it_should_return_false_when_mcq_options_are_null() {
+      // ===== ARRANGE =====
+      AIEnhancedQuestionResponse response =
+          AIEnhancedQuestionResponse.builder()
+              .enhancedQuestionText("Compute 2 + 2 then choose the correct result.")
+              .enhancedOptions(null)
+              .correctAnswerKey("A")
+              .build();
+      AIEnhancementRequest request = buildMcqRequest("Compute.", "4");
+
+      // ===== ACT =====
+      boolean valid = aiEnhancementService.validateAIOutput(request, response);
+
+      // ===== ASSERT =====
+      assertFalse(valid);
+      assertTrue(
+          response.getValidationErrors().stream()
+              .anyMatch(e -> e.contains("exactly 4 options")));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    /**
      * Abnormal case: MCQ có đủ 4 phần tử nhưng khóa không phải A–D.
      *
      * <p>Branch coverage:
@@ -1056,6 +1101,49 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
       AIEnhancedQuestionResponse response =
           AIEnhancedQuestionResponse.builder()
               .enhancedQuestionText("   ")
+              .enhancedOptions(Map.of("A", "1", "B", "2", "C", "3", "D", "4"))
+              .correctAnswerKey("B")
+              .build();
+      AIEnhancementRequest request = buildMcqRequest("Placeholder.", "2");
+
+      // ===== ACT =====
+      boolean valid = aiEnhancementService.validateAIOutput(request, response);
+
+      // ===== ASSERT =====
+      assertFalse(valid);
+      assertTrue(
+          response.getValidationErrors().stream()
+              .anyMatch(e -> e.contains("Enhanced question text is empty")));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    /**
+     * Abnormal case: Nội dung câu hỏi tăng cường bị {@code null}.
+     *
+     * <p>Input:
+     * <ul>
+     *   <li>enhancedQuestionText: null</li>
+     * </ul>
+     *
+     * <p>Branch coverage:
+     * <ul>
+     *   <li>{@code enhancedQuestionText == null || trim().isEmpty()} → nhánh {@code == null}</li>
+     * </ul>
+     *
+     * <p>Expectation:
+     * <ul>
+     *   <li>Trả về {@code false} và có lỗi "Enhanced question text is empty"</li>
+     * </ul>
+     */
+    @Test
+    void it_should_return_false_when_enhanced_question_text_is_null() {
+      // ===== ARRANGE =====
+      AIEnhancedQuestionResponse response =
+          AIEnhancedQuestionResponse.builder()
+              .enhancedQuestionText(null)
               .enhancedOptions(Map.of("A", "1", "B", "2", "C", "3", "D", "4"))
               .correctAnswerKey("B")
               .build();
@@ -1176,6 +1264,57 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== ASSERT =====
       assertTrue(valid);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    /**
+     * Normal case: Có {@code answerFormula} nhưng {@code parameters} là {@code null}.
+     *
+     * <p>Input:
+     * <ul>
+     *   <li>answerFormula: "a + b"</li>
+     *   <li>parameters: null</li>
+     * </ul>
+     *
+     * <p>Branch coverage:
+     * <ul>
+     *   <li>{@code answerFormula != null && parameters != null} → nhánh FALSE do parameters null</li>
+     *   <li>Dùng {@code request.correctAnswer} thay vì giá trị tính từ formula</li>
+     * </ul>
+     *
+     * <p>Expectation:
+     * <ul>
+     *   <li>Vẫn validate thành công nếu đáp án đúng theo dữ liệu gốc</li>
+     * </ul>
+     */
+    @Test
+    void it_should_use_request_correct_answer_when_formula_exists_but_parameters_are_null() {
+      // ===== ARRANGE =====
+      AIEnhancementRequest request =
+          AIEnhancementRequest.builder()
+              .rawQuestionText("Select the number equal to two.")
+              .questionType(QuestionType.MULTIPLE_CHOICE)
+              .correctAnswer("2")
+              .rawOptions(Map.of("A", "1", "B", "2", "C", "3", "D", "4"))
+              .answerFormula("a + b")
+              .parameters(null)
+              .build();
+      AIEnhancedQuestionResponse response =
+          AIEnhancedQuestionResponse.builder()
+              .enhancedQuestionText("Choose the value 2 from the options.")
+              .enhancedOptions(Map.of("A", "1", "B", "2", "C", "3", "D", "4"))
+              .correctAnswerKey("B")
+              .build();
+
+      // ===== ACT =====
+      boolean valid = aiEnhancementService.validateAIOutput(request, response);
+
+      // ===== ASSERT =====
+      assertTrue(valid);
+      assertTrue(response.getValidationErrors().isEmpty());
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
@@ -1695,6 +1834,47 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
     }
 
     @Test
+    void it_should_return_unknown_when_build_symbolic_formula_answer_input_is_null_or_blank() {
+      // ===== ACT =====
+      String fromNull =
+          invokePrivate(
+              "buildSymbolicFormulaAnswer", new Class<?>[] {String.class, Map.class}, null, Map.of("a", 1));
+      String fromBlank =
+          invokePrivate(
+              "buildSymbolicFormulaAnswer", new Class<?>[] {String.class, Map.class}, "   ", Map.of("a", 1));
+      String fromNullValueParam =
+          invokePrivate(
+              "buildSymbolicFormulaAnswer",
+              new Class<?>[] {String.class, Map.class},
+              "a + 1",
+              new LinkedHashMap<String, Object>() {
+                {
+                  put("a", null);
+                }
+              });
+      String fromWhitespaceReplacement =
+          invokePrivate(
+              "buildSymbolicFormulaAnswer",
+              new Class<?>[] {String.class, Map.class},
+              "a",
+              new LinkedHashMap<String, Object>() {
+                {
+                  put("a", " ");
+                }
+              });
+
+      // ===== ASSERT =====
+      assertEquals("?", fromNull);
+      assertEquals("?", fromBlank);
+      assertEquals("0 + 1", fromNullValueParam);
+      assertEquals("?", fromWhitespaceReplacement);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
     void it_should_cover_evaluate_known_function_all_switch_cases_and_default() {
       // ===== ARRANGE =====
       Method evalMethod;
@@ -1726,6 +1906,39 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== ASSERT =====
       assertTrue(thrown);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_looks_like_arithmetic_expression_null_blank_and_function_patterns() {
+      // ===== ACT =====
+      boolean nullCase =
+          invokePrivate("looksLikeArithmeticExpression", new Class<?>[] {String.class}, (Object) null);
+      boolean blankCase =
+          invokePrivate("looksLikeArithmeticExpression", new Class<?>[] {String.class}, "   ");
+      boolean digitsAndOpsCase =
+          invokePrivate("looksLikeArithmeticExpression", new Class<?>[] {String.class}, "2*(3+4)-5");
+      boolean functionCase =
+          invokePrivate(
+              "looksLikeArithmeticExpression", new Class<?>[] {String.class}, "sqrt(9) + 1");
+      boolean textCase =
+          invokePrivate("looksLikeArithmeticExpression", new Class<?>[] {String.class}, "final answer text");
+      boolean opNoDigitsCase =
+          invokePrivate("looksLikeArithmeticExpression", new Class<?>[] {String.class}, "x+y");
+      boolean digitsNoOpsCase =
+          invokePrivate("looksLikeArithmeticExpression", new Class<?>[] {String.class}, "12345");
+
+      // ===== ASSERT =====
+      assertFalse(nullCase);
+      assertFalse(blankCase);
+      assertTrue(digitsAndOpsCase);
+      assertTrue(functionCase);
+      assertFalse(textCase);
+      assertFalse(opNoDigitsCase);
+      assertTrue(digitsNoOpsCase);
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
@@ -2097,6 +2310,1089 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
       assertThrows(
           Exception.class,
           () -> evalKnownFn.invoke(aiEnhancementService, "min", List.of(2.0)));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_build_enhancement_prompt_when_non_mcq_and_context_blank() {
+      // ===== ARRANGE =====
+      AIEnhancementRequest request =
+          AIEnhancementRequest.builder()
+              .rawQuestionText("Tinh gia tri bieu thuc 3 + 4.")
+              .questionType(QuestionType.SHORT_ANSWER)
+              .correctAnswer("7")
+              .rawOptions(null)
+              .difficulty(QuestionDifficulty.EASY)
+              .context("   ")
+              .build();
+
+      // ===== ACT =====
+      String prompt =
+          invokePrivate("buildEnhancementPrompt", new Class<?>[] {AIEnhancementRequest.class}, request);
+
+      // ===== ASSERT =====
+      assertFalse(prompt.contains("ORIGINAL OPTIONS"));
+      assertFalse(prompt.contains("CONTEXT:"));
+      assertTrue(prompt.contains("DIFFICULTY: EASY"));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_parse_ai_response_when_optional_fields_are_missing() {
+      // ===== ARRANGE =====
+      AIEnhancementRequest request =
+          AIEnhancementRequest.builder()
+              .rawQuestionText("Noi dung goc")
+              .questionType(QuestionType.MULTIPLE_CHOICE)
+              .correctAnswer("2")
+              .rawOptions(Map.of("A", "1", "B", "2", "C", "3", "D", "4"))
+              .build();
+      String minimalJson = "{\"enhancedQuestion\":\"\",\"correctAnswerKey\":\"B\",\"explanation\":\"\"}";
+
+      // ===== ACT =====
+      AIEnhancedQuestionResponse response =
+          invokePrivate(
+              "parseAIResponse",
+              new Class<?>[] {String.class, AIEnhancementRequest.class},
+              minimalJson,
+              request);
+
+      // ===== ASSERT =====
+      assertEquals("Noi dung goc", response.getEnhancedQuestionText());
+      assertEquals(null, response.getEnhancedOptions());
+      assertEquals(null, response.getAlternativeSolutions());
+      assertEquals(null, response.getDistractorExplanations());
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_extract_json_when_curly_braces_are_missing_or_long_raw_text() {
+      // ===== ARRANGE =====
+      String noJson = "plain text without braces";
+      String longRaw = "x".repeat(520);
+
+      // ===== ACT =====
+      String extractedNoJson = invokePrivate("extractJSON", new Class<?>[] {String.class}, noJson);
+      String extractedLongRaw = invokePrivate("extractJSON", new Class<?>[] {String.class}, longRaw);
+
+      // ===== ASSERT =====
+      assertEquals(noJson, extractedNoJson);
+      assertEquals(longRaw, extractedLongRaw);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_clean_option_value_when_input_is_blank_or_cleans_to_empty() {
+      // ===== ARRANGE =====
+      String blank = "   ";
+      String onlyParentheses = "(abc)";
+
+      // ===== ACT =====
+      String blankResult = invokePrivate("cleanOptionValue", new Class<?>[] {String.class}, blank);
+      String emptiedResult =
+          invokePrivate("cleanOptionValue", new Class<?>[] {String.class}, onlyParentheses);
+
+      // ===== ASSERT =====
+      assertEquals(blank, blankResult);
+      assertEquals(onlyParentheses, emptiedResult);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_parse_canonical_options_null_non_object_and_blank_values() throws Exception {
+      // ===== ARRANGE =====
+      JsonNode nullNode = mapper.readTree("null");
+      JsonNode arrayNode = mapper.readTree("[1,2]");
+      JsonNode objectWithBlank = mapper.readTree("{\"A\":\"\",\"B\":\"2\"}");
+
+      // ===== ACT =====
+      Map<String, String> fromNull =
+          invokePrivate("parseCanonicalOptions", new Class<?>[] {JsonNode.class, Map.class}, nullNode, Map.of());
+      Map<String, String> fromArray =
+          invokePrivate("parseCanonicalOptions", new Class<?>[] {JsonNode.class, Map.class}, arrayNode, Map.of());
+      Map<String, String> fromBlankObject =
+          invokePrivate(
+              "parseCanonicalOptions",
+              new Class<?>[] {JsonNode.class, Map.class},
+              objectWithBlank,
+              Map.of());
+
+      // ===== ASSERT =====
+      assertTrue(fromNull.isEmpty());
+      assertTrue(fromArray.isEmpty());
+      assertEquals("2", fromBlankObject.get("B"));
+      assertEquals(null, fromBlankObject.get("A"));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_resolve_effective_parameters_when_root_or_template_is_null() throws Exception {
+      // ===== ARRANGE =====
+      JsonNode root = mapper.readTree("{\"usedParameters\":{\"a\":1}}");
+      QuestionTemplate template =
+          QuestionTemplate.builder()
+              .templateType(QuestionType.MULTIPLE_CHOICE)
+              .parameters(Map.of("a", Map.of("type", "integer", "min", 1, "max", 9)))
+              .build();
+
+      // ===== ACT =====
+      Map<String, Object> withNullRoot =
+          invokePrivate(
+              "resolveEffectiveParameters",
+              new Class<?>[] {JsonNode.class, QuestionTemplate.class, Map.class},
+              null,
+              template,
+              Map.of("a", 2));
+      Map<String, Object> withNullTemplate =
+          invokePrivate(
+              "resolveEffectiveParameters",
+              new Class<?>[] {JsonNode.class, QuestionTemplate.class, Map.class},
+              root,
+              null,
+              Map.of("a", 3));
+      Map<String, Object> withNullFallback =
+          invokePrivate(
+              "resolveEffectiveParameters",
+              new Class<?>[] {JsonNode.class, QuestionTemplate.class, Map.class},
+              root,
+              template,
+              null);
+
+      // ===== ASSERT =====
+      assertEquals(2, withNullRoot.get("a"));
+      assertEquals(3, withNullTemplate.get("a"));
+      assertEquals(1, withNullFallback.get("a"));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_pick_parameters_for_non_map_integer_exclude_and_double_ranges() {
+      // ===== ARRANGE =====
+      QuestionTemplate template =
+          QuestionTemplate.builder()
+              .parameters(
+                  Map.of(
+                      "legacy", "not-a-map",
+                      "a", Map.of("type", "integer", "min", 1, "max", 0, "exclude", List.of(0)),
+                      "ratio", Map.of("type", "double", "min", 1.5, "max", 2.5)))
+              .build();
+
+      // ===== ACT =====
+      Map<String, Object> picked =
+          invokePrivate("pickParameters", new Class<?>[] {QuestionTemplate.class, int.class}, template, 1);
+
+      // ===== ASSERT =====
+      assertEquals(1, picked.get("legacy"));
+      assertTrue(((Number) picked.get("a")).intValue() >= 1);
+      assertTrue(((Number) picked.get("ratio")).doubleValue() >= 1.5);
+      assertTrue(((Number) picked.get("ratio")).doubleValue() <= 2.5);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_normalize_formula_wrappers_and_fraction_replacement_loops() {
+      // ===== ARRANGE =====
+      String wrappedRound = "\\(\\frac{1}{2} + 1\\)";
+      String wrappedSquare = "\\[\\frac{a}{b}\\]";
+
+      // ===== ACT =====
+      String normalizedRound =
+          invokePrivate("normalizeFormulaForEvaluation", new Class<?>[] {String.class}, wrappedRound);
+      String normalizedSquare =
+          invokePrivate("normalizeFormulaForEvaluation", new Class<?>[] {String.class}, wrappedSquare);
+
+      // ===== ASSERT =====
+      assertTrue(normalizedRound.contains("((1)/(2)) + 1"));
+      assertTrue(normalizedSquare.contains("((a)/(b))"));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_parse_canonical_generated_question_for_non_mcq_and_missing_fields() {
+      // ===== ARRANGE =====
+      QuestionTemplate template =
+          QuestionTemplate.builder()
+              .templateType(QuestionType.SHORT_ANSWER)
+              .answerFormula("x+1")
+              .templateText(Map.of("vi", "Gia tri cua bieu thuc la {{x}}"))
+              .parameters(Map.of("x", Map.of("type", "integer", "min", 1, "max", 9)))
+              .build();
+      Map<String, Object> params = Map.of("x", 2);
+      String json =
+          "{"
+              + "\"questionText\":\"\","
+              + "\"correctAnswer\":\"\","
+              + "\"explanation\":\"\","
+              + "\"solutionSteps\":\"\","
+              + "\"difficulty\":\"\","
+              + "\"answerCalculation\":\"\""
+              + "}";
+
+      // ===== ACT =====
+      GeneratedQuestionSample sample =
+          invokePrivate(
+              "parseCanonicalGeneratedQuestion",
+              new Class<?>[] {
+                String.class,
+                QuestionTemplate.class,
+                Map.class,
+                QuestionDifficulty.class,
+                String.class,
+                String.class,
+                String.class
+              },
+              json,
+              template,
+              params,
+              QuestionDifficulty.MEDIUM,
+              "Fallback question",
+              "Fallback explanation",
+              "diagram");
+
+      // ===== ASSERT =====
+      assertEquals("Fallback question", sample.getQuestionText());
+      assertEquals("x+1", sample.getCorrectAnswer());
+      assertEquals("Fallback explanation", sample.getExplanation());
+      assertEquals("Fallback explanation", sample.getSolutionSteps());
+      assertEquals("x+1", sample.getAnswerCalculation());
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_generate_question_from_canonical_with_non_mcq_fallback_path() {
+      // ===== ARRANGE =====
+      CanonicalQuestion cq = new CanonicalQuestion();
+      cq.setId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+      cq.setProblemText(null);
+      cq.setSolutionSteps(null);
+      cq.setDiagramDefinition(null);
+      QuestionTemplate template =
+          QuestionTemplate.builder()
+              .templateType(QuestionType.SHORT_ANSWER)
+              .templateText(Map.of("vi", "Tinh {{a}} + 1"))
+              .answerFormula("a+1")
+              .parameters(Map.of("a", Map.of("type", "integer", "min", 1, "max", 1)))
+              .build();
+      when(geminiService.sendMessage(anyString())).thenThrow(new RuntimeException("offline"));
+
+      // ===== ACT =====
+      GeneratedQuestionSample result =
+          aiEnhancementService.generateQuestionFromCanonical(cq, template, 0);
+
+      // ===== ASSERT =====
+      assertEquals(null, result.getOptions());
+      assertEquals("a+1", result.getCorrectAnswer());
+      assertEquals("a+1", result.getAnswerCalculation());
+
+      // ===== VERIFY =====
+      verify(geminiService, times(1)).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_parse_canonical_generated_question_mcq_with_template_option_fallback_and_invalid_key() {
+      // ===== ARRANGE =====
+      QuestionTemplate template =
+          QuestionTemplate.builder()
+              .templateType(QuestionType.MULTIPLE_CHOICE)
+              .answerFormula("a+b")
+              .templateText(Map.of("vi", "Cau hoi {{a}} + {{b}}"))
+              .parameters(
+                  Map.of(
+                      "a", Map.of("type", "integer", "min", 1, "max", 9),
+                      "b", Map.of("type", "integer", "min", 1, "max", 9)))
+              .optionsGenerator(Map.of("A", "{{a}}", "B", "{{b}}", "C", "10", "D", "11"))
+              .build();
+      Map<String, Object> params = Map.of("a", 3, "b", 4);
+      String json =
+          "{"
+              + "\"questionText\":\"Q\","
+              + "\"options\":{},"
+              + "\"correctAnswer\":\"Z\","
+              + "\"difficulty\":\"UNKNOWN\","
+              + "\"explanation\":\"E\","
+              + "\"solutionSteps\":\"\","
+              + "\"answerCalculation\":\"\""
+              + "}";
+
+      // ===== ACT =====
+      GeneratedQuestionSample sample =
+          invokePrivate(
+              "parseCanonicalGeneratedQuestion",
+              new Class<?>[] {
+                String.class,
+                QuestionTemplate.class,
+                Map.class,
+                QuestionDifficulty.class,
+                String.class,
+                String.class,
+                String.class
+              },
+              json,
+              template,
+              params,
+              QuestionDifficulty.HARD,
+              "fallbackQ",
+              "fallbackE",
+              "diagram");
+
+      // ===== ASSERT =====
+      assertEquals("A", sample.getCorrectAnswer());
+      assertNotNull(sample.getOptions().get("A"));
+      assertEquals(QuestionDifficulty.HARD, sample.getCalculatedDifficulty());
+      assertEquals("a+b", sample.getAnswerCalculation());
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_parse_canonical_generated_question_mcq_when_options_exist_and_correct_key_is_valid() {
+      // ===== ARRANGE =====
+      QuestionTemplate template =
+          QuestionTemplate.builder()
+              .templateType(QuestionType.MULTIPLE_CHOICE)
+              .answerFormula("a+b")
+              .templateText(Map.of("vi", "Q"))
+              .parameters(Map.of("a", Map.of("type", "integer", "min", 1, "max", 9)))
+              .optionsGenerator(Map.of("A", "1", "B", "2", "C", "3", "D", "4"))
+              .build();
+      String json =
+          "{"
+              + "\"questionText\":\"Q\","
+              + "\"options\":{\"A\":\"1\",\"B\":\"2\",\"C\":\"3\",\"D\":\"4\"},"
+              + "\"correctAnswer\":\"B\","
+              + "\"explanation\":\"E\","
+              + "\"solutionSteps\":\"S\","
+              + "\"difficulty\":\"MEDIUM\","
+              + "\"answerCalculation\":\"calc\""
+              + "}";
+
+      // ===== ACT =====
+      GeneratedQuestionSample sample =
+          invokePrivate(
+              "parseCanonicalGeneratedQuestion",
+              new Class<?>[] {
+                String.class,
+                QuestionTemplate.class,
+                Map.class,
+                QuestionDifficulty.class,
+                String.class,
+                String.class,
+                String.class
+              },
+              json,
+              template,
+              Map.of("a", 1),
+              QuestionDifficulty.HARD,
+              "fallbackQ",
+              "fallbackE",
+              "diagram");
+
+      // ===== ASSERT =====
+      assertEquals("B", sample.getCorrectAnswer());
+      assertEquals("calc", sample.getAnswerCalculation());
+      assertEquals("S", sample.getSolutionSteps());
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_build_canonical_generation_prompt_for_mcq_with_diagram() {
+      // ===== ARRANGE =====
+      CanonicalQuestion cq = new CanonicalQuestion();
+      cq.setProblemText("Bai toan mau");
+      cq.setSolutionSteps("Buoc giai");
+      cq.setDiagramDefinition("ve hinh tam giac");
+      QuestionTemplate template =
+          QuestionTemplate.builder()
+              .templateType(QuestionType.MULTIPLE_CHOICE)
+              .build();
+
+      // ===== ACT =====
+      String prompt =
+          invokePrivate(
+              "buildCanonicalGenerationPrompt",
+              new Class<?>[] {
+                CanonicalQuestion.class,
+                QuestionTemplate.class,
+                Map.class,
+                String.class,
+                String.class,
+                int.class
+              },
+              cq,
+              template,
+              Map.of("a", 1),
+              "P",
+              "S",
+              0);
+
+      // ===== ASSERT =====
+      assertTrue(prompt.contains("CANONICAL DIAGRAM"));
+      assertTrue(prompt.contains("Provide exactly 4 options"));
+      assertTrue(prompt.contains("correctAnswer must be one key"));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_find_correct_answer_key_when_options_or_answer_are_null() {
+      // ===== ACT =====
+      String keyWithNullOptions =
+          invokePrivate(
+              "findCorrectAnswerKey",
+              new Class<?>[] {Map.class, String.class},
+              null,
+              "2");
+      String keyWithNullAnswer =
+          invokePrivate(
+              "findCorrectAnswerKey",
+              new Class<?>[] {Map.class, String.class},
+              Map.of("A", "1", "B", "2"),
+              null);
+
+      // ===== ASSERT =====
+      assertEquals("A", keyWithNullOptions);
+      assertEquals("A", keyWithNullAnswer);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_include_context_and_skip_original_options_when_mcq_has_null_options() {
+      // ===== ARRANGE =====
+      AIEnhancementRequest request =
+          AIEnhancementRequest.builder()
+              .rawQuestionText("Tinh tong hai so.")
+              .questionType(QuestionType.MULTIPLE_CHOICE)
+              .correctAnswer("5")
+              .rawOptions(null)
+              .difficulty(QuestionDifficulty.MEDIUM)
+              .context("Ngu canh co noi dung bo sung")
+              .build();
+
+      // ===== ACT =====
+      String prompt =
+          invokePrivate("buildEnhancementPrompt", new Class<?>[] {AIEnhancementRequest.class}, request);
+
+      // ===== ASSERT =====
+      assertTrue(prompt.contains("CONTEXT: Ngu canh co noi dung bo sung"));
+      assertFalse(prompt.contains("ORIGINAL OPTIONS"));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_skip_context_when_context_is_null() {
+      // ===== ARRANGE =====
+      AIEnhancementRequest request =
+          AIEnhancementRequest.builder()
+              .rawQuestionText("Tinh hieu hai so.")
+              .questionType(QuestionType.MULTIPLE_CHOICE)
+              .correctAnswer("2")
+              .rawOptions(Map.of("A", "1", "B", "2", "C", "3", "D", "4"))
+              .difficulty(QuestionDifficulty.MEDIUM)
+              .context(null)
+              .build();
+
+      // ===== ACT =====
+      String prompt =
+          invokePrivate("buildEnhancementPrompt", new Class<?>[] {AIEnhancementRequest.class}, request);
+
+      // ===== ASSERT =====
+      assertTrue(prompt.contains("ORIGINAL OPTIONS"));
+      assertFalse(prompt.contains("CONTEXT:"));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_return_default_key_when_no_option_matches_correct_answer() {
+      // ===== ACT =====
+      String result =
+          invokePrivate(
+              "findCorrectAnswerKey",
+              new Class<?>[] {Map.class, String.class},
+              Map.of("A", "10", "B", "11"),
+              "999");
+
+      // ===== ASSERT =====
+      assertEquals("A", result);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_throw_number_format_exception_when_parse_numeric_answer_receives_null() {
+      // ===== ARRANGE =====
+      Method parseNumeric;
+      try {
+        parseNumeric = AIEnhancementServiceImpl.class.getDeclaredMethod("parseNumericAnswer", String.class);
+        parseNumeric.setAccessible(true);
+      } catch (Exception ex) {
+        throw new RuntimeException(ex);
+      }
+
+      // ===== ACT & ASSERT =====
+      Exception thrown =
+          assertThrows(
+              Exception.class,
+              () -> parseNumeric.invoke(aiEnhancementService, new Object[] {null}));
+      assertTrue(thrown.getCause() instanceof NumberFormatException);
+      assertTrue(thrown.getCause().getMessage().contains("Answer is null"));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_return_false_when_math_symbols_exist_but_other_subject_keyword_present() {
+      // ===== ACT =====
+      boolean result =
+          invokePrivate(
+              "isMathematicsContent",
+              new Class<?>[] {String.class},
+              "Compute 2+3 while discussing history timeline.");
+
+      // ===== ASSERT =====
+      assertFalse(result);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_return_true_when_math_symbols_exist_without_math_keywords() {
+      // ===== ACT =====
+      boolean result =
+          invokePrivate("isMathematicsContent", new Class<?>[] {String.class}, "2+3=5");
+
+      // ===== ASSERT =====
+      assertTrue(result);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_is_same_answer_original_option_scan_with_null_and_non_matching_values() {
+      // ===== ARRANGE =====
+      Map<String, String> originalOptions = new LinkedHashMap<>();
+      originalOptions.put("A", null);
+      originalOptions.put("B", "2");
+      Map<String, String> aiOptions = Map.of("B", "2");
+
+      // ===== ACT =====
+      boolean same =
+          invokePrivate(
+              "isSameAnswer",
+              new Class<?>[] {String.class, Map.class, String.class, Map.class},
+              "2",
+              originalOptions,
+              "B",
+              aiOptions);
+
+      // ===== ASSERT =====
+      assertTrue(same);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_is_same_answer_when_original_answer_is_null() {
+      // ===== ACT =====
+      boolean result =
+          invokePrivate(
+              "isSameAnswer",
+              new Class<?>[] {String.class, Map.class, String.class, Map.class},
+              null,
+              Map.of("A", "1"),
+              "A",
+              Map.of("A", "1"));
+
+      // ===== ASSERT =====
+      assertFalse(result);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_generate_question_from_canonical_when_problem_and_solution_are_blank_and_diagram_present() {
+      // ===== ARRANGE =====
+      CanonicalQuestion canonicalQuestion = new CanonicalQuestion();
+      canonicalQuestion.setId(UUID.fromString("33333333-3333-3333-3333-333333333333"));
+      canonicalQuestion.setProblemText("   ");
+      canonicalQuestion.setSolutionSteps("   ");
+      canonicalQuestion.setDiagramDefinition("line {{a}}");
+
+      QuestionTemplate template =
+          QuestionTemplate.builder()
+              .templateType(QuestionType.MULTIPLE_CHOICE)
+              .templateText(Map.of("vi", "Bai toan {{a}}"))
+              .answerFormula("a+1")
+              .parameters(Map.of("a", Map.of("type", "integer", "min", 1, "max", 1)))
+              .optionsGenerator(Map.of("A", "1", "B", "2", "C", "3", "D", "4"))
+              .build();
+
+      when(geminiService.sendMessage(anyString())).thenThrow(new RuntimeException("offline"));
+
+      // ===== ACT =====
+      GeneratedQuestionSample result =
+          aiEnhancementService.generateQuestionFromCanonical(canonicalQuestion, template, 0);
+
+      // ===== ASSERT =====
+      assertNotNull(result.getQuestionText());
+      assertEquals("AI-generated explanation from canonical source", result.getExplanation());
+      assertNotNull(result.getDiagramData());
+      assertEquals("A", result.getCorrectAnswer());
+
+      // ===== VERIFY =====
+      verify(geminiService, times(1)).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_build_canonical_prompt_non_mcq_and_blank_diagram() {
+      // ===== ARRANGE =====
+      CanonicalQuestion canonicalQuestion = new CanonicalQuestion();
+      canonicalQuestion.setProblemText("De bai");
+      canonicalQuestion.setSolutionSteps("Loi giai");
+      canonicalQuestion.setDiagramDefinition("   ");
+
+      QuestionTemplate template =
+          QuestionTemplate.builder().templateType(QuestionType.SHORT_ANSWER).build();
+
+      // ===== ACT =====
+      String prompt =
+          invokePrivate(
+              "buildCanonicalGenerationPrompt",
+              new Class<?>[] {
+                CanonicalQuestion.class,
+                QuestionTemplate.class,
+                Map.class,
+                String.class,
+                String.class,
+                int.class
+              },
+              canonicalQuestion,
+              template,
+              Map.of("a", 1),
+              "P",
+              "S",
+              1);
+
+      // ===== ASSERT =====
+      assertFalse(prompt.contains("CANONICAL DIAGRAM"));
+      assertTrue(prompt.contains("For non-MCQ, options can be empty object {}."));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_parse_canonical_generated_question_non_mcq_blank_answer_and_template_formula_null() {
+      // ===== ARRANGE =====
+      QuestionTemplate template =
+          QuestionTemplate.builder()
+              .templateType(QuestionType.SHORT_ANSWER)
+              .answerFormula(null)
+              .templateText(Map.of("vi", "Q"))
+              .parameters(Map.of())
+              .build();
+      String json =
+          "{"
+              + "\"questionText\":\"\","
+              + "\"explanation\":\"\","
+              + "\"solutionSteps\":\"\","
+              + "\"correctAnswer\":\"\","
+              + "\"difficulty\":\"X\","
+              + "\"answerCalculation\":\"\""
+              + "}";
+
+      // ===== ACT =====
+      GeneratedQuestionSample result =
+          invokePrivate(
+              "parseCanonicalGeneratedQuestion",
+              new Class<?>[] {
+                String.class,
+                QuestionTemplate.class,
+                Map.class,
+                QuestionDifficulty.class,
+                String.class,
+                String.class,
+                String.class
+              },
+              json,
+              template,
+              Map.of(),
+              QuestionDifficulty.MEDIUM,
+              "fallback question",
+              "fallback explanation",
+              "diagram");
+
+      // ===== ASSERT =====
+      assertEquals("N/A", result.getCorrectAnswer());
+      assertEquals(null, result.getAnswerCalculation());
+      assertEquals("fallback question", result.getQuestionText());
+      assertEquals("fallback explanation", result.getExplanation());
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_parse_canonical_generated_question_non_mcq_when_correct_answer_exists() {
+      // ===== ARRANGE =====
+      QuestionTemplate template =
+          QuestionTemplate.builder()
+              .templateType(QuestionType.SHORT_ANSWER)
+              .answerFormula("fallback")
+              .templateText(Map.of("vi", "Q"))
+              .parameters(Map.of())
+              .build();
+      String json =
+          "{"
+              + "\"questionText\":\"Q\","
+              + "\"explanation\":\"E\","
+              + "\"solutionSteps\":\"S\","
+              + "\"correctAnswer\":\"42\","
+              + "\"difficulty\":\"MEDIUM\","
+              + "\"answerCalculation\":\"A\""
+              + "}";
+
+      // ===== ACT =====
+      GeneratedQuestionSample result =
+          invokePrivate(
+              "parseCanonicalGeneratedQuestion",
+              new Class<?>[] {
+                String.class,
+                QuestionTemplate.class,
+                Map.class,
+                QuestionDifficulty.class,
+                String.class,
+                String.class,
+                String.class
+              },
+              json,
+              template,
+              Map.of(),
+              QuestionDifficulty.MEDIUM,
+              "fallback question",
+              "fallback explanation",
+              "diagram");
+
+      // ===== ASSERT =====
+      assertEquals("42", result.getCorrectAnswer());
+      assertEquals("A", result.getAnswerCalculation());
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_parse_canonical_generated_question_catch_branch_for_non_mcq() {
+      // ===== ARRANGE =====
+      QuestionTemplate template =
+          QuestionTemplate.builder()
+              .templateType(QuestionType.SHORT_ANSWER)
+              .answerFormula("a+1")
+              .templateText(Map.of("vi", "Q"))
+              .parameters(Map.of("a", Map.of("type", "integer", "min", 1, "max", 1)))
+              .build();
+
+      // ===== ACT =====
+      GeneratedQuestionSample result =
+          invokePrivate(
+              "parseCanonicalGeneratedQuestion",
+              new Class<?>[] {
+                String.class,
+                QuestionTemplate.class,
+                Map.class,
+                QuestionDifficulty.class,
+                String.class,
+                String.class,
+                String.class
+              },
+              "invalid-json",
+              template,
+              Map.of("a", 1),
+              QuestionDifficulty.HARD,
+              "fallback question",
+              "fallback explanation",
+              "diagram");
+
+      // ===== ASSERT =====
+      assertEquals(null, result.getOptions());
+      assertEquals("N/A", result.getCorrectAnswer());
+      assertEquals("a+1", result.getAnswerCalculation());
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_parse_canonical_options_and_ensure_keys_with_blank_and_null_paths() throws Exception {
+      // ===== ARRANGE =====
+      JsonNode withBlank = mapper.readTree("{\"A\":\"\",\"B\":\"2\"}");
+
+      // ===== ACT =====
+      Map<String, String> parsed =
+          invokePrivate(
+              "parseCanonicalOptions",
+              new Class<?>[] {JsonNode.class, Map.class},
+              withBlank,
+              Map.of());
+      assertEquals(null, parsed.get("A"));
+      assertEquals("2", parsed.get("B"));
+
+      invokePrivate("ensureCanonicalFourOptionKeys", new Class<?>[] {Map.class}, (Object) null);
+      invokePrivate("ensureCanonicalFourOptionKeys", new Class<?>[] {Map.class}, parsed);
+
+      // ===== ASSERT =====
+      assertEquals("Lua chon A", parsed.get("A"));
+      assertEquals("2", parsed.get("B"));
+      assertNotNull(parsed.get("C"));
+      assertNotNull(parsed.get("D"));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_return_empty_map_when_parse_canonical_options_input_is_null() {
+      // ===== ACT =====
+      Map<String, String> parsed =
+          invokePrivate(
+              "parseCanonicalOptions",
+              new Class<?>[] {JsonNode.class, Map.class},
+              null,
+              Map.of());
+
+      // ===== ASSERT =====
+      assertTrue(parsed.isEmpty());
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_cover_evaluate_formula_blank_input_and_engine_null_fallback_return_unknown() {
+      // ===== ACT =====
+      String blankResult =
+          invokePrivate("evaluateFormula", new Class<?>[] {String.class, Map.class}, "   ", Map.of());
+      String nullResult =
+          invokePrivate("evaluateFormula", new Class<?>[] {String.class, Map.class}, null, Map.of());
+      String unknownResult =
+          invokePrivate("evaluateFormula", new Class<?>[] {String.class, Map.class}, "{{x}}", Map.of());
+
+      // ===== ASSERT =====
+      assertEquals("?", blankResult);
+      assertEquals("?", nullResult);
+      assertEquals("?", unknownResult);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    @Test
+    void it_should_return_null_when_clean_option_value_input_is_null() {
+      // ===== ACT =====
+      String result = invokePrivate("cleanOptionValue", new Class<?>[] {String.class}, (Object) null);
+
+      // ===== ASSERT =====
+      assertEquals(null, result);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    /**
+     * Abnormal case: parseArithmetic ném lỗi khi còn token dư sau khi parse.
+     *
+     * <p>Branch coverage:
+     * <ul>
+     *   <li>if (pos[0] != expr.length()) -> TRUE branch</li>
+     * </ul>
+     *
+     * <p>Expectation:
+     * <ul>
+     *   <li>Throw RuntimeException và assert message lỗi cụ thể</li>
+     * </ul>
+     */
+    @Test
+    void it_should_throw_runtime_exception_with_message_when_parse_arithmetic_has_unexpected_token() {
+      // ===== ARRANGE =====
+      Method parseArithmetic;
+      try {
+        parseArithmetic = AIEnhancementServiceImpl.class.getDeclaredMethod("parseArithmetic", String.class);
+        parseArithmetic.setAccessible(true);
+      } catch (Exception ex) {
+        throw new RuntimeException(ex);
+      }
+
+      // ===== ACT & ASSERT =====
+      Exception thrown =
+          assertThrows(
+              Exception.class,
+              () -> parseArithmetic.invoke(aiEnhancementService, "1+2x"));
+      assertTrue(thrown.getCause() instanceof RuntimeException);
+      assertTrue(thrown.getCause().getMessage().contains("Unexpected token"));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    /**
+     * Abnormal case: evaluateKnownFunction rơi vào default switch branch.
+     *
+     * <p>Branch coverage:
+     * <ul>
+     *   <li>switch default branch -> throw unknown function</li>
+     * </ul>
+     *
+     * <p>Expectation:
+     * <ul>
+     *   <li>Throw RuntimeException và assert message chứa tên hàm</li>
+     * </ul>
+     */
+    @Test
+    void it_should_throw_unknown_function_message_when_switch_case_does_not_match() throws Exception {
+      // ===== ARRANGE =====
+      Method evalKnownFn =
+          AIEnhancementServiceImpl.class.getDeclaredMethod("evaluateKnownFunction", String.class, List.class);
+      evalKnownFn.setAccessible(true);
+
+      // ===== ACT & ASSERT =====
+      Exception thrown =
+          assertThrows(
+              Exception.class,
+              () -> evalKnownFn.invoke(aiEnhancementService, "median", List.of(1.0, 2.0)));
+      assertTrue(thrown.getCause() instanceof RuntimeException);
+      assertTrue(thrown.getCause().getMessage().contains("Unknown function: median"));
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    /**
+     * Normal + Abnormal case: isSameAnswer cover early-return branches và return cuối.
+     *
+     * <p>Branch coverage:
+     * <ul>
+     *   <li>answerKey == null || options == null -> TRUE branch</li>
+     *   <li>aiAnswer == null -> TRUE branch</li>
+     *   <li>return normalized1.equals(normalized2) -> TRUE branch</li>
+     * </ul>
+     */
+    @Test
+    void it_should_cover_is_same_answer_all_return_paths_for_null_and_string_fallback() {
+      // ===== ACT =====
+      boolean nullGuardResult =
+          invokePrivate(
+              "isSameAnswer",
+              new Class<?>[] {String.class, Map.class, String.class, Map.class},
+              "2",
+              Map.of("A", "2"),
+              null,
+              Map.of("A", "2"));
+      boolean missingAiAnswerResult =
+          invokePrivate(
+              "isSameAnswer",
+              new Class<?>[] {String.class, Map.class, String.class, Map.class},
+              "2",
+              Map.of("A", "2"),
+              "B",
+              Map.of("A", "2"));
+      boolean stringFallbackEqualResult =
+          invokePrivate(
+              "isSameAnswer",
+              new Class<?>[] {String.class, Map.class, String.class, Map.class},
+              "AnswerText",
+              Map.of("A", "AnswerText"),
+              "A",
+              Map.of("A", "answertext"));
+
+      // ===== ASSERT =====
+      assertFalse(nullGuardResult);
+      assertFalse(missingAiAnswerResult);
+      assertTrue(stringFallbackEqualResult);
+
+      // ===== VERIFY =====
+      verify(geminiService, never()).sendMessage(anyString());
+      verifyNoMoreInteractions(geminiService);
+    }
+
+    /**
+     * Normal case: cover return path của normalizeAnswer khi input null.
+     */
+    @Test
+    void it_should_return_empty_string_when_normalize_answer_input_is_null() {
+      // ===== ACT =====
+      String normalized = invokePrivate("normalizeAnswer", new Class<?>[] {String.class}, (Object) null);
+
+      // ===== ASSERT =====
+      assertEquals("", normalized);
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
