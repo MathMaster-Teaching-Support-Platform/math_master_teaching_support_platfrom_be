@@ -2313,6 +2313,52 @@ class LessonSlideServiceImplTest extends BaseUnitTest {
           () -> assertEquals(true, plainGuidance.contains("LaTeX")));
     }
 
+    /**
+     * Normal case: Cover nhánh còn thiếu của resolve/build format guidance.
+     *
+     * <p>Branch coverage:
+     * <ul>
+     *   <li>resolveOutputFormat với outputFormat != null</li>
+     *   <li>buildFormatGuidance với LATEX + jsonMode=false</li>
+     *   <li>buildFormatGuidance với HYBRID (switch case riêng)</li>
+     * </ul>
+     *
+     * <p>Expectation:
+     * <ul>
+     *   <li>Giữ nguyên enum đầu vào và trả guidance đúng format mode</li>
+     * </ul>
+     */
+    @Test
+    void it_should_keep_non_null_output_format_and_build_guidance_for_hybrid_and_latex_text_mode() {
+      // ===== ACT =====
+      Object resolved =
+          invokePrivate(
+              "resolveOutputFormat",
+              new Class<?>[] {com.fptu.math_master.enums.LessonSlideOutputFormat.class},
+              com.fptu.math_master.enums.LessonSlideOutputFormat.LATEX);
+      String latexTextModeGuidance =
+          (String)
+              invokePrivate(
+                  "buildFormatGuidance",
+                  new Class<?>[] {com.fptu.math_master.enums.LessonSlideOutputFormat.class, boolean.class},
+                  com.fptu.math_master.enums.LessonSlideOutputFormat.LATEX,
+                  false);
+      String hybridJsonModeGuidance =
+          (String)
+              invokePrivate(
+                  "buildFormatGuidance",
+                  new Class<?>[] {com.fptu.math_master.enums.LessonSlideOutputFormat.class, boolean.class},
+                  com.fptu.math_master.enums.LessonSlideOutputFormat.HYBRID,
+                  true);
+
+      // ===== ASSERT =====
+      assertAll(
+          () -> assertEquals(com.fptu.math_master.enums.LessonSlideOutputFormat.LATEX, resolved),
+          () -> assertEquals(false, latexTextModeGuidance.contains("JSON string")),
+          () -> assertEquals(true, latexTextModeGuidance.contains("LaTeX inline")),
+          () -> assertEquals(true, hybridJsonModeGuidance.contains("PHẢI escape backslash")));
+    }
+
     @Test
     void it_should_pick_non_blank_default_value_when_input_is_blank() {
       // ===== ACT =====
