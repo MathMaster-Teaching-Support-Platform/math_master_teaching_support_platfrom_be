@@ -3,6 +3,7 @@ package com.fptu.math_master.service.impl;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -1786,6 +1787,230 @@ class LessonContentServiceImplTest extends BaseUnitTest {
 
       // ===== ASSERT =====
       assertEquals(CurriculumCategory.GEOMETRY, category);
+
+      // ===== VERIFY =====
+      verifyNoMoreInteractions(
+          lessonRepository, chapterRepository, curriculumRepository, userRepository, geminiService);
+    }
+  }
+
+  @Nested
+  @DisplayName("inner ai data classes")
+  class InnerAiDataClassTests {
+
+    private static class AiChapterDataCanEqualFalse extends LessonContentServiceImpl.AiChapterData {
+      @Override
+      public boolean canEqual(Object other) {
+        return false;
+      }
+    }
+
+    private static class AiLessonDataCanEqualFalse extends LessonContentServiceImpl.AiLessonData {
+      @Override
+      public boolean canEqual(Object other) {
+        return false;
+      }
+    }
+
+    @Test
+    void it_should_cover_ai_chapter_data_lombok_contract_with_all_constructors_and_equals_paths() {
+      // ===== ARRANGE =====
+      LessonContentServiceImpl.AiChapterData empty = new LessonContentServiceImpl.AiChapterData();
+      empty.setTitle("Hệ phương trình");
+      empty.setDescription("Mô tả chương hệ phương trình");
+      LessonContentServiceImpl.AiChapterData same =
+          new LessonContentServiceImpl.AiChapterData(
+              "Hệ phương trình", "Mô tả chương hệ phương trình");
+      LessonContentServiceImpl.AiChapterData diffTitle =
+          new LessonContentServiceImpl.AiChapterData("Bất phương trình", "Mô tả chương hệ phương trình");
+      LessonContentServiceImpl.AiChapterData diffDescription =
+          new LessonContentServiceImpl.AiChapterData("Hệ phương trình", "Mô tả khác");
+      LessonContentServiceImpl.AiChapterData nullFields =
+          new LessonContentServiceImpl.AiChapterData(null, null);
+      LessonContentServiceImpl.AiChapterData nullFieldsSame =
+          new LessonContentServiceImpl.AiChapterData(null, null);
+
+      // ===== ACT & ASSERT =====
+      assertEquals("Hệ phương trình", empty.getTitle());
+      assertEquals("Mô tả chương hệ phương trình", empty.getDescription());
+      assertEquals(empty, same);
+      assertEquals(nullFields, nullFieldsSame);
+      assertNotEquals(empty, diffTitle);
+      assertNotEquals(empty, diffDescription);
+      assertNotEquals(empty, nullFields);
+      assertNotEquals(empty, null);
+      assertNotEquals(empty, "not-ai-chapter");
+      assertNotEquals(empty.hashCode(), diffTitle.hashCode());
+      assertTrue(empty.toString().contains("AiChapterData"));
+
+      // ===== VERIFY =====
+      verifyNoMoreInteractions(
+          lessonRepository, chapterRepository, curriculumRepository, userRepository, geminiService);
+    }
+
+    @Test
+    void it_should_cover_ai_lesson_data_lombok_contract_with_branchy_equals_and_hashcode() {
+      // ===== ARRANGE =====
+      LessonContentServiceImpl.AiChapterData chapterA =
+          new LessonContentServiceImpl.AiChapterData("Giới thiệu", "Khởi động kiến thức");
+      LessonContentServiceImpl.AiChapterData chapterB =
+          new LessonContentServiceImpl.AiChapterData("Luyện tập", "Bài tập vận dụng");
+
+      LessonContentServiceImpl.AiLessonData base = new LessonContentServiceImpl.AiLessonData();
+      base.setTitle("Hàm số bậc hai");
+      base.setDescription("Khảo sát hàm số và đồ thị parabol");
+      base.setDurationMinutes(45);
+      base.setDifficulty("BEGINNER");
+      base.setChapters(List.of(chapterA, chapterB));
+
+      LessonContentServiceImpl.AiLessonData same =
+          new LessonContentServiceImpl.AiLessonData(
+              "Hàm số bậc hai",
+              "Khảo sát hàm số và đồ thị parabol",
+              45,
+              "BEGINNER",
+              List.of(chapterA, chapterB));
+      LessonContentServiceImpl.AiLessonData diffTitle =
+          new LessonContentServiceImpl.AiLessonData(
+              "Hàm số bậc nhất",
+              "Khảo sát hàm số và đồ thị parabol",
+              45,
+              "BEGINNER",
+              List.of(chapterA, chapterB));
+      LessonContentServiceImpl.AiLessonData diffDescription =
+          new LessonContentServiceImpl.AiLessonData(
+              "Hàm số bậc hai", "Mô tả khác", 45, "BEGINNER", List.of(chapterA, chapterB));
+      LessonContentServiceImpl.AiLessonData diffDuration =
+          new LessonContentServiceImpl.AiLessonData(
+              "Hàm số bậc hai",
+              "Khảo sát hàm số và đồ thị parabol",
+              90,
+              "BEGINNER",
+              List.of(chapterA, chapterB));
+      LessonContentServiceImpl.AiLessonData diffDifficulty =
+          new LessonContentServiceImpl.AiLessonData(
+              "Hàm số bậc hai",
+              "Khảo sát hàm số và đồ thị parabol",
+              45,
+              "ADVANCED",
+              List.of(chapterA, chapterB));
+      LessonContentServiceImpl.AiLessonData diffChapters =
+          new LessonContentServiceImpl.AiLessonData(
+              "Hàm số bậc hai",
+              "Khảo sát hàm số và đồ thị parabol",
+              45,
+              "BEGINNER",
+              List.of(chapterA));
+      LessonContentServiceImpl.AiLessonData nullFields =
+          new LessonContentServiceImpl.AiLessonData(null, null, null, null, null);
+      LessonContentServiceImpl.AiLessonData nullFieldsSame =
+          new LessonContentServiceImpl.AiLessonData(null, null, null, null, null);
+
+      // ===== ACT & ASSERT =====
+      assertEquals("Hàm số bậc hai", base.getTitle());
+      assertEquals("Khảo sát hàm số và đồ thị parabol", base.getDescription());
+      assertEquals(45, base.getDurationMinutes());
+      assertEquals("BEGINNER", base.getDifficulty());
+      assertEquals(2, base.getChapters().size());
+      assertEquals(base, same);
+      assertEquals(nullFields, nullFieldsSame);
+      assertNotEquals(base, diffTitle);
+      assertNotEquals(base, diffDescription);
+      assertNotEquals(base, diffDuration);
+      assertNotEquals(base, diffDifficulty);
+      assertNotEquals(base, diffChapters);
+      assertNotEquals(base, nullFields);
+      assertNotEquals(base, null);
+      assertNotEquals(base, "not-ai-lesson");
+      assertNotEquals(base.hashCode(), diffTitle.hashCode());
+      assertTrue(base.toString().contains("AiLessonData"));
+
+      // ===== VERIFY =====
+      verifyNoMoreInteractions(
+          lessonRepository, chapterRepository, curriculumRepository, userRepository, geminiService);
+    }
+
+    @Test
+    void it_should_cover_remaining_ai_chapter_data_equals_branches_for_null_mismatch_and_can_equal() {
+      // ===== ARRANGE =====
+      LessonContentServiceImpl.AiChapterData nullTitle =
+          new LessonContentServiceImpl.AiChapterData(null, "Mô tả ổn định");
+      LessonContentServiceImpl.AiChapterData nonNullTitle =
+          new LessonContentServiceImpl.AiChapterData("Tên chương", "Mô tả ổn định");
+      LessonContentServiceImpl.AiChapterData nullDescription =
+          new LessonContentServiceImpl.AiChapterData("Tên chương", null);
+      LessonContentServiceImpl.AiChapterData nonNullDescription =
+          new LessonContentServiceImpl.AiChapterData("Tên chương", "Mô tả ổn định");
+      AiChapterDataCanEqualFalse canEqualFalse = new AiChapterDataCanEqualFalse();
+      canEqualFalse.setTitle("Tên chương");
+      canEqualFalse.setDescription("Mô tả ổn định");
+
+      // ===== ACT & ASSERT =====
+      assertNotEquals(nullTitle, nonNullTitle);
+      assertNotEquals(nonNullTitle, nullTitle);
+      assertNotEquals(nullDescription, nonNullDescription);
+      assertNotEquals(nonNullDescription, nullDescription);
+      assertEquals("Tên chương", canEqualFalse.getTitle());
+
+      // ===== VERIFY =====
+      verifyNoMoreInteractions(
+          lessonRepository, chapterRepository, curriculumRepository, userRepository, geminiService);
+    }
+
+    @Test
+    void it_should_cover_remaining_ai_lesson_data_equals_branches_for_null_mismatch_and_can_equal() {
+      // ===== ARRANGE =====
+      List<LessonContentServiceImpl.AiChapterData> chapters =
+          List.of(new LessonContentServiceImpl.AiChapterData("Mở đầu", "Mô tả"));
+      LessonContentServiceImpl.AiLessonData nullTitle =
+          new LessonContentServiceImpl.AiLessonData(
+              null, "Mô tả", 45, "BEGINNER", chapters);
+      LessonContentServiceImpl.AiLessonData nonNullTitle =
+          new LessonContentServiceImpl.AiLessonData(
+              "Tên bài", "Mô tả", 45, "BEGINNER", chapters);
+      LessonContentServiceImpl.AiLessonData nullDescription =
+          new LessonContentServiceImpl.AiLessonData(
+              "Tên bài", null, 45, "BEGINNER", chapters);
+      LessonContentServiceImpl.AiLessonData nonNullDescription =
+          new LessonContentServiceImpl.AiLessonData(
+              "Tên bài", "Mô tả", 45, "BEGINNER", chapters);
+      LessonContentServiceImpl.AiLessonData nullDuration =
+          new LessonContentServiceImpl.AiLessonData(
+              "Tên bài", "Mô tả", null, "BEGINNER", chapters);
+      LessonContentServiceImpl.AiLessonData nonNullDuration =
+          new LessonContentServiceImpl.AiLessonData(
+              "Tên bài", "Mô tả", 45, "BEGINNER", chapters);
+      LessonContentServiceImpl.AiLessonData nullDifficulty =
+          new LessonContentServiceImpl.AiLessonData(
+              "Tên bài", "Mô tả", 45, null, chapters);
+      LessonContentServiceImpl.AiLessonData nonNullDifficulty =
+          new LessonContentServiceImpl.AiLessonData(
+              "Tên bài", "Mô tả", 45, "BEGINNER", chapters);
+      LessonContentServiceImpl.AiLessonData nullChapters =
+          new LessonContentServiceImpl.AiLessonData(
+              "Tên bài", "Mô tả", 45, "BEGINNER", null);
+      LessonContentServiceImpl.AiLessonData nonNullChapters =
+          new LessonContentServiceImpl.AiLessonData(
+              "Tên bài", "Mô tả", 45, "BEGINNER", chapters);
+      AiLessonDataCanEqualFalse canEqualFalse = new AiLessonDataCanEqualFalse();
+      canEqualFalse.setTitle("Tên bài");
+      canEqualFalse.setDescription("Mô tả");
+      canEqualFalse.setDurationMinutes(45);
+      canEqualFalse.setDifficulty("BEGINNER");
+      canEqualFalse.setChapters(chapters);
+
+      // ===== ACT & ASSERT =====
+      assertNotEquals(nullTitle, nonNullTitle);
+      assertNotEquals(nonNullTitle, nullTitle);
+      assertNotEquals(nullDescription, nonNullDescription);
+      assertNotEquals(nonNullDescription, nullDescription);
+      assertNotEquals(nullDuration, nonNullDuration);
+      assertNotEquals(nonNullDuration, nullDuration);
+      assertNotEquals(nullDifficulty, nonNullDifficulty);
+      assertNotEquals(nonNullDifficulty, nullDifficulty);
+      assertNotEquals(nullChapters, nonNullChapters);
+      assertNotEquals(nonNullChapters, nullChapters);
+      assertEquals("Tên bài", canEqualFalse.getTitle());
 
       // ===== VERIFY =====
       verifyNoMoreInteractions(
