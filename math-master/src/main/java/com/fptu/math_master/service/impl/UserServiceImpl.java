@@ -12,19 +12,24 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.fptu.math_master.dto.request.ChangePasswordRequest;
 import com.fptu.math_master.dto.request.UserCreationRequest;
 import com.fptu.math_master.dto.request.UserSearchRequest;
 import com.fptu.math_master.dto.request.UserUpdateRequest;
+import com.fptu.math_master.dto.response.SchoolGradeResponse;
 import com.fptu.math_master.dto.response.UserResponse;
 import com.fptu.math_master.entity.Role;
+import com.fptu.math_master.entity.SchoolGrade;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.Status;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.RoleRepository;
+import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.UserRepository;
+import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.service.UserService;
 import com.fptu.math_master.util.SecurityUtils;
 
@@ -41,7 +46,9 @@ public class UserServiceImpl implements UserService {
 
   UserRepository userRepository;
   RoleRepository roleRepository;
+  SchoolGradeRepository schoolGradeRepository;
   PasswordEncoder passwordEncoder;
+  UploadService uploadService;
 
   @Override
   @Transactional
@@ -159,6 +166,19 @@ public class UserServiceImpl implements UserService {
       user.setRoles(roles);
     }
 
+    // Update school grades if provided
+    if (request.getSchoolGradeIds() != null) {
+      Set<SchoolGrade> schoolGrades = new HashSet<>();
+      for (UUID gradeId : request.getSchoolGradeIds()) {
+        SchoolGrade grade =
+            schoolGradeRepository
+                .findById(gradeId)
+                .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+        schoolGrades.add(grade);
+      }
+      user.setSchoolGrades(schoolGrades);
+    }
+
     user = userRepository.save(user);
 
     log.info("User updated successfully with id: {}", user.getId());
@@ -220,7 +240,7 @@ public class UserServiceImpl implements UserService {
 
     User user =
         userRepository
-            .findByIdWithRoles(userId)
+            .findByIdWithRolesAndGrades(userId)
             .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     return mapToUserResponse(user);
@@ -235,7 +255,7 @@ public class UserServiceImpl implements UserService {
 
     User user =
         userRepository
-            .findById(userId)
+            .findByIdWithRolesAndGrades(userId)
             .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
     // Update password if provided
@@ -262,6 +282,31 @@ public class UserServiceImpl implements UserService {
 
     if (request.getDob() != null) {
       user.setDob(request.getDob());
+    }
+
+    // Update school grades if provided
+    if (request.getSchoolGradeIds() != null) {
+      log.info("Updating school grades for user {}: {}", userId, request.getSchoolGradeIds());
+
+      // Validate: Students can only select 1 grade, Teachers can select multiple
+      boolean isStudent = user.getRoles().stream()
+          .anyMatch(role -> "STUDENT".equals(role.getName()));
+
+      if (isStudent && request.getSchoolGradeIds().size() > 1) {
+        throw new AppException(ErrorCode.STUDENT_MULTIPLE_GRADES_NOT_ALLOWED);
+      }
+
+      Set<SchoolGrade> schoolGrades = new HashSet<>();
+      for (UUID gradeId : request.getSchoolGradeIds()) {
+        SchoolGrade grade =
+            schoolGradeRepository
+                .findById(gradeId)
+                .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+        schoolGrades.add(grade);
+        log.info("Added school grade: {} ({})", grade.getName(), grade.getId());
+      }
+      user.setSchoolGrades(schoolGrades);
+      log.info("School grades set on user entity, total: {}", schoolGrades.size());
     }
 
     user = userRepository.save(user);
@@ -387,6 +432,21 @@ public class UserServiceImpl implements UserService {
       roles = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
     }
 
+    Set<SchoolGradeResponse> schoolGrades = null;
+    if (user.getSchoolGrades() != null) {
+      schoolGrades = user.getSchoolGrades().stream()
+          .map(grade -> SchoolGradeResponse.builder()
+              .id(grade.getId())
+              .gradeLevel(grade.getGradeLevel())
+              .name(grade.getName())
+              .description(grade.getDescription())
+              .active(grade.getIsActive())
+              .createdAt(grade.getCreatedAt())
+              .updatedAt(grade.getUpdatedAt())
+              .build())
+          .collect(Collectors.toSet());
+    }
+
     return UserResponse.builder()
         .id(user.getId())
         .userName(user.getUserName())
@@ -397,6 +457,7 @@ public class UserServiceImpl implements UserService {
         .avatar(user.getAvatar())
         .dob(user.getDob())
         .code(user.getCode())
+        .schoolGrades(schoolGrades)
         .status(user.getStatus())
         .lastLogin(user.getLastLogin())
         .banReason(user.getBanReason())
@@ -407,5 +468,32 @@ public class UserServiceImpl implements UserService {
         .updatedDate(user.getUpdatedAt())
         .updatedBy(user.getUpdatedByName())
         .build();
+  }
+
+  @Override
+  public String uploadAvatar(MultipartFile file) {
+    log.info("Uploading avatar for current user");
+
+    // Validate file
+    if (file.isEmpty()) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+
+    // Validate file type (only images)
+    String contentType = file.getContentType();
+    if (contentType == null || !contentType.startsWith("image/")) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+
+    // Validate file size (max 5MB)
+    if (file.getSize() > 5 * 1024 * 1024) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+
+    // Upload to MinIO
+    String avatarUrl = uploadService.uploadFile(file, "avatars");
+
+    log.info("Avatar uploaded successfully: {}", avatarUrl);
+    return avatarUrl;
   }
 }

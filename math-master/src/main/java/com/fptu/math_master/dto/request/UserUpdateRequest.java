@@ -6,6 +6,7 @@ import jakarta.validation.constraints.*;
 
 import java.time.LocalDate;
 import java.util.Set;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -55,6 +56,9 @@ public class UserUpdateRequest {
       regexp = "^[a-zA-Z0-9_-]*$",
       message = "Code must contain only alphanumeric characters, underscores, and hyphens")
   String code;
+
+  @Size(max = 12, message = "School grades must not exceed 12 items (grades 1-12)")
+  Set<UUID> schoolGradeIds;
 
   Status status;
 

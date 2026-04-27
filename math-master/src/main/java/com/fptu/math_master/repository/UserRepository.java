@@ -28,6 +28,9 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
   @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles WHERE u.id = :id")
   Optional<User> findByIdWithRoles(UUID id);
 
+  @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles LEFT JOIN FETCH u.schoolGrades WHERE u.id = :id")
+  Optional<User> findByIdWithRolesAndGrades(UUID id);
+
   @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles WHERE u.userName = :userName")
   Optional<User> findByUserNameWithRoles(String userName);
 
