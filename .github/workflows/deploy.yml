@@ -1,0 +1,35 @@
+name: Deploy MathMaster BE to Server
+
+on:
+  push:
+    branches:
+      - main # Trigger khi có code mới đẩy vào main (hoặc sau khi merge PR)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            # Di chuyển vào đúng thư mục chứa dự án
+            cd ~/mathmaster/math_master_teaching_support_platfrom_be/math-master
+
+            # Cập nhật code mới nhất từ nhánh main
+            git pull origin main
+
+            # Chạy deploy bằng Docker Compose
+            # Sử dụng --build để đảm bảo các thay đổi code được đóng gói vào image mới
+            docker compose --env-file .env.production up -d --build
+
+            # (Tùy chọn) Dọn dẹp các image cũ để tránh đầy ổ cứng server
+            docker image prune -f
