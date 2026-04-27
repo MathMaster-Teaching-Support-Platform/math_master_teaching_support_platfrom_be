@@ -22,4 +22,14 @@ public interface EmailService {
 
   void sendNewEnrollmentEmail(String to, String instructorName, String studentName, 
       String courseTitle, String courseUrl);
+
+  // ─── Withdrawal Email Methods ─────────────────────────────────────────────
+
+  void sendWithdrawalOtpEmail(String to, String userName, String otpCode, java.math.BigDecimal amount);
+
+  void sendWithdrawalSuccessEmail(String to, String userName, java.math.BigDecimal amount,
+      String bankName, String bankAccountNumber, String bankAccountName,
+      String proofImageUrl, String transactionId, java.time.Instant processedAt);
+
+  void sendWithdrawalRejectedEmail(String to, String userName, java.math.BigDecimal amount, String reason);
 }
