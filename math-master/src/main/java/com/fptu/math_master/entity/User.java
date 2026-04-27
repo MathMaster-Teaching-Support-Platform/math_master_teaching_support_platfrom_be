@@ -150,4 +150,16 @@ public class User extends BaseEntity {
       joinColumns = @JoinColumn(name = "user_account_id"),
       inverseJoinColumns = @JoinColumn(name = "roles_id"))
   Set<Role> roles;
+
+  /**
+   * Many-to-Many with SchoolGrade
+   * - Students typically have 1 grade
+   * - Teachers can have multiple grades they teach
+   */
+  @ManyToMany
+  @JoinTable(
+      name = "user_school_grades",
+      joinColumns = @JoinColumn(name = "user_id"),
+      inverseJoinColumns = @JoinColumn(name = "school_grade_id"))
+  Set<SchoolGrade> schoolGrades;
 }

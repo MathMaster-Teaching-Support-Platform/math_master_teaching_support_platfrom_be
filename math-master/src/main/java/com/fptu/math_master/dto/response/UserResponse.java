@@ -40,6 +40,8 @@ public class UserResponse {
 
   String code;
 
+  Set<SchoolGradeResponse> schoolGrades;
+
   Status status;
 
   Instant lastLogin;

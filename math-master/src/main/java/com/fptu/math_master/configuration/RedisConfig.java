@@ -63,7 +63,13 @@ public class RedisConfig {
 
   @Bean
   public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-    GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer();
+    // Configure ObjectMapper for proper JSON serialization with Java 8 date/time support
+    ObjectMapper objectMapper = new ObjectMapper();
+    objectMapper.registerModule(new JavaTimeModule());
+    objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+    GenericJackson2JsonRedisSerializer jsonSerializer =
+        new GenericJackson2JsonRedisSerializer(objectMapper);
 
     RedisCacheConfiguration defaultConfig =
         RedisCacheConfiguration.defaultCacheConfig()
