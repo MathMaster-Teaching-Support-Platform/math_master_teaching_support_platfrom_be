@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.fptu.math_master.dto.request.ChangePasswordRequest;
 import com.fptu.math_master.dto.request.UserCreationRequest;
@@ -46,4 +47,7 @@ public interface UserService {
   void changePassword(ChangePasswordRequest request);
 
   Page<UserResponse> getRecentUsers(Pageable pageable);
+
+  // Avatar upload
+  String uploadAvatar(MultipartFile file);
 }

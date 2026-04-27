@@ -59,6 +59,7 @@ import com.fptu.math_master.repository.CourseRepository;
 import com.fptu.math_master.repository.CourseReviewRepository;
 import com.fptu.math_master.repository.CustomCourseSectionRepository;
 import com.fptu.math_master.repository.EnrollmentRepository;
+import com.fptu.math_master.repository.OrderRepository;
 import com.fptu.math_master.repository.LessonProgressRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.SchoolGradeRepository;
@@ -85,6 +86,7 @@ public class CourseServiceImpl implements CourseService {
   SubjectRepository subjectRepository;
   SchoolGradeRepository schoolGradeRepository;
   EnrollmentRepository enrollmentRepository;
+  OrderRepository orderRepository;
   CourseLessonRepository courseLessonRepository;
   LessonProgressRepository lessonProgressRepository;
   UserRepository userRepository;
@@ -138,6 +140,8 @@ public class CourseServiceImpl implements CourseService {
       if (request.getDiscountedPrice().compareTo(request.getOriginalPrice()) >= 0) {
         throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
       }
+    } else if (request.getOriginalPrice() == null && request.getDiscountedPrice() != null) {
+      throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
     }
 
     Course course = Course.builder()
@@ -178,20 +182,24 @@ public class CourseServiceImpl implements CourseService {
       course.setDescription(request.getDescription());
 
     // FIX #9: Validate prices before updating
-    java.math.BigDecimal activeOriginal = request.getOriginalPrice() != null ? request.getOriginalPrice() : course.getOriginalPrice();
+    java.math.BigDecimal activeOriginal = request.getOriginalPrice() != null ? request.getOriginalPrice()
+        : course.getOriginalPrice();
     java.math.BigDecimal activeDiscounted;
-    
+
     // Explicit null check to allow removing discount
     if (request.getOriginalPrice() != null && request.getDiscountedPrice() == null) {
-        activeDiscounted = null;
+      activeDiscounted = null;
     } else {
-        activeDiscounted = request.getDiscountedPrice() != null ? request.getDiscountedPrice() : course.getDiscountedPrice();
+      activeDiscounted = request.getDiscountedPrice() != null ? request.getDiscountedPrice()
+          : course.getDiscountedPrice();
     }
 
     if (activeOriginal != null && activeDiscounted != null) {
       if (activeDiscounted.compareTo(activeOriginal) >= 0) {
         throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
       }
+    } else if (activeOriginal == null && activeDiscounted != null) {
+      throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
     }
     if (request.getWhatYouWillLearn() != null)
       course.setWhatYouWillLearn(request.getWhatYouWillLearn());
@@ -207,7 +215,7 @@ public class CourseServiceImpl implements CourseService {
       course.setLevel(request.getLevel());
     if (request.getOriginalPrice() != null)
       course.setOriginalPrice(request.getOriginalPrice());
-    
+
     // Fix: Explicitly allow setting discounted price to null
     if (request.getOriginalPrice() != null && request.getDiscountedPrice() == null) {
       course.setDiscountedPrice(null);
@@ -235,28 +243,23 @@ public class CourseServiceImpl implements CourseService {
     Course course = findCourseOrThrow(courseId);
     verifyOwnership(course, currentUserId);
 
-    if (course.getStatus() == com.fptu.math_master.enums.CourseStatus.PUBLISHED) {
-      throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
-    }
+    // FIX #2: If course has active students or historical orders, we MUST NOT soft-delete (deletedAt).
+    // Instead, we ARCHIVE it to preserve access for buyers and financial audit trails.
+    long activeEnrollments = enrollmentRepository.countActiveEnrollmentsByCourseId(courseId);
+    long completedOrders = orderRepository.countCompletedOrdersByCourse(courseId);
 
-    // FIX #2: Check for active enrollments
-    if (enrollmentRepository.countActiveEnrollmentsByCourseId(courseId) > 0) {
-      // Active students enrolled — convert to draft/unpublished only.
+    if (activeEnrollments > 0 || completedOrders > 0) {
       course.setPublished(false);
-      course.setStatus(com.fptu.math_master.enums.CourseStatus.DRAFT);
+      course.setStatus(com.fptu.math_master.enums.CourseStatus.ARCHIVED);
       validateStatusPublishConsistency(course);
       courseRepository.save(course);
-      log.info("Course {} has active enrollments; converted to draft/unpublished instead of deleting", courseId);
+      log.info("Course {} has buyers or history; ARCHIVED instead of deleted", courseId);
       return;
     }
 
-    // FIX #2: Check for pending or completed orders before deletion
-    // Note: This requires OrderRepository - will be added in next iteration
-    // For now, we rely on soft delete to preserve financial records
-    
-    // Always soft-delete regardless of historical orders/transactions,
-    // so that financial records referencing this course remain intact.
+    // No buyers and no history: Safe to soft-delete
     course.setPublished(false);
+    course.setStatus(com.fptu.math_master.enums.CourseStatus.DRAFT); // Reset status
     course.setDeletedAt(Instant.now());
     course.setDeletedBy(currentUserId);
     validateStatusPublishConsistency(course);
@@ -278,7 +281,8 @@ public class CourseServiceImpl implements CourseService {
       }
       course.setPublished(true);
     } else {
-      // Lock status after publish to avoid hiding courses that may already have buyers.
+      // Lock status after publish to avoid hiding courses that may already have
+      // buyers.
       throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
     }
 
@@ -303,7 +307,7 @@ public class CourseServiceImpl implements CourseService {
     if (course.getStatus() == com.fptu.math_master.enums.CourseStatus.REJECTED) {
       // Check if course was updated after rejection
       if (course.getRejectedAt() != null && course.getUpdatedAt() != null) {
-        if (course.getUpdatedAt().isBefore(course.getRejectedAt()) || 
+        if (course.getUpdatedAt().isBefore(course.getRejectedAt()) ||
             course.getUpdatedAt().equals(course.getRejectedAt())) {
           throw new AppException(ErrorCode.COURSE_ALREADY_SUBMITTED);
         }
@@ -339,17 +343,18 @@ public class CourseServiceImpl implements CourseService {
   @Transactional(readOnly = true)
   public Page<CourseResponse> getCourseReviewsForAdmin(String status, Pageable pageable) {
     if (org.springframework.util.StringUtils.hasText(status) && !status.equalsIgnoreCase("ALL")) {
-       try {
-           com.fptu.math_master.enums.CourseStatus enumStatus = com.fptu.math_master.enums.CourseStatus.valueOf(status.toUpperCase());
-           return courseRepository.findByStatusAndDeletedAtIsNullOrderByUpdatedAtDesc(enumStatus, pageable)
-                .map(this::mapToResponse);
-       } catch (IllegalArgumentException e) {
-           // Invalid status, return all
-       }
+      try {
+        com.fptu.math_master.enums.CourseStatus enumStatus = com.fptu.math_master.enums.CourseStatus
+            .valueOf(status.toUpperCase());
+        return courseRepository.findByStatusAndDeletedAtIsNullOrderByUpdatedAtDesc(enumStatus, pageable)
+            .map(this::mapToResponse);
+      } catch (IllegalArgumentException e) {
+        // Invalid status, return all
+      }
     }
     // Return all for full history
     return courseRepository.findByDeletedAtIsNullOrderByUpdatedAtDesc(pageable)
-         .map(this::mapToResponse);
+        .map(this::mapToResponse);
   }
 
   @Override
@@ -382,13 +387,13 @@ public class CourseServiceImpl implements CourseService {
     if (course.getStatus() != com.fptu.math_master.enums.CourseStatus.PENDING_REVIEW) {
       throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
     }
-    
+
     course.setStatus(com.fptu.math_master.enums.CourseStatus.REJECTED);
     course.setPublished(false);
     course.setRejectionReason(reason);
     course.setRejectedBy(currentAdminId);
     course.setRejectedAt(Instant.now());
-    
+
     // FIX #6: Clear approval metadata when rejecting
     course.setApprovedBy(null);
     course.setApprovedAt(null);
@@ -499,7 +504,11 @@ public class CourseServiceImpl implements CourseService {
   @Override
   @Transactional(readOnly = true)
   public CourseResponse getCourseById(UUID courseId) {
-    Course course = findCourseOrThrow(courseId);
+    // FIX: Use findById instead of findCourseOrThrow (which uses DeletedAtIsNull)
+    // to allow enrolled students to see their courses even if soft-deleted or archived.
+    Course course = courseRepository.findById(courseId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+    
     verifyPublicCourseVisibility(course);
     return mapToResponse(course);
   }
@@ -549,11 +558,12 @@ public class CourseServiceImpl implements CourseService {
   public CoursePreviewResponse getAdminCoursePreview(UUID courseId) {
     UUID currentAdminId = SecurityUtils.getCurrentUserId();
     log.info("Admin {} requesting full preview of course {}", currentAdminId, courseId);
-    
+
     Course course = findCourseOrThrow(courseId);
     CourseResponse courseResponse = mapToResponse(course);
 
-    // Admin gets full access to all lessons regardless of enrollment or course status
+    // Admin gets full access to all lessons regardless of enrollment or course
+    // status
     List<CourseLessonPreviewResponse> lessons = courseLessonRepository
         .findByCourseIdAndNotDeleted(courseId)
         .stream()
@@ -564,7 +574,7 @@ public class CourseServiceImpl implements CourseService {
                 .map(Lesson::getTitle)
                 .orElse(lessonTitle);
           }
-          
+
           // Build full lesson preview with all details
           return CourseLessonPreviewResponse.builder()
               .id(cl.getId())
@@ -648,6 +658,12 @@ public class CourseServiceImpl implements CourseService {
 
   private void verifyPublicCourseVisibility(Course course) {
     boolean publiclyVisible = isPubliclyVisibleCourse(course);
+    
+    // If it's archived or soft-deleted, it's definitely NOT publicly visible
+    if (course.getDeletedAt() != null || course.getStatus() == com.fptu.math_master.enums.CourseStatus.ARCHIVED) {
+        publiclyVisible = false;
+    }
+
     if (publiclyVisible) {
       return;
     }
@@ -660,6 +676,19 @@ public class CourseServiceImpl implements CourseService {
       if (course.getTeacherId() != null && course.getTeacherId().equals(currentUserId)) {
         return;
       }
+
+      // Allow enrolled students to access the course even if it was
+      // unpublished/drafted/archived/deleted
+      java.util.Optional<Enrollment> enrollment = enrollmentRepository
+          .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, course.getId());
+      if (enrollment.isPresent() && enrollment.get().getStatus() == EnrollmentStatus.ACTIVE) {
+        return;
+      }
+    }
+
+    // If deleted or archived, throw NOT_FOUND for non-privileged users to avoid leaking existence
+    if (course.getDeletedAt() != null || course.getStatus() == com.fptu.math_master.enums.CourseStatus.ARCHIVED) {
+        throw new AppException(ErrorCode.COURSE_NOT_FOUND);
     }
 
     throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);

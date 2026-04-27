@@ -226,6 +226,7 @@ public enum ErrorCode {
   SCHOOL_GRADE_NOT_FOUND(1128, "School grade not found", HttpStatus.NOT_FOUND),
   DOCUMENT_NOT_FOUND(1129, "Document not found", HttpStatus.NOT_FOUND),
   SCHOOL_GRADE_ALREADY_EXISTS(1129, "School grade already exists", HttpStatus.BAD_REQUEST),
+  STUDENT_MULTIPLE_GRADES_NOT_ALLOWED(1132, "Students can only select one grade level", HttpStatus.BAD_REQUEST),
   ROADMAP_TOPIC_NOT_FOUND(1130, "Roadmap topic not found", HttpStatus.NOT_FOUND),
     INVALID_TOPIC_POINT_ORDER(
             1130_1,
@@ -333,14 +334,14 @@ public enum ErrorCode {
   COURSE_NOT_ENROLLED(1185, "You must be enrolled in the course to leave a review", HttpStatus.FORBIDDEN),
   ALREADY_REVIEWED(1186, "You have already reviewed this course", HttpStatus.BAD_REQUEST),
   REVIEW_NOT_FOUND(1187, "Review not found", HttpStatus.NOT_FOUND),
-  
+
   // ─── Order Error Codes ────────────────────────────────────────────────────
   ORDER_NOT_FOUND(1188, "Order not found", HttpStatus.NOT_FOUND),
   ORDER_ACCESS_DENIED(1189, "You do not have permission to access this order", HttpStatus.FORBIDDEN),
   ORDER_ALREADY_PROCESSED(1190, "Order has already been processed", HttpStatus.BAD_REQUEST),
   ORDER_EXPIRED(1191, "Order has expired", HttpStatus.BAD_REQUEST),
   ORDER_CANNOT_BE_CANCELLED(1192, "Order cannot be cancelled", HttpStatus.BAD_REQUEST),
-  
+
   // ─── Enrollment & Payment Error Codes ─────────────────────────────────────
   ENROLLMENT_IN_PROGRESS(1193, "Enrollment is already being processed", HttpStatus.CONFLICT),
   WALLET_CREATION_FAILED(1194, "Failed to create wallet", HttpStatus.INTERNAL_SERVER_ERROR),
@@ -350,7 +351,7 @@ public enum ErrorCode {
   COURSE_ALREADY_SUBMITTED(1198, "Course is already submitted for review", HttpStatus.BAD_REQUEST),
   INVALID_DISCOUNT_PRICE(1199, "Discounted price must be less than original price", HttpStatus.BAD_REQUEST),
   COURSE_RESUBMISSION_TOO_SOON(1200, "Please wait before resubmitting the course", HttpStatus.TOO_MANY_REQUESTS),
-  
+
   // ─── Question Template & Matrix Error Codes ───────────────────────────────
   TAGS_REQUIRED(1201, "At least one tag is required", HttpStatus.BAD_REQUEST),
   TOO_MANY_TAGS(1202, "Maximum 5 tags allowed", HttpStatus.BAD_REQUEST),
