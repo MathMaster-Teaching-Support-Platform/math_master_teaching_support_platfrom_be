@@ -14,5 +14,8 @@ public enum CourseStatus {
     PUBLISHED,
     
     /** Admin has rejected the course. Teacher needs to make changes and submit again. */
-    REJECTED
+    REJECTED,
+    
+    /** Course is no longer accepting new students but remains accessible to existing ones. */
+    ARCHIVED
 }

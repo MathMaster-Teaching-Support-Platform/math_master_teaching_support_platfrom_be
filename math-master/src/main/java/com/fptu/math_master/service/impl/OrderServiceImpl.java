@@ -58,8 +58,8 @@ public class OrderServiceImpl implements OrderService {
 
         // 1. Validate course
         Course course = courseRepository
-            .findByIdAndDeletedAtIsNull(courseId)
-            .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+                .findByIdAndDeletedAtIsNull(courseId)
+                .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
 
         if (!course.isPublished()) {
             throw new AppException(ErrorCode.COURSE_NOT_PUBLISHED);
@@ -67,7 +67,7 @@ public class OrderServiceImpl implements OrderService {
 
         // 2. Check if already enrolled
         Optional<Enrollment> existingEnrollment = enrollmentRepository
-            .findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, courseId);
+                .findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, courseId);
 
         if (existingEnrollment.isPresent() && existingEnrollment.get().getStatus() == EnrollmentStatus.ACTIVE) {
             throw new AppException(ErrorCode.ALREADY_ENROLLED);
@@ -75,13 +75,13 @@ public class OrderServiceImpl implements OrderService {
 
         // 3. Check for pending orders
         List<Order> pendingOrders = orderRepository.findByStudentIdAndCourseIdAndStatusInAndDeletedAtIsNull(
-            studentId, courseId, Arrays.asList(OrderStatus.PENDING, OrderStatus.PROCESSING));
+                studentId, courseId, Arrays.asList(OrderStatus.PENDING, OrderStatus.PROCESSING));
 
         if (!pendingOrders.isEmpty()) {
             // Return existing pending order
             Order existingOrder = pendingOrders.get(0);
-            log.info("Returning existing pending order {} for student {} and course {}", 
-                existingOrder.getOrderNumber(), studentId, courseId);
+            log.info("Returning existing pending order {} for student {} and course {}",
+                    existingOrder.getOrderNumber(), studentId, courseId);
             return mapToResponse(existingOrder, course);
         }
 
@@ -99,22 +99,22 @@ public class OrderServiceImpl implements OrderService {
 
         // 7. Create order
         Order order = Order.builder()
-            .studentId(studentId)
-            .courseId(courseId)
-            .status(OrderStatus.PENDING)
-            .orderNumber(orderNumber)
-            .originalPrice(originalPrice)
-            .discountAmount(discountAmount)
-            .finalPrice(finalPrice)
-            .instructorEarnings(instructorEarnings)
-            .platformCommission(platformCommission)
-            .expiresAt(Instant.now().plus(ORDER_EXPIRY_DURATION))
-            .build();
+                .studentId(studentId)
+                .courseId(courseId)
+                .status(OrderStatus.PENDING)
+                .orderNumber(orderNumber)
+                .originalPrice(originalPrice)
+                .discountAmount(discountAmount)
+                .finalPrice(finalPrice)
+                .instructorEarnings(instructorEarnings)
+                .platformCommission(platformCommission)
+                .expiresAt(Instant.now().plus(ORDER_EXPIRY_DURATION))
+                .build();
 
         order = orderRepository.save(order);
 
-        log.info("Created order {} for student {} and course {} with amount {}", 
-            orderNumber, studentId, courseId, finalPrice);
+        log.info("Created order {} for student {} and course {} with amount {}",
+                orderNumber, studentId, courseId, finalPrice);
 
         return mapToResponse(order, course);
     }
@@ -125,12 +125,12 @@ public class OrderServiceImpl implements OrderService {
         UUID studentId = SecurityUtils.getCurrentUserId();
 
         Order order = orderRepository
-            .findByIdAndStudentId(orderId, studentId)
-            .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+                .findByIdAndStudentId(orderId, studentId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
         Course course = courseRepository
-            .findByIdAndDeletedAtIsNull(order.getCourseId())
-            .orElse(null);
+                .findByIdAndDeletedAtIsNull(order.getCourseId())
+                .orElse(null);
 
         return mapToResponse(order, course);
     }
@@ -141,16 +141,16 @@ public class OrderServiceImpl implements OrderService {
         UUID studentId = SecurityUtils.getCurrentUserId();
 
         Order order = orderRepository
-            .findByOrderNumber(orderNumber)
-            .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+                .findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
         if (!order.getStudentId().equals(studentId)) {
             throw new AppException(ErrorCode.ORDER_ACCESS_DENIED);
         }
 
         Course course = courseRepository
-            .findByIdAndDeletedAtIsNull(order.getCourseId())
-            .orElse(null);
+                .findByIdAndDeletedAtIsNull(order.getCourseId())
+                .orElse(null);
 
         return mapToResponse(order, course);
     }
@@ -160,17 +160,32 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse confirmOrder(UUID orderId) {
         UUID studentId = SecurityUtils.getCurrentUserId();
 
-        // 1. Get and validate order
+        // 1. Get and validate order with pessimistic lock to prevent double payment
         Order order = orderRepository
-            .findByIdAndStudentId(orderId, studentId)
-            .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+                .findByIdAndStudentIdWithLock(orderId, studentId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
         validateOrderForConfirmation(order);
 
+        // 1.5. Check if already enrolled (to prevent double checkout of multiple
+        // pending orders)
+        Optional<Enrollment> existingEnrollment = enrollmentRepository
+                .findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, order.getCourseId());
+        if (existingEnrollment.isPresent() && existingEnrollment.get().getStatus() == EnrollmentStatus.ACTIVE) {
+            order.setStatus(OrderStatus.CANCELLED);
+            order.setCancellationReason("User is already enrolled in this course");
+            orderRepository.save(order);
+            throw new AppException(ErrorCode.ALREADY_ENROLLED);
+        }
+
         // 2. Get course
         Course course = courseRepository
-            .findByIdAndDeletedAtIsNull(order.getCourseId())
-            .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+                .findByIdAndDeletedAtIsNull(order.getCourseId())
+                .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+
+        if (!course.isPublished()) {
+            throw new AppException(ErrorCode.COURSE_NOT_PUBLISHED);
+        }
 
         // 3. Update order status to PROCESSING
         order.setStatus(OrderStatus.PROCESSING);
@@ -200,9 +215,12 @@ public class OrderServiceImpl implements OrderService {
 
         } catch (Exception e) {
             // Rollback handled by @Transactional
-            order.setStatus(OrderStatus.FAILED);
-            order.setCancellationReason("Payment failed: " + e.getMessage());
-            orderRepository.save(order);
+            // Only update to FAILED if it wasn't already successfully processed
+            if (order.getStatus() != OrderStatus.COMPLETED) {
+                order.setStatus(OrderStatus.FAILED);
+                order.setCancellationReason("Payment failed: " + e.getMessage());
+                orderRepository.save(order);
+            }
 
             log.error("Failed to confirm order {}: {}", order.getOrderNumber(), e.getMessage(), e);
             throw e;
@@ -215,8 +233,8 @@ public class OrderServiceImpl implements OrderService {
         UUID studentId = SecurityUtils.getCurrentUserId();
 
         Order order = orderRepository
-            .findByIdAndStudentId(orderId, studentId)
-            .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+                .findByIdAndStudentId(orderId, studentId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new AppException(ErrorCode.ORDER_CANNOT_BE_CANCELLED);
@@ -239,7 +257,7 @@ public class OrderServiceImpl implements OrderService {
         UUID studentId = SecurityUtils.getCurrentUserId();
 
         Page<Order> orders = orderRepository.findByStudentIdAndDeletedAtIsNullOrderByCreatedAtDesc(
-            studentId, pageable);
+                studentId, pageable);
 
         Set<UUID> courseIds = new HashSet<>();
         orders.forEach(o -> courseIds.add(o.getCourseId()));
@@ -265,11 +283,10 @@ public class OrderServiceImpl implements OrderService {
         List<UUID> orderIds = expiredOrders.stream().map(Order::getId).toList();
 
         orderRepository.bulkUpdateStatus(
-            orderIds,
-            OrderStatus.CANCELLED,
-            Instant.now(),
-            "Order expired after 15 minutes"
-        );
+                orderIds,
+                OrderStatus.CANCELLED,
+                Instant.now(),
+                "Order expired after 15 minutes");
 
         log.info("Cancelled {} expired orders", expiredOrders.size());
     }
@@ -278,7 +295,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     public boolean hasPendingOrder(UUID studentId, UUID courseId) {
         List<Order> pendingOrders = orderRepository.findByStudentIdAndCourseIdAndStatusInAndDeletedAtIsNull(
-            studentId, courseId, Arrays.asList(OrderStatus.PENDING, OrderStatus.PROCESSING));
+                studentId, courseId, Arrays.asList(OrderStatus.PENDING, OrderStatus.PROCESSING));
         return !pendingOrders.isEmpty();
     }
 
@@ -317,11 +334,11 @@ public class OrderServiceImpl implements OrderService {
 
         // 1. Get or create student wallet
         Wallet studentWallet = walletRepository.findByUserId(studentId)
-            .orElseGet(() -> {
-                walletService.createWallet(studentId);
-                return walletRepository.findByUserId(studentId)
-                    .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-            });
+                .orElseGet(() -> {
+                    walletService.createWallet(studentId);
+                    return walletRepository.findByUserId(studentId)
+                            .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
+                });
 
         // 2. Check balance
         if (studentWallet.getBalance().compareTo(order.getFinalPrice()) < 0) {
@@ -330,18 +347,18 @@ public class OrderServiceImpl implements OrderService {
 
         // 3. Create PENDING student transaction
         Transaction studentTx = Transaction.builder()
-            .wallet(studentWallet)
-            .order(order)
-            .orderNumber(order.getOrderNumber())
-            .amount(order.getFinalPrice())
-            .type(TransactionType.COURSE_PURCHASE)
-            .status(TransactionStatus.PENDING)
-            .description("Purchase Course: " + course.getTitle())
-            .transactionDate(Instant.now())
-            .orderCode(System.currentTimeMillis())
-            .instructorEarnings(order.getInstructorEarnings())
-            .platformCommission(order.getPlatformCommission())
-            .build();
+                .wallet(studentWallet)
+                .order(order)
+                .orderNumber(order.getOrderNumber())
+                .amount(order.getFinalPrice())
+                .type(TransactionType.COURSE_PURCHASE)
+                .status(TransactionStatus.PENDING)
+                .description("Purchase Course: " + course.getTitle())
+                .transactionDate(Instant.now())
+                .orderCode(System.currentTimeMillis())
+                .instructorEarnings(order.getInstructorEarnings())
+                .platformCommission(order.getPlatformCommission())
+                .build();
         studentTx = transactionRepository.save(studentTx);
 
         // 4. Deduct from student wallet
@@ -353,24 +370,24 @@ public class OrderServiceImpl implements OrderService {
 
         // 6. Get or create instructor wallet
         Wallet instructorWallet = walletRepository.findByUserId(course.getTeacherId())
-            .orElseGet(() -> {
-                walletService.createWallet(course.getTeacherId());
-                return walletRepository.findByUserId(course.getTeacherId())
-                    .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-            });
+                .orElseGet(() -> {
+                    walletService.createWallet(course.getTeacherId());
+                    return walletRepository.findByUserId(course.getTeacherId())
+                            .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
+                });
 
         // 7. Create PENDING instructor transaction
         Transaction instructorTx = Transaction.builder()
-            .wallet(instructorWallet)
-            .order(order)
-            .orderNumber(order.getOrderNumber())
-            .amount(order.getInstructorEarnings())
-            .type(TransactionType.INSTRUCTOR_REVENUE)
-            .status(TransactionStatus.PENDING)
-            .description("Revenue from Course: " + course.getTitle())
-            .transactionDate(Instant.now())
-            .orderCode(System.currentTimeMillis() + 1)
-            .build();
+                .wallet(instructorWallet)
+                .order(order)
+                .orderNumber(order.getOrderNumber())
+                .amount(order.getInstructorEarnings())
+                .type(TransactionType.INSTRUCTOR_REVENUE)
+                .status(TransactionStatus.PENDING)
+                .description("Revenue from Course: " + course.getTitle())
+                .transactionDate(Instant.now())
+                .orderCode(System.currentTimeMillis() + 1)
+                .build();
         instructorTx = transactionRepository.save(instructorTx);
 
         // 8. Add to instructor wallet
@@ -381,31 +398,37 @@ public class OrderServiceImpl implements OrderService {
         transactionRepository.save(instructorTx);
 
         if (order.getPlatformCommission().compareTo(BigDecimal.ZERO) > 0) {
-            // 10. Get Admin wallet
-            List<UUID> adminIds = userRepository.findUserIdsByRoleName("ADMIN");
-            if (adminIds.isEmpty()) {
-                throw new RuntimeException("System missing ADMIN user for commission distribution");
-            }
-            UUID adminId = adminIds.get(0);
+            // 10. Get Admin wallet (Try to find 'admin@mathmaster.vn' first, otherwise
+            // fallback to first admin)
+            UUID adminId = userRepository.findByEmail("admin@mathmaster.com")
+                    .map(u -> u.getId())
+                    .orElseGet(() -> {
+                        List<UUID> adminIds = userRepository.findUserIdsByRoleName("ADMIN");
+                        if (adminIds.isEmpty()) {
+                            throw new RuntimeException("System missing ADMIN user for commission distribution");
+                        }
+                        return adminIds.get(0);
+                    });
+
             Wallet adminWallet = walletRepository.findByUserId(adminId)
-                .orElseGet(() -> {
-                    walletService.createWallet(adminId);
-                    return walletRepository.findByUserId(adminId)
-                        .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-                });
+                    .orElseGet(() -> {
+                        walletService.createWallet(adminId);
+                        return walletRepository.findByUserId(adminId)
+                                .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
+                    });
 
             // 11. Create PENDING platform commission transaction
             Transaction adminTx = Transaction.builder()
-                .wallet(adminWallet)
-                .order(order)
-                .orderNumber(order.getOrderNumber())
-                .amount(order.getPlatformCommission())
-                .type(TransactionType.PLATFORM_COMMISSION)
-                .status(TransactionStatus.PENDING)
-                .description("Platform Commission from Course: " + course.getTitle())
-                .transactionDate(Instant.now())
-                .orderCode(System.currentTimeMillis() + 2)
-                .build();
+                    .wallet(adminWallet)
+                    .order(order)
+                    .orderNumber(order.getOrderNumber())
+                    .amount(order.getPlatformCommission())
+                    .type(TransactionType.PLATFORM_COMMISSION)
+                    .status(TransactionStatus.PENDING)
+                    .description("Platform Commission from Course: " + course.getTitle())
+                    .transactionDate(Instant.now())
+                    .orderCode(System.currentTimeMillis() + 2)
+                    .build();
             adminTx = transactionRepository.save(adminTx);
 
             // 12. Add to admin wallet
@@ -417,16 +440,17 @@ public class OrderServiceImpl implements OrderService {
         }
 
         log.info("Payment processed for order {}: Student paid {}, Instructor earned {}, Platform commission {}",
-            order.getOrderNumber(), order.getFinalPrice(), order.getInstructorEarnings(), order.getPlatformCommission());
+                order.getOrderNumber(), order.getFinalPrice(), order.getInstructorEarnings(),
+                order.getPlatformCommission());
     }
 
     private Enrollment createEnrollment(Order order) {
         Enrollment enrollment = Enrollment.builder()
-            .courseId(order.getCourseId())
-            .studentId(order.getStudentId())
-            .status(EnrollmentStatus.ACTIVE)
-            .enrolledAt(Instant.now())
-            .build();
+                .courseId(order.getCourseId())
+                .studentId(order.getStudentId())
+                .status(EnrollmentStatus.ACTIVE)
+                .enrolledAt(Instant.now())
+                .build();
 
         enrollment = enrollmentRepository.save(enrollment);
 
@@ -450,16 +474,17 @@ public class OrderServiceImpl implements OrderService {
         // Student notification
         try {
             NotificationRequest studentNotification = NotificationRequest.builder()
-                .id(UUID.randomUUID().toString())
-                .type("COURSE")
-                .title("Đăng ký khóa học thành công")
-                .content("Bạn đã đăng ký thành công khóa học '" + course.getTitle() + "'. Mã đơn hàng: " + order.getOrderNumber())
-                .recipientId(order.getStudentId().toString())
-                .senderId("SYSTEM")
-                .timestamp(LocalDateTime.now())
-                .metadata(metadata)
-                .actionUrl("/student/courses/" + order.getEnrollmentId())
-                .build();
+                    .id(UUID.randomUUID().toString())
+                    .type("COURSE")
+                    .title("Đăng ký khóa học thành công")
+                    .content("Bạn đã đăng ký thành công khóa học '" + course.getTitle() + "'. Mã đơn hàng: "
+                            + order.getOrderNumber())
+                    .recipientId(order.getStudentId().toString())
+                    .senderId("SYSTEM")
+                    .timestamp(LocalDateTime.now())
+                    .metadata(metadata)
+                    .actionUrl("/student/courses/" + order.getEnrollmentId())
+                    .build();
             streamPublisher.publish(studentNotification);
         } catch (Exception e) {
             log.error("Failed to send order confirmation notification to student {}", order.getStudentId(), e);
@@ -471,13 +496,12 @@ public class OrderServiceImpl implements OrderService {
                 String enrollmentUrl = "http://localhost:3000/student/courses/" + order.getEnrollmentId();
                 String formattedAmount = String.format("%,.0f VND", order.getFinalPrice());
                 emailService.sendOrderConfirmationEmail(
-                    student.getEmail(),
-                    student.getFullName(),
-                    course.getTitle(),
-                    order.getOrderNumber(),
-                    formattedAmount,
-                    enrollmentUrl
-                );
+                        student.getEmail(),
+                        student.getFullName(),
+                        course.getTitle(),
+                        order.getOrderNumber(),
+                        formattedAmount,
+                        enrollmentUrl);
                 log.info("Order confirmation email sent to student {}", student.getEmail());
             } catch (Exception e) {
                 log.error("Failed to send order confirmation email to student {}", student.getEmail(), e);
@@ -487,16 +511,16 @@ public class OrderServiceImpl implements OrderService {
         // Teacher notification
         try {
             NotificationRequest teacherNotification = NotificationRequest.builder()
-                .id(UUID.randomUUID().toString())
-                .type("COURSE")
-                .title("Học viên mới đăng ký")
-                .content("Khóa học '" + course.getTitle() + "' vừa có một học viên mới đăng ký.")
-                .recipientId(course.getTeacherId().toString())
-                .senderId("SYSTEM")
-                .timestamp(LocalDateTime.now())
-                .metadata(metadata)
-                .actionUrl("/teacher/courses/" + course.getId())
-                .build();
+                    .id(UUID.randomUUID().toString())
+                    .type("COURSE")
+                    .title("Học viên mới đăng ký")
+                    .content("Khóa học '" + course.getTitle() + "' vừa có một học viên mới đăng ký.")
+                    .recipientId(course.getTeacherId().toString())
+                    .senderId("SYSTEM")
+                    .timestamp(LocalDateTime.now())
+                    .metadata(metadata)
+                    .actionUrl("/teacher/courses/" + course.getId())
+                    .build();
             streamPublisher.publish(teacherNotification);
         } catch (Exception e) {
             log.error("Failed to send order confirmation notification to teacher {}", course.getTeacherId(), e);
@@ -507,12 +531,11 @@ public class OrderServiceImpl implements OrderService {
             try {
                 String courseUrl = "http://localhost:3000/teacher/courses/" + course.getId();
                 emailService.sendNewEnrollmentEmail(
-                    instructor.getEmail(),
-                    instructor.getFullName(),
-                    student.getFullName(),
-                    course.getTitle(),
-                    courseUrl
-                );
+                        instructor.getEmail(),
+                        instructor.getFullName(),
+                        student.getFullName(),
+                        course.getTitle(),
+                        courseUrl);
                 log.info("New enrollment email sent to instructor {}", instructor.getEmail());
             } catch (Exception e) {
                 log.error("Failed to send new enrollment email to instructor {}", instructor.getEmail(), e);
@@ -522,30 +545,30 @@ public class OrderServiceImpl implements OrderService {
 
     private OrderResponse mapToResponse(Order order, Course course) {
         String studentName = userRepository.findById(order.getStudentId())
-            .map(User::getFullName)
-            .orElse(null);
+                .map(User::getFullName)
+                .orElse(null);
 
         return OrderResponse.builder()
-            .id(order.getId())
-            .orderNumber(order.getOrderNumber())
-            .studentId(order.getStudentId())
-            .studentName(studentName)
-            .courseId(order.getCourseId())
-            .courseTitle(course != null ? course.getTitle() : null)
-            .courseThumbnailUrl(course != null ? course.getThumbnailUrl() : null)
-            .enrollmentId(order.getEnrollmentId())
-            .status(order.getStatus())
-            .originalPrice(order.getOriginalPrice())
-            .discountAmount(order.getDiscountAmount())
-            .finalPrice(order.getFinalPrice())
-            .instructorEarnings(order.getInstructorEarnings())
-            .platformCommission(order.getPlatformCommission())
-            .expiresAt(order.getExpiresAt())
-            .confirmedAt(order.getConfirmedAt())
-            .cancelledAt(order.getCancelledAt())
-            .cancellationReason(order.getCancellationReason())
-            .createdAt(order.getCreatedAt())
-            .updatedAt(order.getUpdatedAt())
-            .build();
+                .id(order.getId())
+                .orderNumber(order.getOrderNumber())
+                .studentId(order.getStudentId())
+                .studentName(studentName)
+                .courseId(order.getCourseId())
+                .courseTitle(course != null ? course.getTitle() : null)
+                .courseThumbnailUrl(course != null ? course.getThumbnailUrl() : null)
+                .enrollmentId(order.getEnrollmentId())
+                .status(order.getStatus())
+                .originalPrice(order.getOriginalPrice())
+                .discountAmount(order.getDiscountAmount())
+                .finalPrice(order.getFinalPrice())
+                .instructorEarnings(order.getInstructorEarnings())
+                .platformCommission(order.getPlatformCommission())
+                .expiresAt(order.getExpiresAt())
+                .confirmedAt(order.getConfirmedAt())
+                .cancelledAt(order.getCancelledAt())
+                .cancellationReason(order.getCancellationReason())
+                .createdAt(order.getCreatedAt())
+                .updatedAt(order.getUpdatedAt())
+                .build();
     }
 }

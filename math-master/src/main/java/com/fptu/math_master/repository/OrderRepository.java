@@ -5,10 +5,12 @@ import com.fptu.math_master.enums.OrderStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import jakarta.persistence.LockModeType;
 
 import java.time.Instant;
 import java.util.List;
@@ -21,6 +23,10 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     Optional<Order> findByOrderNumber(String orderNumber);
 
     Optional<Order> findByIdAndStudentId(UUID id, UUID studentId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.id = :id AND o.studentId = :studentId")
+    Optional<Order> findByIdAndStudentIdWithLock(@Param("id") UUID id, @Param("studentId") UUID studentId);
 
     Page<Order> findByStudentIdAndDeletedAtIsNullOrderByCreatedAtDesc(UUID studentId, Pageable pageable);
 
