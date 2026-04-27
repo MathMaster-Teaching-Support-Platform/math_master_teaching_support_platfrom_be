@@ -356,7 +356,18 @@ public enum ErrorCode {
   TOO_MANY_TAGS(1202, "Maximum 5 tags allowed", HttpStatus.BAD_REQUEST),
   BANK_MISSING_CHAPTER(1203, "Question bank must be linked to a chapter", HttpStatus.BAD_REQUEST),
   BANK_GRADE_MISMATCH(1204, "Question bank grade does not match matrix grade", HttpStatus.BAD_REQUEST),
-  BANK_SUBJECT_MISMATCH(1205, "Question bank subject does not match matrix subject", HttpStatus.BAD_REQUEST);
+  BANK_SUBJECT_MISMATCH(1205, "Question bank subject does not match matrix subject", HttpStatus.BAD_REQUEST),
+
+  // ─── Withdrawal Error Codes ───────────────────────────────────────────────
+  WITHDRAWAL_REQUEST_NOT_FOUND(1207, "Withdrawal request not found", HttpStatus.NOT_FOUND),
+  INVALID_WITHDRAWAL_STATUS(
+      1208, "Withdrawal request status is invalid for this operation", HttpStatus.BAD_REQUEST),
+  WITHDRAWAL_REQUEST_ALREADY_EXISTS(
+      1209, "You already have a pending withdrawal request", HttpStatus.BAD_REQUEST),
+  OTP_EXPIRED(1210, "OTP has expired", HttpStatus.BAD_REQUEST),
+  INVALID_OTP(1211, "Invalid OTP code", HttpStatus.BAD_REQUEST),
+  WITHDRAWAL_AMOUNT_TOO_SMALL(
+      1212, "Withdrawal amount must be at least 10,000 VND", HttpStatus.BAD_REQUEST);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {

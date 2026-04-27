@@ -130,4 +130,54 @@ public class EmailServiceImpl implements EmailService {
 
     sendEmail(to, "Học viên mới đăng ký khóa học - " + courseTitle, "new-enrollment", variables);
   }
+
+  // ─── Withdrawal Email Methods ─────────────────────────────────────────────
+
+  @Override
+  @Async
+  public void sendWithdrawalOtpEmail(String to, String userName, String otpCode,
+      java.math.BigDecimal amount) {
+    Map<String, Object> variables = new HashMap<>();
+    variables.put("userName", userName);
+    variables.put("otpCode", otpCode);
+    variables.put("amount", String.format("%,.0f", amount));
+    variables.put("expiryMinutes", 10);
+    variables.put("currentYear", java.time.Year.now().getValue());
+
+    sendEmail(to, "Mã OTP xác nhận rút tiền — MathMaster", "withdrawal-otp", variables);
+  }
+
+  @Override
+  @Async
+  public void sendWithdrawalSuccessEmail(String to, String userName, java.math.BigDecimal amount,
+      String bankName, String bankAccountNumber, String bankAccountName,
+      String proofImageUrl, String transactionId, java.time.Instant processedAt) {
+    Map<String, Object> variables = new HashMap<>();
+    variables.put("userName", userName);
+    variables.put("amount", String.format("%,.0f", amount));
+    variables.put("bankName", bankName);
+    variables.put("bankAccountNumber", bankAccountNumber);
+    variables.put("bankAccountName", bankAccountName);
+    variables.put("proofImageUrl", proofImageUrl);
+    variables.put("transactionId", transactionId);
+    variables.put("processedAt",
+        java.time.ZonedDateTime.ofInstant(processedAt, java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
+            .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")));
+    variables.put("currentYear", java.time.Year.now().getValue());
+
+    sendEmail(to, "Yêu cầu rút tiền đã được xử lý — MathMaster", "withdrawal-success", variables);
+  }
+
+  @Override
+  @Async
+  public void sendWithdrawalRejectedEmail(String to, String userName, java.math.BigDecimal amount,
+      String reason) {
+    Map<String, Object> variables = new HashMap<>();
+    variables.put("userName", userName);
+    variables.put("amount", String.format("%,.0f", amount));
+    variables.put("reason", reason);
+    variables.put("currentYear", java.time.Year.now().getValue());
+
+    sendEmail(to, "Yêu cầu rút tiền bị từ chối — MathMaster", "withdrawal-rejected", variables);
+  }
 }

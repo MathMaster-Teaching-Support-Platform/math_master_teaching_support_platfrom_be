@@ -1,0 +1,184 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yêu cầu rút tiền đã hoàn tất</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f4f6f9;
+        font-family: "Segoe UI", Arial, sans-serif;
+      }
+      .wrapper {
+        max-width: 580px;
+        margin: 40px auto;
+        background-color: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+      }
+      .header {
+        background: linear-gradient(135deg, #2e7d32 0%, #66bb6a 100%);
+        padding: 32px 40px;
+        text-align: center;
+      }
+      .header h1 {
+        color: #ffffff;
+        font-size: 22px;
+        margin: 0;
+        font-weight: 700;
+      }
+      .header p {
+        color: rgba(255, 255, 255, 0.85);
+        margin: 8px 0 0;
+        font-size: 14px;
+      }
+      .body {
+        padding: 36px 40px;
+      }
+      .success-badge {
+        text-align: center;
+        margin-bottom: 28px;
+      }
+      .success-badge span {
+        background-color: #e8f5e9;
+        color: #2e7d32;
+        font-size: 14px;
+        font-weight: 700;
+        padding: 8px 20px;
+        border-radius: 20px;
+        border: 1px solid #a5d6a7;
+      }
+      .greeting {
+        font-size: 15px;
+        color: #333;
+        margin-bottom: 20px;
+        line-height: 1.6;
+      }
+      .detail-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+      }
+      .detail-table tr td {
+        padding: 11px 14px;
+        font-size: 14px;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      .detail-table tr td:first-child {
+        color: #666;
+        width: 45%;
+      }
+      .detail-table tr td:last-child {
+        color: #222;
+        font-weight: 600;
+      }
+      .amount-row td {
+        background-color: #e8f5e9;
+      }
+      .amount-row td:last-child {
+        color: #2e7d32 !important;
+        font-size: 16px;
+      }
+      .proof-section {
+        margin-top: 24px;
+      }
+      .proof-section p {
+        font-size: 13px;
+        color: #666;
+        margin-bottom: 8px;
+      }
+      .proof-section a {
+        display: inline-block;
+        background-color: #1976d2;
+        color: #fff;
+        text-decoration: none;
+        font-size: 13px;
+        padding: 9px 20px;
+        border-radius: 6px;
+      }
+      .footer {
+        background-color: #f9fafb;
+        padding: 20px 40px;
+        text-align: center;
+        border-top: 1px solid #eee;
+      }
+      .footer p {
+        margin: 0;
+        font-size: 12px;
+        color: #aaa;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">
+      <div class="header">
+        <h1>✅ Rút tiền thành công</h1>
+        <p>MathMaster — Biên lai giao dịch</p>
+      </div>
+
+      <div class="body">
+        <div class="success-badge">
+          <span>GIAO DỊCH HOÀN TẤT</span>
+        </div>
+
+        <p class="greeting">
+          Xin chào <strong th:text="${userName}">Người dùng</strong>,<br />
+          Yêu cầu rút tiền của bạn đã được xử lý thành công. Dưới đây là chi
+          tiết giao dịch.
+        </p>
+
+        <table class="detail-table">
+          <tr class="amount-row">
+            <td>Số tiền rút</td>
+            <td th:text="'₫' + ${amount} + ' VND'">₫50,000 VND</td>
+          </tr>
+          <tr>
+            <td>Ngân hàng</td>
+            <td th:text="${bankName}">Vietcombank</td>
+          </tr>
+          <tr>
+            <td>Số tài khoản</td>
+            <td th:text="${bankAccountNumber}">1234567890</td>
+          </tr>
+          <tr>
+            <td>Tên tài khoản</td>
+            <td th:text="${bankAccountName}">NGUYEN VAN A</td>
+          </tr>
+          <tr>
+            <td>Mã giao dịch</td>
+            <td th:text="${transactionId}">uuid-here</td>
+          </tr>
+          <tr>
+            <td>Thời gian xử lý</td>
+            <td th:text="${processedAt}">10:30 27/04/2026</td>
+          </tr>
+        </table>
+
+        <div
+          class="proof-section"
+          th:if="${proofImageUrl != null and !#strings.isEmpty(proofImageUrl)}"
+        >
+          <p>Ảnh minh chứng chuyển khoản:</p>
+          <a th:href="${proofImageUrl}" target="_blank">Xem ảnh minh chứng</a>
+        </div>
+
+        <p style="font-size: 13px; color: #888; margin-top: 24px">
+          Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ
+          <a href="mailto:support@mathmaster.vn" style="color: #1976d2"
+            >support@mathmaster.vn</a
+          >.
+        </p>
+      </div>
+
+      <div class="footer">
+        <p>
+          © <span th:text="${currentYear}">2026</span> MathMaster. Email này
+          được gửi tự động, vui lòng không trả lời.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

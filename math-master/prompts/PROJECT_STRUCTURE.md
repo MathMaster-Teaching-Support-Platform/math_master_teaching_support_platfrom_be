@@ -96,6 +96,8 @@ TeacherProfileController.java
 UserController.java
 VideoUploadController.java
 WalletController.java
+WithdrawalController.java
+AdminWithdrawalController.java
 ```
 
 ---
@@ -156,6 +158,7 @@ TeachingResource.java
 TopicLearningMaterial.java
 Transaction.java
 User.java
+WithdrawalRequest.java
 UserSubscription.java
 Wallet.java
 ```
@@ -216,6 +219,7 @@ TeachingResourceRepository.java
 TopicLearningMaterialRepository.java
 TransactionRepository.java
 UserRepository.java
+WithdrawalRequestRepository.java
 UserSpecification.java             — JPA Specification for dynamic queries
 UserSubscriptionRepository.java
 WalletRepository.java
@@ -280,6 +284,7 @@ UserService.java
 UserSubscriptionService.java
 VideoUploadService.java
 WalletService.java
+WithdrawalService.java
 ```
 
 ### service/impl/ — Service Implementations
@@ -338,6 +343,7 @@ TemplateValidationServiceImpl.java
 UserServiceImpl.java
 UserSubscriptionServiceImpl.java
 VideoUploadServiceImpl.java
+WithdrawalServiceImpl.java
 ```
 
 ### service/async/ — Async Job Processing (Redis Stream)
@@ -469,6 +475,9 @@ UserCreationRequest.java
 UserRegistrationRequest.java
 UserSearchRequest.java
 UserUpdateRequest.java
+VerifyWithdrawalOtpRequest.java
+WithdrawalRequestDto.java
+RejectWithdrawalRequest.java
 ```
 
 #### dto/response/ — Outbound DTOs
@@ -587,6 +596,8 @@ UserRegisterResponse.java
 UserResponse.java
 UserSubscriptionResponse.java
 WalletResponse.java
+WithdrawalRequestResponse.java
+AdminWithdrawalRequestResponse.java
 ```
 
 #### dto/ocr/ — OCR Job DTOs
@@ -640,6 +651,7 @@ TemplateVariant.java
 TopicStatus.java
 TransactionStatus.java
 TransactionType.java
+WithdrawalStatus.java
 UserSubscriptionStatus.java
 ```
 
@@ -680,6 +692,7 @@ PayOSProperties.java
 
 ```
 PendingTransactionCancelScheduler.java   — Auto-cancel PENDING txs after 15 min (runs every 60s)
+WithdrawalOtpCancelScheduler.java        — Auto-cancel PENDING_VERIFY withdrawal requests when OTP expires (runs every 5 min)
 StreamConsumerListener.java
 StreamInitializer.java
 StreamPublisher.java
