@@ -6,8 +6,27 @@ on:
       - main # Trigger khi có code mới đẩy vào main (hoặc sau khi merge PR)
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+          cache: maven
+
+      - name: Build with Maven (verify only, no deploy)
+        working-directory: math-master
+        run: ./mvnw clean package -DskipTests -q
+
   deploy:
     runs-on: ubuntu-latest
+    needs: build # Chỉ chạy nếu job build thành công
 
     steps:
       - name: Checkout code
