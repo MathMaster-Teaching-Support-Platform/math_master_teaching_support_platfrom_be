@@ -22,7 +22,9 @@ jobs:
 
       - name: Build with Maven (verify only, no deploy)
         working-directory: math-master
-        run: ./mvnw clean package -DskipTests -q
+        run: |
+          chmod +x mvnw
+          ./mvnw clean package -DskipTests -q
 
   deploy:
     runs-on: ubuntu-latest
