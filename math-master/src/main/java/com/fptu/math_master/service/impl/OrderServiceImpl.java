@@ -17,7 +17,9 @@ import com.fptu.math_master.util.SecurityUtils;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,10 @@ public class OrderServiceImpl implements OrderService {
     WalletService walletService;
     StreamPublisher streamPublisher;
     com.fptu.math_master.service.EmailService emailService;
+
+    @NonFinal
+    @Value("${app.frontend-url:http://localhost:3000}")
+    String frontendUrl;
 
     private static final Duration ORDER_EXPIRY_DURATION = Duration.ofMinutes(15);
     private static final BigDecimal INSTRUCTOR_SHARE = new BigDecimal("0.90");
@@ -493,7 +499,7 @@ public class OrderServiceImpl implements OrderService {
         // Student email
         if (student != null && student.getEmail() != null) {
             try {
-                String enrollmentUrl = "http://localhost:3000/student/courses/" + order.getEnrollmentId();
+                String enrollmentUrl = frontendUrl + "/student/courses/" + order.getEnrollmentId();
                 String formattedAmount = String.format("%,.0f VND", order.getFinalPrice());
                 emailService.sendOrderConfirmationEmail(
                         student.getEmail(),
@@ -529,7 +535,7 @@ public class OrderServiceImpl implements OrderService {
         // Teacher email
         if (instructor != null && instructor.getEmail() != null && student != null) {
             try {
-                String courseUrl = "http://localhost:3000/teacher/courses/" + course.getId();
+                String courseUrl = frontendUrl + "/teacher/courses/" + course.getId();
                 emailService.sendNewEnrollmentEmail(
                         instructor.getEmail(),
                         instructor.getFullName(),
