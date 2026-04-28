@@ -13,6 +13,9 @@ import lombok.NoArgsConstructor;
 /**
  * One row in the exam-matrix table — corresponds to a single <em>dạng bài</em>
  * (question type) associated with a chapter / lesson.
+ * 
+ * Phase 3: questionBankId removed from row level.
+ * The bank is now specified at the matrix level (BuildExamMatrixRequest.questionBankId).
  */
 @Data
 @Builder
@@ -28,19 +31,13 @@ public class MatrixRowRequest {
   private UUID lessonId;
 
   /**
-   * Question bank used for this row in bank-only matrix mode.
-   */
-  @NotNull(message = "questionBankId is required")
-  private UUID questionBankId;
-
-  /**
    * Selected difficulty for this row (EASY/MEDIUM/HARD).
    */
   private QuestionDifficulty questionDifficulty;
 
   /**
    * Human-readable label for the dạng bài column.
-    * Required for bank-only row.
+   * Required for bank-only row.
    */
   @Size(max = 500, message = "questionTypeName must not exceed 500 characters")
   private String questionTypeName;

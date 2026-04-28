@@ -65,6 +65,9 @@ public class QuestionTemplate extends BaseEntity {
   @Column(name = "lesson_id")
   private UUID lessonId;
 
+  @Column(name = "chapter_id")
+  private UUID chapterId;
+
   @Column(name = "question_bank_id")
   private UUID questionBankId;
 

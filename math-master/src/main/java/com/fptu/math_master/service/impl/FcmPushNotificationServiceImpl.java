@@ -18,6 +18,7 @@ import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.SendResponse;
 import com.google.firebase.messaging.Notification;
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -301,7 +302,20 @@ public class FcmPushNotificationServiceImpl implements PushNotificationService {
       }
 
       if (StringUtils.hasText(firebaseProperties.getServiceAccountPath())) {
-        try (InputStream stream = new FileInputStream(firebaseProperties.getServiceAccountPath())) {
+        File file = new File(firebaseProperties.getServiceAccountPath());
+        
+        if (!file.exists()) {
+          log.warn("Firebase service account file does not exist at path: {}", file.getAbsolutePath());
+          return null;
+        }
+        
+        if (file.isDirectory()) {
+          log.error("Firebase service account path is a directory, not a file: {}. " +
+              "Please check your Docker volume mounts or secret configuration.", file.getAbsolutePath());
+          return null;
+        }
+
+        try (InputStream stream = new FileInputStream(file)) {
           return GoogleCredentials.fromStream(stream);
         }
       }

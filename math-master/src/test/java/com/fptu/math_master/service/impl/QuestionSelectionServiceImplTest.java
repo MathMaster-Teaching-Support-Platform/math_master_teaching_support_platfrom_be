@@ -49,7 +49,7 @@ class QuestionSelectionServiceImplTest extends BaseUnitTest {
     ExamMatrixBankMapping mapping = new ExamMatrixBankMapping();
     mapping.setId(id);
     mapping.setExamMatrixId(examMatrixId);
-    mapping.setQuestionBankId(bankId);
+    mapping.setMatrixRowId(bankId); // Phase 4: mappings now reference rows, not banks directly
     mapping.setQuestionCount(questionCount);
     mapping.setPointsPerQuestion(points);
     mapping.setCognitiveLevel(cognitiveLevel);

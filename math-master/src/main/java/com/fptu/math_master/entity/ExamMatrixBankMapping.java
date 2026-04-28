@@ -1,6 +1,7 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.CognitiveLevel;
+import com.fptu.math_master.enums.QuestionType;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -34,12 +35,12 @@ import lombok.Setter;
     name = "exam_matrix_bank_mappings",
     uniqueConstraints = {
       @UniqueConstraint(
-          name = "uq_exam_matrix_row_bank_cognitive",
-          columnNames = {"exam_matrix_id", "matrix_row_id", "question_bank_id", "cognitive_level"})
+          name = "uq_exam_matrix_row_cognitive",
+          columnNames = {"exam_matrix_id", "matrix_row_id", "cognitive_level"})
     },
     indexes = {
       @Index(name = "idx_exam_matrix_bank_mapping_matrix", columnList = "exam_matrix_id"),
-      @Index(name = "idx_exam_matrix_bank_mapping_bank", columnList = "question_bank_id"),
+      @Index(name = "idx_exam_matrix_bank_mapping_row", columnList = "matrix_row_id"),
       @Index(name = "idx_exam_matrix_bank_mapping_cognitive", columnList = "cognitive_level")
     })
 public class ExamMatrixBankMapping extends BaseEntity {
@@ -47,10 +48,7 @@ public class ExamMatrixBankMapping extends BaseEntity {
   @Column(name = "exam_matrix_id", nullable = false)
   private UUID examMatrixId;
 
-  @Column(name = "question_bank_id", nullable = false)
-  private UUID questionBankId;
-
-  @Column(name = "matrix_row_id")
+  @Column(name = "matrix_row_id", nullable = false)
   private UUID matrixRowId;
 
   @Column(name = "question_count", nullable = false)
@@ -64,13 +62,22 @@ public class ExamMatrixBankMapping extends BaseEntity {
   @Enumerated(EnumType.STRING)
   private CognitiveLevel cognitiveLevel;
 
+  /**
+   * The type of question this cell requires (MCQ, TRUE_FALSE, or SHORT_ANSWER).
+   * Derived from the exam part number:
+   * - Part I (1) → MULTIPLE_CHOICE
+   * - Part II (2) → TRUE_FALSE
+   * - Part III (3) → SHORT_ANSWER
+   * Default: MULTIPLE_CHOICE for backward compatibility
+   */
+  @Column(name = "question_type", nullable = false)
+  @Enumerated(EnumType.STRING)
+  @Builder.Default
+  private QuestionType questionType = QuestionType.MULTIPLE_CHOICE;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "exam_matrix_id", insertable = false, updatable = false)
   private ExamMatrix examMatrix;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
-  private QuestionBank questionBank;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "matrix_row_id", insertable = false, updatable = false)

@@ -1016,7 +1016,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
               List.of(
                   com.fptu.math_master.entity.ExamMatrixBankMapping.builder()
                       .examMatrixId(matrixId)
-                      .questionBankId(UUID.randomUUID())
+                      .matrixRowId(UUID.randomUUID())
                       .questionCount(1)
                       .build()));
       when(examMatrixRowRepository.findByExamMatrixId(matrixId)).thenReturn(Collections.emptyList());
@@ -1062,7 +1062,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
               List.of(
                   com.fptu.math_master.entity.ExamMatrixBankMapping.builder()
                       .examMatrixId(matrixId)
-                      .questionBankId(UUID.randomUUID())
+                      .matrixRowId(UUID.randomUUID())
                       .questionCount(1)
                       .build()));
       when(examMatrixRowRepository.findByExamMatrixId(matrixId)).thenReturn(Collections.emptyList());
@@ -1144,7 +1144,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
               List.of(
                   com.fptu.math_master.entity.ExamMatrixBankMapping.builder()
                       .examMatrixId(matrixId)
-                      .questionBankId(UUID.randomUUID())
+                      .matrixRowId(UUID.randomUUID())
                       .questionCount(10)
                       .build()));
       when(questionRepository.countApprovedByBanksAndCognitiveLevel(any(), any())).thenReturn(20L);
@@ -1960,7 +1960,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
       com.fptu.math_master.entity.ExamMatrixBankMapping mapping =
           com.fptu.math_master.entity.ExamMatrixBankMapping.builder()
               .examMatrixId(matrixId)
-              .questionBankId(UUID.randomUUID())
+              .matrixRowId(UUID.randomUUID())
               .questionCount(2)
               .build();
       mapping.setId(UUID.fromString("8e7fcb31-d4ae-4b07-aa57-60534ad637ba"));
@@ -1984,7 +1984,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
       com.fptu.math_master.entity.ExamMatrixBankMapping mapping =
           com.fptu.math_master.entity.ExamMatrixBankMapping.builder()
               .examMatrixId(matrixId)
-              .questionBankId(UUID.randomUUID())
+              .matrixRowId(UUID.randomUUID())
               .questionCount(2)
               .build();
       mapping.setId(UUID.fromString("82f5f591-4b4d-4f94-a406-1f0e598f9b51"));
@@ -2517,7 +2517,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
       com.fptu.math_master.entity.ExamMatrixBankMapping mapping =
           com.fptu.math_master.entity.ExamMatrixBankMapping.builder()
               .examMatrixId(matrixId)
-              .questionBankId(UUID.randomUUID())
+              .matrixRowId(UUID.randomUUID())
               .questionCount(2)
               .build();
       mapping.setId(UUID.randomUUID());
@@ -2651,7 +2651,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
               List.of(
                   com.fptu.math_master.entity.ExamMatrixBankMapping.builder()
                       .examMatrixId(matrixId)
-                      .questionBankId(UUID.randomUUID())
+                      .matrixRowId(UUID.randomUUID())
                       .questionCount(10)
                       .build()));
       when(questionRepository.countApprovedByBanksAndCognitiveLevel(any(), anyString())).thenReturn(1L);
@@ -2905,3 +2905,4 @@ class AssessmentServiceImplTest extends BaseUnitTest {
     }
   }
 }
+

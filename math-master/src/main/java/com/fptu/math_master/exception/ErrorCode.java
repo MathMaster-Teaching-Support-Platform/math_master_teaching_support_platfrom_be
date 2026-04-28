@@ -51,13 +51,15 @@ public enum ErrorCode {
       1036, "You do not have permission to access this question bank", HttpStatus.FORBIDDEN),
   QUESTION_BANK_HAS_QUESTIONS_IN_USE(
       1037, "Question bank has questions being used in assessments", HttpStatus.BAD_REQUEST),
-  INVALID_SUBJECT(1038, "Invalid subject", HttpStatus.BAD_REQUEST),
-  NOT_A_TEACHER(1039, "Only teachers can create question banks", HttpStatus.FORBIDDEN),
-  ASSESSMENT_NOT_FOUND(1040, "Assessment not found", HttpStatus.NOT_FOUND),
+  QUESTION_BANK_REQUIRED(
+      1038, "Question bank is required for exam matrix", HttpStatus.BAD_REQUEST),
+  INVALID_SUBJECT(1039, "Invalid subject", HttpStatus.BAD_REQUEST),
+  NOT_A_TEACHER(1040, "Only teachers can create question banks", HttpStatus.FORBIDDEN),
+  ASSESSMENT_NOT_FOUND(1041, "Assessment not found", HttpStatus.NOT_FOUND),
   ASSESSMENT_ACCESS_DENIED(
-      1041, "You do not have permission to access this assessment", HttpStatus.FORBIDDEN),
+      1042, "You do not have permission to access this assessment", HttpStatus.FORBIDDEN),
   ASSESSMENT_ALREADY_PUBLISHED(
-      1042, "Assessment is already published and cannot be edited", HttpStatus.BAD_REQUEST),
+      1043, "Assessment is already published and cannot be edited", HttpStatus.BAD_REQUEST),
   ASSESSMENT_HAS_SUBMISSIONS(
       1043,
       "Assessment has submissions and cannot be deleted or unpublished",

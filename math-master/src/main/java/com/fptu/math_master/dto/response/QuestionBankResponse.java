@@ -20,8 +20,6 @@ public class QuestionBankResponse {
   private String name;
   private String description;
   private Boolean isPublic;
-  private UUID chapterId;
-  private String chapterTitle;
   private Long questionCount;
   /** Counts per CognitiveLevel enum name, e.g. {"NHAN_BIET": 6, "THONG_HIEU": 4} */
   private Map<String, Long> cognitiveStats;

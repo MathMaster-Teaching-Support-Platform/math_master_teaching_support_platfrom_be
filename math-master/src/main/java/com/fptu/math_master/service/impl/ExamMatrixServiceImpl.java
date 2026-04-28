@@ -439,7 +439,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
       long approvedAvailable =
           questionRepository.countApprovedByBankAndDifficultyAndCognitive(
-              bankMapping.getQuestionBankId(), null, bankMapping.getCognitiveLevel());
+              matrix.getQuestionBankId(), null, bankMapping.getCognitiveLevel());
 
       if (approvedAvailable < required) {
         aiFallbackLikely = true;
@@ -1000,6 +1000,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       Question question =
           Question.builder()
               .questionBankId(request.getQuestionBankId())
+              .chapterId(template.getChapterId())
+              .lessonId(template.getLessonId())
               .questionType(item.getQuestionType())
               .questionText(item.getQuestionText())
               .options(optionsJsonb)
@@ -1080,21 +1082,28 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     UUID currentUserId = getCurrentUserId();
     validateTeacherRole(currentUserId);
 
-    // Resolve grade level from curriculum when not provided explicitly
-    Integer gradeLevel = request.getGradeLevel();
-    if (gradeLevel == null && request.getCurriculumId() != null) {
-      gradeLevel =
-          curriculumRepository
-              .findByIdAndNotDeleted(request.getCurriculumId())
-              .map(Curriculum::getGrade)
-              .orElse(null);
+    // Phase 3: Validate questionBankId is provided and accessible
+    if (request.getQuestionBankId() == null) {
+      throw new AppException(ErrorCode.QUESTION_BANK_REQUIRED);
+    }
+
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(request.getQuestionBankId())
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    // Validate bank access
+    if (!bank.getTeacherId().equals(currentUserId)
+        && !Boolean.TRUE.equals(bank.getIsPublic())
+        && !hasRole(PredefinedRole.ADMIN_ROLE)) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
     }
 
     ExamMatrix matrix =
         ExamMatrix.builder()
             .teacherId(currentUserId)
-            .curriculumId(request.getCurriculumId())
-            .gradeLevel(gradeLevel)
+            .gradeLevel(request.getGradeLevel())
+            .questionBankId(request.getQuestionBankId())
             .name(request.getName())
             .description(request.getDescription())
             .isReusable(request.getIsReusable() != null ? request.getIsReusable() : false)
@@ -1300,17 +1309,21 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
   }
 
   private BankMappingResponse buildBankMappingResponse(ExamMatrixBankMapping mapping) {
-    String bankName =
-      questionBankRepository.findById(mapping.getQuestionBankId()).map(QuestionBank::getName).orElse(null);
+    // Get bank ID from the matrix since mappings no longer store it directly
+    ExamMatrix matrix = examMatrixRepository.findById(mapping.getExamMatrixId()).orElse(null);
+    UUID bankId = matrix != null ? matrix.getQuestionBankId() : null;
+    String bankName = bankId != null 
+        ? questionBankRepository.findById(bankId).map(QuestionBank::getName).orElse(null)
+        : null;
+    
     return BankMappingResponse.builder()
         .id(mapping.getId())
         .examMatrixId(mapping.getExamMatrixId())
-        .questionBankId(mapping.getQuestionBankId())
         .questionBankName(bankName)
-      .matrixRowId(mapping.getMatrixRowId())
-      .questionCount(getQuestionCountFromBankMapping(mapping))
+        .matrixRowId(mapping.getMatrixRowId())
+        .questionCount(getQuestionCountFromBankMapping(mapping))
         .cognitiveLevel(mapping.getCognitiveLevel())
-      .pointsPerQuestion(mapping.getPointsPerQuestion() != null ? mapping.getPointsPerQuestion() : BigDecimal.ONE)
+        .pointsPerQuestion(mapping.getPointsPerQuestion() != null ? mapping.getPointsPerQuestion() : BigDecimal.ONE)
         .createdAt(mapping.getCreatedAt())
         .updatedAt(mapping.getUpdatedAt())
         .build();
@@ -1394,10 +1407,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       throw new AppException(ErrorCode.MATRIX_ROW_QUESTION_TYPE_REQUIRED);
     }
 
-    QuestionBank bank =
-        questionBankRepository
-            .findByIdAndNotDeleted(rowSpec.getQuestionBankId())
-            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+    // Phase 3: No longer validate or store questionBankId at row level
+    // The bank is validated and stored at matrix level
 
     Chapter chapter =
         chapterRepository
@@ -1425,13 +1436,6 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       }
     }
 
-    UUID currentUserId = getCurrentUserId();
-    if (!bank.getTeacherId().equals(currentUserId)
-        && !Boolean.TRUE.equals(bank.getIsPublic())
-        && !hasRole(PredefinedRole.ADMIN_ROLE)) {
-      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
-    }
-
     // Matrix can have multiple grades and subjects - no validation needed
 
     ExamMatrixRow row =
@@ -1443,7 +1447,6 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .subjectName(subjectName)
             .schoolGradeName(schoolGradeName)
             .chapterName(chapter.getTitle())
-            .questionBankId(rowSpec.getQuestionBankId())
             .questionDifficulty(rowSpec.getQuestionDifficulty())
             .questionTypeName(qTypeName)
             .referenceQuestions(rowSpec.getReferenceQuestions())
@@ -1478,10 +1481,11 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               ? cell.getPointsPerQuestion()
               : (defaultPointsPerQuestion != null ? defaultPointsPerQuestion : BigDecimal.ONE);
 
+      // Phase 3: No longer store questionBankId in ExamMatrixBankMapping
+      // The bank comes from ExamMatrix.questionBankId
       ExamMatrixBankMapping mapping =
           ExamMatrixBankMapping.builder()
               .examMatrixId(matrixId)
-              .questionBankId(row.getQuestionBankId())
               .matrixRowId(row.getId())
               .questionCount(questionCount)
               .cognitiveLevel(cell.getCognitiveLevel())
@@ -1594,7 +1598,6 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
                 .subjectName(row.getSubjectName())
                 .schoolGradeName(row.getSchoolGradeName())
                 .chapterName(row.getChapterName())
-                .questionBankId(row.getQuestionBankId())
                 .questionDifficulty(row.getQuestionDifficulty())
                 .questionTypeName(row.getQuestionTypeName())
                 .referenceQuestions(row.getReferenceQuestions())
@@ -1638,19 +1641,20 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       grandTotalPoints = grandTotalPoints.add(chapterTotalPts);
     }
 
-    // Resolve curriculum info for the response
-    String finalCurriculumName = null;
-    UUID finalSubjectId = null;
+    // Resolve subject info from the first chapter in the matrix
     String finalSubjectName = null;
-    if (matrix.getCurriculumId() != null) {
-      var currOpt = curriculumRepository.findByIdAndNotDeleted(matrix.getCurriculumId());
-      if (currOpt.isPresent()) {
-        Curriculum curr = currOpt.get();
-        finalCurriculumName = curr.getName();
-        if (curr.getSubjectId() != null) {
-          finalSubjectId = curr.getSubjectId();
+    UUID finalSubjectId = null;
+    if (!chapterGroups.isEmpty() && chapterGroups.get(0).getChapterId() != null) {
+      var chapOpt = chapterRepository.findById(chapterGroups.get(0).getChapterId());
+      if (chapOpt.isPresent()) {
+        Chapter firstChapter = chapOpt.get();
+        if (firstChapter.getSubjectId() != null) {
+          finalSubjectId = firstChapter.getSubjectId();
           finalSubjectName =
-              subjectRepository.findById(curr.getSubjectId()).map(Subject::getName).orElse(null);
+              subjectRepository
+                  .findById(firstChapter.getSubjectId())
+                  .map(Subject::getName)
+                  .orElse(null);
         }
       }
     }
@@ -1665,8 +1669,6 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .teacherId(matrix.getTeacherId())
         .teacherName(teacherName)
         .gradeLevel(matrix.getGradeLevel())
-        .curriculumId(matrix.getCurriculumId())
-        .curriculumName(finalCurriculumName)
         .subjectId(finalSubjectId)
         .subjectName(finalSubjectName)
         .isReusable(matrix.getIsReusable())

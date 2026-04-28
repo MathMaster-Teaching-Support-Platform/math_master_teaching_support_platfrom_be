@@ -63,14 +63,17 @@ public class UuidV7Generator implements BeforeExecutionGenerator {
   // BeforeExecutionGenerator contract
   // -----------------------------------------------------------------------
 
-  @Override
-  public Object generate(
-      SharedSessionContractImplementor session,
-      Object owner,
-      Object currentValue,
-      EventType eventType) {
-    return generateUuidV7();
-  }
+    @Override
+    public Object generate(
+        SharedSessionContractImplementor session,
+        Object owner,
+        Object currentValue,
+        EventType eventType) {
+      if (currentValue != null) {
+        return currentValue;
+      }
+      return generateUuidV7();
+    }
 
   @Override
   public EnumSet<EventType> getEventTypes() { // FIX: was raw EnumSet

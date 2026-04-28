@@ -55,5 +55,14 @@ public class QuestionTemplateRequest {
   /** Optional: assign this template to a question bank */
   private UUID questionBankId;
 
+  /** 
+   * Optional: chapter this template belongs to.
+   * If not provided, will be auto-resolved from lessonId or questionBankId.
+   */
+  private UUID chapterId;
+
+  /** Optional: lesson this template belongs to (implies chapterId) */
+  private UUID lessonId;
+
   private UUID canonicalQuestionId;
 }
