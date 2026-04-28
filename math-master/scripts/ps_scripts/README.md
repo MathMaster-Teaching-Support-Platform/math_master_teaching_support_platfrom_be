@@ -58,6 +58,9 @@ khoipd_terminal_ps
   -----------------------------------
   [17] Project Status
   [18] Delete Log Files
+  -----------------------------------
+  [21] SSH Tunnel to Production DB
+  -----------------------------------
   [19] Help
   [20] Clear Screen
   [0]  Exit
@@ -193,6 +196,43 @@ khoipd_terminal_ps -Task DeleteLogs
 ```
 
 **Công dụng**: Xóa tất cả log files (`*.log`, `*.txt`) từ thư mục `logs/`
+
+---
+
+### SSH Tunnel to Production Database
+
+```powershell
+khoipd_terminal_ps -Task SSHTunnel
+
+# Hoặc chạy trực tiếp
+.\ssh-tunnel.ps1
+```
+
+**Công dụng**: Tạo SSH tunnel đến production database server
+
+**Chi tiết**:
+- Server: `221.132.21.5`
+- User: `root`
+- Password: `ji6lRRER0Zutb2QhmuJs` (tự động điền nếu có sshpass/plink)
+- Tunnel: `localhost:5432` → `server:5432`
+
+**Auto-fill password**:
+- Script sẽ tự động điền password nếu có `sshpass` hoặc `plink` (PuTTY)
+- Nếu không có, bạn cần nhập password thủ công
+
+**Cài đặt sshpass (optional)**:
+```bash
+# Windows: Dùng Chocolatey
+choco install sshpass
+
+# Hoặc cài PuTTY (có sẵn plink)
+choco install putty
+```
+
+**Lưu ý**: 
+- Giữ terminal này luôn mở khi đang làm việc
+- Nhấn Ctrl+C để dừng tunnel
+- Sau khi tunnel chạy, cập nhật config DB trong `.env` hoặc `application.yaml`
 
 ---
 

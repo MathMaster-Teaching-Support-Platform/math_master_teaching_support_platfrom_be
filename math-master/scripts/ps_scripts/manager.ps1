@@ -7,7 +7,7 @@ param(
         'StartAll', 'StopAll', 'RestartAll',
         'DeployLocal', 'DeployFull', 'RecreateDocker',
         'Logs', 'LogsRedis', 'LogsApp',
-        'Status', 'DeleteLogs', 'Help'
+        'Status', 'DeleteLogs', 'SSHTunnel', 'Help'
     )]
     [string]$Task,
     [switch]$Help,
@@ -54,16 +54,23 @@ function Write-OK($msg)   { Write-Host "OK  $msg" -ForegroundColor Green  }
 function Write-Err($msg)  { Write-Host "ERR $msg" -ForegroundColor Red    }
 
 function Stop-AppPort {
-    param([int]$Port = 8080)
+    param([int]$Port = 8080, [switch]$SkipPostgres)
     $procs = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue |
              Where-Object { $_.State -eq 'Listen' -or $_.State -eq 'Established' }
     if (-not $procs) { Write-OK "Port $Port is already free."; return }
-    $pids = $procs | Select-Object -ExpandProperty OwningProcess -Unique
-    foreach ($pid in $pids) {
-        $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
-        $name = if ($proc) { $proc.Name } else { "PID $pid" }
-        Write-Step "Killing process on port ${Port}: $name (PID $pid)"
-        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    $processList = $procs | Select-Object -ExpandProperty OwningProcess -Unique
+    foreach ($processId in $processList) {
+        $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
+        $name = if ($proc) { $proc.Name } else { "PID $processId" }
+
+        # Skip PostgreSQL processes if requested (they might be needed)
+        if ($SkipPostgres -and $name -match "postgres|pg_ctl") {
+            Write-Host "  Skipping PostgreSQL process: $name (PID $processId)" -ForegroundColor Yellow
+            continue
+        }
+
+        Write-Step "Killing process on port ${Port}: $name (PID $processId)"
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
     }
     for ($i = 0; $i -lt 10; $i++) {
         Start-Sleep -Seconds 1
@@ -72,6 +79,98 @@ function Stop-AppPort {
         if (-not $still) { Write-OK "Port $Port is now free."; return }
     }
     Write-Err "Port $Port still in use after 10s. Continuing anyway..."
+}
+
+function Test-SSHTunnel {
+    # Check if SSH tunnel is running on port 5432
+    $sshProcs = Get-NetTCPConnection -LocalPort 5432 -ErrorAction SilentlyContinue |
+                Where-Object { $_.State -eq 'Listen' }
+
+    if ($sshProcs) {
+        $processList = $sshProcs | Select-Object -ExpandProperty OwningProcess -Unique
+        foreach ($processId in $processList) {
+            $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
+            if ($proc -and $proc.Name -eq "ssh") {
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
+function Start-SSHTunnelIfNeeded {
+    if (Test-SSHTunnel) {
+        Write-OK "SSH tunnel is already running on port 5432."
+        return $true
+    }
+
+    Write-Host ""
+    Write-Host "WARNING: SSH tunnel to production database is NOT running!" -ForegroundColor Yellow
+    Write-Host "The application needs SSH tunnel to connect to the database." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Options:" -ForegroundColor Cyan
+    Write-Host "  [Y] Start SSH tunnel now (recommended)" -ForegroundColor Green
+    Write-Host "  [N] Continue without tunnel (app will fail to connect)" -ForegroundColor Red
+    Write-Host "  [C] Cancel and exit" -ForegroundColor Gray
+    Write-Host ""
+
+    $choice = Read-Host "Start SSH tunnel? (Y/N/C)"
+
+    switch ($choice.ToUpper()) {
+        'Y' {
+            # Start SSH tunnel (port 5432 should already be free from earlier cleanup)
+            Write-Step "Starting SSH tunnel in background..."
+            $script = Join-Path $PSScriptRoot "ssh-tunnel.ps1"
+            if (-Not (Test-Path $script)) {
+                Write-Err "ssh-tunnel.ps1 not found at: $script"
+                return $false
+            }
+
+            # Start SSH tunnel in a new PowerShell window (not in current terminal)
+            Write-Host ""
+            Write-Host "Note: SSH tunnel will open in a separate window." -ForegroundColor Yellow
+            Write-Host "Keep that window open while working." -ForegroundColor Yellow
+            Write-Host ""
+            Start-Process powershell -ArgumentList "-NoExit", "-File", "`"$script`""
+
+            Write-Host "Waiting for SSH tunnel to establish (up to 5 seconds)..." -ForegroundColor Yellow
+            Write-Host "If this is the first connection, you may need to accept the SSH host key in the tunnel window." -ForegroundColor Gray
+            Write-Host ""
+
+            $maxWait = 5
+            for ($i = 0; $i -lt $maxWait; $i++) {
+                Start-Sleep -Seconds 1
+                Write-Host "." -NoNewline -ForegroundColor Gray
+
+                if (Test-SSHTunnel) {
+                    Write-Host ""
+                    Write-OK "SSH tunnel established successfully!"
+                    Write-Host "  Keep the SSH tunnel window open while working." -ForegroundColor Yellow
+                    Write-Host ""
+                    return $true
+                }
+            }
+
+            Write-Host ""
+            Write-Host ""
+            Write-Host "Continuing without confirmed tunnel (tunnel may still be connecting)..." -ForegroundColor Yellow
+            Write-Host "The SSH tunnel window will continue running in the background." -ForegroundColor Gray
+            Write-Host ""
+            return $true
+        }
+        'N' {
+            Write-Host "Continuing without SSH tunnel..." -ForegroundColor Yellow
+            return $true
+        }
+        'C' {
+            Write-Host "Cancelled." -ForegroundColor Gray
+            return $false
+        }
+        default {
+            Write-Host "Invalid choice. Cancelled." -ForegroundColor Red
+            return $false
+        }
+    }
 }
 
 # Tasks
@@ -115,6 +214,37 @@ function Invoke-CleanBuildStart {
     Write-Header "Clean Build + Start Project"
     $root = Get-ProjectRoot
     if (-Not (Test-Path (Join-Path $root "mvnw.cmd"))) { Write-Err "mvnw.cmd not found."; return }
+
+    # Step 0a: Kill any existing processes on port 5432 FIRST (before checking tunnel)
+    Write-Step "Cleaning up port 5432..."
+    $procs = Get-NetTCPConnection -LocalPort 5432 -ErrorAction SilentlyContinue |
+             Where-Object { $_.State -eq 'Listen' }
+
+    if ($procs) {
+        Write-Host "  Found existing process(es) on port 5432. Cleaning up..." -ForegroundColor Yellow
+        $processList = $procs | Select-Object -ExpandProperty OwningProcess -Unique
+        foreach ($processId in $processList) {
+            $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
+            if ($proc) {
+                $name = $proc.Name
+                Write-Host "  Stopping process: $name (PID $processId)" -ForegroundColor Gray
+                Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        # Wait for port to be freed
+        Start-Sleep -Seconds 2
+        Write-OK "Port 5432 is now free."
+    } else {
+        Write-OK "Port 5432 is already free."
+    }
+
+    # Step 0b: Check SSH tunnel for database connection
+    Write-Step "Checking SSH tunnel to production database..."
+    if (-not (Start-SSHTunnelIfNeeded)) {
+        Write-Err "Cannot proceed without database connection."
+        return
+    }
 
     # Step 1: Remove the app Docker container so it cannot occupy port 8080
     if (Assert-Docker) {
@@ -180,6 +310,13 @@ function Invoke-RestartRedis {
 function Invoke-StartAll {
     Write-Header "Start All Services"
     if (-not (Assert-Docker)) { return }
+
+    # Check if starting app service - if so, check SSH tunnel
+    Write-Step "Checking SSH tunnel to production database..."
+    if (-not (Start-SSHTunnelIfNeeded)) {
+        Write-Host "Continuing without SSH tunnel check..." -ForegroundColor Yellow
+    }
+
     $root = Get-ProjectRoot; Assert-EnvFile $root; Push-Location $root
     Write-Step "Starting all containers..."
     docker compose up -d --no-recreate
@@ -212,6 +349,13 @@ function Invoke-RestartAll {
 function Invoke-DeployLocal {
     Write-Header "Local Deploy (build + up)"
     if (-not (Assert-Docker)) { return }
+
+    # Check SSH tunnel before deploying
+    Write-Step "Checking SSH tunnel to production database..."
+    if (-not (Start-SSHTunnelIfNeeded)) {
+        Write-Host "Continuing without SSH tunnel check..." -ForegroundColor Yellow
+    }
+
     $root = Get-ProjectRoot; Assert-EnvFile $root; Push-Location $root
     Write-Step "Building Docker images (no-cache)..."
     docker compose build --no-cache
@@ -226,6 +370,13 @@ function Invoke-DeployLocal {
 function Invoke-DeployFull {
     Write-Header "Full Deploy (down + clean build + up)"
     if (-not (Assert-Docker)) { return }
+
+    # Check SSH tunnel before deploying
+    Write-Step "Checking SSH tunnel to production database..."
+    if (-not (Start-SSHTunnelIfNeeded)) {
+        Write-Host "Continuing without SSH tunnel check..." -ForegroundColor Yellow
+    }
+
     $root = Get-ProjectRoot; Assert-EnvFile $root; Push-Location $root
 
     Write-Step "Stopping existing containers..."
@@ -317,6 +468,13 @@ function Invoke-DeleteLogs {
     Write-Host ""
 }
 
+function Invoke-SSHTunnel {
+    Write-Header "SSH Tunnel to Production Database"
+    $script = Join-Path $PSScriptRoot "ssh-tunnel.ps1"
+    if (-Not (Test-Path $script)) { Write-Err "ssh-tunnel.ps1 not found."; return }
+    & $script
+}
+
 # â”€â”€â”€ Help â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function Show-Help {
@@ -346,6 +504,7 @@ function Show-Help {
         @{ Name = "LogsApp";        Desc = "Tail app container logs" },
         @{ Name = "Status";         Desc = "Show container status and image sizes" },
         @{ Name = "DeleteLogs";     Desc = "Delete *.log / *.txt from logs folders" },
+        @{ Name = "SSHTunnel";      Desc = "Start SSH tunnel to production database server" },
         @{ Name = "Help";           Desc = "Show this help" }
     )
     foreach ($t in $tasks) {
@@ -389,6 +548,9 @@ function Show-MainMenu {
     Write-Host ("  " + "-" * 35) -ForegroundColor DarkGray
     Write-Host "  [17] Project Status"                    -ForegroundColor White
     Write-Host "  [18] Delete Log Files"                  -ForegroundColor White
+    Write-Host ("  " + "-" * 35) -ForegroundColor DarkGray
+    Write-Host "  [21] SSH Tunnel to Production DB"       -ForegroundColor Yellow
+    Write-Host ("  " + "-" * 35) -ForegroundColor DarkGray
     Write-Host "  [19] Help"                              -ForegroundColor White
     Write-Host "  [20] Clear Screen"                      -ForegroundColor White
     Write-Host "  [0]  Exit"                              -ForegroundColor DarkGray
@@ -419,6 +581,7 @@ if ($Task) {
         'LogsApp'        { Invoke-Logs "math-master" "App Logs" }
         'Status'         { Invoke-Status }
         'DeleteLogs'     { Invoke-DeleteLogs }
+        'SSHTunnel'      { Invoke-SSHTunnel }
     }
     exit 0
 }
@@ -449,6 +612,7 @@ while ($true) {
         '16' { Invoke-Logs "math-master" "App Logs" }
         '17' { Invoke-Status }
         '18' { Invoke-DeleteLogs }
+        '21' { Invoke-SSHTunnel }
         '19' { Show-Help }
         '20' { Clear-Host }
         '0'  { Write-Host ""; Write-Host "  Goodbye!" -ForegroundColor Cyan; exit 0 }
