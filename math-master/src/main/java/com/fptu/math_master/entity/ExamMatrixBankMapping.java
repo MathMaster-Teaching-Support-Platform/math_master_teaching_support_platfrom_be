@@ -34,12 +34,12 @@ import lombok.Setter;
     name = "exam_matrix_bank_mappings",
     uniqueConstraints = {
       @UniqueConstraint(
-          name = "uq_exam_matrix_row_bank_cognitive",
-          columnNames = {"exam_matrix_id", "matrix_row_id", "question_bank_id", "cognitive_level"})
+          name = "uq_exam_matrix_row_cognitive",
+          columnNames = {"exam_matrix_id", "matrix_row_id", "cognitive_level"})
     },
     indexes = {
       @Index(name = "idx_exam_matrix_bank_mapping_matrix", columnList = "exam_matrix_id"),
-      @Index(name = "idx_exam_matrix_bank_mapping_bank", columnList = "question_bank_id"),
+      @Index(name = "idx_exam_matrix_bank_mapping_row", columnList = "matrix_row_id"),
       @Index(name = "idx_exam_matrix_bank_mapping_cognitive", columnList = "cognitive_level")
     })
 public class ExamMatrixBankMapping extends BaseEntity {
@@ -47,10 +47,7 @@ public class ExamMatrixBankMapping extends BaseEntity {
   @Column(name = "exam_matrix_id", nullable = false)
   private UUID examMatrixId;
 
-  @Column(name = "question_bank_id", nullable = false)
-  private UUID questionBankId;
-
-  @Column(name = "matrix_row_id")
+  @Column(name = "matrix_row_id", nullable = false)
   private UUID matrixRowId;
 
   @Column(name = "question_count", nullable = false)
@@ -67,10 +64,6 @@ public class ExamMatrixBankMapping extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "exam_matrix_id", insertable = false, updatable = false)
   private ExamMatrix examMatrix;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
-  private QuestionBank questionBank;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "matrix_row_id", insertable = false, updatable = false)

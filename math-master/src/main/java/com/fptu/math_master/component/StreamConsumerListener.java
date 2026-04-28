@@ -45,7 +45,7 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
                 redisTemplate.opsForStream().acknowledge(STREAM_KEY, GROUP_NAME, record.getId());
                 return;
             }
-            
+
             NotificationRequest notificationMessage = objectMapper.readValue(payloadStr, NotificationRequest.class);
             log.info("Received message from Redis Stream {}: {}", STREAM_KEY, notificationMessage);
 
@@ -53,9 +53,10 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
             String recipientIdStr = notificationMessage.getRecipientId();
             if (recipientIdStr != null && !recipientIdStr.equals("ALL")) {
                 UUID recipientId = UUID.fromString(recipientIdStr);
-                
+
                 // Check if user wants in-app notifications for this type
-                if (notificationPreferenceService.shouldSendInAppNotification(recipientId, notificationMessage.getType())) {
+                if (notificationPreferenceService.shouldSendInAppNotification(recipientId,
+                        notificationMessage.getType())) {
                     User recipient = new User();
                     recipient.setId(recipientId);
 
@@ -67,7 +68,6 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
                             .metadata(notificationMessage.getMetadata())
                             .isRead(false)
                             .build();
-                    notificationEntity.setId(UUID.fromString(notificationMessage.getId()));
 
                     // Use the stream message ID to maintain consistency between FCM and database
                     // Check if notification already exists to prevent duplicates
@@ -78,7 +78,8 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
                         log.info("Notification {} already exists, skipping save", notificationMessage.getId());
                     }
                 } else {
-                    log.debug("User {} has disabled in-app notifications for type {}", recipientIdStr, notificationMessage.getType());
+                    log.debug("User {} has disabled in-app notifications for type {}", recipientIdStr,
+                            notificationMessage.getType());
                 }
             }
 

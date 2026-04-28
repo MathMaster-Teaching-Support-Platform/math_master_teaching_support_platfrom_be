@@ -192,7 +192,7 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
     ExamMatrixBankMapping mapping =
         ExamMatrixBankMapping.builder()
             .examMatrixId(targetMatrixId)
-            .questionBankId(bankId)
+            .matrixRowId(UUID.randomUUID()) // Added matrixRowId as required field
             .cognitiveLevel(level)
             .questionCount(count)
             .pointsPerQuestion(ppq)
@@ -1260,7 +1260,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       MatrixRowRequest row =
           MatrixRowRequest.builder()
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionDifficulty(QuestionDifficulty.EASY)
               .questionTypeName("Nhận diện đồ thị hàm số")
               .referenceQuestions("1,2")
@@ -1302,7 +1301,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
           ExamMatrixRow.builder()
               .examMatrixId(matrixId)
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionTypeName("Nhận diện đồ thị hàm số")
               .orderIndex(1)
               .build();
@@ -1316,7 +1314,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
           ExamMatrixBankMapping.builder()
               .examMatrixId(matrixId)
               .matrixRowId(rowId)
-              .questionBankId(bankId)
               .questionCount(2)
               .pointsPerQuestion(new BigDecimal("0.5"))
               .cognitiveLevel(CognitiveLevel.NHAN_BIET)
@@ -1370,7 +1367,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
           ExamMatrixRow.builder()
               .examMatrixId(matrixId)
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionTypeName("Tính đạo hàm cơ bản")
               .orderIndex(1)
               .build();
@@ -1381,7 +1377,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
           ExamMatrixBankMapping.builder()
               .examMatrixId(matrixId)
               .matrixRowId(rowId)
-              .questionBankId(bankId)
               .questionCount(3)
               .pointsPerQuestion(new BigDecimal("1.0"))
               .cognitiveLevel(CognitiveLevel.THONG_HIEU)
@@ -1721,7 +1716,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       MatrixRowRequest rowRequest =
           MatrixRowRequest.builder()
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionTypeName("Bài toán cực trị hàm số")
               .questionDifficulty(QuestionDifficulty.HARD)
               .cells(
@@ -1749,7 +1743,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
           ExamMatrixRow.builder()
               .examMatrixId(matrixId)
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .orderIndex(1)
               .questionTypeName("Bài toán cực trị hàm số")
               .build();
@@ -1850,7 +1843,7 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       UUID bankId = UUID.fromString("e0a2f695-c92d-4ed1-a02d-1c9d89e71909");
 
       ExamMatrixRow existingRow =
-          ExamMatrixRow.builder().examMatrixId(matrixId).questionBankId(bankId).orderIndex(1).build();
+          ExamMatrixRow.builder().examMatrixId(matrixId).orderIndex(1).build();
       existingRow.setId(existingRowId);
 
       when(examMatrixRepository.findByIdAndNotDeleted(matrixId)).thenReturn(Optional.of(draftMatrix));
@@ -2718,7 +2711,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       MatrixRowRequest row =
           MatrixRowRequest.builder()
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionTypeName("Bài toán đạo hàm")
               .build();
       QuestionBank privateBank =
@@ -2756,13 +2748,12 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       UUID rowId = UUID.fromString("6305d527-dcf8-4458-96ec-1c212147984c");
 
       ExamMatrix matrix =
-          ExamMatrix.builder().teacherId(teacherId).curriculumId(curriculumId).status(MatrixStatus.DRAFT).build();
+          ExamMatrix.builder().teacherId(teacherId).status(MatrixStatus.DRAFT).build();
       matrix.setId(matrixId);
       ExamMatrixRow uncategorizedRow =
           ExamMatrixRow.builder()
               .examMatrixId(matrixId)
               .chapterId(null)
-              .questionBankId(bankId)
               .questionTypeName("Ôn tập tổng hợp")
               .orderIndex(1)
               .build();
@@ -2818,7 +2809,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       MatrixRowRequest row =
           MatrixRowRequest.builder()
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionTypeName("Hàm bậc nhất")
               .questionDifficulty(QuestionDifficulty.EASY)
               .build();
@@ -2886,7 +2876,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       MatrixRowRequest row =
           MatrixRowRequest.builder()
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionTypeName("Hàm số")
               .build();
       when(questionBankRepository.findByIdAndNotDeleted(bankId)).thenReturn(Optional.empty());
@@ -2916,7 +2905,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       MatrixRowRequest row =
           MatrixRowRequest.builder()
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionTypeName("Dạng bài cực trị")
               .build();
       QuestionBank bank = QuestionBank.builder().teacherId(teacherId).name("B").isPublic(false).build();
@@ -2945,7 +2933,7 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       // ===== ARRANGE =====
       UUID rowId = UUID.fromString("6957f7c7-e23b-4135-b6bc-99231c5d3df8");
       ExamMatrixRow row =
-          ExamMatrixRow.builder().examMatrixId(matrixId).questionBankId(UUID.randomUUID()).build();
+          ExamMatrixRow.builder().examMatrixId(matrixId).build();
       row.setId(rowId);
 
       // ===== ACT =====
@@ -2968,7 +2956,7 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       UUID rowId = UUID.fromString("ab5ee995-d37d-4934-80eb-8c9bb8e2ff0f");
       UUID bankId = UUID.fromString("e5d8cb6d-5ef4-43bc-924c-a4dcca239ff2");
       ExamMatrixRow row =
-          ExamMatrixRow.builder().examMatrixId(matrixId).questionBankId(bankId).build();
+          ExamMatrixRow.builder().examMatrixId(matrixId).build();
       row.setId(rowId);
 
       // ===== ACT =====
@@ -3226,15 +3214,14 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       UUID bankId = UUID.fromString("086f4c4d-f66f-4131-b40e-4df8de28fdfe");
       UUID rowId = UUID.fromString("e6fd0b9a-5bdc-44f8-8c68-37a95e0cd1d1");
 
-      ExamMatrixRow existingNull = ExamMatrixRow.builder().examMatrixId(matrixId).questionBankId(bankId).orderIndex(null).build();
+      ExamMatrixRow existingNull = ExamMatrixRow.builder().examMatrixId(matrixId).orderIndex(null).build();
       existingNull.setId(UUID.fromString("e15b7e07-9cb0-4d0a-95cd-4f5b5977d920"));
-      ExamMatrixRow existingThree = ExamMatrixRow.builder().examMatrixId(matrixId).questionBankId(bankId).orderIndex(3).build();
+      ExamMatrixRow existingThree = ExamMatrixRow.builder().examMatrixId(matrixId).orderIndex(3).build();
       existingThree.setId(UUID.fromString("adf6d237-d45a-4c2a-9f1a-716d258f4f2a"));
 
       MatrixRowRequest rowRequest =
           MatrixRowRequest.builder()
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionTypeName("Cộng trừ đa thức")
               .build();
 
@@ -3242,7 +3229,7 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       bank.setId(bankId);
       Chapter chapter = Chapter.builder().title("Chương").orderIndex(1).subjectId(null).build();
       chapter.setId(chapterId);
-      ExamMatrixRow saved = ExamMatrixRow.builder().examMatrixId(matrixId).questionBankId(bankId).orderIndex(4).build();
+      ExamMatrixRow saved = ExamMatrixRow.builder().examMatrixId(matrixId).orderIndex(4).build();
       saved.setId(rowId);
 
       when(examMatrixRepository.findByIdAndNotDeleted(matrixId)).thenReturn(Optional.of(draftMatrix));
@@ -3269,7 +3256,7 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       authenticateAsTeacher(teacherId);
       UUID rowId = UUID.fromString("7a89f708-6161-420f-b879-a4a8f49a0d54");
       UUID bankId = UUID.fromString("67b6b98a-0491-4de8-ba77-a11dfb9658f0");
-      ExamMatrixRow row = ExamMatrixRow.builder().examMatrixId(matrixId).questionBankId(bankId).orderIndex(1).build();
+      ExamMatrixRow row = ExamMatrixRow.builder().examMatrixId(matrixId).orderIndex(1).build();
       row.setId(rowId);
 
       BatchUpsertMatrixRowCellsRequest request =
@@ -3461,8 +3448,8 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       BuildExamMatrixRequest request =
           BuildExamMatrixRequest.builder()
               .name("Build with curriculum grade")
-              .curriculumId(curriculumId)
-              .rows(List.of(MatrixRowRequest.builder().chapterId(chapterId).questionBankId(bankId).questionTypeName("Dạng 1").build()))
+              .questionBankId(bankId)
+              .rows(List.of(MatrixRowRequest.builder().chapterId(chapterId).questionTypeName("Dạng 1").build()))
               .build();
 
       Curriculum curriculum =
@@ -3827,7 +3814,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       MatrixRowRequest row =
           MatrixRowRequest.builder()
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionTypeName("Dạng bài")
               .build();
       QuestionBank bank = QuestionBank.builder().teacherId(teacherId).isPublic(true).name("B").build();
@@ -4039,7 +4025,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       MatrixRowRequest row =
           MatrixRowRequest.builder()
               .chapterId(UUID.fromString("eeef0d3b-c4e0-4d0d-ab96-bdcabf990b24"))
-              .questionBankId(UUID.fromString("32f0226d-54ee-48bd-a65d-258bb9a9f419"))
               .questionTypeName("   ")
               .build();
 
@@ -4068,7 +4053,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       MatrixRowRequest row =
           MatrixRowRequest.builder()
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionTypeName("Dạng bài")
               .build();
       QuestionBank bank = QuestionBank.builder().teacherId(teacherId).name("B").isPublic(false).build();
@@ -4105,7 +4089,6 @@ class ExamMatrixServiceImplTest extends BaseUnitTest {
       MatrixRowRequest row =
           MatrixRowRequest.builder()
               .chapterId(chapterId)
-              .questionBankId(bankId)
               .questionTypeName("Dạng chuẩn")
               .build();
 

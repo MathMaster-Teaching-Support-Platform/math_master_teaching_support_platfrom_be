@@ -98,7 +98,6 @@ class QuestionBankServiceImplTest extends BaseUnitTest {
     qb.setTeacherId(teacherId);
     qb.setName("Ngan hang cau hoi Dao ham");
     qb.setDescription("Bo cau hoi cho chuong Dao ham");
-    qb.setChapterId(chapterId);
     qb.setIsPublic(isPublic);
     qb.setCreatedAt(Instant.parse("2026-04-20T00:00:00Z"));
     qb.setUpdatedAt(Instant.parse("2026-04-21T00:00:00Z"));
@@ -296,13 +295,11 @@ class QuestionBankServiceImplTest extends BaseUnitTest {
       assertAll(
           () -> assertEquals("Ngan hang Toan xac suat", response.getName()),
           () -> assertEquals("Duoc cap nhat", response.getDescription()),
-          () -> assertTrue(response.getIsPublic()),
-          () -> assertEquals(CHAPTER_ID, response.getChapterId()));
+          () -> assertTrue(response.getIsPublic()));
 
       // ===== VERIFY =====
       verify(questionBankRepository, times(1)).findByIdAndNotDeleted(BANK_ID);
       verify(questionBankRepository, times(1)).hasQuestionsInUse(BANK_ID);
-      verify(chapterRepository, times(2)).findById(CHAPTER_ID);
       verify(questionBankRepository, times(1)).save(bank);
     }
 
@@ -725,15 +722,16 @@ class QuestionBankServiceImplTest extends BaseUnitTest {
   }
 
   @Test
-  void it_should_return_question_bank_with_null_chapter_title_when_chapter_missing() {
+  void it_should_return_question_bank_response_successfully() {
     // ===== ARRANGE =====
-    QuestionBank withoutChapter = buildBank(BANK_ID, OWNER_ID, null, false);
-    when(questionBankRepository.findByIdAndNotDeleted(BANK_ID)).thenReturn(Optional.of(withoutChapter));
+    QuestionBank bank = buildBank(BANK_ID, OWNER_ID, null, false);
+    when(questionBankRepository.findByIdAndNotDeleted(BANK_ID)).thenReturn(Optional.of(bank));
 
     // ===== ACT =====
     QuestionBankResponse response = questionBankService.getQuestionBankById(BANK_ID);
 
     // ===== ASSERT =====
-    assertNull(response.getChapterTitle());
+    assertNotNull(response);
+    assertEquals(BANK_ID, response.getId());
   }
 }

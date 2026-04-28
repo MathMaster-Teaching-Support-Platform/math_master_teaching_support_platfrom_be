@@ -27,7 +27,6 @@ public class MatrixRowResponse {
   private String subjectName;
   private String schoolGradeName;
   private String chapterName;
-  private UUID questionBankId;
   private QuestionDifficulty questionDifficulty;
 
   /** Display name for the dạng bài column. */

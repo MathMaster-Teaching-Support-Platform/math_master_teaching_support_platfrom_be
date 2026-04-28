@@ -47,7 +47,6 @@ import org.hibernate.annotations.Nationalized;
       @Index(name = "idx_emr_chapter", columnList = "chapter_id"),
       @Index(name = "idx_emr_lesson", columnList = "lesson_id"),
       @Index(name = "idx_emr_subject", columnList = "subject_id"),
-      @Index(name = "idx_emr_bank", columnList = "question_bank_id"),
       @Index(name = "idx_emr_difficulty", columnList = "question_difficulty"),
       @Index(name = "idx_emr_order", columnList = "order_index")
     })
@@ -85,12 +84,6 @@ public class ExamMatrixRow extends BaseEntity {
   @Nationalized
   @Column(name = "chapter_name", length = 255)
   private String chapterName;
-
-  /**
-   * Bank source for this row in bank-only matrix mode.
-   */
-  @Column(name = "question_bank_id")
-  private UUID questionBankId;
 
   /** Selected row-level difficulty used by bank mappings for this row. */
   @Column(name = "question_difficulty")
@@ -131,10 +124,6 @@ public class ExamMatrixRow extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "lesson_id", insertable = false, updatable = false)
   private Lesson lesson;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
-  private QuestionBank questionBank;
 
   /** The individual cognitive-level cells for this row. */
   @OneToMany(mappedBy = "matrixRow", cascade = CascadeType.ALL, orphanRemoval = true)

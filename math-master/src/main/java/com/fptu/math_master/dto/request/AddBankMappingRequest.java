@@ -11,14 +11,18 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Request to add a bank mapping to an exam matrix.
+ * Phase 3: questionBankId removed - bank comes from the matrix level.
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class AddBankMappingRequest {
 
-  @NotNull(message = "questionBankId is required")
-  private UUID questionBankId;
+  @NotNull(message = "matrixRowId is required")
+  private UUID matrixRowId;
 
   @NotNull(message = "questionCount is required")
   @Min(value = 0, message = "questionCount must be at least 0")

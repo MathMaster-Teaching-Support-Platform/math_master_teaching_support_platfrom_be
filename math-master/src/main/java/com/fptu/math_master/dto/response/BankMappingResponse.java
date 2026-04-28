@@ -17,7 +17,6 @@ public class BankMappingResponse {
 
   private UUID id;
   private UUID examMatrixId;
-  private UUID questionBankId;
   private String questionBankName;
   private UUID matrixRowId;
   private Integer questionCount;

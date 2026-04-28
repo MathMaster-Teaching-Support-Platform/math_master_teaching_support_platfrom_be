@@ -39,8 +39,8 @@ import lombok.Setter;
       @Index(name = "idx_exam_matrices_teacher", columnList = "teacher_id"),
       @Index(name = "idx_exam_matrices_status", columnList = "status"),
       @Index(name = "idx_exam_matrices_is_reusable", columnList = "is_reusable"),
-      @Index(name = "idx_exam_matrices_curriculum", columnList = "curriculum_id"),
-      @Index(name = "idx_exam_matrices_grade", columnList = "grade_level")
+      @Index(name = "idx_exam_matrices_grade", columnList = "grade_level"),
+      @Index(name = "idx_exam_matrices_bank", columnList = "question_bank_id")
     })
 /**
  * The entity of 'ExamMatrix'.
@@ -49,13 +49,6 @@ public class ExamMatrix extends BaseEntity {
 
   @Column(name = "teacher_id", nullable = false)
   private UUID teacherId;
-
-  /**
-   * Optional link to the {@link Curriculum} (chương trình) this matrix covers.
-   * Set automatically when using the structured builder API.
-   */
-  @Column(name = "curriculum_id")
-  private UUID curriculumId;
 
   /**
    * Cache of the target school-grade level (lớp) for this matrix (e.g. 10, 11, 12).
@@ -70,6 +63,14 @@ public class ExamMatrix extends BaseEntity {
    */
   @Column(name = "subject_id")
   private UUID subjectId;
+
+  /**
+   * The single question bank used as the source for all questions in this matrix.
+   * In the new chapter-based architecture, one matrix maps to exactly one bank.
+   * Questions are filtered by chapter within that bank.
+   */
+  @Column(name = "question_bank_id", nullable = false)
+  private UUID questionBankId;
 
   @Size(max = 255)
   @Nationalized
@@ -100,8 +101,8 @@ public class ExamMatrix extends BaseEntity {
   private User teacher;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "curriculum_id", insertable = false, updatable = false)
-  private Curriculum curriculum;
+  @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
+  private QuestionBank questionBank;
 
   @OneToMany(mappedBy = "examMatrix", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<ExamMatrixTemplateMapping> templateMappings;
