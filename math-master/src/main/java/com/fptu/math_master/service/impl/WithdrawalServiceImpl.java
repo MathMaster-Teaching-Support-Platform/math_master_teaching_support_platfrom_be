@@ -215,7 +215,11 @@ public class WithdrawalServiceImpl implements WithdrawalService {
       WithdrawalStatus status, String search, Pageable pageable) {
     String normalizedSearch = (search != null && !search.isBlank()) ? search.trim() : null;
     String statusStr = (status != null) ? status.name() : null;
-    return withdrawalRequestRepository.findAllForAdmin(statusStr, normalizedSearch, pageable)
+    // Native query already has ORDER BY wr.created_at DESC; strip the Pageable sort to prevent
+    // Spring Data JPA from appending camelCase column names (e.g. "wr.createdAt") that PostgreSQL rejects.
+    Pageable unsorted = org.springframework.data.domain.PageRequest.of(
+        pageable.getPageNumber(), pageable.getPageSize());
+    return withdrawalRequestRepository.findAllForAdmin(statusStr, normalizedSearch, unsorted)
         .map(this::toAdminResponse);
   }
 
