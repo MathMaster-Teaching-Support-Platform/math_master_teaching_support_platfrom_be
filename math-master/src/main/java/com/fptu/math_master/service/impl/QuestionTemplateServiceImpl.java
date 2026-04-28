@@ -90,17 +90,30 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     // Validate tags
     validateTags(request.getTags());
 
+    // Auto-resolve chapterId if not provided
+    UUID chapterId = request.getChapterId();
+    UUID lessonId = request.getLessonId();
+    
+    if (chapterId == null && lessonId != null) {
+      // Resolve chapter from lesson
+      chapterId = lessonRepository.findById(lessonId)
+          .map(Lesson::getChapterId)
+          .orElse(null);
+    }
+
     QuestionTemplate template =
         QuestionTemplate.builder()
             .questionBankId(bankId)
-          .canonicalQuestionId(request.getCanonicalQuestionId())
+            .chapterId(chapterId)
+            .lessonId(lessonId)
+            .canonicalQuestionId(request.getCanonicalQuestionId())
             .name(request.getName())
             .description(request.getDescription())
             .templateType(request.getTemplateType())
             .templateText(request.getTemplateText())
             .parameters(request.getParameters())
             .answerFormula(request.getAnswerFormula())
-          .diagramTemplate(request.getDiagramTemplate())
+            .diagramTemplate(request.getDiagramTemplate())
             .optionsGenerator(request.getOptionsGenerator())
             .constraints(request.getConstraints())
             .cognitiveLevel(request.getCognitiveLevel())

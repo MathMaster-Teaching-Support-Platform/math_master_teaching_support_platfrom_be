@@ -808,32 +808,32 @@ public class AssessmentServiceImpl implements AssessmentService {
   }
 
   private void autoPopulateLessonsFromMatrix(UUID assessmentId, UUID matrixId) {
-    // Get all question banks used in matrix rows
-    List<UUID> bankIds = examMatrixRowRepository.findByExamMatrixId(matrixId)
-        .stream()
-        .map(ExamMatrixRow::getQuestionBankId)
-        .distinct()
-        .toList();
-    
-    // Get all chapters from those banks
-    List<UUID> chapterIds = questionBankRepository.findAllById(bankIds)
-        .stream()
-        .map(QuestionBank::getChapterId)
-        .filter(java.util.Objects::nonNull)
-        .distinct()
-        .toList();
-    
+    // Phase 4: Get chapters directly from ExamMatrixRow.chapterId
+    // Legacy bank-based lookup removed - all matrices must have chapter data in rows
+    List<UUID> chapterIds =
+        examMatrixRowRepository.findByExamMatrixId(matrixId).stream()
+            .map(ExamMatrixRow::getChapterId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+
+    if (chapterIds.isEmpty()) {
+      log.warn("No chapters found in matrix {} rows - cannot populate lessons", matrixId);
+      return;
+    }
+
     // Get all lessons from those chapters
-    List<UUID> lessonIds = lessonRepository.findByChapterIdIn(chapterIds)
-        .stream()
-        .map(Lesson::getId)
-        .toList();
-    
+    List<UUID> lessonIds =
+        lessonRepository.findByChapterIdIn(chapterIds).stream().map(Lesson::getId).toList();
+
     // Sync assessment lessons
     if (!lessonIds.isEmpty()) {
       syncAssessmentLessons(assessmentId, lessonIds);
-      log.info("Auto-populated {} lessons for assessment {} from matrix {}", 
-          lessonIds.size(), assessmentId, matrixId);
+      log.info(
+          "Auto-populated {} lessons for assessment {} from matrix {} (chapter-based)",
+          lessonIds.size(),
+          assessmentId,
+          matrixId);
     }
   }
 
@@ -1272,22 +1272,14 @@ public class AssessmentServiceImpl implements AssessmentService {
     // Matrix does NOT need to be APPROVED for percentage-based generation
     // This allows creating multiple assessments from the same matrix
 
-    // Get all question banks from the matrix
-    List<ExamMatrixBankMapping> bankMappings =
-        examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
-
-    if (bankMappings.isEmpty()) {
-      throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
+    // Phase 4: Get the single question bank from the matrix
+    UUID questionBankId = matrix.getQuestionBankId();
+    if (questionBankId == null) {
+      throw new AppException(ErrorCode.QUESTION_BANK_REQUIRED);
     }
 
-    // Extract unique bank IDs
-    List<UUID> bankIds =
-        bankMappings.stream()
-            .map(ExamMatrixBankMapping::getQuestionBankId)
-            .distinct()
-            .collect(Collectors.toList());
-
-    log.info("Found {} question banks in matrix {}", bankIds.size(), matrix.getId());
+    List<UUID> bankIds = List.of(questionBankId);
+    log.info("Using question bank {} from matrix {}", questionBankId, matrix.getId());
 
     // Calculate question count for each cognitive level
     Map<CognitiveLevel, Integer> questionCounts = new HashMap<>();

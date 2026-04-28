@@ -319,4 +319,65 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
   long countApprovedByBanksAndCognitiveLevel(
       @Param("bankIds") List<UUID> bankIds,
       @Param("cognitiveLevel") String cognitiveLevel);
+
+  // ========================================================================
+  // Phase 2: Chapter-Based Query Methods
+  // ========================================================================
+
+  /**
+   * Count approved questions by bank, chapter, and cognitive level.
+   * This is the core query for the new chapter-based generation engine.
+   */
+  @Query(
+      value =
+          "SELECT COUNT(*) FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.chapter_id = :chapterId "
+              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL",
+      nativeQuery = true)
+  long countApprovedByBankAndChapterAndCognitive(
+      @Param("bankId") UUID bankId,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel);
+
+  /**
+   * Find approved question IDs by bank, chapter, and cognitive level.
+   * Returns IDs in deterministic order for reproducible selection.
+   */
+  @Query(
+      value =
+          "SELECT q.id FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.chapter_id = :chapterId "
+              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "ORDER BY q.id",
+      nativeQuery = true)
+  List<UUID> findApprovedIdsByBankAndChapterAndCognitive(
+      @Param("bankId") UUID bankId,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel);
+
+  /**
+   * Find random approved questions by bank, chapter, and cognitive level.
+   * Used for quick random selection without pre-loading all IDs.
+   */
+  @Query(
+      value =
+          "SELECT * FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.chapter_id = :chapterId "
+              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "ORDER BY random() LIMIT :limit",
+      nativeQuery = true)
+  List<Question> findRandomApprovedByBankAndChapterAndCognitive(
+      @Param("bankId") UUID bankId,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("limit") int limit);
 }

@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -39,14 +40,17 @@ public class BuildExamMatrixRequest {
   private String description;
 
   /**
-   * Curriculum this matrix is based on (optional but recommended).
-   * Drives the grade level and subject context shown in the matrix header.
+   * The single question bank used as the source for all questions in this matrix.
+   * In the chapter-based architecture, one matrix maps to exactly one bank.
+   * Questions are filtered by chapter within that bank.
+   * REQUIRED in Phase 3.
    */
-  private UUID curriculumId;
+  @NotNull(message = "questionBankId is required")
+  private UUID questionBankId;
 
   /**
    * Target school-grade level (lớp), e.g. 10, 11, 12.
-   * Auto-resolved from {@code curriculumId} when omitted.
+   * Optional - can be inferred from chapters in the matrix.
    */
   @Min(value = 1, message = "gradeLevel must be between 1 and 12")
   @Max(value = 12, message = "gradeLevel must be between 1 and 12")

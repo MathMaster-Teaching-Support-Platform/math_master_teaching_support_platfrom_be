@@ -1,11 +1,15 @@
 package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.entity.AssessmentQuestion;
+import com.fptu.math_master.entity.ExamMatrix;
 import com.fptu.math_master.entity.ExamMatrixBankMapping;
+import com.fptu.math_master.entity.ExamMatrixRow;
 import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ExamMatrixBankMappingRepository;
+import com.fptu.math_master.repository.ExamMatrixRepository;
+import com.fptu.math_master.repository.ExamMatrixRowRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.service.QuestionSelectionService;
 import java.util.ArrayList;
@@ -20,23 +24,46 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
 public class QuestionSelectionServiceImpl implements QuestionSelectionService {
 
   ExamMatrixBankMappingRepository examMatrixBankMappingRepository;
+  ExamMatrixRepository examMatrixRepository;
+  ExamMatrixRowRepository examMatrixRowRepository;
   QuestionRepository questionRepository;
 
   @Override
   public void validateAvailability(UUID examMatrixId) {
+    // Load the matrix to get questionBankId
+    ExamMatrix matrix =
+        examMatrixRepository
+            .findById(examMatrixId)
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+
+    UUID questionBankId = matrix.getQuestionBankId();
+
+    // Phase 4: questionBankId is now required (NOT NULL), no legacy support needed
+    if (questionBankId == null) {
+      throw new AppException(ErrorCode.QUESTION_BANK_REQUIRED);
+    }
+
     List<ExamMatrixBankMapping> mappings =
         examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(examMatrixId);
 
     if (mappings.isEmpty()) {
       throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
+    }
+
+    // Build a map of matrixRowId -> ExamMatrixRow for chapter lookup
+    Map<UUID, ExamMatrixRow> rowById = new HashMap<>();
+    for (ExamMatrixRow row : examMatrixRowRepository.findByExamMatrixId(examMatrixId)) {
+      rowById.put(row.getId(), row);
     }
 
     for (ExamMatrixBankMapping mapping : mappings) {
@@ -45,8 +72,26 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
         continue;
       }
 
-      long available = countAvailableByBankAndCognitive(mapping);
+      // Get chapter from the row
+      ExamMatrixRow row = rowById.get(mapping.getMatrixRowId());
+      if (row == null || row.getChapterId() == null) {
+        log.warn(
+            "Mapping {} has no associated row or chapter - skipping validation",
+            mapping.getId());
+        continue;
+      }
+
+      long available =
+          countAvailableByBankAndChapterAndCognitive(
+              questionBankId, row.getChapterId(), mapping);
       if (available < required) {
+        log.error(
+            "Insufficient questions: bank={}, chapter={}, cognitive={}, required={}, available={}",
+            questionBankId,
+            row.getChapterId(),
+            mapping.getCognitiveLevel(),
+            required,
+            available);
         throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
       }
     }
@@ -56,22 +101,56 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
   public SelectionPlan buildSelectionPlan(UUID assessmentId, UUID examMatrixId, int startOrderIndex) {
     validateAvailability(examMatrixId);
 
+    // Load the matrix to get questionBankId
+    ExamMatrix matrix =
+        examMatrixRepository
+            .findById(examMatrixId)
+            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
+
+    UUID questionBankId = matrix.getQuestionBankId();
+
+    // Phase 4: questionBankId is now required (NOT NULL), no legacy support needed
+    if (questionBankId == null) {
+      throw new AppException(ErrorCode.QUESTION_BANK_REQUIRED);
+    }
+
     List<ExamMatrixBankMapping> mappings =
         examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(examMatrixId);
+
+    // Build a map of matrixRowId -> ExamMatrixRow for chapter lookup
+    Map<UUID, ExamMatrixRow> rowById = new HashMap<>();
+    for (ExamMatrixRow row : examMatrixRowRepository.findByExamMatrixId(examMatrixId)) {
+      rowById.put(row.getId(), row);
+    }
 
     SelectionContext context =
         new SelectionContext(new ArrayList<>(), new HashSet<>(), startOrderIndex, 0);
 
     for (ExamMatrixBankMapping mapping : mappings) {
       int required = requiredQuestions(mapping);
-      appendSelectionFromMapping(assessmentId, mapping, required, context);
+      ExamMatrixRow row = rowById.get(mapping.getMatrixRowId());
+
+      if (row == null || row.getChapterId() == null) {
+        log.warn(
+            "Mapping {} has no associated row or chapter - skipping", mapping.getId());
+        continue;
+      }
+
+      appendSelectionFromMappingWithChapter(
+          assessmentId, questionBankId, row.getChapterId(), mapping, required, context);
     }
 
     return new SelectionPlan(context.plannedQuestions(), context.totalPoints());
   }
 
-  private void appendSelectionFromMapping(
+  // ========================================================================
+  // Chapter-Based Query Methods (Phase 2)
+  // ========================================================================
+
+  private void appendSelectionFromMappingWithChapter(
       UUID assessmentId,
+      UUID questionBankId,
+      UUID chapterId,
       ExamMatrixBankMapping mapping,
       int required,
       SelectionContext context) {
@@ -80,7 +159,8 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     }
 
     List<Question> selectedQuestions =
-        selectQuestionsForCell(assessmentId, mapping, required, context.usedQuestionIds());
+        selectQuestionsForCellWithChapter(
+            assessmentId, questionBankId, chapterId, mapping, required, context.usedQuestionIds());
 
     for (Question selected : selectedQuestions) {
       context.plannedQuestions().add(
@@ -99,34 +179,58 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     }
   }
 
-  private List<Question> selectQuestionsForCell(
+  private List<Question> selectQuestionsForCellWithChapter(
       UUID assessmentId,
+      UUID questionBankId,
+      UUID chapterId,
       ExamMatrixBankMapping mapping,
       int required,
       Set<UUID> usedQuestionIds) {
-    List<UUID> candidateIds = findCandidateIdsByBankAndCognitive(mapping);
+    List<UUID> candidateIds =
+        findCandidateIdsByBankAndChapterAndCognitive(questionBankId, chapterId, mapping);
 
     candidateIds.removeIf(usedQuestionIds::contains);
     deterministicShuffle(candidateIds, assessmentId, mapping.getId());
 
     if (candidateIds.size() < required) {
+      log.error(
+          "Insufficient questions after filtering: bank={}, chapter={}, cognitive={}, required={}, available={}",
+          questionBankId,
+          chapterId,
+          mapping.getCognitiveLevel(),
+          required,
+          candidateIds.size());
       throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
     }
 
     return fetchQuestionsInOrder(candidateIds.subList(0, required));
   }
 
-  private long countAvailableByBankAndCognitive(ExamMatrixBankMapping mapping) {
-    String cognitiveLevel = mapping.getCognitiveLevel() != null ? mapping.getCognitiveLevel().name() : null;
-    return questionRepository.countApprovedByBankAndDifficultyAndCognitiveAndTopic(
-        mapping.getQuestionBankId(), null, cognitiveLevel, null);
+  private long countAvailableByBankAndChapterAndCognitive(
+      UUID bankId, UUID chapterId, ExamMatrixBankMapping mapping) {
+    String cognitiveLevel =
+        mapping.getCognitiveLevel() != null ? mapping.getCognitiveLevel().name() : null;
+    if (cognitiveLevel == null) {
+      return 0;
+    }
+    return questionRepository.countApprovedByBankAndChapterAndCognitive(
+        bankId, chapterId, cognitiveLevel);
   }
 
-  private List<UUID> findCandidateIdsByBankAndCognitive(ExamMatrixBankMapping mapping) {
-    String cognitiveLevel = mapping.getCognitiveLevel() != null ? mapping.getCognitiveLevel().name() : null;
-    return questionRepository.findApprovedIdsByBankAndDifficultyAndCognitiveAndTopic(
-        mapping.getQuestionBankId(), null, cognitiveLevel, null);
+  private List<UUID> findCandidateIdsByBankAndChapterAndCognitive(
+      UUID bankId, UUID chapterId, ExamMatrixBankMapping mapping) {
+    String cognitiveLevel =
+        mapping.getCognitiveLevel() != null ? mapping.getCognitiveLevel().name() : null;
+    if (cognitiveLevel == null) {
+      return new ArrayList<>();
+    }
+    return questionRepository.findApprovedIdsByBankAndChapterAndCognitive(
+        bankId, chapterId, cognitiveLevel);
   }
+
+  // ========================================================================
+  // Helper methods
+  // ========================================================================
 
   private int requiredQuestions(ExamMatrixBankMapping mapping) {
     return mapping.getQuestionCount() != null ? Math.max(0, mapping.getQuestionCount()) : 0;

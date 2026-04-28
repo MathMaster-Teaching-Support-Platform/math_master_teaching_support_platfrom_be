@@ -48,7 +48,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
   public QuestionBankResponse createQuestionBank(QuestionBankRequest request) {
     log.info("Creating question bank: {}", request.getName());
     UUID currentUserId = SecurityUtils.getCurrentUserId();
-    UUID chapterId = validateChapterId(request.getChapterId());
 
     QuestionBank questionBank =
         QuestionBank.builder()
@@ -56,7 +55,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             .name(request.getName())
             .description(request.getDescription())
             .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
-        .chapterId(chapterId)
             .build();
 
     questionBank = questionBankRepository.save(questionBank);
@@ -85,7 +83,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
     questionBank.setName(request.getName());
     questionBank.setDescription(request.getDescription());
-    questionBank.setChapterId(validateChapterId(request.getChapterId()));
     if (request.getIsPublic() != null) {
       questionBank.setIsPublic(request.getIsPublic());
     }
@@ -310,17 +307,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     String teacherName =
         userRepository.findById(questionBank.getTeacherId()).map(User::getFullName).orElse(null);
 
-    String chapterTitle =
-        questionBank.getChapter() != null
-            ? questionBank.getChapter().getTitle()
-        : (questionBank.getChapterId() == null
-          ? null
-          : chapterRepository
-            .findById(questionBank.getChapterId())
-            .filter(ch -> ch.getDeletedAt() == null)
-            .map(Chapter::getTitle)
-            .orElse(null));
-
     List<Object[]> cognitiveRows =
         questionRepository.countByCognitiveLevelForBank(questionBank.getId());
     Map<String, Long> cognitiveStats = new LinkedHashMap<>();
@@ -337,27 +323,11 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         .name(questionBank.getName())
         .description(questionBank.getDescription())
         .isPublic(questionBank.getIsPublic())
-        .chapterId(questionBank.getChapterId())
-        .chapterTitle(chapterTitle)
         .questionCount(questionCount)
         .cognitiveStats(cognitiveStats)
         .createdAt(questionBank.getCreatedAt())
         .updatedAt(questionBank.getUpdatedAt())
         .build();
-  }
-
-  private UUID validateChapterId(UUID chapterId) {
-    if (chapterId == null) {
-      return null;
-    }
-    Chapter chapter =
-        chapterRepository
-            .findById(chapterId)
-            .orElseThrow(() -> new AppException(ErrorCode.CHAPTER_NOT_FOUND));
-    if (chapter.getDeletedAt() != null) {
-      throw new AppException(ErrorCode.CHAPTER_NOT_FOUND);
-    }
-    return chapterId;
   }
 
   private void validateTemplateOwnerOrAdmin(QuestionTemplate template, UUID currentUserId) {
