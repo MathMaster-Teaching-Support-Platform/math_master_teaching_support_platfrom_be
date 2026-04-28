@@ -40,6 +40,9 @@ public class ExamMatrixTableResponse {
   /** Primary grade level (lớp) this matrix is designed for. */
   private Integer gradeLevel;
 
+  /** Number of parts in the exam (1-3). Part I=MCQ, Part II=TF, Part III=SA. */
+  private Integer numberOfParts;
+
   /** Curriculum / chương trình the matrix is based on. */
   private UUID curriculumId;
 

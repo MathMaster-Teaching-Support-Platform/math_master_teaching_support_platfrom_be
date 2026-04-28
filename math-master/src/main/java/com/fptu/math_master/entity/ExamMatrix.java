@@ -96,6 +96,16 @@ public class ExamMatrix extends BaseEntity {
   @Enumerated(EnumType.STRING)
   private MatrixStatus status;
 
+  /**
+   * Number of parts in the exam (1-3).
+   * Part I = MCQ, Part II = TRUE_FALSE, Part III = SHORT_ANSWER
+   * Used for Vietnamese THPT exam format.
+   * Default: 1 (MCQ only)
+   */
+  @Column(name = "number_of_parts", nullable = false)
+  @Builder.Default
+  private Integer numberOfParts = 1;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
   private User teacher;
