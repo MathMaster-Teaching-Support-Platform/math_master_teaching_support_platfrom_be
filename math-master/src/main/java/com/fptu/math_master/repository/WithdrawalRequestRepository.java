@@ -40,18 +40,34 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
   /**
    * Admin list with optional status filter and free-text search across
    * userName, userEmail, and bankAccountNumber.
+   * Uses native SQL with ::text cast to avoid lower(bytea) errors when user
+   * columns (username, email) are stored as bytea in PostgreSQL.
    */
-  @Query("""
-      SELECT w FROM WithdrawalRequest w
-      JOIN FETCH w.user u
-      WHERE (:status IS NULL OR w.status = :status)
-        AND (:search IS NULL
-             OR LOWER(u.userName) LIKE LOWER(CONCAT('%', :search, '%'))
-             OR LOWER(u.email)    LIKE LOWER(CONCAT('%', :search, '%'))
-             OR LOWER(w.bankAccountNumber) LIKE LOWER(CONCAT('%', :search, '%')))
-      """)
+  @Query(
+      value = """
+          SELECT wr.*
+          FROM withdrawal_requests wr
+          JOIN users u ON wr.user_id = u.id
+          WHERE (:status IS NULL OR wr.status = :status)
+            AND (:search IS NULL
+                 OR u.username::text          ILIKE CONCAT('%', :search, '%')
+                 OR u.email::text             ILIKE CONCAT('%', :search, '%')
+                 OR wr.bank_account_number    ILIKE CONCAT('%', :search, '%'))
+          ORDER BY wr.created_at DESC
+          """,
+      countQuery = """
+          SELECT COUNT(*)
+          FROM withdrawal_requests wr
+          JOIN users u ON wr.user_id = u.id
+          WHERE (:status IS NULL OR wr.status = :status)
+            AND (:search IS NULL
+                 OR u.username::text          ILIKE CONCAT('%', :search, '%')
+                 OR u.email::text             ILIKE CONCAT('%', :search, '%')
+                 OR wr.bank_account_number    ILIKE CONCAT('%', :search, '%'))
+          """,
+      nativeQuery = true)
   Page<WithdrawalRequest> findAllForAdmin(
-      @Param("status") WithdrawalStatus status,
+      @Param("status") String status,
       @Param("search") String search,
       Pageable pageable);
 }
