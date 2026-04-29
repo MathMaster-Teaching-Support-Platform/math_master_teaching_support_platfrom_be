@@ -49,6 +49,17 @@ public class BuildExamMatrixRequest {
   private UUID questionBankId;
 
   /**
+   * Number of parts in the exam (1-3).
+   * Part I = MCQ, Part II = TRUE_FALSE, Part III = SHORT_ANSWER
+   * Used for Vietnamese THPT exam format.
+   * Default: 1 (MCQ only)
+   */
+  @Min(value = 1, message = "numberOfParts must be 1, 2, or 3")
+  @Max(value = 3, message = "numberOfParts must be 1, 2, or 3")
+  @Builder.Default
+  private Integer numberOfParts = 1;
+
+  /**
    * Target school-grade level (lớp), e.g. 10, 11, 12.
    * Optional - can be inferred from chapters in the matrix.
    */

@@ -1,6 +1,7 @@
 package com.fptu.math_master.entity;
 
 import com.fptu.math_master.enums.CognitiveLevel;
+import com.fptu.math_master.enums.QuestionType;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -60,6 +61,19 @@ public class ExamMatrixBankMapping extends BaseEntity {
   @Column(name = "cognitive_level")
   @Enumerated(EnumType.STRING)
   private CognitiveLevel cognitiveLevel;
+
+  /**
+   * The type of question this cell requires (MCQ, TRUE_FALSE, or SHORT_ANSWER).
+   * Derived from the exam part number:
+   * - Part I (1) → MULTIPLE_CHOICE
+   * - Part II (2) → TRUE_FALSE
+   * - Part III (3) → SHORT_ANSWER
+   * Default: MULTIPLE_CHOICE for backward compatibility
+   */
+  @Column(name = "question_type", nullable = false)
+  @Enumerated(EnumType.STRING)
+  @Builder.Default
+  private QuestionType questionType = QuestionType.MULTIPLE_CHOICE;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "exam_matrix_id", insertable = false, updatable = false)
