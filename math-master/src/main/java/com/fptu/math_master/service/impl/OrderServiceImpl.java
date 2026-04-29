@@ -12,8 +12,11 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
 import com.fptu.math_master.service.OrderService;
+import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.service.WalletService;
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.util.SecurityUtils;
+import org.springframework.util.StringUtils;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -48,6 +51,8 @@ public class OrderServiceImpl implements OrderService {
     WalletService walletService;
     StreamPublisher streamPublisher;
     com.fptu.math_master.service.EmailService emailService;
+    UploadService uploadService;
+    MinioProperties minioProperties;
 
     @NonFinal
     @Value("${app.frontend-url:http://localhost:3000}")
@@ -569,7 +574,7 @@ public class OrderServiceImpl implements OrderService {
                 .studentName(studentName)
                 .courseId(order.getCourseId())
                 .courseTitle(course != null ? course.getTitle() : null)
-                .courseThumbnailUrl(course != null ? course.getThumbnailUrl() : null)
+                .courseThumbnailUrl(course != null ? resolveThumbnailUrl(course.getThumbnailUrl()) : null)
                 .enrollmentId(order.getEnrollmentId())
                 .status(order.getStatus())
                 .originalPrice(order.getOriginalPrice())
@@ -584,5 +589,22 @@ public class OrderServiceImpl implements OrderService {
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
                 .build();
+    }
+
+    private String resolveThumbnailUrl(String thumbnailUrl) {
+        if (!StringUtils.hasText(thumbnailUrl)) {
+            return null;
+        }
+
+        if (thumbnailUrl.startsWith("http://") || thumbnailUrl.startsWith("https://")) {
+            return thumbnailUrl;
+        }
+
+        try {
+            return uploadService.getPresignedUrl(thumbnailUrl, minioProperties.getTemplateBucket());
+        } catch (Exception ex) {
+            log.warn("Failed to build presigned thumbnail URL for key={}", thumbnailUrl, ex);
+            return thumbnailUrl;
+        }
     }
 }
