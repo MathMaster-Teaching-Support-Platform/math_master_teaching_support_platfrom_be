@@ -52,21 +52,29 @@ public class CourseReviewServiceImpl implements CourseReviewService {
     enrollmentRepository.findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, courseId)
         .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_ENROLLED));
 
-    // 3. Check if already reviewed
-    if (reviewRepository.findByCourseIdAndStudentIdAndDeletedAtIsNull(courseId, studentId).isPresent()) {
+    // 3. Check if already reviewed (including soft-deleted)
+    CourseReview review = reviewRepository.findByCourseIdAndStudentId(courseId, studentId).orElse(null);
+    if (review != null && review.getDeletedAt() == null) {
       throw new AppException(ErrorCode.ALREADY_REVIEWED);
     }
 
-    // 4. Create review
-    CourseReview review = CourseReview.builder()
-        .courseId(courseId)
-        .studentId(studentId)
-        .rating(request.getRating())
-        .comment(request.getComment())
-        .build();
+    // 4. Create or restore review
+    if (review == null) {
+      review = CourseReview.builder()
+          .courseId(courseId)
+          .studentId(studentId)
+          .rating(request.getRating())
+          .comment(request.getComment())
+          .build();
+    } else {
+      review.setDeletedAt(null);
+      review.setDeletedBy(null);
+      review.setRating(request.getRating());
+      review.setComment(request.getComment());
+    }
 
     review = reviewRepository.save(review);
-    
+
     // 5. Update course average rating
     updateCourseRating(course);
 
@@ -76,7 +84,7 @@ public class CourseReviewServiceImpl implements CourseReviewService {
   @Override
   @Transactional
   public CourseReviewResponse updateReview(UUID reviewId, CourseReviewRequest request, UUID studentId) {
-    CourseReview review = reviewRepository.findById(reviewId)
+    CourseReview review = reviewRepository.findByIdAndDeletedAtIsNull(reviewId)
         .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
 
     if (!review.getStudentId().equals(studentId)) {
@@ -88,7 +96,7 @@ public class CourseReviewServiceImpl implements CourseReviewService {
     review = reviewRepository.save(review);
 
     // Update course average rating
-    Course course = courseRepository.findById(review.getCourseId())
+    Course course = courseRepository.findByIdAndDeletedAtIsNull(review.getCourseId())
         .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
     updateCourseRating(course);
 
@@ -111,10 +119,12 @@ public class CourseReviewServiceImpl implements CourseReviewService {
   public CourseReviewSummaryResponse getReviewSummary(UUID courseId) {
     long totalReviews = reviewRepository.countByCourseIdAndDeletedAtIsNull(courseId);
     Double avg = reviewRepository.calculateAverageRating(courseId);
-    BigDecimal averageRating = avg != null ? BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+    BigDecimal averageRating = avg != null ? BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP)
+        : BigDecimal.ZERO;
 
     Map<Integer, Long> distribution = new HashMap<>();
-    for (int i = 1; i <= 5; i++) distribution.put(i, 0L);
+    for (int i = 1; i <= 5; i++)
+      distribution.put(i, 0L);
 
     List<Object[]> stats = reviewRepository.getRatingDistribution(courseId);
     for (Object[] row : stats) {
@@ -131,10 +141,10 @@ public class CourseReviewServiceImpl implements CourseReviewService {
   @Override
   @Transactional
   public CourseReviewResponse replyToReview(UUID reviewId, InstructorReplyRequest request, UUID teacherId) {
-    CourseReview review = reviewRepository.findById(reviewId)
+    CourseReview review = reviewRepository.findByIdAndDeletedAtIsNull(reviewId)
         .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
 
-    Course course = courseRepository.findById(review.getCourseId())
+    Course course = courseRepository.findByIdAndDeletedAtIsNull(review.getCourseId())
         .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
 
     if (!course.getTeacherId().equals(teacherId)) {
@@ -143,23 +153,25 @@ public class CourseReviewServiceImpl implements CourseReviewService {
 
     review.setInstructorReply(request.getReply());
     review.setRepliedAt(Instant.now());
-    
+
     return mapToResponse(reviewRepository.save(review));
   }
 
   @Override
   @Transactional
   public void deleteReview(UUID reviewId, UUID studentId) {
-    CourseReview review = reviewRepository.findById(reviewId)
+    CourseReview review = reviewRepository.findByIdAndDeletedAtIsNull(reviewId)
         .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
 
     if (!review.getStudentId().equals(studentId)) {
       throw new AppException(ErrorCode.UNAUTHORIZED);
     }
 
-    reviewRepository.delete(review);
-    
-    Course course = courseRepository.findById(review.getCourseId()).orElse(null);
+    review.setDeletedAt(Instant.now());
+    review.setDeletedBy(studentId);
+    reviewRepository.save(review);
+
+    Course course = courseRepository.findByIdAndDeletedAtIsNull(review.getCourseId()).orElse(null);
     if (course != null) {
       updateCourseRating(course);
     }

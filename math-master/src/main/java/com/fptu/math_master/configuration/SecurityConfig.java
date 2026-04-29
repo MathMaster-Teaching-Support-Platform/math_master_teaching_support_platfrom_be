@@ -33,72 +33,71 @@ public class SecurityConfig {
   CustomJwtDecoder customJwtDecoder;
 
   private static final String[] PUBLIC_POST_ENDPOINTS = {
-    "/api/auth/register",
-    "/api/auth/login",
-    "/api/auth/google",
-    "/api/auth/introspect",
-    "/api/auth/logout",
-    "/api/auth/refresh",
-    "/api/auth/forgot-password",
-    "/api/auth/reset-password",
-    "/api/payment/webhook",
-    "/api/question-templates/import-from-file",
+      "/api/auth/register",
+      "/api/auth/login",
+      "/api/auth/google",
+      "/api/auth/introspect",
+      "/api/auth/logout",
+      "/api/auth/refresh",
+      "/api/auth/forgot-password",
+      "/api/auth/reset-password",
+      "/api/payment/webhook",
+      "/api/question-templates/import-from-file",
   };
 
   private static final String[] PUBLIC_GET_ENDPOINTS = {
-    "/api/schools/**",
-    "/actuator/health",
-    "/actuator/info",
-    "/actuator/mappings",
-    "/api/ai/test",
-    "/api/lessons/**",
-    "/api/lesson-slides/public/**",
-    "/api/auth/confirm-email",
-    "/api/courses",
-    "/api/courses/*",
-    "/api/courses/*/preview",
-    "/api/courses/*/lessons",
-    "/api/courses/*/sections",
-    "/api/courses/*/lessons/*/video-url",
-    // Stream endpoint removed - using presigned URL directly from MinIO
+      "/api/schools/**",
+      "/actuator/health",
+      "/actuator/info",
+      "/actuator/mappings",
+      "/api/ai/test",
+      "/api/lessons/**",
+      "/api/lesson-slides/public/**",
+      "/api/auth/confirm-email",
+      "/api/courses",
+      "/api/courses/*",
+      "/api/courses/*/preview",
+      "/api/courses/*/reviews",
+      "/api/courses/*/reviews/summary",
+      "/api/courses/*/lessons",
+      "/api/courses/*/sections",
+      "/api/courses/*/lessons/*/video-url",
+      // Stream endpoint removed - using presigned URL directly from MinIO
   };
 
   private static final String[] SWAGGER_WHITELIST = {
-    "/v3/api-docs/**",
-    "/api/v3/api-docs/**",
-    "/swagger-ui/**",
-    "/swagger-ui.html",
-    "/swagger-resources/**",
-    "/webjars/**"
+      "/v3/api-docs/**",
+      "/api/v3/api-docs/**",
+      "/swagger-ui/**",
+      "/swagger-ui.html",
+      "/swagger-resources/**",
+      "/webjars/**"
   };
 
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
     httpSecurity
         .authorizeHttpRequests(
-            request ->
-                request
-                    .requestMatchers("/api/payment/webhook/**")
-                    .permitAll()
-                  .requestMatchers(HttpMethod.GET, "/api/mindmaps/public/**")
-                  .hasAnyRole("STUDENT", "TEACHER", "ADMIN")
-                    .requestMatchers(SWAGGER_WHITELIST)
-                    .permitAll()
-                    .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS)
-                    .permitAll()
-                    .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS)
-                    .permitAll()
-                    .anyRequest()
-                    .authenticated())
+            request -> request
+                .requestMatchers("/api/payment/webhook/**")
+                .permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/mindmaps/public/**")
+                .hasAnyRole("STUDENT", "TEACHER", "ADMIN")
+                .requestMatchers(SWAGGER_WHITELIST)
+                .permitAll()
+                .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS)
+                .permitAll()
+                .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS)
+                .permitAll()
+                .anyRequest()
+                .authenticated())
         .oauth2ResourceServer(
-            oauth2 ->
-                oauth2
-                    .jwt(
-                        jwtConfigurer ->
-                            jwtConfigurer
-                                .decoder(customJwtDecoder)
-                                .jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                    .authenticationEntryPoint(new JwtAuthenticationEntryPoint()))
+            oauth2 -> oauth2
+                .jwt(
+                    jwtConfigurer -> jwtConfigurer
+                        .decoder(customJwtDecoder)
+                        .jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                .authenticationEntryPoint(new JwtAuthenticationEntryPoint()))
         .csrf(AbstractHttpConfigurer::disable)
         .cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
@@ -113,10 +112,10 @@ public class SecurityConfig {
             "http://localhost:5173",
             "http://localhost:3000",
             "http://localhost:3001",
-        "https://sep.nhducminhqt.name.vn",
+            "https://sep.nhducminhqt.name.vn",
             "https://nhducminhqt.name.vn",
-        "http://nhducminhqt.name.vn",
-        "https://math-master-teaching-support-platfr.vercel.app"));
+            "http://nhducminhqt.name.vn",
+            "https://math-master-teaching-support-platfr.vercel.app"));
 
     configuration.setAllowedMethods(
         Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
@@ -131,8 +130,7 @@ public class SecurityConfig {
 
   @Bean
   public JwtAuthenticationConverter jwtAuthenticationConverter() {
-    JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter =
-        new JwtGrantedAuthoritiesConverter();
+    JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
     jwtGrantedAuthoritiesConverter.setAuthorityPrefix("");
 
     JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
