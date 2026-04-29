@@ -175,8 +175,10 @@ public class OrderServiceImpl implements OrderService {
 
         // 1.5. Check if already enrolled (to prevent double checkout of multiple
         // pending orders)
+        // FIX: Use pessimistic locking to prevent race conditions and handle re-enrollment
         Optional<Enrollment> existingEnrollment = enrollmentRepository
-                .findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, order.getCourseId());
+                .findByStudentIdAndCourseIdAndDeletedAtIsNullWithLock(studentId, order.getCourseId());
+        
         if (existingEnrollment.isPresent() && existingEnrollment.get().getStatus() == EnrollmentStatus.ACTIVE) {
             order.setStatus(OrderStatus.CANCELLED);
             order.setCancellationReason("User is already enrolled in this course");
@@ -451,16 +453,22 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private Enrollment createEnrollment(Order order) {
-        Enrollment enrollment = Enrollment.builder()
-                .courseId(order.getCourseId())
-                .studentId(order.getStudentId())
-                .status(EnrollmentStatus.ACTIVE)
-                .enrolledAt(Instant.now())
-                .build();
+        // FIX: Check for existing enrollment to avoid unique constraint violation on re-enrollment
+        Enrollment enrollment = enrollmentRepository.findByStudentIdAndCourseIdAndDeletedAtIsNull(
+                order.getStudentId(), order.getCourseId())
+                .orElseGet(() -> Enrollment.builder()
+                        .courseId(order.getCourseId())
+                        .studentId(order.getStudentId())
+                        .build());
+
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        enrollment.setEnrolledAt(Instant.now());
 
         enrollment = enrollmentRepository.save(enrollment);
 
-        log.info("Created enrollment {} for order {}", enrollment.getId(), order.getOrderNumber());
+        log.info("Successfully {} enrollment {} for order {}", 
+            enrollment.getId() != null ? "updated" : "created", 
+            enrollment.getId(), order.getOrderNumber());
 
         return enrollment;
     }
