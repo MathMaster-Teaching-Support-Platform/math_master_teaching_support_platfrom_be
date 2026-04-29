@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,9 +16,14 @@ public interface CourseReviewRepository extends JpaRepository<CourseReview, UUID
 
        Optional<CourseReview> findByIdAndDeletedAtIsNull(UUID id);
 
-       Page<CourseReview> findByCourseIdAndDeletedAtIsNull(UUID courseId, Pageable pageable);
+       @EntityGraph(attributePaths = {"student"})
+       @Query("SELECT cr FROM CourseReview cr WHERE cr.course.id = :courseId AND cr.deletedAt IS NULL")
+       Page<CourseReview> findByCourseIdAndDeletedAtIsNull(@Param("courseId") UUID courseId, Pageable pageable);
 
-       Page<CourseReview> findByCourseIdAndRatingAndDeletedAtIsNull(UUID courseId, Integer rating, Pageable pageable);
+       @EntityGraph(attributePaths = {"student"})
+       @Query("SELECT cr FROM CourseReview cr WHERE cr.course.id = :courseId AND cr.rating = :rating AND cr.deletedAt IS NULL")
+       Page<CourseReview> findByCourseIdAndRatingAndDeletedAtIsNull(
+           @Param("courseId") UUID courseId, @Param("rating") Integer rating, Pageable pageable);
 
        Optional<CourseReview> findByCourseIdAndStudentIdAndDeletedAtIsNull(UUID courseId, UUID studentId);
 

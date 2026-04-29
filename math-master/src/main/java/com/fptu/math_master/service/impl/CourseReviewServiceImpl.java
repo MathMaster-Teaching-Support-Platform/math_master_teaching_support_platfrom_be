@@ -13,7 +13,9 @@ import com.fptu.math_master.repository.CourseRepository;
 import com.fptu.math_master.repository.CourseReviewRepository;
 import com.fptu.math_master.repository.EnrollmentRepository;
 import com.fptu.math_master.repository.UserRepository;
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.service.CourseReviewService;
+import com.fptu.math_master.service.UploadService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -40,6 +42,8 @@ public class CourseReviewServiceImpl implements CourseReviewService {
   CourseRepository courseRepository;
   EnrollmentRepository enrollmentRepository;
   UserRepository userRepository;
+  UploadService uploadService;
+  MinioProperties minioProperties;
 
   @Override
   @Transactional
@@ -106,12 +110,18 @@ public class CourseReviewServiceImpl implements CourseReviewService {
   @Override
   @Transactional(readOnly = true)
   public Page<CourseReviewResponse> getCourseReviews(UUID courseId, Integer rating, Pageable pageable) {
+    log.info("Fetching course reviews for courseId: {}, rating filter: {}, pageable: {}", courseId, rating, pageable);
+    
+    Page<CourseReview> reviewPage;
     if (rating != null) {
-      return reviewRepository.findByCourseIdAndRatingAndDeletedAtIsNull(courseId, rating, pageable)
-          .map(this::mapToResponse);
+      reviewPage = reviewRepository.findByCourseIdAndRatingAndDeletedAtIsNull(courseId, rating, pageable);
+    } else {
+      reviewPage = reviewRepository.findByCourseIdAndDeletedAtIsNull(courseId, pageable);
     }
-    return reviewRepository.findByCourseIdAndDeletedAtIsNull(courseId, pageable)
-        .map(this::mapToResponse);
+    
+    log.info("Found {} reviews for courseId: {}", reviewPage.getTotalElements(), courseId);
+    System.out.println("DEBUG: Found " + reviewPage.getTotalElements() + " reviews for courseId: " + courseId);
+    return reviewPage.map(this::mapToResponse);
   }
 
   @Override
@@ -201,7 +211,7 @@ public class CourseReviewServiceImpl implements CourseReviewService {
         .courseId(review.getCourseId())
         .studentId(review.getStudentId())
         .studentName(review.getStudent() != null ? review.getStudent().getFullName() : "Anonymous")
-        .studentAvatar(review.getStudent() != null ? review.getStudent().getAvatar() : null)
+        .studentAvatar(resolveAvatarUrl(review.getStudent()))
         .rating(review.getRating())
         .comment(review.getComment())
         .instructorReply(review.getInstructorReply())
@@ -209,5 +219,21 @@ public class CourseReviewServiceImpl implements CourseReviewService {
         .createdAt(review.getCreatedAt())
         .updatedAt(review.getUpdatedAt())
         .build();
+  }
+
+  private String resolveAvatarUrl(User student) {
+    if (student == null || student.getAvatar() == null) {
+      return null;
+    }
+    String avatar = student.getAvatar();
+    if (avatar.startsWith("http")) {
+      return avatar;
+    }
+    try {
+      return uploadService.getPresignedUrl(avatar, "avatars");
+    } catch (Exception e) {
+      log.error("Failed to generate presigned URL for student avatar: {}", avatar, e);
+      return null;
+    }
   }
 }
