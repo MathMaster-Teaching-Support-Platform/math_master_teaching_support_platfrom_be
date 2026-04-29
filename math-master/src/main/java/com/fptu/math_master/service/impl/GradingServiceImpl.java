@@ -162,9 +162,9 @@ public class GradingServiceImpl implements GradingService {
       case MULTIPLE_CHOICE:
         return gradeMultipleChoice(answer, question, effectiveMaxPoints);
       case TRUE_FALSE:
-        return gradeTrueFalse(answer, question, effectiveMaxPoints);
+        return gradeTrueFalseWithPartialCredit(answer, question, effectiveMaxPoints);
       case SHORT_ANSWER:
-        return gradeShortAnswer(answer, question, effectiveMaxPoints);
+        return gradeShortAnswerWithValidation(answer, question, effectiveMaxPoints);
       case ESSAY:
       case CODING:
         return false;
@@ -208,6 +208,180 @@ public class GradingServiceImpl implements GradingService {
     return true;
   }
 
+  /**
+   * Grade TRUE_FALSE questions with Vietnamese THPT partial credit.
+   * Scoring rule: 4/4 correct → 1.0 point, 3/4 correct → 0.25 point, 0-2/4 → 0 points
+   */
+  private boolean gradeTrueFalseWithPartialCredit(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
+    if (question.getCorrectAnswer() == null) {
+      return false;
+    }
+
+    // Parse correct answer (comma-separated true keys)
+    Set<String> expectedTrueKeys = new HashSet<>();
+    if (question.getCorrectAnswer() != null && !question.getCorrectAnswer().isBlank()) {
+      String[] keys = question.getCorrectAnswer().split(",");
+      for (String key : keys) {
+        expectedTrueKeys.add(key.trim());
+      }
+    }
+
+    // Parse student answer (comma-separated true keys)
+    String studentAnswerStr = extractAnswerValue(answer, "value", "selected", "answer", "choice");
+    Set<String> actualTrueKeys = new HashSet<>();
+    if (studentAnswerStr != null && !studentAnswerStr.isBlank()) {
+      String[] keys = studentAnswerStr.split(",");
+      for (String key : keys) {
+        actualTrueKeys.add(key.trim());
+      }
+    }
+
+    // Count correct clauses (4 total: A, B, C, D)
+    int correctCount = 0;
+    Map<String, Object> clauseResults = new LinkedHashMap<>();
+
+    for (String key : List.of("A", "B", "C", "D")) {
+      boolean expected = expectedTrueKeys.contains(key);
+      boolean actual = actualTrueKeys.contains(key);
+      boolean isCorrect = (expected == actual);
+
+      if (isCorrect) {
+        correctCount++;
+      }
+
+      clauseResults.put(key, Map.of(
+          "expected", expected,
+          "actual", actual,
+          "correct", isCorrect
+      ));
+    }
+
+    // Calculate score using Vietnamese THPT rule
+    BigDecimal score;
+    switch (correctCount) {
+      case 4:
+        score = effectiveMaxPoints;  // 4/4 → 1.0 point
+        break;
+      case 3:
+        score = effectiveMaxPoints.multiply(BigDecimal.valueOf(0.25));  // 3/4 → 0.25 point
+        break;
+      default:
+        score = BigDecimal.ZERO;  // 0-2/4 → 0 points
+    }
+
+    // Store clause detail for assessment review
+    Map<String, Object> scoringDetail = new LinkedHashMap<>();
+    scoringDetail.put("questionType", "TRUE_FALSE");
+    scoringDetail.put("clauseResults", clauseResults);
+    scoringDetail.put("correctCount", correctCount);
+    scoringDetail.put("totalClauses", 4);
+    scoringDetail.put("scoringRule", "VIET_THPT");
+
+    if (effectiveMaxPoints.compareTo(BigDecimal.ZERO) > 0) {
+      double earnedRatio = score.doubleValue() / effectiveMaxPoints.doubleValue();
+      scoringDetail.put("earnedRatio", earnedRatio);
+    }
+
+    // Store in thread-local context for caller to retrieve
+    com.fptu.math_master.util.ScoringContext.setScoringDetail(scoringDetail);
+
+    answer.setIsCorrect(correctCount == 4);  // Only fully correct if 4/4
+    answer.setPointsEarned(score);
+    answer.setScoringDetail(scoringDetail);
+
+    if (correctCount < 4) {
+      log.debug(
+          "TF auto-grade partial credit for answer {}: student='{}' correct={}/4",
+          answer.getId(),
+          studentAnswerStr,
+          correctCount);
+    }
+
+    return true;
+  }
+
+  /**
+   * Grade SHORT_ANSWER questions with validation modes.
+   * Supports EXACT, NUMERIC, and REGEX validation modes.
+   */
+  private boolean gradeShortAnswerWithValidation(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
+    if (question.getCorrectAnswer() == null) {
+      return false;
+    }
+
+    String studentAnswer = extractAnswerValue(answer, "value", "answer", "text", "response");
+    if (studentAnswer == null) {
+      return false;
+    }
+
+    // Get validation configuration from generationMetadata
+    Map<String, Object> metadata = question.getGenerationMetadata();
+    String validationMode = "EXACT";
+    double tolerance = 0.001;
+
+    if (metadata != null) {
+      Object modeObj = metadata.get("answerValidationMode");
+      if (modeObj != null) {
+        validationMode = modeObj.toString();
+      }
+
+      Object toleranceObj = metadata.get("answerTolerance");
+      if (toleranceObj != null) {
+        try {
+          tolerance = ((Number) toleranceObj).doubleValue();
+        } catch (Exception e) {
+          tolerance = 0.001;
+        }
+      }
+    }
+
+    // Validate answer based on mode
+    boolean isCorrect = switch (validationMode) {
+      case "NUMERIC" -> validateNumericAnswer(studentAnswer.trim(), question.getCorrectAnswer().trim(), tolerance);
+      case "REGEX" -> validateRegexAnswer(studentAnswer.trim(), question.getCorrectAnswer().trim());
+      default -> validateExactAnswer(studentAnswer.trim(), question.getCorrectAnswer().trim());
+    };
+
+    if (!isCorrect) {
+      log.debug(
+          "Short-answer auto-grade mismatch for answer {}: student='{}' correct='{}' mode='{}'",
+          answer.getId(),
+          studentAnswer,
+          question.getCorrectAnswer(),
+          validationMode);
+    }
+
+    answer.setIsCorrect(isCorrect);
+    answer.setPointsEarned(isCorrect ? effectiveMaxPoints : BigDecimal.ZERO);
+    return true;
+  }
+
+  private boolean validateExactAnswer(String studentAnswer, String correctAnswer) {
+    return studentAnswer.equalsIgnoreCase(correctAnswer);
+  }
+
+  private boolean validateNumericAnswer(String studentAnswer, String correctAnswer, double tolerance) {
+    try {
+      double student = Double.parseDouble(studentAnswer);
+      double correct = Double.parseDouble(correctAnswer);
+      return Math.abs(student - correct) <= tolerance;
+    } catch (NumberFormatException e) {
+      return false;
+    }
+  }
+
+  private boolean validateRegexAnswer(String studentAnswer, String correctAnswer) {
+    try {
+      return studentAnswer.matches(correctAnswer);
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  /**
+   * Legacy TRUE_FALSE grading (kept for backward compatibility).
+   * Use gradeTrueFalseWithPartialCredit() for new code.
+   */
   private boolean gradeTrueFalse(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
     if (question.getCorrectAnswer() == null) {
       return false;
@@ -234,32 +408,10 @@ public class GradingServiceImpl implements GradingService {
     return true;
   }
 
-  private boolean gradeShortAnswer(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
-    if (question.getCorrectAnswer() == null) {
-      return false;
-    }
-
-    String studentAnswer = extractAnswerValue(answer, "value", "answer", "text", "response");
-    if (studentAnswer == null) {
-      return false;
-    }
-
-    String correctAnswer = question.getCorrectAnswer();
-    studentAnswer = normalizeFreeText(studentAnswer);
-    correctAnswer = normalizeFreeText(correctAnswer);
-
-    boolean isCorrect = studentAnswer.equals(correctAnswer);
-    if (!isCorrect) {
-      log.debug(
-          "Short-answer auto-grade mismatch for answer {}: student='{}' correct='{}'",
-          answer.getId(),
-          studentAnswer,
-          correctAnswer);
-    }
-    answer.setIsCorrect(isCorrect);
-    answer.setPointsEarned(isCorrect ? effectiveMaxPoints : BigDecimal.ZERO);
-    return true;
-  }
+  /**
+   * Legacy SHORT_ANSWER grading (kept for backward compatibility).
+   * Use gradeShortAnswerWithValidation() for new code.
+   */
 
   private String extractAnswerValue(Answer answer, String... dataKeys) {
     if (answer.getAnswerData() != null && dataKeys != null) {

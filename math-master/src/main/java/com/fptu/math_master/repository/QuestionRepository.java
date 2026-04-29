@@ -380,4 +380,74 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       @Param("chapterId") UUID chapterId,
       @Param("cognitiveLevel") String cognitiveLevel,
       @Param("limit") int limit);
+
+  // ========================================================================
+  // Phase 5: Type-Aware Query Methods (MCQ, TRUE_FALSE, SHORT_ANSWER)
+  // ========================================================================
+
+  /**
+   * Count approved questions by bank, chapter, cognitive level, and question type.
+   * This is the core query for type-aware generation engine.
+   * Supports MCQ, TRUE_FALSE, and SHORT_ANSWER question types.
+   */
+  @Query(
+      value =
+          "SELECT COUNT(*) FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.chapter_id = :chapterId "
+              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "AND q.question_type = CAST(:questionType AS text) "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL",
+      nativeQuery = true)
+  long countApprovedByBankAndChapterAndCognitiveAndType(
+      @Param("bankId") UUID bankId,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("questionType") String questionType);
+
+  /**
+   * Find approved question IDs by bank, chapter, cognitive level, and question type.
+   * Returns IDs in deterministic order for reproducible selection.
+   * Used by generation engine to select specific question types.
+   */
+  @Query(
+      value =
+          "SELECT q.id FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.chapter_id = :chapterId "
+              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "AND q.question_type = CAST(:questionType AS text) "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "ORDER BY q.id",
+      nativeQuery = true)
+  List<UUID> findApprovedIdsByBankAndChapterAndCognitiveAndType(
+      @Param("bankId") UUID bankId,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("questionType") String questionType);
+
+  /**
+   * Find random approved questions by bank, chapter, cognitive level, and question type.
+   * Used for quick random selection without pre-loading all IDs.
+   * Supports type-specific question selection for MCQ, TF, and SA.
+   */
+  @Query(
+      value =
+          "SELECT * FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.chapter_id = :chapterId "
+              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "AND q.question_type = CAST(:questionType AS text) "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "ORDER BY random() LIMIT :limit",
+      nativeQuery = true)
+  List<Question> findRandomApprovedByBankAndChapterAndCognitiveAndType(
+      @Param("bankId") UUID bankId,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("questionType") String questionType,
+      @Param("limit") int limit);
 }

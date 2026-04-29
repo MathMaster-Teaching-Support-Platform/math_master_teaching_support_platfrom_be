@@ -16,7 +16,10 @@ import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.repository.WalletRepository;
 import com.fptu.math_master.service.EnrollmentService;
 import com.fptu.math_master.service.WalletService;
+import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.util.SecurityUtils;
+import com.fptu.math_master.configuration.properties.MinioProperties;
+import org.springframework.util.StringUtils;
 import com.fptu.math_master.entity.Wallet;
 import com.fptu.math_master.entity.Transaction;
 import com.fptu.math_master.enums.TransactionType;
@@ -57,6 +60,8 @@ public class EnrollmentServiceImpl implements EnrollmentService {
   CourseLessonRepository courseLessonRepository;
   LessonProgressRepository lessonProgressRepository;
   StreamPublisher streamPublisher;
+  UploadService uploadService;
+  MinioProperties minioProperties;
 
   @Override
   public EnrollmentResponse enroll(UUID courseId) {
@@ -279,7 +284,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             e -> {
               Course course = courseMap.get(e.getCourseId());
               String courseTitle = course != null ? course.getTitle() : null;
-              String thumbnailUrl = course != null ? course.getThumbnailUrl() : null;
+              String thumbnailUrl = course != null ? resolveThumbnailUrl(course.getThumbnailUrl()) : null;
               
               EnrollmentResponse res = mapToResponse(e, courseTitle, studentId);
               res.setCourseThumbnailUrl(thumbnailUrl);
@@ -311,5 +316,22 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         .createdAt(e.getCreatedAt())
         .updatedAt(e.getUpdatedAt())
         .build();
+  }
+
+  private String resolveThumbnailUrl(String thumbnailUrl) {
+    if (!StringUtils.hasText(thumbnailUrl)) {
+      return null;
+    }
+
+    if (thumbnailUrl.startsWith("http://") || thumbnailUrl.startsWith("https://")) {
+      return thumbnailUrl;
+    }
+
+    try {
+      return uploadService.getPresignedUrl(thumbnailUrl, minioProperties.getTemplateBucket());
+    } catch (Exception ex) {
+      log.warn("Failed to build presigned thumbnail URL for key={}", thumbnailUrl, ex);
+      return thumbnailUrl;
+    }
   }
 }

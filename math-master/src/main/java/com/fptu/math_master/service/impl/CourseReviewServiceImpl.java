@@ -13,7 +13,9 @@ import com.fptu.math_master.repository.CourseRepository;
 import com.fptu.math_master.repository.CourseReviewRepository;
 import com.fptu.math_master.repository.EnrollmentRepository;
 import com.fptu.math_master.repository.UserRepository;
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.service.CourseReviewService;
+import com.fptu.math_master.service.UploadService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -40,6 +42,8 @@ public class CourseReviewServiceImpl implements CourseReviewService {
   CourseRepository courseRepository;
   EnrollmentRepository enrollmentRepository;
   UserRepository userRepository;
+  UploadService uploadService;
+  MinioProperties minioProperties;
 
   @Override
   @Transactional
@@ -52,21 +56,29 @@ public class CourseReviewServiceImpl implements CourseReviewService {
     enrollmentRepository.findByStudentIdAndCourseIdAndDeletedAtIsNull(studentId, courseId)
         .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_ENROLLED));
 
-    // 3. Check if already reviewed
-    if (reviewRepository.findByCourseIdAndStudentIdAndDeletedAtIsNull(courseId, studentId).isPresent()) {
+    // 3. Check if already reviewed (including soft-deleted)
+    CourseReview review = reviewRepository.findByCourseIdAndStudentId(courseId, studentId).orElse(null);
+    if (review != null && review.getDeletedAt() == null) {
       throw new AppException(ErrorCode.ALREADY_REVIEWED);
     }
 
-    // 4. Create review
-    CourseReview review = CourseReview.builder()
-        .courseId(courseId)
-        .studentId(studentId)
-        .rating(request.getRating())
-        .comment(request.getComment())
-        .build();
+    // 4. Create or restore review
+    if (review == null) {
+      review = CourseReview.builder()
+          .courseId(courseId)
+          .studentId(studentId)
+          .rating(request.getRating())
+          .comment(request.getComment())
+          .build();
+    } else {
+      review.setDeletedAt(null);
+      review.setDeletedBy(null);
+      review.setRating(request.getRating());
+      review.setComment(request.getComment());
+    }
 
     review = reviewRepository.save(review);
-    
+
     // 5. Update course average rating
     updateCourseRating(course);
 
@@ -76,7 +88,7 @@ public class CourseReviewServiceImpl implements CourseReviewService {
   @Override
   @Transactional
   public CourseReviewResponse updateReview(UUID reviewId, CourseReviewRequest request, UUID studentId) {
-    CourseReview review = reviewRepository.findById(reviewId)
+    CourseReview review = reviewRepository.findByIdAndDeletedAtIsNull(reviewId)
         .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
 
     if (!review.getStudentId().equals(studentId)) {
@@ -88,7 +100,7 @@ public class CourseReviewServiceImpl implements CourseReviewService {
     review = reviewRepository.save(review);
 
     // Update course average rating
-    Course course = courseRepository.findById(review.getCourseId())
+    Course course = courseRepository.findByIdAndDeletedAtIsNull(review.getCourseId())
         .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
     updateCourseRating(course);
 
@@ -98,12 +110,18 @@ public class CourseReviewServiceImpl implements CourseReviewService {
   @Override
   @Transactional(readOnly = true)
   public Page<CourseReviewResponse> getCourseReviews(UUID courseId, Integer rating, Pageable pageable) {
+    log.info("Fetching course reviews for courseId: {}, rating filter: {}, pageable: {}", courseId, rating, pageable);
+    
+    Page<CourseReview> reviewPage;
     if (rating != null) {
-      return reviewRepository.findByCourseIdAndRatingAndDeletedAtIsNull(courseId, rating, pageable)
-          .map(this::mapToResponse);
+      reviewPage = reviewRepository.findByCourseIdAndRatingAndDeletedAtIsNull(courseId, rating, pageable);
+    } else {
+      reviewPage = reviewRepository.findByCourseIdAndDeletedAtIsNull(courseId, pageable);
     }
-    return reviewRepository.findByCourseIdAndDeletedAtIsNull(courseId, pageable)
-        .map(this::mapToResponse);
+    
+    log.info("Found {} reviews for courseId: {}", reviewPage.getTotalElements(), courseId);
+    System.out.println("DEBUG: Found " + reviewPage.getTotalElements() + " reviews for courseId: " + courseId);
+    return reviewPage.map(this::mapToResponse);
   }
 
   @Override
@@ -111,10 +129,12 @@ public class CourseReviewServiceImpl implements CourseReviewService {
   public CourseReviewSummaryResponse getReviewSummary(UUID courseId) {
     long totalReviews = reviewRepository.countByCourseIdAndDeletedAtIsNull(courseId);
     Double avg = reviewRepository.calculateAverageRating(courseId);
-    BigDecimal averageRating = avg != null ? BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+    BigDecimal averageRating = avg != null ? BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP)
+        : BigDecimal.ZERO;
 
     Map<Integer, Long> distribution = new HashMap<>();
-    for (int i = 1; i <= 5; i++) distribution.put(i, 0L);
+    for (int i = 1; i <= 5; i++)
+      distribution.put(i, 0L);
 
     List<Object[]> stats = reviewRepository.getRatingDistribution(courseId);
     for (Object[] row : stats) {
@@ -131,10 +151,10 @@ public class CourseReviewServiceImpl implements CourseReviewService {
   @Override
   @Transactional
   public CourseReviewResponse replyToReview(UUID reviewId, InstructorReplyRequest request, UUID teacherId) {
-    CourseReview review = reviewRepository.findById(reviewId)
+    CourseReview review = reviewRepository.findByIdAndDeletedAtIsNull(reviewId)
         .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
 
-    Course course = courseRepository.findById(review.getCourseId())
+    Course course = courseRepository.findByIdAndDeletedAtIsNull(review.getCourseId())
         .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
 
     if (!course.getTeacherId().equals(teacherId)) {
@@ -143,23 +163,25 @@ public class CourseReviewServiceImpl implements CourseReviewService {
 
     review.setInstructorReply(request.getReply());
     review.setRepliedAt(Instant.now());
-    
+
     return mapToResponse(reviewRepository.save(review));
   }
 
   @Override
   @Transactional
   public void deleteReview(UUID reviewId, UUID studentId) {
-    CourseReview review = reviewRepository.findById(reviewId)
+    CourseReview review = reviewRepository.findByIdAndDeletedAtIsNull(reviewId)
         .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
 
     if (!review.getStudentId().equals(studentId)) {
       throw new AppException(ErrorCode.UNAUTHORIZED);
     }
 
-    reviewRepository.delete(review);
-    
-    Course course = courseRepository.findById(review.getCourseId()).orElse(null);
+    review.setDeletedAt(Instant.now());
+    review.setDeletedBy(studentId);
+    reviewRepository.save(review);
+
+    Course course = courseRepository.findByIdAndDeletedAtIsNull(review.getCourseId()).orElse(null);
     if (course != null) {
       updateCourseRating(course);
     }
@@ -189,7 +211,7 @@ public class CourseReviewServiceImpl implements CourseReviewService {
         .courseId(review.getCourseId())
         .studentId(review.getStudentId())
         .studentName(review.getStudent() != null ? review.getStudent().getFullName() : "Anonymous")
-        .studentAvatar(review.getStudent() != null ? review.getStudent().getAvatar() : null)
+        .studentAvatar(resolveAvatarUrl(review.getStudent()))
         .rating(review.getRating())
         .comment(review.getComment())
         .instructorReply(review.getInstructorReply())
@@ -197,5 +219,21 @@ public class CourseReviewServiceImpl implements CourseReviewService {
         .createdAt(review.getCreatedAt())
         .updatedAt(review.getUpdatedAt())
         .build();
+  }
+
+  private String resolveAvatarUrl(User student) {
+    if (student == null || student.getAvatar() == null) {
+      return null;
+    }
+    String avatar = student.getAvatar();
+    if (avatar.startsWith("http")) {
+      return avatar;
+    }
+    try {
+      return uploadService.getPresignedUrl(avatar, "avatars");
+    } catch (Exception e) {
+      log.error("Failed to generate presigned URL for student avatar: {}", avatar, e);
+      return null;
+    }
   }
 }

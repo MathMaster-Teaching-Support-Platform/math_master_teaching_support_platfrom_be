@@ -137,8 +137,16 @@ public class CourseServiceImpl implements CourseService {
 
     // FIX #9: Validate discount price is less than original price
     if (request.getOriginalPrice() != null && request.getDiscountedPrice() != null) {
-      if (request.getDiscountedPrice().compareTo(request.getOriginalPrice()) >= 0) {
-        throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
+      // Only validate if original price > 0
+      if (request.getOriginalPrice().compareTo(BigDecimal.ZERO) > 0) {
+        if (request.getDiscountedPrice().compareTo(request.getOriginalPrice()) >= 0) {
+          throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
+        }
+      } else {
+        // If original price is 0, discounted price must also be 0 or null
+        if (request.getDiscountedPrice().compareTo(BigDecimal.ZERO) > 0) {
+          throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
+        }
       }
     } else if (request.getOriginalPrice() == null && request.getDiscountedPrice() != null) {
       throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
@@ -195,8 +203,16 @@ public class CourseServiceImpl implements CourseService {
     }
 
     if (activeOriginal != null && activeDiscounted != null) {
-      if (activeDiscounted.compareTo(activeOriginal) >= 0) {
-        throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
+      // Only validate if original price > 0
+      if (activeOriginal.compareTo(BigDecimal.ZERO) > 0) {
+        if (activeDiscounted.compareTo(activeOriginal) >= 0) {
+          throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
+        }
+      } else {
+        // If original price is 0, discounted price must also be 0 or null
+        if (activeDiscounted.compareTo(BigDecimal.ZERO) > 0) {
+          throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);
+        }
       }
     } else if (activeOriginal == null && activeDiscounted != null) {
       throw new AppException(ErrorCode.INVALID_DISCOUNT_PRICE);

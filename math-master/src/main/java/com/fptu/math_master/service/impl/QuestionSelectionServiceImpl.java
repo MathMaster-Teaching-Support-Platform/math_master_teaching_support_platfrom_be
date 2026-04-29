@@ -213,8 +213,16 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     if (cognitiveLevel == null) {
       return 0;
     }
-    return questionRepository.countApprovedByBankAndChapterAndCognitive(
-        bankId, chapterId, cognitiveLevel);
+    
+    // Phase 5: Include questionType in the count query
+    String questionType =
+        mapping.getQuestionType() != null ? mapping.getQuestionType().name() : null;
+    if (questionType == null) {
+      return 0;
+    }
+    
+    return questionRepository.countApprovedByBankAndChapterAndCognitiveAndType(
+        bankId, chapterId, cognitiveLevel, questionType);
   }
 
   private List<UUID> findCandidateIdsByBankAndChapterAndCognitive(
@@ -224,8 +232,16 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     if (cognitiveLevel == null) {
       return new ArrayList<>();
     }
-    return questionRepository.findApprovedIdsByBankAndChapterAndCognitive(
-        bankId, chapterId, cognitiveLevel);
+    
+    // Phase 5: Include questionType in the ID lookup query
+    String questionType =
+        mapping.getQuestionType() != null ? mapping.getQuestionType().name() : null;
+    if (questionType == null) {
+      return new ArrayList<>();
+    }
+    
+    return questionRepository.findApprovedIdsByBankAndChapterAndCognitiveAndType(
+        bankId, chapterId, cognitiveLevel, questionType);
   }
 
   // ========================================================================

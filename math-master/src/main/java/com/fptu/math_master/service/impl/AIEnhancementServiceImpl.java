@@ -632,6 +632,27 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         template.getName(),
         sampleIndex + 1);
 
+    // Dispatch based on question type
+    switch (template.getTemplateType()) {
+      case SHORT_ANSWER:
+        return generateShortAnswerQuestion(template, sampleIndex);
+      case TRUE_FALSE:
+        return generateTrueFalseQuestion(template, sampleIndex);
+      case MULTIPLE_CHOICE:
+      default:
+        return generateMultipleChoiceQuestion(template, sampleIndex);
+    }
+  }
+
+  /**
+   * Generate a MULTIPLE_CHOICE question from template (existing MCQ flow)
+   */
+  private GeneratedQuestionSample generateMultipleChoiceQuestion(QuestionTemplate template, int sampleIndex) {
+    log.info(
+        "Generating MCQ from template '{}' (sample #{})",
+        template.getName(),
+        sampleIndex + 1);
+
     // Step 1: always compute params + answer in Java first (guaranteed correct)
     Map<String, Object> params = pickParameters(template, sampleIndex);
     String correctAnswerStr = evaluateFormula(template.getAnswerFormula(), params);
@@ -696,6 +717,210 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .answerCalculation(template.getAnswerFormula() + " = " + correctAnswerStr)
           .build();
     }
+  }
+
+  /**
+   * Generate a SHORT_ANSWER question from template
+   * Flow: Resolve parameters → Substitute into template → Evaluate formula → Return answer
+   */
+  private GeneratedQuestionSample generateShortAnswerQuestion(QuestionTemplate template, int sampleIndex) {
+    log.info(
+        "Generating SHORT_ANSWER from template '{}' (sample #{})",
+        template.getName(),
+        sampleIndex + 1);
+
+    try {
+      // Step 1: Resolve parameters
+      Map<String, Object> params = pickParameters(template, sampleIndex);
+      log.info("Resolved parameters: {}", params);
+
+      // Step 2: Substitute into template text
+      String questionText = fillTemplateText(template.getTemplateText(), params);
+      log.info("Question text: {}", questionText);
+
+      // Step 3: Evaluate answer formula
+      String correctAnswer = evaluateFormula(template.getAnswerFormula(), params);
+      log.info("Correct answer: {}", correctAnswer);
+
+      if ("?".equals(correctAnswer)) {
+        log.error("Formula evaluation failed for template: {}", template.getName());
+        correctAnswer = "Unable to calculate";
+      }
+
+      // Step 4: Determine difficulty
+      QuestionDifficulty difficulty = determineDifficulty(null, params);
+
+      // Step 5: Get validation mode from metadata (default to EXACT)
+      Map<String, Object> gradingMetadata = new HashMap<>();
+      gradingMetadata.put("answerValidationMode", "EXACT");
+      gradingMetadata.put("answerTolerance", 0.001);
+
+      // Return generated question
+      return GeneratedQuestionSample.builder()
+          .questionText(questionText)
+          .options(null)  // No options for SHORT_ANSWER
+          .correctAnswer(correctAnswer)
+          .explanation("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
+          .solutionSteps("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
+          .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
+          .calculatedDifficulty(difficulty)
+          .usedParameters(params)
+          .answerCalculation(template.getAnswerFormula() + " = " + correctAnswer)
+          .generationMetadata(gradingMetadata)
+          .build();
+
+    } catch (Exception e) {
+      log.error("Failed to generate SHORT_ANSWER question: {}", e.getMessage(), e);
+      return GeneratedQuestionSample.builder()
+          .questionText("Error generating question: " + e.getMessage())
+          .options(null)
+          .correctAnswer("Error")
+          .explanation("Failed to generate question")
+          .solutionSteps("Error: " + e.getMessage())
+          .calculatedDifficulty(QuestionDifficulty.MEDIUM)
+          .usedParameters(new HashMap<>())
+          .build();
+    }
+  }
+
+  /**
+   * Generate a TRUE_FALSE question from template
+   * Flow: Resolve parameters → Generate 4 clauses → Determine true/false for each → Return question
+   */
+  private GeneratedQuestionSample generateTrueFalseQuestion(QuestionTemplate template, int sampleIndex) {
+    log.info(
+        "Generating TRUE_FALSE from template '{}' (sample #{})",
+        template.getName(),
+        sampleIndex + 1);
+
+    try {
+      // Step 1: Resolve parameters
+      Map<String, Object> params = pickParameters(template, sampleIndex);
+      log.info("Resolved parameters: {}", params);
+
+      // Step 2: Substitute into template text (stem)
+      String questionStem = fillTemplateText(template.getTemplateText(), params);
+      log.info("Question stem: {}", questionStem);
+
+      // Step 3: Get clause templates from statementMutations
+      Map<String, Object> statementMutations = template.getStatementMutations() != null 
+          ? template.getStatementMutations() 
+          : new HashMap<>();
+      
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> clauseTemplates = 
+          (List<Map<String, Object>>) statementMutations.getOrDefault("clauseTemplates", new ArrayList<>());
+
+      if (clauseTemplates.isEmpty()) {
+        log.warn("No clause templates found for TRUE_FALSE question");
+        clauseTemplates = generateDefaultClauseTemplates();
+      }
+
+      // Step 4: Generate clauses and determine true/false
+      Map<String, String> clauses = new LinkedHashMap<>();
+      Map<String, Object> tfClauses = new LinkedHashMap<>();
+      Set<String> trueKeys = new HashSet<>();
+
+      for (int i = 0; i < Math.min(4, clauseTemplates.size()); i++) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> clauseTemplate = clauseTemplates.get(i);
+        String key = String.valueOf((char) ('A' + i));
+
+        // Substitute parameters in clause text
+        String clauseText = (String) clauseTemplate.get("text");
+        if (clauseText != null) {
+          clauseText = fillText(clauseText, params);
+        } else {
+          clauseText = "Clause " + key;
+        }
+
+        clauses.put(key, clauseText);
+
+        // Store clause metadata
+        @SuppressWarnings("unchecked")
+        Map<String, Object> clauseMeta = new LinkedHashMap<>();
+        clauseMeta.put("chapterId", clauseTemplate.get("chapterId"));
+        clauseMeta.put("cognitiveLevel", clauseTemplate.get("cognitiveLevel"));
+        tfClauses.put(key, clauseMeta);
+
+        // Track true clauses
+        Boolean truthValue = (Boolean) clauseTemplate.get("truthValue");
+        if (truthValue != null && truthValue) {
+          trueKeys.add(key);
+        }
+      }
+
+      // Step 5: Determine difficulty
+      QuestionDifficulty difficulty = determineDifficulty(null, params);
+
+      // Step 6: Build metadata for grading
+      Map<String, Object> gradingMetadata = new HashMap<>();
+      gradingMetadata.put("tfClauses", tfClauses);
+
+      // Step 7: Build correct answer (comma-separated true keys)
+      String correctAnswer = String.join(",", trueKeys);
+      if (correctAnswer.isEmpty()) {
+        correctAnswer = "A";  // Default if no true clauses
+      }
+
+      // Return generated question
+      return GeneratedQuestionSample.builder()
+          .questionText(questionStem)
+          .options(clauses)
+          .correctAnswer(correctAnswer)
+          .explanation("Xét các mệnh đề: " + String.join(", ", trueKeys.isEmpty() ? List.of("Không có mệnh đề nào đúng") : trueKeys))
+          .solutionSteps("Phân tích từng mệnh đề dựa trên các tính chất toán học")
+          .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
+          .calculatedDifficulty(difficulty)
+          .usedParameters(params)
+          .answerCalculation("Các mệnh đề đúng: " + (trueKeys.isEmpty() ? "Không có" : String.join(", ", trueKeys)))
+          .generationMetadata(gradingMetadata)
+          .build();
+
+    } catch (Exception e) {
+      log.error("Failed to generate TRUE_FALSE question: {}", e.getMessage(), e);
+      return GeneratedQuestionSample.builder()
+          .questionText("Error generating question: " + e.getMessage())
+          .options(Map.of("A", "Error", "B", "Error", "C", "Error", "D", "Error"))
+          .correctAnswer("A")
+          .explanation("Failed to generate question")
+          .solutionSteps("Error: " + e.getMessage())
+          .calculatedDifficulty(QuestionDifficulty.MEDIUM)
+          .usedParameters(new HashMap<>())
+          .build();
+    }
+  }
+
+  /**
+   * Generate default clause templates if none are provided
+   */
+  private List<Map<String, Object>> generateDefaultClauseTemplates() {
+    List<Map<String, Object>> clauses = new ArrayList<>();
+    clauses.add(Map.of(
+        "text", "Mệnh đề A",
+        "truthValue", true,
+        "chapterId", "default",
+        "cognitiveLevel", "THONG_HIEU"
+    ));
+    clauses.add(Map.of(
+        "text", "Mệnh đề B",
+        "truthValue", false,
+        "chapterId", "default",
+        "cognitiveLevel", "THONG_HIEU"
+    ));
+    clauses.add(Map.of(
+        "text", "Mệnh đề C",
+        "truthValue", true,
+        "chapterId", "default",
+        "cognitiveLevel", "VAN_DUNG"
+    ));
+    clauses.add(Map.of(
+        "text", "Mệnh đề D",
+        "truthValue", false,
+        "chapterId", "default",
+        "cognitiveLevel", "VAN_DUNG"
+    ));
+    return clauses;
   }
 
       @Override
