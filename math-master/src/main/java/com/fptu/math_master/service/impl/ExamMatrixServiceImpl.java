@@ -51,6 +51,7 @@ import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.MatrixStatus;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.enums.ExamPart;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.AssessmentQuestionRepository;
@@ -1468,9 +1469,26 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       return;
     }
 
+    // Load matrix to get numberOfParts for validation
+    ExamMatrix matrix = loadMatrixOrThrow(matrixId);
+
     bankMappingRepository.deleteByExamMatrixIdAndMatrixRowId(matrixId, row.getId());
 
     for (MatrixCellRequest cell : cells) {
+      // Phase 5: Validate partNumber is provided and within range
+      if (cell.getPartNumber() == null) {
+        throw new AppException(ErrorCode.INVALID_REQUEST);
+      }
+
+      if (cell.getPartNumber() < 1 || cell.getPartNumber() > 3) {
+        throw new AppException(ErrorCode.INVALID_REQUEST);
+      }
+
+      // Phase 5: Validate partNumber does not exceed matrix numberOfParts
+      if (cell.getPartNumber() > matrix.getNumberOfParts()) {
+        throw new AppException(ErrorCode.INVALID_REQUEST);
+      }
+
       int questionCount = cell.getQuestionCount() != null ? Math.max(0, cell.getQuestionCount()) : 0;
       if (questionCount == 0) {
         continue;
@@ -1481,6 +1499,9 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               ? cell.getPointsPerQuestion()
               : (defaultPointsPerQuestion != null ? defaultPointsPerQuestion : BigDecimal.ONE);
 
+      // Phase 5: Derive questionType from partNumber using ExamPart enum
+      QuestionType questionType = ExamPart.typeForPart(cell.getPartNumber());
+
       // Phase 3: No longer store questionBankId in ExamMatrixBankMapping
       // The bank comes from ExamMatrix.questionBankId
       ExamMatrixBankMapping mapping =
@@ -1490,6 +1511,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               .questionCount(questionCount)
               .cognitiveLevel(cell.getCognitiveLevel())
               .pointsPerQuestion(pointsPerQuestion)
+              .questionType(questionType)  // Phase 5: Set derived question type
               .build();
       bankMappingRepository.save(mapping);
     }
