@@ -93,6 +93,27 @@ public class Answer extends BaseEntity {
   private String feedback;
 
   /**
+   * scoring_detail - Per-clause scoring breakdown for TRUE_FALSE questions
+   * NULL for MCQ/SA questions (backward compatible)
+   * Structure: {
+   *   "questionType": "TRUE_FALSE",
+   *   "clauseResults": {
+   *     "A": {"expected": true, "actual": true, "correct": true},
+   *     "B": {"expected": false, "actual": false, "correct": true},
+   *     "C": {"expected": true, "actual": true, "correct": true},
+   *     "D": {"expected": false, "actual": true, "correct": false}
+   *   },
+   *   "correctCount": 3,
+   *   "totalClauses": 4,
+   *   "scoringRule": "VIET_THPT",
+   *   "earnedRatio": 0.25
+   * }
+   */
+  @Type(JsonBinaryType.class)
+  @Column(name = "scoring_detail", columnDefinition = "jsonb")
+  private Map<String, Object> scoringDetail;
+
+  /**
    * Relationships
    * - Many-to-One with Submission
    * - Many-to-One with Question

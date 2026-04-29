@@ -22,4 +22,5 @@ public class GeneratedQuestionSample {
   private QuestionDifficulty calculatedDifficulty;
   private Map<String, Object> usedParameters;
   private String answerCalculation;
+  private Map<String, Object> generationMetadata;  // NEW: For SA/TF metadata (validation mode, clause info, etc.)
 }
