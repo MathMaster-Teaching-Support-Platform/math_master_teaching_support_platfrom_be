@@ -350,7 +350,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   @Transactional
   public SlideTemplateResponse uploadTemplate(
       String name, String description, MultipartFile file, MultipartFile previewImage) {
-    validateTeacherRole();
+    validateTeacherOrAdminRole();
     validatePptxFile(file);
     validatePreviewImage(previewImage);
     ensureTemplateBucketExists();
@@ -411,7 +411,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       Boolean active,
       MultipartFile file,
       MultipartFile previewImage) {
-    validateTeacherRole();
+    validateTeacherOrAdminRole();
     validatePreviewImage(previewImage);
 
     SlideTemplate template =
@@ -487,8 +487,33 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   @Override
   @Transactional(readOnly = true)
+  public SlideTemplateResponse getTemplateById(UUID templateId) {
+    validateTeacherOrAdminRole();
+    SlideTemplate template =
+        slideTemplateRepository
+            .findByIdAndNotDeleted(templateId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+    return toTemplateResponse(template);
+  }
+
+  @Override
+  @Transactional
+  public void deleteTemplate(UUID templateId) {
+    validateAdminRole();
+    SlideTemplate template =
+        slideTemplateRepository
+            .findByIdAndNotDeleted(templateId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+    template.setDeletedAt(Instant.now());
+    template.setDeletedBy(SecurityUtils.getCurrentUserId());
+    slideTemplateRepository.save(template);
+    log.info("Admin soft-deleted slide template id={}", templateId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public BinaryFileData downloadTemplate(UUID templateId) {
-    validateTeacherRole();
+    validateTeacherOrAdminRole();
 
     SlideTemplate template =
         slideTemplateRepository
@@ -502,7 +527,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   @Override
   @Transactional(readOnly = true)
   public BinaryFileData downloadTemplatePreviewImage(UUID templateId) {
-    validateTeacherRole();
+    validateTeacherOrAdminRole();
 
     SlideTemplate template =
         slideTemplateRepository
@@ -2434,6 +2459,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         .contentType(template.getContentType())
         .previewImage(buildPreviewImagePath(template))
         .active(Boolean.TRUE.equals(template.getIsActive()))
+        .uploadedBy(template.getUploadedBy())
         .createdAt(template.getCreatedAt())
         .updatedAt(template.getUpdatedAt())
         .build();
@@ -2476,6 +2502,20 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private void validateTeacherRole() {
     if (!SecurityUtils.hasRole(PredefinedRole.TEACHER_ROLE)) {
       throw new AppException(ErrorCode.NOT_A_TEACHER);
+    }
+  }
+
+  private void validateTeacherOrAdminRole() {
+    boolean isTeacher = SecurityUtils.hasRole(PredefinedRole.TEACHER_ROLE);
+    boolean isAdmin = SecurityUtils.hasRole(PredefinedRole.ADMIN_ROLE);
+    if (!isTeacher && !isAdmin) {
+      throw new AppException(ErrorCode.NOT_A_TEACHER);
+    }
+  }
+
+  private void validateAdminRole() {
+    if (!SecurityUtils.hasRole(PredefinedRole.ADMIN_ROLE)) {
+      throw new AppException(ErrorCode.UNAUTHORIZED);
     }
   }
 

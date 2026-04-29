@@ -20,6 +20,7 @@ public class SlideTemplateResponse {
   private String contentType;
   private String previewImage;
   private boolean active;
+  private UUID uploadedBy;
   private Instant createdAt;
   private Instant updatedAt;
 }
