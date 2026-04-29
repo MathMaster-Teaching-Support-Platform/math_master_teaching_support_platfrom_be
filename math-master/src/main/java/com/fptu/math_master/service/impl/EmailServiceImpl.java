@@ -16,6 +16,7 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +25,9 @@ public class EmailServiceImpl implements EmailService {
 
   private final JavaMailSender mailSender;
   private final TemplateEngine templateEngine;
+
+  @Value("${app.frontend-url:http://localhost:3000}")
+  private String frontendUrl;
 
   @Override
   @Async
@@ -69,7 +73,7 @@ public class EmailServiceImpl implements EmailService {
   public void sendTeacherApprovalEmail(String to, String teacherName) {
     Map<String, Object> variables = new HashMap<>();
     variables.put("name", teacherName);
-    variables.put("dashboardUrl", "http://localhost:3000/teacher/dashboard");
+    variables.put("dashboardUrl", frontendUrl + "/teacher/dashboard");
     
     sendEmail(to, "Chúc mừng! Hồ sơ giảng viên của bạn đã được phê duyệt 🎉", "teacher-approved", variables);
   }
@@ -79,7 +83,7 @@ public class EmailServiceImpl implements EmailService {
     Map<String, Object> variables = new HashMap<>();
     variables.put("name", teacherName);
     variables.put("reason", reason != null ? reason : "Hồ sơ chưa đạt yêu cầu xác minh.");
-    variables.put("retryUrl", "http://localhost:3000/profile");
+    variables.put("retryUrl", frontendUrl + "/profile");
 
     sendEmail(to, "Thông báo về hồ sơ giảng viên của bạn - MathMaster", "teacher-rejected", variables);
   }

@@ -4,8 +4,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
 
-import org.hibernate.annotations.Nationalized;
-
 import com.fptu.math_master.enums.Gender;
 import com.fptu.math_master.enums.Status;
 
@@ -63,7 +61,6 @@ public class User extends BaseEntity {
    * email
    */
   @Size(max = 255)
-  @Nationalized
   @Column(name = "email", length = 255)
   private String email;
 

@@ -140,6 +140,19 @@ public class WithdrawalServiceImpl implements WithdrawalService {
       throw new AppException(ErrorCode.INVALID_OTP);
     }
 
+    // Deduct balance immediately when OTP verified — lock funds while request is pending
+    Wallet wallet = walletRepository.findByUserIdWithLock(userId)
+        .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
+    if (wallet.getBalance().compareTo(wr.getAmount()) < 0) {
+      throw new AppException(ErrorCode.INSUFFICIENT_BALANCE);
+    }
+    int updated = walletRepository.decrementBalance(wallet.getId(), wr.getAmount());
+    if (updated == 0) {
+      throw new AppException(ErrorCode.INSUFFICIENT_BALANCE);
+    }
+    log.info("Balance {} deducted from wallet {} upon OTP verify for withdrawal {}",
+        wr.getAmount(), wallet.getId(), wr.getId());
+
     // Transition to PENDING_ADMIN — clear OTP fields
     wr.setStatus(WithdrawalStatus.PENDING_ADMIN);
     wr.setOtpCode(null);
@@ -178,6 +191,13 @@ public class WithdrawalServiceImpl implements WithdrawalService {
       throw new AppException(ErrorCode.INVALID_WITHDRAWAL_STATUS);
     }
 
+    // Refund balance if already deducted (i.e. OTP was verified → PENDING_ADMIN)
+    if (wr.getStatus() == WithdrawalStatus.PENDING_ADMIN) {
+      walletRepository.incrementBalance(wr.getWallet().getId(), wr.getAmount());
+      log.info("Refunded {} to wallet {} on cancellation of withdrawal {}",
+          wr.getAmount(), wr.getWallet().getId(), wr.getId());
+    }
+
     wr.setStatus(WithdrawalStatus.CANCELLED);
     wr.setOtpCode(null);
     wr.setOtpExpiry(null);
@@ -190,10 +210,16 @@ public class WithdrawalServiceImpl implements WithdrawalService {
   // ─── Admin: List Requests ─────────────────────────────────────────────────
 
   @Override
+  @org.springframework.transaction.annotation.Transactional(readOnly = true)
   public Page<AdminWithdrawalRequestResponse> getAdminRequests(
       WithdrawalStatus status, String search, Pageable pageable) {
     String normalizedSearch = (search != null && !search.isBlank()) ? search.trim() : null;
-    return withdrawalRequestRepository.findAllForAdmin(status, normalizedSearch, pageable)
+    String statusStr = (status != null) ? status.name() : null;
+    // Native query already has ORDER BY wr.created_at DESC; strip the Pageable sort to prevent
+    // Spring Data JPA from appending camelCase column names (e.g. "wr.createdAt") that PostgreSQL rejects.
+    Pageable unsorted = org.springframework.data.domain.PageRequest.of(
+        pageable.getPageNumber(), pageable.getPageSize());
+    return withdrawalRequestRepository.findAllForAdmin(statusStr, normalizedSearch, unsorted)
         .map(this::toAdminResponse);
   }
 
@@ -215,19 +241,9 @@ public class WithdrawalServiceImpl implements WithdrawalService {
     // Upload proof image (reuse UploadService — invariant #6)
     String proofImageUrl = uploadService.uploadFile(proofImage, "withdrawal-proofs");
 
-    // Double-check balance before deducting (guards against race conditions)
-    Wallet wallet = walletRepository.findByUserIdWithLock(wr.getUser().getId())
+    // Balance was already deducted at OTP verify time — just get wallet for transaction record
+    Wallet wallet = walletRepository.findByUserId(wr.getUser().getId())
         .orElseThrow(() -> new AppException(ErrorCode.WALLET_NOT_FOUND));
-
-    if (wallet.getBalance().compareTo(wr.getAmount()) < 0) {
-      throw new AppException(ErrorCode.INSUFFICIENT_BALANCE);
-    }
-
-    // Atomically debit the wallet (SQL-level guard)
-    int updated = walletRepository.decrementBalance(wallet.getId(), wr.getAmount());
-    if (updated == 0) {
-      throw new AppException(ErrorCode.INSUFFICIENT_BALANCE);
-    }
 
     // Create the withdrawal Transaction (invariant #5: exactly one per request)
     Transaction transaction = Transaction.builder()
@@ -280,6 +296,11 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         && wr.getStatus() != WithdrawalStatus.PROCESSING) {
       throw new AppException(ErrorCode.INVALID_WITHDRAWAL_STATUS);
     }
+
+    // Refund balance — was already deducted at OTP verify time
+    walletRepository.incrementBalance(wr.getWallet().getId(), wr.getAmount());
+    log.info("Refunded {} to wallet {} on rejection of withdrawal {}",
+        wr.getAmount(), wr.getWallet().getId(), wr.getId());
 
     wr.setStatus(WithdrawalStatus.REJECTED);
     wr.setAdminNote(request.getReason());
