@@ -45,6 +45,10 @@ public interface LessonSlideService {
 
   List<SlideTemplateResponse> getTemplates(boolean activeOnly);
 
+  SlideTemplateResponse getTemplateById(UUID templateId);
+
+  void deleteTemplate(UUID templateId);
+
   BinaryFileData downloadTemplate(UUID templateId);
 
   BinaryFileData downloadTemplatePreviewImage(UUID templateId);
