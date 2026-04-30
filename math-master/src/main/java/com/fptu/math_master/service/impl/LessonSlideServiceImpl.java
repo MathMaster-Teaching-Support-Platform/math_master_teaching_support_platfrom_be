@@ -538,7 +538,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
 
     if (template.getPreviewImageObjectKey() == null || template.getPreviewImageObjectKey().isBlank()) {
-      throw new AppException(ErrorCode.TEMPLATE_NOT_USABLE);
+      throw new AppException(ErrorCode.TEMPLATE_PREVIEW_IMAGE_NOT_FOUND);
     }
 
     byte[] content = readObject(template.getBucketName(), template.getPreviewImageObjectKey());
