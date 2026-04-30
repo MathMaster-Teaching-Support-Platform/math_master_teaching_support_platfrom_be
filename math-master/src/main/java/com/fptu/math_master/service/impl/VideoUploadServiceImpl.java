@@ -68,6 +68,10 @@ public class VideoUploadServiceImpl implements VideoUploadService {
   EnrollmentRepository enrollmentRepository;
 
   private static final int PRESIGNED_EXPIRY_MINUTES = 60;
+  private static final long MAX_VIDEO_SIZE = 2L * 1024 * 1024 * 1024; // 2GB
+  private static final java.util.Set<String> ALLOWED_EXTENSIONS = java.util.Set.of(".mp4", ".mkv", ".mov");
+  private static final java.util.Set<String> ALLOWED_MIME_TYPES = java.util.Set.of("video/mp4", "video/x-matroska",
+      "video/quicktime");
 
   // ─── AWS SDK v2 client builders (MinIO is S3-compatible) ─────────────────
 
@@ -145,6 +149,30 @@ public class VideoUploadServiceImpl implements VideoUploadService {
   @Override
   public InitiateUploadResponse initiateUpload(UUID courseId, InitiateUploadRequest request) {
     findCourseAndVerifyOwner(courseId);
+
+    // 1. Validate File Size
+    if (request.getFileSize() > MAX_VIDEO_SIZE) {
+      String message = ErrorCode.RESOURCE_FILE_TOO_LARGE.getMessage()
+          .replace("{limit}", com.fptu.math_master.util.FormatUtils.formatFileSize(MAX_VIDEO_SIZE))
+          .replace("{actual}", com.fptu.math_master.util.FormatUtils.formatFileSize(request.getFileSize()));
+      throw new AppException(ErrorCode.RESOURCE_FILE_TOO_LARGE, message);
+    }
+
+    // 2. Validate Extension
+    String fileName = request.getFileName();
+    int dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex <= 0) {
+      throw new AppException(ErrorCode.INVALID_FILE_FORMAT);
+    }
+    String ext = fileName.substring(dotIndex).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.contains(ext)) {
+      throw new AppException(ErrorCode.INVALID_FILE_FORMAT);
+    }
+
+    // 3. Validate MIME Type
+    if (!ALLOWED_MIME_TYPES.contains(request.getContentType().toLowerCase())) {
+      throw new AppException(ErrorCode.INVALID_FILE_FORMAT);
+    }
 
     String bucket = minioProperties.getCourseVideosBucket();
     ensureBucketExists(bucket);
@@ -307,22 +335,34 @@ public class VideoUploadServiceImpl implements VideoUploadService {
       throw new RuntimeException("Failed to complete video upload", e);
     }
 
-    CourseLesson courseLesson = CourseLesson.builder()
-        .courseId(courseId)
-        .lessonId(request.getLessonId())
-        .sectionId(request.getSectionId())
-        .customTitle(request.getCustomTitle())
-        .customDescription(request.getCustomDescription())
-        .videoUrl(request.getObjectKey()) // store object key; serve via presigned GET URL
-        .videoTitle(request.getVideoTitle())
-        .orderIndex(request.getOrderIndex())
-        .isFreePreview(request.isFreePreview())
-        .durationSeconds(request.getDurationSeconds())
-        .materials(request.getMaterials())
-        .build();
+    // ─── IDEMPOTENCY CHECK: Find existing or create new ──────────────────────
+    CourseLesson courseLesson;
+    if (course.getProvider() == com.fptu.math_master.enums.CourseProvider.MINISTRY) {
+      courseLesson = courseLessonRepository
+          .findByCourseIdAndLessonIdAndDeletedAtIsNull(courseId, request.getLessonId())
+          .orElse(new CourseLesson());
+    } else {
+      courseLesson = courseLessonRepository
+          .findByCourseIdAndSectionIdAndCustomTitleAndDeletedAtIsNull(
+              courseId, request.getSectionId(), request.getCustomTitle())
+          .orElse(new CourseLesson());
+    }
+
+    // Update fields
+    courseLesson.setCourseId(courseId);
+    courseLesson.setLessonId(request.getLessonId());
+    courseLesson.setSectionId(request.getSectionId());
+    courseLesson.setCustomTitle(request.getCustomTitle());
+    courseLesson.setCustomDescription(request.getCustomDescription());
+    courseLesson.setVideoUrl(request.getObjectKey());
+    courseLesson.setVideoTitle(request.getVideoTitle());
+    courseLesson.setOrderIndex(request.getOrderIndex());
+    courseLesson.setFreePreview(request.isFreePreview());
+    courseLesson.setDurationSeconds(request.getDurationSeconds());
+    courseLesson.setMaterials(request.getMaterials());
 
     courseLesson = courseLessonRepository.save(courseLesson);
-    log.info("CourseLesson saved: {}", courseLesson.getId());
+    log.info("CourseLesson saved (idempotent): {}", courseLesson.getId());
 
     return CourseLessonResponse.builder()
         .id(courseLesson.getId())
@@ -355,7 +395,8 @@ public class VideoUploadServiceImpl implements VideoUploadService {
     }
 
     // Udemy-style access: only explicit free-preview lessons are publicly viewable.
-    // All other lessons require active enrollment, teacher ownership, or admin role.
+    // All other lessons require active enrollment, teacher ownership, or admin
+    // role.
     if (!cl.isFreePreview()) {
       boolean enrolled = enrollmentRepository
           .findByStudentIdAndCourseIdAndDeletedAtIsNull(requesterId, courseId)

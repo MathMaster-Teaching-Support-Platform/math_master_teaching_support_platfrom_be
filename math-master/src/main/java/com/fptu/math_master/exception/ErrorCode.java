@@ -237,7 +237,7 @@ public enum ErrorCode {
   TEACHING_RESOURCE_NOT_FOUND(1131, "Teaching resource not found", HttpStatus.NOT_FOUND),
   TEACHING_RESOURCE_ACCESS_DENIED(
       1132, "You do not have permission to access this teaching resource", HttpStatus.FORBIDDEN),
-  RESOURCE_FILE_TOO_LARGE(1133, "Resource file exceeds the allowed size", HttpStatus.BAD_REQUEST),
+  RESOURCE_FILE_TOO_LARGE(1133, "Resource file exceeds the allowed size of {limit}. (Uploaded: {actual})", HttpStatus.BAD_REQUEST),
   CHAT_SESSION_NOT_FOUND(1134, "Chat session not found", HttpStatus.NOT_FOUND),
   CHAT_SESSION_ACCESS_DENIED(
       1135, "You do not have permission to access this chat session", HttpStatus.FORBIDDEN),
