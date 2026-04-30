@@ -37,4 +37,9 @@ public interface CourseLessonRepository extends JpaRepository<CourseLesson, UUID
   List<Object[]> countByCourseIdsAndNotDeleted(@Param("courseIds") List<UUID> courseIds);
 
   boolean existsByIdAndCourseIdAndDeletedAtIsNull(UUID id, UUID courseId);
+
+  Optional<CourseLesson> findByCourseIdAndLessonIdAndDeletedAtIsNull(UUID courseId, UUID lessonId);
+
+  Optional<CourseLesson> findByCourseIdAndSectionIdAndCustomTitleAndDeletedAtIsNull(
+      UUID courseId, UUID sectionId, String customTitle);
 }

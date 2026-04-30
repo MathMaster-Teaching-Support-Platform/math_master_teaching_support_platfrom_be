@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @ControllerAdvice
 @Slf4j
@@ -32,6 +33,15 @@ public class GlobalExceptionHandler {
   void handleAsyncRequestNotUsableException(AsyncRequestNotUsableException exception) {
     // Client closed the connection (timeout/navigation/cancel). Not a server-side business error.
     log.warn("Client disconnected before response completed: {}", exception.getMessage());
+  }
+
+  @ExceptionHandler(value = NoResourceFoundException.class)
+  ResponseEntity<ApiResponse<Void>> handleNoResourceFoundException(NoResourceFoundException exception) {
+    log.warn("No route found: {}", exception.getMessage());
+    ApiResponse<Void> apiResponse = new ApiResponse<>();
+    apiResponse.setCode(404);
+    apiResponse.setMessage("Resource not found: " + exception.getResourcePath());
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(apiResponse);
   }
 
   /**
@@ -67,7 +77,7 @@ public class GlobalExceptionHandler {
     ApiResponse<Void> apiResponse = new ApiResponse<>();
 
     apiResponse.setCode(errorCode.getCode());
-    apiResponse.setMessage(errorCode.getMessage());
+    apiResponse.setMessage(exception.getMessage());
 
     return ResponseEntity.status(errorCode.getStatusCode()).body(apiResponse);
   }

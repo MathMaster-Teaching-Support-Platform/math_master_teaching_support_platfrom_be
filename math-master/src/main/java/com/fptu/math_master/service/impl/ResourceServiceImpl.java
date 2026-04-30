@@ -86,7 +86,10 @@ public class ResourceServiceImpl implements ResourceService {
       throw new AppException(ErrorCode.INVALID_KEY);
     }
     if (file.getSize() > MAX_FILE_SIZE_BYTES) {
-      throw new AppException(ErrorCode.RESOURCE_FILE_TOO_LARGE);
+      String message = ErrorCode.RESOURCE_FILE_TOO_LARGE.getMessage()
+          .replace("{limit}", com.fptu.math_master.util.FormatUtils.formatFileSize(MAX_FILE_SIZE_BYTES))
+          .replace("{actual}", com.fptu.math_master.util.FormatUtils.formatFileSize(file.getSize()));
+      throw new AppException(ErrorCode.RESOURCE_FILE_TOO_LARGE, message);
     }
 
     String fileName = file.getOriginalFilename();
