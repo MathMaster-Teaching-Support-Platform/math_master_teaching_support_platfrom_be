@@ -73,12 +73,15 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.sl.usermodel.PaintStyle;
 import org.apache.poi.sl.usermodel.PictureData;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFPictureData;
 import org.apache.poi.xslf.usermodel.XSLFPictureShape;
 import org.apache.poi.xslf.usermodel.XSLFShape;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
+import org.apache.poi.xslf.usermodel.XSLFTextParagraph;
+import org.apache.poi.xslf.usermodel.XSLFTextRun;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -1461,8 +1464,48 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       sanitizeDisplayText(
         contentWithMarkers.replaceAll("\\[\\[LATEX_\\d+\\]\\]", LATEX_INLINE_PLACEHOLDER));
 
+    // Capture template formatting from the first run before clearing
+    Double savedFontSize = null;
+    Color savedFontColor = null;
+    Boolean savedBold = null;
+    Boolean savedItalic = null;
+    String savedFontFamily = null;
+    List<XSLFTextParagraph> existingParagraphs = textShape.getTextParagraphs();
+    if (!existingParagraphs.isEmpty()) {
+      List<XSLFTextRun> runs = existingParagraphs.get(0).getTextRuns();
+      if (!runs.isEmpty()) {
+        XSLFTextRun firstRun = runs.get(0);
+        savedFontSize = firstRun.getFontSize();
+        savedBold = firstRun.isBold();
+        savedItalic = firstRun.isItalic();
+        savedFontFamily = firstRun.getFontFamily();
+        PaintStyle paint = firstRun.getFontColor();
+        if (paint instanceof PaintStyle.SolidPaint solidPaint) {
+          savedFontColor = solidPaint.getSolidColor().getColor();
+        }
+      }
+    }
+
     textShape.clearText();
     textShape.setText(displayText);
+
+    // Restore template formatting to all new runs
+    final Double fSize = savedFontSize;
+    final Color fColor = savedFontColor;
+    final Boolean fBold = savedBold;
+    final Boolean fItalic = savedItalic;
+    final String fFamily = savedFontFamily;
+    if (fSize != null || fColor != null || fBold != null || fItalic != null || fFamily != null) {
+      for (XSLFTextParagraph para : textShape.getTextParagraphs()) {
+        for (XSLFTextRun run : para.getTextRuns()) {
+          if (fSize != null) run.setFontSize(fSize);
+          if (fColor != null) run.setFontColor(fColor);
+          if (fBold != null) run.setBold(fBold);
+          if (fItalic != null) run.setItalic(fItalic);
+          if (fFamily != null) run.setFontFamily(fFamily);
+        }
+      }
+    }
 
     if (latexTokens.isEmpty()) {
       return;
