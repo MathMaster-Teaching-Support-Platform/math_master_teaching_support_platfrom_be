@@ -19,4 +19,7 @@ public class LessonProgressItem {
   private Instant completedAt;
   /** Last known playback position in seconds; 0 means never watched. */
   private int watchedSeconds;
+
+  /** Derived progress percentage (0-100). */
+  private double progressPercent;
 }
