@@ -111,6 +111,14 @@ public class RedisConfig {
     StreamMessageListenerContainer.StreamMessageListenerContainerOptions<String, MapRecord<String, String, String>> options =
         StreamMessageListenerContainer.StreamMessageListenerContainerOptions.builder()
             .pollTimeout(Duration.ofSeconds(1))
+            .errorHandler(throwable -> {
+                Throwable cause = throwable.getCause() != null ? throwable.getCause() : throwable;
+                if (cause.getMessage() != null && cause.getMessage().contains("Connection closed")) {
+                    log.warn("Redis Stream: connection temporarily lost, will retry automatically: {}", cause.getMessage());
+                } else {
+                    log.error("Redis Stream processing error: ", throwable);
+                }
+            })
             .build();
 
     StreamMessageListenerContainer<String, MapRecord<String, String, String>> container =
