@@ -114,6 +114,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .isReusable(request.getIsReusable() != null ? request.getIsReusable() : false)
             .totalQuestionsTarget(request.getTotalQuestionsTarget())
             .totalPointsTarget(request.getTotalPointsTarget())
+            .questionBankId(request.getQuestionBankId())  // ✅ NEW: Optional bank assignment
+            .numberOfParts(request.getNumberOfParts() != null ? request.getNumberOfParts() : 1)  // ✅ NEW: Default to 1
             .status(MatrixStatus.DRAFT)
             .build();
 
@@ -142,6 +144,12 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
     if (request.getTotalPointsTarget() != null) {
       matrix.setTotalPointsTarget(request.getTotalPointsTarget());
+    }
+    if (request.getQuestionBankId() != null) {  // ✅ NEW: Allow updating bank
+      matrix.setQuestionBankId(request.getQuestionBankId());
+    }
+    if (request.getNumberOfParts() != null) {  // ✅ NEW: Allow updating number of parts
+      matrix.setNumberOfParts(request.getNumberOfParts());
     }
 
     matrix = examMatrixRepository.save(matrix);
