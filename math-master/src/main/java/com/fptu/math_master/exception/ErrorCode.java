@@ -370,7 +370,9 @@ public enum ErrorCode {
   OTP_EXPIRED(1210, "OTP has expired", HttpStatus.BAD_REQUEST),
   INVALID_OTP(1211, "Invalid OTP code", HttpStatus.BAD_REQUEST),
   WITHDRAWAL_AMOUNT_TOO_SMALL(
-      1212, "Withdrawal amount must be at least 10,000 VND", HttpStatus.BAD_REQUEST);
+      1212, "Withdrawal amount must be at least 10,000 VND", HttpStatus.BAD_REQUEST),
+  TEMPLATE_PREVIEW_IMAGE_NOT_FOUND(
+      1213, "This template does not have a preview image", HttpStatus.NOT_FOUND);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
