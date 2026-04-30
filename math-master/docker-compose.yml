@@ -199,8 +199,8 @@ networks:
     driver: bridge
 
 volumes:
-  # postgres_data:
-  #   driver: local
+  postgres_data:
+    driver: local
   redis_data:
     driver: local
   minio_data:
