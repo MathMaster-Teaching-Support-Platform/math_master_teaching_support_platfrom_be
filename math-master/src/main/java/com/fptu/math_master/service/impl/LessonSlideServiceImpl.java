@@ -364,12 +364,13 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     String previewImageContentType = null;
 
     try {
+      byte[] pptxBytes = file.getBytes();
       minioClient.putObject(
           PutObjectArgs.builder()
               .bucket(minioProperties.getTemplateBucket())
               .object(objectKey)
               .contentType(file.getContentType() == null ? PPTX_MIME : file.getContentType())
-              .stream(file.getInputStream(), file.getSize(), -1)
+              .stream(new ByteArrayInputStream(pptxBytes), pptxBytes.length, -1)
               .build());
 
       if (previewImage != null && !previewImage.isEmpty()) {
@@ -382,7 +383,23 @@ public class LessonSlideServiceImpl implements LessonSlideService {
                 .contentType(previewImageContentType)
                 .stream(previewImage.getInputStream(), previewImage.getSize(), -1)
                 .build());
+      } else {
+        byte[] autoPreview = generateFirstSlidePreview(pptxBytes);
+        if (autoPreview != null && autoPreview.length > 0) {
+          previewImageObjectKey = buildPreviewImageObjectKey("preview.png");
+          previewImageContentType = PNG_MIME;
+          minioClient.putObject(
+              PutObjectArgs.builder()
+                  .bucket(minioProperties.getTemplateBucket())
+                  .object(previewImageObjectKey)
+                  .contentType(PNG_MIME)
+                  .stream(new ByteArrayInputStream(autoPreview), autoPreview.length, -1)
+                  .build());
+          log.info("Auto-generated preview image for template: {}", objectKey);
+        }
       }
+    } catch (AppException ex) {
+      throw ex;
     } catch (Exception ex) {
       log.error("Failed to upload template to minio", ex);
       throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
@@ -432,17 +449,19 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       template.setIsActive(active);
     }
 
+    byte[] newPptxBytes = null;
     if (file != null && !file.isEmpty()) {
       validatePptxFile(file);
       ensureTemplateBucketExists();
       String objectKey = buildObjectKey(file.getOriginalFilename());
       try {
+        newPptxBytes = file.getBytes();
         minioClient.putObject(
             PutObjectArgs.builder()
                 .bucket(minioProperties.getTemplateBucket())
                 .object(objectKey)
                 .contentType(file.getContentType() == null ? PPTX_MIME : file.getContentType())
-                .stream(file.getInputStream(), file.getSize(), -1)
+                .stream(new ByteArrayInputStream(newPptxBytes), newPptxBytes.length, -1)
                 .build());
       } catch (Exception ex) {
         log.error("Failed to update template file in minio", ex);
@@ -473,6 +492,28 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
       template.setPreviewImageObjectKey(previewObjectKey);
       template.setPreviewImageContentType(previewContentType);
+    } else if (newPptxBytes != null
+        && (template.getPreviewImageObjectKey() == null
+            || template.getPreviewImageObjectKey().isBlank())) {
+      // New PPTX uploaded but no preview — auto-generate from first slide
+      byte[] autoPreview = generateFirstSlidePreview(newPptxBytes);
+      if (autoPreview != null && autoPreview.length > 0) {
+        String autoPreviewKey = buildPreviewImageObjectKey("preview.png");
+        try {
+          minioClient.putObject(
+              PutObjectArgs.builder()
+                  .bucket(minioProperties.getTemplateBucket())
+                  .object(autoPreviewKey)
+                  .contentType(PNG_MIME)
+                  .stream(new ByteArrayInputStream(autoPreview), autoPreview.length, -1)
+                  .build());
+          template.setPreviewImageObjectKey(autoPreviewKey);
+          template.setPreviewImageContentType(PNG_MIME);
+          log.info("Auto-generated preview image on template update: {}", template.getId());
+        } catch (Exception ex) {
+          log.warn("Failed to auto-generate preview on update: {}", ex.getMessage());
+        }
+      }
     }
 
     return toTemplateResponse(slideTemplateRepository.save(template));
@@ -547,6 +588,42 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             ? PNG_MIME
             : template.getPreviewImageContentType();
     return new BinaryFileData(content, "template-preview-image", contentType);
+  }
+
+  @Override
+  @Transactional
+  public SlideTemplateResponse regenerateTemplatePreview(UUID templateId) {
+    validateAdminRole();
+
+    SlideTemplate template =
+        slideTemplateRepository
+            .findByIdAndNotDeleted(templateId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
+
+    byte[] pptxBytes = readObject(template.getBucketName(), template.getObjectKey());
+    byte[] previewBytes = generateFirstSlidePreview(pptxBytes);
+    if (previewBytes == null || previewBytes.length == 0) {
+      throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+    }
+
+    String previewKey = buildPreviewImageObjectKey("preview.png");
+    try {
+      ensureTemplateBucketExists();
+      minioClient.putObject(
+          PutObjectArgs.builder()
+              .bucket(minioProperties.getTemplateBucket())
+              .object(previewKey)
+              .contentType(PNG_MIME)
+              .stream(new ByteArrayInputStream(previewBytes), previewBytes.length, -1)
+              .build());
+    } catch (Exception ex) {
+      log.error("Failed to upload regenerated preview image", ex);
+      throw new AppException(ErrorCode.TEMPLATE_GENERATION_FAILED);
+    }
+
+    template.setPreviewImageObjectKey(previewKey);
+    template.setPreviewImageContentType(PNG_MIME);
+    return toTemplateResponse(slideTemplateRepository.save(template));
   }
 
   @Override
@@ -2350,6 +2427,38 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         + System.currentTimeMillis()
         + "-"
         + sanitized;
+  }
+
+  /**
+   * Renders the first slide of a PPTX as a PNG image.
+   * Returns null (and logs a warning) if rendering fails.
+   */
+  private byte[] generateFirstSlidePreview(byte[] pptxBytes) {
+    try (XMLSlideShow slideShow = new XMLSlideShow(new ByteArrayInputStream(pptxBytes))) {
+      List<XSLFSlide> slides = slideShow.getSlides();
+      if (slides.isEmpty()) {
+        return null;
+      }
+      Dimension pageSize = slideShow.getPageSize();
+      int width = Math.max(1, (int) pageSize.getWidth());
+      int height = Math.max(1, (int) pageSize.getHeight());
+
+      BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = image.createGraphics();
+      g.setPaint(Color.WHITE);
+      g.fill(new Rectangle2D.Float(0, 0, width, height));
+      g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+      g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+      slides.get(0).draw(g);
+      g.dispose();
+
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      ImageIO.write(image, "png", baos);
+      return baos.toByteArray();
+    } catch (Exception ex) {
+      log.warn("Failed to auto-generate preview from PPTX first slide: {}", ex.getMessage());
+      return null;
+    }
   }
 
   private String buildPreviewImageObjectKey(String originalFileName) {
