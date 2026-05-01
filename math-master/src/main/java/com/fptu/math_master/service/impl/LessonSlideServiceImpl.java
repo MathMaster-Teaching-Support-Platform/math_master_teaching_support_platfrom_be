@@ -1812,7 +1812,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private LessonSlideJsonItemResponse buildPreviewSlide(
       int slideNumber, String slideType, String heading, String content,
       LessonSlideOutputFormat outputFormat) {
-    String normalizedContent = truncateToWordLimit(normalizeAiGeneratedText(content), 80);
+    String normalizedContent = truncateToWordLimit(normalizeAiGeneratedText(content), 60);
     String normalizedHeading = normalizeAiGeneratedText(heading);
 
     String previewImageUrl = null;
