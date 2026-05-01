@@ -44,4 +44,23 @@ public interface ExamMatrixBankMappingRepository extends JpaRepository<ExamMatri
           + "WHERE m.examMatrixId = :matrixId AND m.matrixRowId = :rowId")
   void deleteByExamMatrixIdAndMatrixRowId(
       @Param("matrixId") UUID matrixId, @Param("rowId") UUID rowId);
+
+  // BE-5: Delete cells when reducing number of parts
+  @Modifying
+  @Query(
+      "DELETE FROM ExamMatrixBankMapping e "
+          + "WHERE e.examMatrixId = :matrixId AND e.partNumber > :partNumber")
+  void deleteByExamMatrixIdAndPartNumberGreaterThan(
+      @Param("matrixId") UUID matrixId, @Param("partNumber") Integer partNumber);
+
+  // BE-7: Find cell by unique key for upsert
+  @Query(
+      "SELECT m FROM ExamMatrixBankMapping m "
+          + "WHERE m.examMatrixId = :matrixId AND m.matrixRowId = :rowId "
+          + "AND m.partNumber = :partNumber AND m.cognitiveLevel = :cognitiveLevel")
+  Optional<ExamMatrixBankMapping> findByExamMatrixIdAndMatrixRowIdAndPartNumberAndCognitiveLevel(
+      @Param("matrixId") UUID matrixId,
+      @Param("rowId") UUID rowId,
+      @Param("partNumber") Integer partNumber,
+      @Param("cognitiveLevel") CognitiveLevel cognitiveLevel);
 }

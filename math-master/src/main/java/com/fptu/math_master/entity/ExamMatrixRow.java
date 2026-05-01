@@ -36,6 +36,7 @@ import org.hibernate.annotations.Nationalized;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+  @Deprecated
 @Getter
 @Setter
 @EqualsAndHashCode(callSuper = true)

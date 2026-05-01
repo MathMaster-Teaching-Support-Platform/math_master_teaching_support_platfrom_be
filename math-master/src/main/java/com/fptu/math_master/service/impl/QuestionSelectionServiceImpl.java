@@ -13,6 +13,7 @@ import com.fptu.math_master.repository.ExamMatrixRowRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.service.QuestionSelectionService;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -116,6 +117,11 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
 
     List<ExamMatrixBankMapping> mappings =
         examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(examMatrixId);
+
+    // BUG-4 FIX: Sort mappings by partNumber then cognitiveLevel to ensure correct question order
+    mappings.sort(Comparator
+        .comparingInt(ExamMatrixBankMapping::getPartNumber)
+        .thenComparing(m -> m.getCognitiveLevel().ordinal()));
 
     // Build a map of matrixRowId -> ExamMatrixRow for chapter lookup
     Map<UUID, ExamMatrixRow> rowById = new HashMap<>();

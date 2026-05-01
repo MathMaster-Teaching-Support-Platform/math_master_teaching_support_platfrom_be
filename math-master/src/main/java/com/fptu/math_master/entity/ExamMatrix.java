@@ -68,8 +68,9 @@ public class ExamMatrix extends BaseEntity {
    * The single question bank used as the source for all questions in this matrix.
    * In the new chapter-based architecture, one matrix maps to exactly one bank.
    * Questions are filtered by chapter within that bank.
+   * OPTIONAL: Matrix can be created without a bank and bank can be assigned later.
    */
-  @Column(name = "question_bank_id", nullable = false)
+  @Column(name = "question_bank_id")
   private UUID questionBankId;
 
   @Size(max = 255)

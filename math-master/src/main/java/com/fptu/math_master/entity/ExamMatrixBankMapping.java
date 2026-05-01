@@ -35,8 +35,8 @@ import lombok.Setter;
     name = "exam_matrix_bank_mappings",
     uniqueConstraints = {
       @UniqueConstraint(
-          name = "uq_exam_matrix_row_cognitive",
-          columnNames = {"exam_matrix_id", "matrix_row_id", "cognitive_level"})
+          name = "uq_exam_matrix_row_part_cognitive",
+          columnNames = {"exam_matrix_id", "matrix_row_id", "part_number", "cognitive_level"})
     },
     indexes = {
       @Index(name = "idx_exam_matrix_bank_mapping_matrix", columnList = "exam_matrix_id"),
@@ -63,11 +63,25 @@ public class ExamMatrixBankMapping extends BaseEntity {
   private CognitiveLevel cognitiveLevel;
 
   /**
+   * The exam part number (1, 2, or 3) that this cell belongs to.
+   * Part type is defined by exam_matrix_parts table, not hardcoded.
+   * Default: 1 for backward compatibility
+   */
+  @Column(name = "part_number", nullable = false)
+  @Builder.Default
+  private Integer partNumber = 1;
+
+  /**
+   * FK to exam_matrix_parts table.
+   * Defines the question type for this cell dynamically.
+   * Nullable for legacy data migration.
+   */
+  @Column(name = "part_id")
+  private UUID partId;
+
+  /**
    * The type of question this cell requires (MCQ, TRUE_FALSE, or SHORT_ANSWER).
-   * Derived from the exam part number:
-   * - Part I (1) → MULTIPLE_CHOICE
-   * - Part II (2) → TRUE_FALSE
-   * - Part III (3) → SHORT_ANSWER
+   * Denormalized from exam_matrix_parts for query performance.
    * Default: MULTIPLE_CHOICE for backward compatibility
    */
   @Column(name = "question_type", nullable = false)
@@ -82,6 +96,10 @@ public class ExamMatrixBankMapping extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "matrix_row_id", insertable = false, updatable = false)
   private ExamMatrixRow matrixRow;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "part_id", insertable = false, updatable = false)
+  private ExamMatrixPart examMatrixPart;
 
   @OneToMany(mappedBy = "examMatrixBankMapping", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<AssessmentQuestion> assessmentQuestions;

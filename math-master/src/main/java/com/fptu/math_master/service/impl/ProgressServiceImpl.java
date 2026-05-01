@@ -88,10 +88,23 @@ public class ProgressServiceImpl implements ProgressService {
             .watchedSeconds(0)
             .build());
 
+    var cl = courseLessonRepository.findByIdAndDeletedAtIsNull(courseLessonId).orElse(null);
+
     if (request.getWatchedSeconds() != null) {
       // Only allow increasing watched seconds, protect against reverting backward on seek
       progress.setWatchedSeconds(Math.max(progress.getWatchedSeconds(), request.getWatchedSeconds()));
       progress.setLastWatchedAt(Instant.now());
+
+      // Auto-complete at 90% if we have duration
+      if (cl != null && cl.getDurationSeconds() != null && cl.getDurationSeconds() > 0) {
+        double percent = (progress.getWatchedSeconds() * 100.0) / cl.getDurationSeconds();
+        if (percent >= 90.0 && !progress.isCompleted()) {
+          progress.setCompleted(true);
+          progress.setCompletedAt(Instant.now());
+          log.info("Lesson {} auto-marked complete (reached 90% progress) for enrollment {}", 
+              courseLessonId, enrollmentId);
+        }
+      }
     }
 
     if (Boolean.TRUE.equals(request.getIsCompleted()) && !progress.isCompleted()) {
@@ -101,7 +114,7 @@ public class ProgressServiceImpl implements ProgressService {
 
     progress = lessonProgressRepository.save(progress);
     log.info("Progress updated for lesson {} on enrollment {}", courseLessonId, enrollmentId);
-    return mapToItem(progress);
+    return mapToItem(cl, progress);
   }
 
   @Override
@@ -136,14 +149,7 @@ public class ProgressServiceImpl implements ProgressService {
                           .findByEnrollmentIdAndCourseLessonIdAndDeletedAtIsNull(
                               enrollmentId, cl.getId())
                           .orElse(null);
-                  return LessonProgressItem.builder()
-                      .courseLessonId(cl.getId())
-                      .videoTitle(cl.getVideoTitle())
-                      .orderIndex(cl.getOrderIndex())
-                      .isCompleted(lp != null && lp.isCompleted())
-                      .completedAt(lp != null ? lp.getCompletedAt() : null)
-                      .watchedSeconds(lp != null ? lp.getWatchedSeconds() : 0)
-                      .build();
+                  return mapToItem(cl, lp);
                 })
             .collect(Collectors.toList());
 
@@ -187,13 +193,28 @@ public class ProgressServiceImpl implements ProgressService {
 
   private LessonProgressItem mapToItem(LessonProgress lp) {
     var cl = courseLessonRepository.findByIdAndDeletedAtIsNull(lp.getCourseLessonId()).orElse(null);
+    return mapToItem(cl, lp);
+  }
+
+  private LessonProgressItem mapToItem(com.fptu.math_master.entity.CourseLesson cl, LessonProgress lp) {
+    int watched = lp != null ? lp.getWatchedSeconds() : 0;
+    boolean completed = lp != null && lp.isCompleted();
+    double percent = 0.0;
+
+    if (completed) {
+      percent = 100.0;
+    } else if (cl != null && cl.getDurationSeconds() != null && cl.getDurationSeconds() > 0) {
+      percent = Math.min(100.0, (watched * 100.0) / cl.getDurationSeconds());
+    }
+
     return LessonProgressItem.builder()
-        .courseLessonId(lp.getCourseLessonId())
+        .courseLessonId(cl != null ? cl.getId() : (lp != null ? lp.getCourseLessonId() : null))
         .videoTitle(cl != null ? cl.getVideoTitle() : null)
         .orderIndex(cl != null ? cl.getOrderIndex() : null)
-        .isCompleted(lp.isCompleted())
-        .completedAt(lp.getCompletedAt())
-        .watchedSeconds(lp.getWatchedSeconds())
+        .isCompleted(completed)
+        .completedAt(lp != null ? lp.getCompletedAt() : null)
+        .watchedSeconds(watched)
+        .progressPercent(percent)
         .build();
   }
 }

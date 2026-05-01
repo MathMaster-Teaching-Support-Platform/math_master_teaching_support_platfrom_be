@@ -78,6 +78,7 @@ public class AssessmentServiceImpl implements AssessmentService {
   ExamMatrixRepository examMatrixRepository;
   ExamMatrixBankMappingRepository examMatrixBankMappingRepository;
   ExamMatrixRowRepository examMatrixRowRepository;
+  ExamMatrixPartRepository examMatrixPartRepository;
   LessonRepository lessonRepository;
   ChapterRepository chapterRepository;
   SubjectRepository subjectRepository;
@@ -1278,8 +1279,18 @@ public class AssessmentServiceImpl implements AssessmentService {
       throw new AppException(ErrorCode.QUESTION_BANK_REQUIRED);
     }
 
-    List<UUID> bankIds = List.of(questionBankId);
     log.info("Using question bank {} from matrix {}", questionBankId, matrix.getId());
+
+    // BUG-3 FIX: Load matrix parts to respect question type configuration
+    // Note: This is a simplified implementation that doesn't use chapter-based selection
+    // For full chapter-aware generation, use generateAssessmentFromMatrix instead
+    List<com.fptu.math_master.entity.ExamMatrixPart> parts =
+        examMatrixPartRepository.findByExamMatrixIdOrderByPartNumber(matrix.getId());
+    
+    if (parts.isEmpty()) {
+      log.warn("Matrix {} has no parts configured, cannot generate assessment", matrix.getId());
+      throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
+    }
 
     // Calculate question count for each cognitive level
     Map<CognitiveLevel, Integer> questionCounts = new HashMap<>();
@@ -1295,9 +1306,12 @@ public class AssessmentServiceImpl implements AssessmentService {
       int requiredCount = (int) Math.round((percentage / 100.0) * request.getTotalQuestions());
       questionCounts.put(level, requiredCount);
 
-      // Check availability in question banks
-      long availableCount =
-          questionRepository.countApprovedByBanksAndCognitiveLevel(bankIds, level.name());
+      // BUG-3 FIX: Check availability across all parts (sum of all question types)
+      long availableCount = 0;
+      for (com.fptu.math_master.entity.ExamMatrixPart part : parts) {
+        availableCount += questionRepository.countApprovedByBankAndCognitiveAndType(
+            questionBankId, level.name(), part.getQuestionType().name());
+      }
 
       CognitiveLevelDistributionResponse distResponse =
           CognitiveLevelDistributionResponse.builder()
@@ -1359,45 +1373,69 @@ public class AssessmentServiceImpl implements AssessmentService {
     Assessment savedAssessment = assessmentRepository.save(assessment);
     log.info("Created assessment {} from matrix {}", savedAssessment.getId(), matrix.getId());
 
-    // Generate questions for each cognitive level
+    // BUG-3 FIX: Generate questions grouped by part → questionType, then by cognitiveLevel
     List<AssessmentQuestion> assessmentQuestions = new ArrayList<>();
     int orderIndex = 0;
     int totalGenerated = 0;
     BigDecimal totalPoints = BigDecimal.ZERO;
 
-    for (Map.Entry<CognitiveLevel, Integer> entry : questionCounts.entrySet()) {
-      CognitiveLevel level = entry.getKey();
-      int count = entry.getValue();
+    // Distribute questions across parts proportionally
+    int questionsPerPart = request.getTotalQuestions() / parts.size();
+    int remainder = request.getTotalQuestions() % parts.size();
 
-      if (count == 0) continue;
-
-      // Find random questions for this cognitive level
-      List<Question> questions =
-          questionRepository.findRandomApprovedByBanksAndCognitiveLevel(
-              bankIds, level.name(), count);
+    for (int i = 0; i < parts.size(); i++) {
+      com.fptu.math_master.entity.ExamMatrixPart part = parts.get(i);
+      int partQuestionCount = questionsPerPart + (i < remainder ? 1 : 0);
 
       log.info(
-          "Selected {} questions for cognitive level {} (requested: {})",
-          questions.size(),
-          level.name(),
-          count);
+          "Generating {} questions for Part {} ({})",
+          partQuestionCount,
+          part.getPartNumber(),
+          part.getQuestionType().name());
 
-      // Create assessment questions
-      for (Question question : questions) {
-        BigDecimal points =
-            question.getPoints() != null ? question.getPoints() : BigDecimal.valueOf(1.0);
+      // For each cognitive level, select questions of the correct type
+      for (Map.Entry<CognitiveLevel, Integer> entry : questionCounts.entrySet()) {
+        CognitiveLevel level = entry.getKey();
+        int totalCountForLevel = entry.getValue();
 
-        AssessmentQuestion aq =
-            AssessmentQuestion.builder()
-                .assessmentId(savedAssessment.getId())
-                .questionId(question.getId())
-                .orderIndex(orderIndex++)
-                .pointsOverride(points)
-                .build();
+        if (totalCountForLevel == 0) continue;
 
-        assessmentQuestions.add(aq);
-        totalPoints = totalPoints.add(points);
-        totalGenerated++;
+        // Calculate count for this part proportionally
+        int countForThisPart = (int) Math.round(
+            (double) totalCountForLevel * partQuestionCount / request.getTotalQuestions());
+
+        if (countForThisPart == 0) continue;
+
+        // BUG-3 FIX: Select questions filtered by questionType
+        List<Question> questions =
+            questionRepository.findRandomApprovedByBankAndCognitiveAndType(
+                questionBankId, level.name(), part.getQuestionType().name(), countForThisPart);
+
+        log.info(
+            "Selected {} questions for Part {} - {} - {} (requested: {})",
+            questions.size(),
+            part.getPartNumber(),
+            part.getQuestionType().name(),
+            level.name(),
+            countForThisPart);
+
+        // Create assessment questions
+        for (Question question : questions) {
+          BigDecimal points =
+              question.getPoints() != null ? question.getPoints() : BigDecimal.valueOf(1.0);
+
+          AssessmentQuestion aq =
+              AssessmentQuestion.builder()
+                  .assessmentId(savedAssessment.getId())
+                  .questionId(question.getId())
+                  .orderIndex(orderIndex++)
+                  .pointsOverride(points)
+                  .build();
+
+          assessmentQuestions.add(aq);
+          totalPoints = totalPoints.add(points);
+          totalGenerated++;
+        }
       }
     }
 
@@ -1424,8 +1462,8 @@ public class AssessmentServiceImpl implements AssessmentService {
         .message(
             totalGenerated == request.getTotalQuestions()
                 ? String.format(
-                    "Successfully generated %d questions from %d question banks",
-                    totalGenerated, bankIds.size())
+                    "Successfully generated %d questions from question bank",
+                    totalGenerated)
                 : String.format(
                     "Generated %d/%d questions. Some cognitive levels had insufficient questions.",
                     totalGenerated, request.getTotalQuestions()))

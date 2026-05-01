@@ -22,9 +22,16 @@ public class ExamMatrixResponse {
   private String name;
   private String description;
   private Boolean isReusable;
+  private Integer numberOfParts;
+  private Integer gradeLevel;
+  private UUID subjectId;
+  private String subjectName;
+  private UUID questionBankId;
+  private String questionBankName;
   private Integer totalQuestionsTarget;
   private BigDecimal totalPointsTarget;
   private MatrixStatus status;
+  private List<ExamMatrixPartResponse> parts; // ALWAYS populated, never null
   private Integer templateMappingCount;
   private List<TemplateMappingResponse> templateMappings;
   private Integer bankMappingCount;

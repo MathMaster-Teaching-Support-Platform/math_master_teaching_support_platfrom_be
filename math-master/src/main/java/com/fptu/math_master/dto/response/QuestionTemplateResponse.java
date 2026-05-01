@@ -33,6 +33,7 @@ public class QuestionTemplateResponse {
   private Map<String, Object> optionsGenerator;
   private String topic;
   private String[] constraints;
+  private Map<String, Object> statementMutations;
   private CognitiveLevel cognitiveLevel;
   private java.util.List<com.fptu.math_master.enums.QuestionTag> tags;
   private Boolean isPublic;
