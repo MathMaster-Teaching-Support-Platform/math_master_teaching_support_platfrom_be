@@ -53,6 +53,8 @@ public interface LessonSlideService {
 
   BinaryFileData downloadTemplatePreviewImage(UUID templateId);
 
+  SlideTemplateResponse regenerateTemplatePreview(UUID templateId);
+
   BinaryFileData generatePptx(LessonSlideGeneratePptxRequest request);
 
   BinaryFileData generatePptxFromJson(LessonSlideGeneratePptxFromJsonRequest request);

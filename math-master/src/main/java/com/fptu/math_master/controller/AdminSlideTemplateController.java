@@ -136,6 +136,18 @@ public class AdminSlideTemplateController {
         .build();
   }
 
+  @PatchMapping("/{templateId}/regenerate-preview")
+  @Operation(
+      summary = "Regenerate preview image from first PPTX slide",
+      description = "Re-renders the first slide of the template PPTX as a PNG preview image and saves it.")
+  public ApiResponse<SlideTemplateResponse> regeneratePreview(@PathVariable UUID templateId) {
+    log.info("Admin regenerating preview for slide template id={}", templateId);
+    return ApiResponse.<SlideTemplateResponse>builder()
+        .message("Preview image regenerated")
+        .result(lessonSlideService.regenerateTemplatePreview(templateId))
+        .build();
+  }
+
   // ─────────────────────────────────────────────────────────────
   // Delete
   // ─────────────────────────────────────────────────────────────
