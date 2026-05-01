@@ -1812,7 +1812,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private LessonSlideJsonItemResponse buildPreviewSlide(
       int slideNumber, String slideType, String heading, String content,
       LessonSlideOutputFormat outputFormat) {
-    String normalizedContent = truncateToWordLimit(normalizeAiGeneratedText(content), 50);
+    String normalizedContent = truncateToWordLimit(normalizeAiGeneratedText(content), 60);
     String normalizedHeading = normalizeAiGeneratedText(heading);
 
     String previewImageUrl = null;
@@ -1835,24 +1835,41 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   }
 
   /**
-   * Truncates text to at most maxWords words, preserving line structure within the kept portion.
+   * Truncates text to at most maxWords words, then extends to the nearest sentence boundary
+   * (end of line, '.', '?', '!') so the result always ends at a meaningful point.
    */
   private String truncateToWordLimit(String text, int maxWords) {
     if (text == null || text.isBlank() || maxWords <= 0) return text;
     String[] words = text.split("\\s+");
     if (words.length <= maxWords) return text;
-    // Reconstruct from original text up to the position of the maxWords-th word.
+
+    // Find position in original text after maxWords-th word
     int count = 0;
     int pos = 0;
     while (pos < text.length() && count < maxWords) {
-      // skip whitespace
       while (pos < text.length() && Character.isWhitespace(text.charAt(pos))) pos++;
       if (pos >= text.length()) break;
-      // advance through the word
       while (pos < text.length() && !Character.isWhitespace(text.charAt(pos))) pos++;
       count++;
     }
-    return text.substring(0, pos).stripTrailing();
+    String hardCut = text.substring(0, pos).stripTrailing();
+
+    // Extend up to 40 more chars to find a sentence boundary: newline, '.', '?', '!'
+    int searchEnd = Math.min(text.length(), pos + 40);
+    String tail = text.substring(pos, searchEnd);
+    int bestBoundary = -1;
+    for (int i = 0; i < tail.length(); i++) {
+      char c = tail.charAt(i);
+      if (c == '\n' || c == '.' || c == '?' || c == '!') {
+        bestBoundary = i + 1; // include the boundary character
+        break;
+      }
+    }
+
+    if (bestBoundary > 0) {
+      return text.substring(0, pos + bestBoundary).stripTrailing();
+    }
+    return hardCut;
   }
 
   private List<String> splitIntoChunks(String content, int chunkCount) {
