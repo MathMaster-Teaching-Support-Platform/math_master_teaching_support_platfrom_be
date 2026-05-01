@@ -450,4 +450,43 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       @Param("cognitiveLevel") String cognitiveLevel,
       @Param("questionType") String questionType,
       @Param("limit") int limit);
+
+  /**
+   * Count approved questions by bank, cognitive level, and question type (no chapter filter).
+   * Used for percentage-based assessment generation that respects part question types.
+   */
+  @Query(
+      value =
+          "SELECT COUNT(*) FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "AND q.question_type = CAST(:questionType AS text)",
+      nativeQuery = true)
+  long countApprovedByBankAndCognitiveAndType(
+      @Param("bankId") UUID bankId,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("questionType") String questionType);
+
+  /**
+   * Find random approved questions by bank, cognitive level, and question type (no chapter filter).
+   * Used for percentage-based assessment generation that respects part question types.
+   */
+  @Query(
+      value =
+          "SELECT * FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "AND q.question_type = CAST(:questionType AS text) "
+              + "ORDER BY random() LIMIT :limit",
+      nativeQuery = true)
+  List<Question> findRandomApprovedByBankAndCognitiveAndType(
+      @Param("bankId") UUID bankId,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("questionType") String questionType,
+      @Param("limit") int limit);
 }
+

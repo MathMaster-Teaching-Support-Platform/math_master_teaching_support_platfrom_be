@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -29,6 +30,7 @@ import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
 import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
 import com.fptu.math_master.dto.request.BatchUpsertMatrixRowCellsRequest;
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
+import com.fptu.math_master.dto.request.ExamMatrixPartRequest;
 import com.fptu.math_master.dto.request.ExamMatrixRequest;
 import com.fptu.math_master.dto.request.FinalizePreviewRequest;
 import com.fptu.math_master.dto.request.GeneratePreviewRequest;
@@ -36,6 +38,7 @@ import com.fptu.math_master.dto.request.MatrixCellRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
 import com.fptu.math_master.dto.response.BatchTemplateMappingsResponse;
 import com.fptu.math_master.dto.response.BankMappingResponse;
+import com.fptu.math_master.dto.response.ExamMatrixPartResponse;
 import com.fptu.math_master.dto.response.ExamMatrixResponse;
 import com.fptu.math_master.dto.response.ExamMatrixTableResponse;
 import com.fptu.math_master.dto.response.FinalizePreviewResponse;
@@ -60,6 +63,7 @@ import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.CurriculumRepository;
 import com.fptu.math_master.repository.ExamMatrixRepository;
 import com.fptu.math_master.repository.ExamMatrixBankMappingRepository;
+import com.fptu.math_master.repository.ExamMatrixPartRepository;
 import com.fptu.math_master.repository.ExamMatrixRowRepository;
 import com.fptu.math_master.repository.ExamMatrixTemplateMappingRepository;
 import com.fptu.math_master.repository.QuestionRepository;
@@ -83,6 +87,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
   ExamMatrixRepository examMatrixRepository;
   ExamMatrixBankMappingRepository bankMappingRepository;
+  ExamMatrixPartRepository examMatrixPartRepository;
   ExamMatrixTemplateMappingRepository templateMappingRepository;
   ExamMatrixRowRepository examMatrixRowRepository;
   QuestionTemplateRepository questionTemplateRepository;
@@ -106,6 +111,11 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     UUID currentUserId = getCurrentUserId();
     validateTeacherRole(currentUserId);
 
+    // BE-5: Determine effective numberOfParts from parts[] or numberOfParts field
+    int effectiveNumberOfParts = (request.getParts() != null && !request.getParts().isEmpty())
+        ? request.getParts().size()
+        : (request.getNumberOfParts() != null ? request.getNumberOfParts() : 1);
+
     ExamMatrix matrix =
         ExamMatrix.builder()
             .teacherId(currentUserId)
@@ -114,12 +124,15 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .isReusable(request.getIsReusable() != null ? request.getIsReusable() : false)
             .totalQuestionsTarget(request.getTotalQuestionsTarget())
             .totalPointsTarget(request.getTotalPointsTarget())
-            .questionBankId(request.getQuestionBankId())  // ✅ NEW: Optional bank assignment
-            .numberOfParts(request.getNumberOfParts() != null ? request.getNumberOfParts() : 1)  // ✅ NEW: Default to 1
+            .questionBankId(request.getQuestionBankId())
+            .numberOfParts(effectiveNumberOfParts)
             .status(MatrixStatus.DRAFT)
             .build();
 
     matrix = examMatrixRepository.save(matrix);
+
+    // BE-5: Create parts using createOrReplaceParts
+    createOrReplaceParts(matrix.getId(), request.getParts(), request.getNumberOfParts());
 
     log.info("Exam matrix created with id: {}", matrix.getId());
     return buildMatrixResponse(matrix, Collections.emptyList());
@@ -145,20 +158,47 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     if (request.getTotalPointsTarget() != null) {
       matrix.setTotalPointsTarget(request.getTotalPointsTarget());
     }
-    if (request.getQuestionBankId() != null) {  // ✅ NEW: Allow updating bank
+    if (request.getQuestionBankId() != null) {
       matrix.setQuestionBankId(request.getQuestionBankId());
     }
-    if (request.getNumberOfParts() != null) {  // ✅ NEW: Allow updating number of parts
-      matrix.setNumberOfParts(request.getNumberOfParts());
+
+    // BE-6: Handle part changes
+    if (request.getParts() != null || request.getNumberOfParts() != null) {
+      int newPartCount = (request.getParts() != null && !request.getParts().isEmpty())
+          ? request.getParts().size()
+          : (request.getNumberOfParts() != null ? request.getNumberOfParts() : matrix.getNumberOfParts());
+      int oldPartCount = matrix.getNumberOfParts();
+
+      // Create or replace parts
+      Map<Integer, ExamMatrixPart> partsCache =
+          createOrReplaceParts(matrixId, request.getParts(), request.getNumberOfParts());
+
+      // Delete cells for removed parts
+      if (newPartCount < oldPartCount) {
+        bankMappingRepository.deleteByExamMatrixIdAndPartNumberGreaterThan(matrixId, newPartCount);
+        log.info("Deleted cells with partNumber > {} for matrix {}", newPartCount, matrixId);
+      }
+
+      // Re-sync existing cells: update partId + questionType from new parts
+      List<ExamMatrixBankMapping> existingCells =
+          bankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId);
+      for (ExamMatrixBankMapping cell : existingCells) {
+        ExamMatrixPart newPart = partsCache.get(cell.getPartNumber());
+        if (newPart != null) {
+          cell.setPartId(newPart.getId());
+          cell.setQuestionType(newPart.getQuestionType());
+          bankMappingRepository.save(cell);
+        }
+      }
+
+      matrix.setNumberOfParts(newPartCount);
     }
 
     matrix = examMatrixRepository.save(matrix);
     log.info("Exam matrix updated: {}", matrixId);
     return buildMatrixResponse(
         matrix, templateMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId));
-  }
-
-  @Override
+  }  @Override
   @Transactional(readOnly = true)
   public ExamMatrixResponse getExamMatrixById(UUID matrixId) {
     log.info("Getting exam matrix: {}", matrixId);
@@ -427,6 +467,15 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     Map<String, Integer> bankCoverageByDifficulty = new LinkedHashMap<>();
     boolean aiFallbackLikely = false;
 
+    // BUG-1 & BUG-2 FIX: Build caches for rows and parts
+    Map<UUID, ExamMatrixRow> rowById = examMatrixRowRepository
+        .findByExamMatrixIdOrderByOrderIndex(matrixId).stream()
+        .collect(Collectors.toMap(ExamMatrixRow::getId, r -> r));
+    
+    Map<Integer, ExamMatrixPart> partsCache = examMatrixPartRepository
+        .findByExamMatrixIdOrderByPartNumber(matrixId).stream()
+        .collect(Collectors.toMap(ExamMatrixPart::getPartNumber, p -> p));
+
     for (ExamMatrixBankMapping bankMapping : bankMappings) {
       int required = getQuestionCountFromBankMapping(bankMapping);
       if (required < 0) {
@@ -446,17 +495,43 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
           required,
           (left, right) -> (left == null ? 0 : left) + (right == null ? 0 : right));
 
+      // BUG-1 FIX: Use chapter+type-aware count query
+      ExamMatrixRow row = rowById.get(bankMapping.getMatrixRowId());
+      ExamMatrixPart part = partsCache.get(bankMapping.getPartNumber());
+      
+      if (row == null || row.getChapterId() == null) {
+        warnings.add(
+            String.format(
+                "Mapping %s has no associated row or chapter - skipping validation.",
+                bankMapping.getId()));
+        continue;
+      }
+      
+      if (part == null) {
+        warnings.add(
+            String.format(
+                "Mapping %s has no associated part (partNumber=%d) - skipping validation.",
+                bankMapping.getId(),
+                bankMapping.getPartNumber()));
+        continue;
+      }
+
       long approvedAvailable =
-          questionRepository.countApprovedByBankAndDifficultyAndCognitive(
-              matrix.getQuestionBankId(), null, bankMapping.getCognitiveLevel());
+          questionRepository.countApprovedByBankAndChapterAndCognitiveAndType(
+              matrix.getQuestionBankId(),
+              row.getChapterId(),
+              bankMapping.getCognitiveLevel().name(),
+              part.getQuestionType().name());
 
       if (approvedAvailable < required) {
         aiFallbackLikely = true;
+        // BUG-2 FIX: Human-readable error messages with chapter name, part type, cognitive level
         warnings.add(
             String.format(
-                "Bank mapping %s has insufficient APPROVED questions for %s: required=%d, available=%d.",
-                bankMapping.getId(),
-                coverageKey,
+                "Chương '%s' — %s — %s: cần %d câu, ngân hàng chỉ có %d.",
+                row.getChapterName() != null ? row.getChapterName() : "Không xác định",
+                part.getQuestionType().name(),
+                bankMapping.getCognitiveLevel().name(),
                 required,
                 approvedAvailable));
       }
@@ -1118,6 +1193,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .isReusable(request.getIsReusable() != null ? request.getIsReusable() : false)
             .totalQuestionsTarget(request.getTotalQuestionsTarget())
             .totalPointsTarget(request.getTotalPointsTarget())
+        .numberOfParts(request.getNumberOfParts() != null ? request.getNumberOfParts() : 1)
             .status(MatrixStatus.DRAFT)
             .build();
 
@@ -1285,6 +1361,67 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     }
   }
 
+  /**
+   * BE-4: Creates or replaces parts for a matrix.
+   * Called on both create and update flows.
+   * Performance: parts are cached per-request via returned map.
+   */
+  private Map<Integer, ExamMatrixPart> createOrReplaceParts(
+      UUID matrixId, List<ExamMatrixPartRequest> parts, Integer numberOfParts) {
+
+    // 1. Resolve effective parts
+    List<ExamMatrixPartRequest> effectiveParts;
+    if (parts != null && !parts.isEmpty()) {
+      if (parts.size() > 3) {
+        throw new AppException(ErrorCode.INVALID_REQUEST);
+      }
+      effectiveParts = parts;
+    } else {
+      int n = (numberOfParts != null) ? numberOfParts : 1;
+      QuestionType[] defaults = {QuestionType.MULTIPLE_CHOICE, QuestionType.TRUE_FALSE, QuestionType.SHORT_ANSWER};
+      effectiveParts = new ArrayList<>();
+      for (int i = 1; i <= n; i++) {
+        effectiveParts.add(ExamMatrixPartRequest.builder()
+            .partNumber(i)
+            .questionType(defaults[i-1])
+            .build());
+      }
+    }
+
+    // 2. Delete existing parts (cascade sets partId=NULL on cells)
+    examMatrixPartRepository.deleteByExamMatrixId(matrixId);
+
+    // 3. Insert new parts + build cache
+    Map<Integer, ExamMatrixPart> cache = new HashMap<>();
+    for (ExamMatrixPartRequest req : effectiveParts) {
+      ExamMatrixPart part = examMatrixPartRepository.save(
+          ExamMatrixPart.builder()
+              .examMatrixId(matrixId)
+              .partNumber(req.getPartNumber())
+              .questionType(req.getQuestionType())
+              .name(req.getName())
+              .build());
+      cache.put(part.getPartNumber(), part);
+    }
+
+    return cache; // Reuse in upsert — no re-query needed
+  }
+
+  /**
+   * BE-8: Build part responses for API response.
+   * MUST be called in BOTH buildTableResponse() AND buildMatrixResponse().
+   */
+  private List<ExamMatrixPartResponse> buildPartResponses(UUID matrixId) {
+    return examMatrixPartRepository.findByExamMatrixIdOrderByPartNumber(matrixId).stream()
+        .map(p -> ExamMatrixPartResponse.builder()
+            .id(p.getId())
+            .partNumber(p.getPartNumber())
+            .questionType(p.getQuestionType())
+            .name(p.getName())
+            .build())
+        .collect(Collectors.toList());
+  }
+
 
 
   private ExamMatrixResponse buildMatrixResponse(
@@ -1298,6 +1435,23 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .map(this::buildBankMappingResponse)
         .collect(Collectors.toList());
 
+    UUID subjectId = matrix.getSubjectId();
+    String subjectName = null;
+    if (subjectId != null) {
+      subjectName = subjectRepository.findById(subjectId).map(Subject::getName).orElse(null);
+    }
+
+    UUID questionBankId = matrix.getQuestionBankId();
+    String questionBankName = null;
+    if (questionBankId != null) {
+      questionBankName = questionBankRepository.findById(questionBankId)
+          .map(QuestionBank::getName)
+          .orElse(null);
+    }
+
+    // BE-8: Build parts responses (ALWAYS populated)
+    List<ExamMatrixPartResponse> partResponses = buildPartResponses(matrix.getId());
+
     return ExamMatrixResponse.builder()
         .id(matrix.getId())
         .teacherId(matrix.getTeacherId())
@@ -1305,6 +1459,13 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .name(matrix.getName())
         .description(matrix.getDescription())
         .isReusable(matrix.getIsReusable())
+        .numberOfParts(matrix.getNumberOfParts())
+        .parts(partResponses)
+        .gradeLevel(matrix.getGradeLevel())
+        .subjectId(subjectId)
+        .subjectName(subjectName)
+        .questionBankId(questionBankId)
+        .questionBankName(questionBankName)
         .totalQuestionsTarget(matrix.getTotalQuestionsTarget())
         .totalPointsTarget(matrix.getTotalPointsTarget())
         .status(matrix.getStatus())
@@ -1480,10 +1641,14 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     // Load matrix to get numberOfParts for validation
     ExamMatrix matrix = loadMatrixOrThrow(matrixId);
 
-    bankMappingRepository.deleteByExamMatrixIdAndMatrixRowId(matrixId, row.getId());
+    // BE-7: PERFORMANCE - Load parts ONCE per request, not per cell
+    Map<Integer, ExamMatrixPart> partsCache = examMatrixPartRepository
+        .findByExamMatrixIdOrderByPartNumber(matrixId).stream()
+        .collect(Collectors.toMap(ExamMatrixPart::getPartNumber, p -> p));
 
+    // BE-7: Proper upsert logic - find existing cells and update/insert/delete as needed
     for (MatrixCellRequest cell : cells) {
-      // Phase 5: Validate partNumber is provided and within range
+      // Validate partNumber is provided and within range
       if (cell.getPartNumber() == null) {
         throw new AppException(ErrorCode.INVALID_REQUEST);
       }
@@ -1492,13 +1657,27 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         throw new AppException(ErrorCode.INVALID_REQUEST);
       }
 
-      // Phase 5: Validate partNumber does not exceed matrix numberOfParts
+      // Validate partNumber does not exceed matrix numberOfParts
       if (cell.getPartNumber() > matrix.getNumberOfParts()) {
         throw new AppException(ErrorCode.INVALID_REQUEST);
       }
 
+      // BE-1: Use partsCache instead of ExamPart.typeForPart()
+      ExamMatrixPart part = partsCache.get(cell.getPartNumber());
+      if (part == null) {
+        throw new AppException(ErrorCode.INVALID_REQUEST);
+      }
+
+      // Find existing cell by unique key (matrixId, rowId, partNumber, cognitiveLevel)
+      Optional<ExamMatrixBankMapping> existing =
+          bankMappingRepository.findByExamMatrixIdAndMatrixRowIdAndPartNumberAndCognitiveLevel(
+              matrixId, row.getId(), cell.getPartNumber(), cell.getCognitiveLevel());
+
       int questionCount = cell.getQuestionCount() != null ? Math.max(0, cell.getQuestionCount()) : 0;
+
       if (questionCount == 0) {
+        // DELETE if exists
+        existing.ifPresent(bankMappingRepository::delete);
         continue;
       }
 
@@ -1507,21 +1686,29 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               ? cell.getPointsPerQuestion()
               : (defaultPointsPerQuestion != null ? defaultPointsPerQuestion : BigDecimal.ONE);
 
-      // Phase 5: Derive questionType from partNumber using ExamPart enum
-      QuestionType questionType = ExamPart.typeForPart(cell.getPartNumber());
-
-      // Phase 3: No longer store questionBankId in ExamMatrixBankMapping
-      // The bank comes from ExamMatrix.questionBankId
-      ExamMatrixBankMapping mapping =
-          ExamMatrixBankMapping.builder()
-              .examMatrixId(matrixId)
-              .matrixRowId(row.getId())
-              .questionCount(questionCount)
-              .cognitiveLevel(cell.getCognitiveLevel())
-              .pointsPerQuestion(pointsPerQuestion)
-              .questionType(questionType)  // Phase 5: Set derived question type
-              .build();
-      bankMappingRepository.save(mapping);
+      if (existing.isPresent()) {
+        // UPDATE existing cell
+        ExamMatrixBankMapping mapping = existing.get();
+        mapping.setQuestionCount(questionCount);
+        mapping.setPointsPerQuestion(pointsPerQuestion);
+        mapping.setQuestionType(part.getQuestionType());
+        mapping.setPartId(part.getId());
+        bankMappingRepository.save(mapping);
+      } else {
+        // INSERT new cell
+        ExamMatrixBankMapping mapping =
+            ExamMatrixBankMapping.builder()
+                .examMatrixId(matrixId)
+                .matrixRowId(row.getId())
+                .partNumber(cell.getPartNumber())
+                .partId(part.getId())
+                .questionType(part.getQuestionType())
+                .cognitiveLevel(cell.getCognitiveLevel())
+                .questionCount(questionCount)
+                .pointsPerQuestion(pointsPerQuestion)
+                .build();
+        bankMappingRepository.save(mapping);
+      }
     }
   }
 
@@ -1612,6 +1799,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
           cellResponses.add(
               MatrixCellResponse.builder()
                   .mappingId(cell.getId())
+                  .partNumber(cell.getPartNumber())  // Phase 5: Direct read from DB
+                  .questionType(cell.getQuestionType())  // Phase 5: Direct read from DB
                   .cognitiveLevel(cell.getCognitiveLevel())
                   .cognitiveLevelLabel(label)
                   .questionCount(count)
@@ -1692,6 +1881,9 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     String teacherName =
         userRepository.findById(matrix.getTeacherId()).map(User::getFullName).orElse("Unknown");
 
+    // BE-8: Build parts responses (ALWAYS populated)
+    List<ExamMatrixPartResponse> partResponses = buildPartResponses(matrix.getId());
+
     return ExamMatrixTableResponse.builder()
         .id(matrix.getId())
         .name(matrix.getName())
@@ -1699,6 +1891,8 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .teacherId(matrix.getTeacherId())
         .teacherName(teacherName)
         .gradeLevel(matrix.getGradeLevel())
+        .numberOfParts(matrix.getNumberOfParts())
+        .parts(partResponses)
         .subjectId(finalSubjectId)
         .subjectName(finalSubjectName)
         .isReusable(matrix.getIsReusable())

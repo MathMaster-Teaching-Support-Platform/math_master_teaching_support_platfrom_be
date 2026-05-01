@@ -50,14 +50,23 @@ public class BuildExamMatrixRequest {
 
   /**
    * Number of parts in the exam (1-3).
-   * Part I = MCQ, Part II = TRUE_FALSE, Part III = SHORT_ANSWER
-   * Used for Vietnamese THPT exam format.
+   * DEPRECATED: Use parts[] instead for configurable part types.
+   * If parts[] is provided, numberOfParts is derived from parts.length.
    * Default: 1 (MCQ only)
    */
   @Min(value = 1, message = "numberOfParts must be 1, 2, or 3")
   @Max(value = 3, message = "numberOfParts must be 1, 2, or 3")
   @Builder.Default
   private Integer numberOfParts = 1;
+
+  /**
+   * Configurable parts for the exam matrix.
+   * If provided, this takes precedence over numberOfParts.
+   * Each part defines its question type (MCQ, TRUE_FALSE, or SHORT_ANSWER).
+   * Min: 1 part, Max: 3 parts.
+   */
+  @Valid
+  private List<ExamMatrixPartRequest> parts;
 
   /**
    * Target school-grade level (lớp), e.g. 10, 11, 12.

@@ -34,7 +34,9 @@ public enum ExamPart {
    * @param partNumber the part number (1, 2, or 3)
    * @return the corresponding QuestionType
    * @throws IllegalArgumentException if partNumber is not 1, 2, or 3
+   * @deprecated Use ExamMatrixPart entity instead. Part types are now configurable per matrix.
    */
+  @Deprecated
   public static QuestionType typeForPart(int partNumber) {
     for (ExamPart part : ExamPart.values()) {
       if (part.partNumber == partNumber) {
