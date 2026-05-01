@@ -116,6 +116,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .diagramTemplate(request.getDiagramTemplate())
             .optionsGenerator(request.getOptionsGenerator())
             .constraints(request.getConstraints())
+            .statementMutations(request.getStatementMutations())
             .cognitiveLevel(request.getCognitiveLevel())
             .tags(request.getTags())
             .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
@@ -177,6 +178,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     template.setDiagramTemplate(request.getDiagramTemplate());
     template.setOptionsGenerator(request.getOptionsGenerator());
     template.setConstraints(request.getConstraints());
+    template.setStatementMutations(request.getStatementMutations());
     template.setCognitiveLevel(request.getCognitiveLevel());
     template.setTags(request.getTags());
     if (request.getIsPublic() != null) {
@@ -921,6 +923,14 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   private List<String> validateTemplateSyntax(QuestionTemplateRequest request) {
     List<String> errors = new ArrayList<>();
 
+    // Validate answerFormula based on question type
+    if (request.getTemplateType() != QuestionType.TRUE_FALSE) {
+      // MCQ and SHORT_ANSWER require answerFormula
+      if (request.getAnswerFormula() == null || request.getAnswerFormula().trim().isEmpty()) {
+        errors.add("Answer formula is required for " + request.getTemplateType() + " questions");
+      }
+    }
+
     String templateTextStr =
         request.getTemplateText() != null ? request.getTemplateText().toString() : "";
     Pattern pattern = Pattern.compile("\\{\\{(\\w+)}}");
@@ -956,6 +966,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .diagramTemplate(template.getDiagramTemplate())
             .optionsGenerator(template.getOptionsGenerator())
             .constraints(template.getConstraints())
+            .statementMutations(template.getStatementMutations())
             .cognitiveLevel(template.getCognitiveLevel())
             .tags(template.getTags())
             .isPublic(template.getIsPublic())

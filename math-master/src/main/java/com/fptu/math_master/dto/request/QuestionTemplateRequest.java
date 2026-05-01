@@ -34,7 +34,8 @@ public class QuestionTemplateRequest {
   @NotNull(message = "Parameters are required")
   private Map<String, Object> parameters;
 
-  @NotBlank(message = "Answer formula is required")
+  // Answer formula is required for MCQ and SHORT_ANSWER, but not for TRUE_FALSE
+  // Validation is handled in service layer based on question type
   private String answerFormula;
 
   private String diagramTemplate;
@@ -42,6 +43,9 @@ public class QuestionTemplateRequest {
   private Map<String, Object> optionsGenerator;
 
   private String[] constraints;
+
+  /** Statement mutations for TRUE_FALSE questions - contains clause templates with truth values */
+  private Map<String, Object> statementMutations;
 
   @NotNull(message = "Cognitive level is required")
   private CognitiveLevel cognitiveLevel;
