@@ -95,7 +95,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     // Auto-resolve chapterId if not provided
     UUID chapterId = request.getChapterId();
     UUID lessonId = request.getLessonId();
-    
+
     if (chapterId == null && lessonId != null) {
       // Resolve chapter from lesson
       chapterId = lessonRepository.findById(lessonId)
@@ -448,6 +448,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             Question.builder()
             .questionBankId(template.getQuestionBankId())
                 .templateId(template.getId())
+                .chapterId(template.getChapterId())
             .canonicalQuestionId(template.getCanonicalQuestionId())
                 .questionType(template.getTemplateType())
                 .questionText(
@@ -554,7 +555,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         metadata.put("status", "AI_DRAFT");
         metadata.put("generationMode", mode.name());
         metadata.put("usedParameters", sample.getUsedParameters());
-        
+
         // Merge sample's generationMetadata (contains tfClauses for TF questions)
         if (sample.getGenerationMetadata() != null) {
           metadata.putAll(sample.getGenerationMetadata());
@@ -564,6 +565,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             Question.builder()
                 .questionBankId(template.getQuestionBankId())
                 .templateId(template.getId())
+                .chapterId(template.getChapterId())
                 .canonicalQuestionId(effectiveCanonicalId)
                 .questionType(template.getTemplateType())
                 .questionText(sample.getQuestionText())
@@ -879,6 +881,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         Question.builder()
             .templateId(template.getId())
         .questionBankId(template.getQuestionBankId())
+            .chapterId(template.getChapterId())
         .canonicalQuestionId(template.getCanonicalQuestionId())
             .questionType(template.getTemplateType())
             .questionText(sample.getQuestionText())
