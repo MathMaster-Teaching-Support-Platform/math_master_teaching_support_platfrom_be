@@ -1,47 +1,140 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 20px auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; }
-        .content { padding: 30px; background: #ffffff; }
-        .footer { background: #f9f9f9; padding: 20px; text-align: center; font-size: 12px; color: #777; }
-        .btn { display: inline-block; padding: 12px 24px; background-color: #667eea; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 20px; }
-        .logo { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
-        h1 { margin: 0; font-size: 22px; }
-        .highlight { color: #667eea; font-weight: bold; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hồ sơ giảng viên đã được phê duyệt — MathMaster</title>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <div class="logo">MathMaster 📚</div>
-            <h1>Chúc mừng bạn!</h1>
-        </div>
-        <div class="content">
-            <p>Xin chào <span class="highlight" th:text="${name}">Giảng viên</span>,</p>
-            <p>Chúng tôi rất vui mừng thông báo rằng hồ sơ đăng ký giảng viên của bạn trên <strong>MathMaster</strong> đã được chính thức phê duyệt!</p>
-            <p>Bây giờ bạn đã có quyền truy cập đầy đủ vào các công cụ dành cho giảng viên:</p>
-            <ul>
-                <li>Tạo và quản lý giáo trình khóa học</li>
-                <li>Sử dụng AI hỗ trợ soạn thảo tài liệu</li>
-                <li>Giao bài tập và chấm điểm tự động</li>
-                <li>Theo dõi lộ trình học tập của học sinh</li>
-            </ul>
-            <p>Hãy bắt đầu hành trình giảng dạy của bạn ngay hôm nay bằng cách truy cập vào trang Dashboard.</p>
-            <div style="text-align: center;">
-                <a th:href="${dashboardUrl}" class="btn">Đi đến Dashboard →</a>
-            </div>
-            <p>Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ với đội ngũ hỗ trợ của chúng tôi tại <a href="mailto:support@mathmaster.vn">support@mathmaster.vn</a>.</p>
-            <p>Trân trọng,<br>Đội ngũ MathMaster</p>
-        </div>
-        <div class="footer">
-            &copy; 2026 MathMaster App. Tất cả các quyền được bảo lưu.<br>
-            Bạn nhận được email này vì bạn đã đăng ký làm giảng viên trên hệ thống của chúng tôi.
-        </div>
-    </div>
+<body style="margin:0;padding:0;background-color:#f5f4ed;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f4ed;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0"
+               style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+          <!-- HEADER -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#4a6a5a 0%,#5d8b74 60%,#6aab8e 100%);padding:0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:20px 32px 0;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td><span style="font-size:20px;font-weight:800;color:#ffffff;">∑ MathMaster</span></td>
+                        <td align="right"><span style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.75);text-transform:uppercase;letter-spacing:0.08em;">Thông báo phê duyệt</span></td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding:28px 32px 32px;">
+                    <table cellpadding="0" cellspacing="0" border="0" align="center">
+                      <tr>
+                        <td align="center" style="width:72px;height:72px;background-color:rgba(255,255,255,0.2);border-radius:50%;border:2px solid rgba(255,255,255,0.35);">
+                          <span style="font-size:36px;line-height:72px;">🎉</span>
+                        </td>
+                      </tr>
+                    </table>
+                    <h1 style="margin:16px 0 6px;font-size:26px;font-weight:800;color:#ffffff;">Chúc mừng!</h1>
+                    <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.85);">Hồ sơ giảng viên của bạn đã được phê duyệt.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding:32px 36px 0;">
+              <p style="margin:0;font-size:16px;color:#4d4c48;line-height:1.7;">
+                Xin chào <strong style="color:#141413;" th:text="${name}">Giảng viên</strong>,
+              </p>
+              <p style="margin:12px 0 0;font-size:15px;color:#5e5d59;line-height:1.75;">
+                Chúng tôi rất vui mừng thông báo rằng hồ sơ đăng ký giảng viên của bạn trên
+                <strong style="color:#4a6a5a;">MathMaster</strong> đã được <strong>chính thức phê duyệt</strong>.
+                Bây giờ bạn đã có toàn quyền truy cập vào các công cụ dành cho giảng viên!
+              </p>
+            </td>
+          </tr>
+
+          <!-- FEATURES LIST -->
+          <tr>
+            <td style="padding:20px 36px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background-color:#f0fdf4;border-radius:12px;border:1px solid #bbf7d0;overflow:hidden;">
+                <tr>
+                  <td style="padding:14px 20px;background-color:#dcfce7;border-bottom:1px solid #bbf7d0;">
+                    <span style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:0.08em;">✅ Quyền truy cập của bạn</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr><td style="padding:6px 0;font-size:14px;color:#166534;">📚 &nbsp;Tạo và quản lý giáo trình khóa học</td></tr>
+                      <tr><td style="padding:6px 0;font-size:14px;color:#166534;">🤖 &nbsp;Sử dụng AI hỗ trợ soạn thảo tài liệu</td></tr>
+                      <tr><td style="padding:6px 0;font-size:14px;color:#166534;">📝 &nbsp;Giao bài tập và chấm điểm tự động</td></tr>
+                      <tr><td style="padding:6px 0;font-size:14px;color:#166534;">📈 &nbsp;Theo dõi lộ trình học tập của học sinh</td></tr>
+                      <tr><td style="padding:6px 0;font-size:14px;color:#166534;">💰 &nbsp;Nhận doanh thu từ khóa học của bạn</td></tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td align="center" style="padding:28px 36px 0;">
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="background:linear-gradient(135deg,#4a6a5a,#6aab8e);border-radius:12px;">
+                    <a th:href="${dashboardUrl}" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;">
+                      🏫 &nbsp;Đến trang quản lý
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- DIVIDER -->
+          <tr><td style="padding:28px 36px 0;"><hr style="border:none;border-top:1px solid #ede8dc;margin:0;"/></td></tr>
+
+          <!-- SIGN OFF -->
+          <tr>
+            <td style="padding:20px 36px 32px;">
+              <p style="margin:0;font-size:13px;color:#87867f;line-height:1.7;">
+                Nếu có câu hỏi, hãy liên hệ với chúng tôi qua
+                <a href="mailto:support@mathmaster.vn" style="color:#4a6a5a;font-weight:600;text-decoration:none;">support@mathmaster.vn</a>.
+              </p>
+              <p style="margin:16px 0 0;font-size:15px;color:#141413;font-weight:600;">
+                Chào mừng bạn đến với đội ngũ MathMaster! 🌟<br/>
+                <span style="font-weight:400;color:#87867f;font-size:13px;">Đội ngũ MathMaster</span>
+              </p>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="background-color:#f5f4ed;border-top:1px solid #ede8dc;padding:24px 36px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center">
+                    <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#4d4c48;">∑ MathMaster</p>
+                    <p style="margin:0 0 14px;font-size:12px;color:#a09f98;">Nền tảng học toán trực tuyến hàng đầu Việt Nam</p>
+                    <p style="margin:0;font-size:11px;color:#b8b6ae;line-height:1.6;">
+                      © 2026 MathMaster. Bảo lưu mọi quyền.<br/>Email này được gửi tự động — vui lòng không trả lời.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>

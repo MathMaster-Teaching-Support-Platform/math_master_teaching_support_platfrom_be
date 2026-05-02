@@ -1,235 +1,237 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xác nhận đăng ký khóa học</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f4f4;
-        }
-        .email-container {
-            max-width: 600px;
-            margin: 20px auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 30px 20px;
-            text-align: center;
-            color: #ffffff;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 28px;
-            font-weight: 600;
-        }
-        .header .icon {
-            font-size: 48px;
-            margin-bottom: 10px;
-        }
-        .content {
-            padding: 40px 30px;
-            color: #333333;
-            line-height: 1.6;
-        }
-        .greeting {
-            font-size: 18px;
-            margin-bottom: 20px;
-            color: #333333;
-        }
-        .message {
-            font-size: 16px;
-            margin-bottom: 30px;
-            color: #555555;
-        }
-        .order-details {
-            background-color: #f8f9fa;
-            border-left: 4px solid #667eea;
-            padding: 20px;
-            margin: 30px 0;
-            border-radius: 4px;
-        }
-        .order-details h2 {
-            margin: 0 0 15px 0;
-            font-size: 18px;
-            color: #333333;
-        }
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        .detail-row:last-child {
-            border-bottom: none;
-        }
-        .detail-label {
-            font-weight: 600;
-            color: #666666;
-        }
-        .detail-value {
-            color: #333333;
-            text-align: right;
-        }
-        .amount {
-            font-size: 20px;
-            font-weight: 700;
-            color: #667eea;
-        }
-        .cta-button {
-            display: inline-block;
-            padding: 14px 32px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #ffffff !important;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 16px;
-            margin: 20px 0;
-            transition: transform 0.2s;
-        }
-        .cta-button:hover {
-            transform: translateY(-2px);
-        }
-        .info-box {
-            background-color: #e8f4fd;
-            border-left: 4px solid #2196F3;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
-        }
-        .info-box p {
-            margin: 0;
-            color: #1976D2;
-            font-size: 14px;
-        }
-        .footer {
-            background-color: #f8f9fa;
-            padding: 30px;
-            text-align: center;
-            color: #666666;
-            font-size: 14px;
-        }
-        .footer p {
-            margin: 5px 0;
-        }
-        .social-links {
-            margin: 20px 0;
-        }
-        .social-links a {
-            display: inline-block;
-            margin: 0 10px;
-            color: #667eea;
-            text-decoration: none;
-        }
-        .divider {
-            height: 1px;
-            background-color: #e0e0e0;
-            margin: 30px 0;
-        }
-        @media only screen and (max-width: 600px) {
-            .content {
-                padding: 30px 20px;
-            }
-            .header h1 {
-                font-size: 24px;
-            }
-            .detail-row {
-                flex-direction: column;
-            }
-            .detail-value {
-                text-align: left;
-                margin-top: 5px;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Xác nhận đăng ký khóa học — MathMaster</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
 </head>
-<body>
-    <div class="email-container">
-        <!-- Header -->
-        <div class="header">
-            <div class="icon">✅</div>
-            <h1>Đăng ký thành công!</h1>
-        </div>
+<body style="margin:0;padding:0;background-color:#f5f4ed;font-family:'Segoe UI',Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 
-        <!-- Content -->
-        <div class="content">
-            <p class="greeting">Xin chào <strong th:text="${studentName}">Học viên</strong>,</p>
-            
-            <p class="message">
-                Chúc mừng! Bạn đã đăng ký thành công khóa học 
-                <strong th:text="${courseTitle}">Tên khóa học</strong>. 
-                Chúng tôi rất vui mừng được đồng hành cùng bạn trong hành trình học tập này.
-            </p>
+  <!-- Outer wrapper -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f4ed;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
 
-            <!-- Order Details -->
-            <div class="order-details">
-                <h2>📋 Chi tiết đơn hàng</h2>
-                <div class="detail-row">
-                    <span class="detail-label">Mã đơn hàng:</span>
-                    <span class="detail-value" th:text="${orderNumber}">ORD-20260423-1234</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Khóa học:</span>
-                    <span class="detail-value" th:text="${courseTitle}">Tên khóa học</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Số tiền thanh toán:</span>
-                    <span class="detail-value amount" th:text="${amount}">1,000,000 VND</span>
-                </div>
-            </div>
+        <!-- Email card -->
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
 
-            <!-- CTA Button -->
-            <div style="text-align: center;">
-                <a th:href="${enrollmentUrl}" class="cta-button">
-                    🚀 Bắt đầu học ngay
-                </a>
-            </div>
+          <!-- ── HEADER ── -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#c96442 0%,#e07c55 60%,#d4855a 100%);padding:0;">
+              <!-- Top bar -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:20px 32px 0;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td>
+                          <span style="font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">
+                            ∑ MathMaster
+                          </span>
+                        </td>
+                        <td align="right">
+                          <span style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.75);letter-spacing:0.08em;text-transform:uppercase;">
+                            Xác nhận đơn hàng
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding:28px 32px 32px;">
+                    <!-- Success icon circle -->
+                    <table cellpadding="0" cellspacing="0" border="0" align="center">
+                      <tr>
+                        <td align="center" style="width:72px;height:72px;background-color:rgba(255,255,255,0.2);border-radius:50%;border:2px solid rgba(255,255,255,0.35);">
+                          <span style="font-size:36px;line-height:72px;">✅</span>
+                        </td>
+                      </tr>
+                    </table>
+                    <h1 style="margin:16px 0 6px;font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">
+                      Đăng ký thành công!
+                    </h1>
+                    <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.85);font-weight:400;">
+                      Khóa học của bạn đã được kích hoạt và sẵn sàng để bắt đầu.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-            <!-- Info Box -->
-            <div class="info-box">
-                <p>
-                    💡 <strong>Mẹo:</strong> Bạn có thể truy cập khóa học bất cứ lúc nào từ trang 
-                    "Khóa học của tôi" trong tài khoản của bạn.
-                </p>
-            </div>
+          <!-- ── GREETING ── -->
+          <tr>
+            <td style="padding:32px 36px 0;">
+              <p style="margin:0;font-size:16px;color:#4d4c48;line-height:1.7;">
+                Xin chào <strong style="color:#141413;" th:text="${studentName}">Học viên</strong>,
+              </p>
+              <p style="margin:12px 0 0;font-size:15px;color:#5e5d59;line-height:1.75;">
+                Cảm ơn bạn đã tin tưởng và lựa chọn <strong style="color:#c96442;">MathMaster</strong>.
+                Đơn hàng của bạn đã được xử lý thành công. Chúc mừng bạn đã trở thành
+                thành viên của khóa học!
+              </p>
+            </td>
+          </tr>
 
-            <div class="divider"></div>
+          <!-- ── ORDER DETAILS CARD ── -->
+          <tr>
+            <td style="padding:24px 36px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background-color:#faf9f6;border-radius:12px;border:1px solid #ede8dc;overflow:hidden;">
+                <!-- Card header -->
+                <tr>
+                  <td style="padding:14px 20px;background-color:#f0ede4;border-bottom:1px solid #e4dfd3;">
+                    <span style="font-size:11px;font-weight:700;color:#7a7870;text-transform:uppercase;letter-spacing:0.08em;">
+                      📋 Chi tiết đơn hàng
+                    </span>
+                  </td>
+                </tr>
+                <!-- Mã đơn hàng -->
+                <tr>
+                  <td style="padding:14px 20px;border-bottom:1px solid #ede8dc;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:13px;color:#87867f;font-weight:600;">Mã đơn hàng</td>
+                        <td align="right">
+                          <span style="font-size:13px;font-weight:700;color:#141413;font-family:monospace;background:#e8e6dc;padding:3px 10px;border-radius:6px;"
+                                th:text="${orderNumber}">ORD-20260502-1234</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <!-- Khóa học -->
+                <tr>
+                  <td style="padding:14px 20px;border-bottom:1px solid #ede8dc;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:13px;color:#87867f;font-weight:600;width:40%;">Khóa học</td>
+                        <td align="right" style="font-size:14px;font-weight:700;color:#141413;" th:text="${courseTitle}">Tên khóa học</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <!-- Thanh toán -->
+                <tr>
+                  <td style="padding:16px 20px;background-color:#fff5f0;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:13px;color:#87867f;font-weight:600;">Số tiền thanh toán</td>
+                        <td align="right">
+                          <!-- Show "Miễn phí" for free courses, otherwise show amount -->
+                          <span th:if="${amount == '0 VND' or amount == '0' or amount == 'Miễn phí'}"
+                                style="font-size:18px;font-weight:800;color:#4a6a5a;">
+                            🎉 Miễn phí
+                          </span>
+                          <span th:unless="${amount == '0 VND' or amount == '0' or amount == 'Miễn phí'}"
+                                style="font-size:18px;font-weight:800;color:#c96442;"
+                                th:text="${amount}">89,000 VND</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-            <p style="font-size: 14px; color: #666666;">
-                Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ với chúng tôi qua email 
-                <a href="mailto:support@mathmaster.vn" style="color: #667eea;">support@mathmaster.vn</a>
-            </p>
+          <!-- ── CTA BUTTON ── -->
+          <tr>
+            <td align="center" style="padding:28px 36px 0;">
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="background:linear-gradient(135deg,#c96442,#e07c55);border-radius:12px;">
+                    <a th:href="${enrollmentUrl}"
+                       style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;letter-spacing:0.02em;">
+                      🚀 &nbsp;Bắt đầu học ngay
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:12px 0 0;font-size:12px;color:#a09f98;">
+                Hoặc truy cập trang <strong>Khóa học của tôi</strong> trong tài khoản của bạn.
+              </p>
+            </td>
+          </tr>
 
-            <p style="margin-top: 30px; font-size: 16px; color: #333333;">
-                Chúc bạn học tập hiệu quả!<br/>
-                <strong>Đội ngũ MathMaster</strong>
-            </p>
-        </div>
+          <!-- ── TIP BOX ── -->
+          <tr>
+            <td style="padding:24px 36px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background-color:#f0fdf4;border-radius:10px;border-left:4px solid #4a6a5a;">
+                <tr>
+                  <td style="padding:14px 18px;">
+                    <p style="margin:0;font-size:13px;color:#355345;line-height:1.65;">
+                      💡 <strong>Mẹo học tập:</strong> Đặt mục tiêu học ít nhất một bài mỗi ngày
+                      để duy trì đà tiến bộ và hoàn thành khóa học hiệu quả nhất.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-        <!-- Footer -->
-        <div class="footer">
-            <p><strong>MathMaster</strong></p>
-            <p>Nền tảng học toán trực tuyến hàng đầu Việt Nam</p>
-            
-            <div class="social-links">
-                <a href="#">Facebook</a> | 
-                <a href="#">YouTube</a> | 
-                <a href="#">Instagram</a>
-            </div>
-            
-            <p style="margin-top: 20px; font-size: 12px; color: #999999;">
-                © <span th:text="${currentYear}">2026</span> MathMaster. All rights reserved.<br/>
-                Email này được gửi tự động, vui lòng không trả lời.
-            </p>
-        </div>
-    </div>
+          <!-- ── DIVIDER ── -->
+          <tr>
+            <td style="padding:28px 36px 0;">
+              <hr style="border:none;border-top:1px solid #ede8dc;margin:0;" />
+            </td>
+          </tr>
+
+          <!-- ── SUPPORT ── -->
+          <tr>
+            <td style="padding:20px 36px 32px;">
+              <p style="margin:0;font-size:13px;color:#87867f;line-height:1.7;">
+                Nếu bạn có bất kỳ câu hỏi nào về khóa học hoặc đơn hàng, vui lòng liên hệ
+                <a href="mailto:support@mathmaster.vn"
+                   style="color:#c96442;font-weight:600;text-decoration:none;">support@mathmaster.vn</a>
+                — chúng tôi luôn sẵn sàng hỗ trợ bạn.
+              </p>
+              <p style="margin:16px 0 0;font-size:15px;color:#141413;font-weight:600;">
+                Chúc bạn học tập vui vẻ và hiệu quả! 📚<br/>
+                <span style="font-weight:400;color:#87867f;font-size:13px;">Đội ngũ MathMaster</span>
+              </p>
+            </td>
+          </tr>
+
+          <!-- ── FOOTER ── -->
+          <tr>
+            <td style="background-color:#f5f4ed;border-top:1px solid #ede8dc;padding:24px 36px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center">
+                    <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#4d4c48;">
+                      ∑ MathMaster
+                    </p>
+                    <p style="margin:0 0 14px;font-size:12px;color:#a09f98;">
+                      Nền tảng học toán trực tuyến hàng đầu Việt Nam
+                    </p>
+                    <p style="margin:0;font-size:11px;color:#b8b6ae;line-height:1.6;">
+                      © <span th:text="${currentYear}">2026</span> MathMaster. Bảo lưu mọi quyền.<br/>
+                      Email này được gửi tự động — vui lòng không trả lời trực tiếp.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Email card -->
+
+      </td>
+    </tr>
+  </table>
+
 </body>
 </html>

@@ -52,7 +52,17 @@ public class ProgressServiceImpl implements ProgressService {
             enrollmentId, courseLessonId);
 
     if (existing.isPresent()) {
-      return mapToItem(existing.get());
+      LessonProgress progress = existing.get();
+      // If already completed, return immediately (idempotent)
+      if (progress.isCompleted()) {
+        return mapToItem(progress);
+      }
+      // Progress record exists but is not yet complete — mark it complete now
+      progress.setCompleted(true);
+      progress.setCompletedAt(Instant.now());
+      progress = lessonProgressRepository.save(progress);
+      log.info("Lesson {} (existing IN_PROGRESS record) marked complete for enrollment {}", courseLessonId, enrollmentId);
+      return mapToItem(progress);
     }
 
     LessonProgress progress =

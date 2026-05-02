@@ -1,279 +1,206 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Học viên mới đăng ký</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f4f4;
-        }
-        .email-container {
-            max-width: 600px;
-            margin: 20px auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .header {
-            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
-            padding: 30px 20px;
-            text-align: center;
-            color: #ffffff;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 28px;
-            font-weight: 600;
-        }
-        .header .icon {
-            font-size: 48px;
-            margin-bottom: 10px;
-        }
-        .content {
-            padding: 40px 30px;
-            color: #333333;
-            line-height: 1.6;
-        }
-        .greeting {
-            font-size: 18px;
-            margin-bottom: 20px;
-            color: #333333;
-        }
-        .message {
-            font-size: 16px;
-            margin-bottom: 30px;
-            color: #555555;
-        }
-        .enrollment-card {
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            border-radius: 8px;
-            padding: 25px;
-            margin: 30px 0;
-            border-left: 4px solid #2196F3;
-        }
-        .enrollment-card h2 {
-            margin: 0 0 20px 0;
-            font-size: 18px;
-            color: #1976D2;
-        }
-        .info-row {
-            display: flex;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.5);
-        }
-        .info-row:last-child {
-            border-bottom: none;
-        }
-        .info-icon {
-            font-size: 24px;
-            margin-right: 15px;
-            min-width: 30px;
-        }
-        .info-content {
-            flex: 1;
-        }
-        .info-label {
-            font-size: 12px;
-            color: #1976D2;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .info-value {
-            font-size: 16px;
-            color: #0d47a1;
-            font-weight: 600;
-            margin-top: 4px;
-        }
-        .cta-button {
-            display: inline-block;
-            padding: 14px 32px;
-            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
-            color: #ffffff !important;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 16px;
-            margin: 20px 0;
-            transition: transform 0.2s;
-        }
-        .cta-button:hover {
-            transform: translateY(-2px);
-        }
-        .stats-container {
-            display: flex;
-            justify-content: space-around;
-            margin: 30px 0;
-            padding: 20px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-        }
-        .stat-item {
-            text-align: center;
-        }
-        .stat-number {
-            font-size: 32px;
-            font-weight: 700;
-            color: #2196F3;
-            display: block;
-        }
-        .stat-label {
-            font-size: 14px;
-            color: #666666;
-            margin-top: 5px;
-        }
-        .tip-box {
-            background-color: #fff3e0;
-            border-left: 4px solid #ff9800;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
-        }
-        .tip-box p {
-            margin: 0;
-            color: #e65100;
-            font-size: 14px;
-        }
-        .footer {
-            background-color: #f8f9fa;
-            padding: 30px;
-            text-align: center;
-            color: #666666;
-            font-size: 14px;
-        }
-        .footer p {
-            margin: 5px 0;
-        }
-        .divider {
-            height: 1px;
-            background-color: #e0e0e0;
-            margin: 30px 0;
-        }
-        @media only screen and (max-width: 600px) {
-            .content {
-                padding: 30px 20px;
-            }
-            .header h1 {
-                font-size: 24px;
-            }
-            .stats-container {
-                flex-direction: column;
-                gap: 20px;
-            }
-            .info-row {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Học viên mới đăng ký — MathMaster</title>
 </head>
-<body>
-    <div class="email-container">
-        <!-- Header -->
-        <div class="header">
-            <div class="icon">🎓</div>
-            <h1>Học viên mới đăng ký!</h1>
-        </div>
+<body style="margin:0;padding:0;background-color:#f5f4ed;font-family:'Segoe UI',Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 
-        <!-- Content -->
-        <div class="content">
-            <p class="greeting">Xin chào <strong th:text="${instructorName}">Giảng viên</strong>,</p>
-            
-            <p class="message">
-                Chúc mừng! Khóa học <strong th:text="${courseTitle}">Tên khóa học</strong> 
-                của bạn vừa có thêm một học viên mới. Đây là cơ hội tuyệt vời để chia sẻ kiến thức 
-                và truyền cảm hứng cho học viên.
-            </p>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f4ed;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
 
-            <!-- Enrollment Card -->
-            <div class="enrollment-card">
-                <h2>👤 Thông tin học viên</h2>
-                
-                <div class="info-row">
-                    <div class="info-icon">👨‍🎓</div>
-                    <div class="info-content">
-                        <div class="info-label">Tên học viên</div>
-                        <div class="info-value" th:text="${studentName}">Nguyễn Văn A</div>
-                    </div>
-                </div>
-                
-                <div class="info-row">
-                    <div class="info-icon">📚</div>
-                    <div class="info-content">
-                        <div class="info-label">Khóa học</div>
-                        <div class="info-value" th:text="${courseTitle}">Tên khóa học</div>
-                    </div>
-                </div>
-                
-                <div class="info-row">
-                    <div class="info-icon">📅</div>
-                    <div class="info-content">
-                        <div class="info-label">Ngày đăng ký</div>
-                        <div class="info-value" th:text="${#temporals.format(#temporals.createNow(), 'dd/MM/yyyy HH:mm')}">23/04/2026 14:30</div>
-                    </div>
-                </div>
-            </div>
+        <!-- Email card -->
+        <table width="600" cellpadding="0" cellspacing="0" border="0"
+               style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
 
-            <!-- CTA Button -->
-            <div style="text-align: center;">
-                <a th:href="${courseUrl}" class="cta-button">
-                    📊 Xem chi tiết khóa học
-                </a>
-            </div>
+          <!-- ── HEADER ── -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1e40af 0%,#2563eb 60%,#3b82f6 100%);padding:0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:20px 32px 0;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td>
+                          <span style="font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">
+                            ∑ MathMaster
+                          </span>
+                        </td>
+                        <td align="right">
+                          <span style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.75);letter-spacing:0.08em;text-transform:uppercase;">
+                            Thông báo giảng viên
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding:28px 32px 32px;">
+                    <table cellpadding="0" cellspacing="0" border="0" align="center">
+                      <tr>
+                        <td align="center" style="width:72px;height:72px;background-color:rgba(255,255,255,0.2);border-radius:50%;border:2px solid rgba(255,255,255,0.35);">
+                          <span style="font-size:36px;line-height:72px;">🎓</span>
+                        </td>
+                      </tr>
+                    </table>
+                    <h1 style="margin:16px 0 6px;font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">
+                      Có học viên mới!
+                    </h1>
+                    <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.85);">
+                      Một học viên vừa đăng ký tham gia khóa học của bạn.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-            <!-- Stats (Optional - can be dynamic) -->
-            <div class="stats-container">
-                <div class="stat-item">
-                    <span class="stat-number">+1</span>
-                    <span class="stat-label">Học viên mới</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number">🎯</span>
-                    <span class="stat-label">Mục tiêu</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number">⭐</span>
-                    <span class="stat-label">Chất lượng</span>
-                </div>
-            </div>
+          <!-- ── GREETING ── -->
+          <tr>
+            <td style="padding:32px 36px 0;">
+              <p style="margin:0;font-size:16px;color:#4d4c48;line-height:1.7;">
+                Xin chào <strong style="color:#141413;" th:text="${instructorName}">Giảng viên</strong>,
+              </p>
+              <p style="margin:12px 0 0;font-size:15px;color:#5e5d59;line-height:1.75;">
+                Khóa học <strong style="color:#1e40af;" th:text="${courseTitle}">Tên khóa học</strong>
+                của bạn vừa chào đón thêm một thành viên mới. Đây là cơ hội tuyệt vời để bạn
+                chia sẻ kiến thức và tạo ra tác động tích cực!
+              </p>
+            </td>
+          </tr>
 
-            <!-- Tip Box -->
-            <div class="tip-box">
-                <p>
-                    💡 <strong>Gợi ý:</strong> Hãy gửi lời chào mừng đến học viên mới để tạo 
-                    ấn tượng tốt và khuyến khích họ tích cực tham gia khóa học.
-                </p>
-            </div>
+          <!-- ── STUDENT INFO CARD ── -->
+          <tr>
+            <td style="padding:24px 36px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background-color:#eff6ff;border-radius:12px;border:1px solid #bfdbfe;overflow:hidden;">
+                <!-- Card header -->
+                <tr>
+                  <td style="padding:14px 20px;background-color:#dbeafe;border-bottom:1px solid #bfdbfe;">
+                    <span style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:0.08em;">
+                      👤 Thông tin học viên mới
+                    </span>
+                  </td>
+                </tr>
+                <!-- Student name -->
+                <tr>
+                  <td style="padding:14px 20px;border-bottom:1px solid #dbeafe;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:13px;color:#3b82f6;font-weight:600;width:40%;">Tên học viên</td>
+                        <td align="right" style="font-size:14px;font-weight:700;color:#1e3a8a;" th:text="${studentName}">Nguyễn Văn A</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <!-- Course -->
+                <tr>
+                  <td style="padding:14px 20px;border-bottom:1px solid #dbeafe;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:13px;color:#3b82f6;font-weight:600;">Khóa học</td>
+                        <td align="right" style="font-size:14px;font-weight:700;color:#1e3a8a;" th:text="${courseTitle}">Tên khóa học</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <!-- Enrollment time -->
+                <tr>
+                  <td style="padding:14px 20px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:13px;color:#3b82f6;font-weight:600;">Thời gian đăng ký</td>
+                        <td align="right" style="font-size:13px;font-weight:600;color:#1e3a8a;"
+                            th:text="${#temporals.format(#temporals.createNow(), 'HH:mm — dd/MM/yyyy')}">
+                          14:30 — 02/05/2026
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-            <div class="divider"></div>
+          <!-- ── CTA BUTTON ── -->
+          <tr>
+            <td align="center" style="padding:28px 36px 0;">
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);border-radius:12px;">
+                    <a th:href="${courseUrl}"
+                       style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;letter-spacing:0.02em;">
+                      📊 &nbsp;Xem chi tiết khóa học
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-            <p style="font-size: 14px; color: #666666;">
-                Bạn có thể xem danh sách đầy đủ học viên và theo dõi tiến độ của họ trong 
-                trang quản lý khóa học.
-            </p>
+          <!-- ── MOTIVATIONAL BOX ── -->
+          <tr>
+            <td style="padding:24px 36px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background-color:#fffbeb;border-radius:10px;border-left:4px solid #f59e0b;">
+                <tr>
+                  <td style="padding:14px 18px;">
+                    <p style="margin:0;font-size:13px;color:#92400e;line-height:1.65;">
+                      💡 <strong>Gợi ý:</strong> Hãy gửi một lời chào mừng đến học viên mới — điều này
+                      tạo ấn tượng tốt, tăng tỷ lệ hoàn thành khóa học và cải thiện xếp hạng của bạn.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-            <p style="margin-top: 30px; font-size: 16px; color: #333333;">
-                Chúc bạn giảng dạy hiệu quả!<br/>
-                <strong>Đội ngũ MathMaster</strong>
-            </p>
-        </div>
+          <!-- ── DIVIDER ── -->
+          <tr>
+            <td style="padding:28px 36px 0;">
+              <hr style="border:none;border-top:1px solid #ede8dc;margin:0;" />
+            </td>
+          </tr>
 
-        <!-- Footer -->
-        <div class="footer">
-            <p><strong>MathMaster</strong></p>
-            <p>Nền tảng học toán trực tuyến hàng đầu Việt Nam</p>
-            
-            <p style="margin-top: 20px; font-size: 12px; color: #999999;">
-                © <span th:text="${currentYear}">2026</span> MathMaster. All rights reserved.<br/>
-                Email này được gửi tự động, vui lòng không trả lời.
-            </p>
-        </div>
-    </div>
+          <!-- ── SIGN OFF ── -->
+          <tr>
+            <td style="padding:20px 36px 32px;">
+              <p style="margin:0;font-size:13px;color:#87867f;line-height:1.7;">
+                Bạn có thể xem danh sách đầy đủ học viên và theo dõi tiến độ của họ trong
+                trang quản lý khóa học trên <a href="#" style="color:#1d4ed8;font-weight:600;text-decoration:none;">MathMaster</a>.
+              </p>
+              <p style="margin:16px 0 0;font-size:15px;color:#141413;font-weight:600;">
+                Chúc bạn giảng dạy hiệu quả! 🎯<br/>
+                <span style="font-weight:400;color:#87867f;font-size:13px;">Đội ngũ MathMaster</span>
+              </p>
+            </td>
+          </tr>
+
+          <!-- ── FOOTER ── -->
+          <tr>
+            <td style="background-color:#f5f4ed;border-top:1px solid #ede8dc;padding:24px 36px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center">
+                    <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#4d4c48;">∑ MathMaster</p>
+                    <p style="margin:0 0 14px;font-size:12px;color:#a09f98;">Nền tảng học toán trực tuyến hàng đầu Việt Nam</p>
+                    <p style="margin:0;font-size:11px;color:#b8b6ae;line-height:1.6;">
+                      © <span th:text="${currentYear}">2026</span> MathMaster. Bảo lưu mọi quyền.<br/>
+                      Email này được gửi tự động — vui lòng không trả lời trực tiếp.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
 </body>
 </html>
