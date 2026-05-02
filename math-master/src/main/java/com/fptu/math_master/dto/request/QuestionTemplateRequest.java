@@ -40,6 +40,8 @@ public class QuestionTemplateRequest {
 
   private String diagramTemplate;
 
+  private String solutionStepsTemplate;
+
   private Map<String, Object> optionsGenerator;
 
   private String[] constraints;

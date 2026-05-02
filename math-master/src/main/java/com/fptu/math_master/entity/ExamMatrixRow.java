@@ -130,6 +130,10 @@ public class ExamMatrixRow extends BaseEntity {
   @OneToMany(mappedBy = "matrixRow", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<ExamMatrixTemplateMapping> cells;
 
+  /** The bank-based cells for this row (new matrix system). */
+  @OneToMany(mappedBy = "matrixRow", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<ExamMatrixBankMapping> bankMappings;
+
   // ── Lifecycle hooks ──────────────────────────────────────────────────────
 
 }

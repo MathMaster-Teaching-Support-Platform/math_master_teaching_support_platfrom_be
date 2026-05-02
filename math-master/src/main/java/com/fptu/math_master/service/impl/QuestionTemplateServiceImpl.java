@@ -114,6 +114,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .parameters(request.getParameters())
             .answerFormula(request.getAnswerFormula())
             .diagramTemplate(request.getDiagramTemplate())
+            .solutionStepsTemplate(request.getSolutionStepsTemplate())
             .optionsGenerator(request.getOptionsGenerator())
             .constraints(request.getConstraints())
             .statementMutations(request.getStatementMutations())
@@ -176,6 +177,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     template.setParameters(request.getParameters());
     template.setAnswerFormula(request.getAnswerFormula());
     template.setDiagramTemplate(request.getDiagramTemplate());
+    template.setSolutionStepsTemplate(request.getSolutionStepsTemplate());
     template.setOptionsGenerator(request.getOptionsGenerator());
     template.setConstraints(request.getConstraints());
     template.setStatementMutations(request.getStatementMutations());
@@ -959,11 +961,13 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .createdBy(template.getCreatedBy())
             .name(template.getName())
             .description(template.getDescription())
+            .chapterId(template.getChapterId())
             .templateType(template.getTemplateType())
             .templateText(template.getTemplateText())
             .parameters(template.getParameters())
             .answerFormula(template.getAnswerFormula())
             .diagramTemplate(template.getDiagramTemplate())
+            .solutionStepsTemplate(template.getSolutionStepsTemplate())
             .optionsGenerator(template.getOptionsGenerator())
             .constraints(template.getConstraints())
             .statementMutations(template.getStatementMutations())

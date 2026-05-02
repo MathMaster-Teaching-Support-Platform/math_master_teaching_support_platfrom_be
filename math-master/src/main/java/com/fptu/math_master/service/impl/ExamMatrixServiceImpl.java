@@ -1254,7 +1254,17 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .filter(r -> r.getExamMatrixId().equals(matrixId))
             .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_ROW_NOT_FOUND));
 
+    // Manually delete bank mappings first to avoid foreign key constraint violation
+    // This works regardless of whether the CASCADE DELETE migration has been applied
+    bankMappingRepository.deleteByMatrixRowId(rowId);
+    
+    // Delete template mappings (old system)
+    templateMappingRepository.deleteByMatrixRowId(rowId);
+    
+    // Now delete the row
     examMatrixRowRepository.delete(row);
+    examMatrixRowRepository.flush();
+    
     return buildTableResponse(matrix);
   }
 

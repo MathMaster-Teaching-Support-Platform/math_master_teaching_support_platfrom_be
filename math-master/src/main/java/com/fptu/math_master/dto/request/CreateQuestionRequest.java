@@ -58,6 +58,9 @@ public class CreateQuestionRequest {
   @Schema(description = "Template ID if generated from template")
   private java.util.UUID templateId;
 
+  @Schema(description = "Chapter ID (auto-populated from template if not provided)")
+  private java.util.UUID chapterId;
+
   @Schema(description = "Canonical question ID if generated from canonical source")
   private java.util.UUID canonicalQuestionId;
 

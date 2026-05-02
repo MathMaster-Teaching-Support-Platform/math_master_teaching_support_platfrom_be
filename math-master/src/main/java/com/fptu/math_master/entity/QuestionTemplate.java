@@ -116,6 +116,9 @@ public class QuestionTemplate extends BaseEntity {
   @Column(name = "diagram_template", columnDefinition = "TEXT")
   private String diagramTemplate;
 
+  @Column(name = "solution_steps_template", columnDefinition = "TEXT")
+  private String solutionStepsTemplate;
+
   /**
    * Configuration for generating multiple choice options (PARAMETRIC variant)
    * Example: {"type": "around_answer", "count": 4, "range": 10}

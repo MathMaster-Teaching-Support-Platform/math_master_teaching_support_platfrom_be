@@ -25,4 +25,6 @@ public class AnswerGradeResponse {
   private String feedback;
   private Boolean isManuallyAdjusted;
   private Instant gradedAt;
+  private String explanation;
+  private String solutionSteps;
 }

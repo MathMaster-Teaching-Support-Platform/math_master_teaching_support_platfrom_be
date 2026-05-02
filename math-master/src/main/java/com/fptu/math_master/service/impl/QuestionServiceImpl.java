@@ -7,6 +7,7 @@ import com.fptu.math_master.dto.response.ImportQuestionsResponse;
 import com.fptu.math_master.dto.response.QuestionResponse;
 import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.entity.QuestionBank;
+import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.QuestionSourceType;
 import com.fptu.math_master.enums.QuestionStatus;
@@ -14,6 +15,7 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionRepository;
+import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.QuestionService;
 import com.fptu.math_master.util.SecurityUtils;
@@ -48,6 +50,7 @@ public class QuestionServiceImpl implements QuestionService {
   QuestionRepository questionRepository;
   UserRepository userRepository;
   QuestionBankRepository questionBankRepository;
+  QuestionTemplateRepository questionTemplateRepository;
 
   @Override
   public QuestionResponse createQuestion(CreateQuestionRequest request) {
@@ -75,6 +78,16 @@ public class QuestionServiceImpl implements QuestionService {
             : "No explanation provided";
     String correctAnswer = request.getCorrectAnswer().trim();
 
+    // If chapterId not provided but templateId is, fetch chapterId from template
+    UUID chapterId = request.getChapterId();
+    if (chapterId == null && request.getTemplateId() != null) {
+      chapterId = questionTemplateRepository
+          .findById(request.getTemplateId())
+          .map(QuestionTemplate::getChapterId)
+          .orElse(null);
+      log.info("Auto-populated chapterId {} from template {}", chapterId, request.getTemplateId());
+    }
+
     Question question =
         Question.builder()
             .questionText(questionText)
@@ -89,6 +102,7 @@ public class QuestionServiceImpl implements QuestionService {
             .tags(request.getTags())
             .questionBankId(request.getQuestionBankId())
             .templateId(request.getTemplateId())
+            .chapterId(chapterId)  // Set chapterId
           .canonicalQuestionId(request.getCanonicalQuestionId())
             .questionStatus(QuestionStatus.AI_DRAFT)
             .questionSourceType(QuestionSourceType.MANUAL)
@@ -123,8 +137,8 @@ public class QuestionServiceImpl implements QuestionService {
         question.getExplanation() == null
             ? "null"
             : question
-                .getExplanation()
-                .substring(0, Math.min(50, question.getExplanation().length())));
+                .getExplanation().substring(0, Math.min(50, question.getExplanation().length())));
+    log.info("  - chapterId: {}", question.getChapterId());
 
     return mapToResponse(question);
   }

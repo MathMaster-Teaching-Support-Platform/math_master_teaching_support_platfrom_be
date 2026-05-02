@@ -63,4 +63,9 @@ public interface ExamMatrixBankMappingRepository extends JpaRepository<ExamMatri
       @Param("rowId") UUID rowId,
       @Param("partNumber") Integer partNumber,
       @Param("cognitiveLevel") CognitiveLevel cognitiveLevel);
+
+  // Delete all bank mappings for a specific row (used when deleting a row)
+  @Modifying
+  @Query("DELETE FROM ExamMatrixBankMapping m WHERE m.matrixRowId = :rowId")
+  void deleteByMatrixRowId(@Param("rowId") UUID rowId);
 }

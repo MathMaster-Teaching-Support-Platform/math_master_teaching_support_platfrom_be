@@ -1,6 +1,7 @@
 package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.QuestionBankRequest;
+import com.fptu.math_master.dto.response.QuestionBankMatrixStatsResponse;
 import com.fptu.math_master.dto.response.QuestionBankResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import java.util.List;
@@ -34,4 +35,6 @@ public interface QuestionBankService {
   boolean canEditQuestionBank(UUID id);
 
   boolean canDeleteQuestionBank(UUID id);
+
+  List<QuestionBankMatrixStatsResponse> getMatrixStats(UUID bankId);
 }

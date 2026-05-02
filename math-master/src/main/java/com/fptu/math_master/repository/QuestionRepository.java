@@ -488,5 +488,32 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       @Param("cognitiveLevel") String cognitiveLevel,
       @Param("questionType") String questionType,
       @Param("limit") int limit);
+
+  /**
+   * Get hierarchical matrix statistics for a question bank.
+   * Groups questions by: Grade Level > Chapter > Question Type > Cognitive Level
+   * Returns: [gradeLevel, chapterId, chapterName, questionType, cognitiveLevel, count]
+   */
+  @Query(
+      value =
+          "SELECT "
+              + "  sg.grade_level as gradeLevel, "
+              + "  c.id as chapterId, "
+              + "  c.title as chapterName, "
+              + "  q.question_type as questionType, "
+              + "  q.cognitive_level as cognitiveLevel, "
+              + "  COUNT(q.id) as questionCount "
+              + "FROM questions q "
+              + "JOIN question_templates t ON q.template_id = t.id "
+              + "JOIN chapters c ON t.chapter_id = c.id "
+              + "JOIN subjects s ON c.subject_id = s.id "
+              + "JOIN school_grades sg ON s.school_grade_id = sg.id "
+              + "WHERE q.question_bank_id = :bankId "
+              + "  AND q.question_status = 'APPROVED' "
+              + "  AND q.deleted_at IS NULL "
+              + "GROUP BY sg.grade_level, c.id, c.title, q.question_type, q.cognitive_level "
+              + "ORDER BY sg.grade_level, c.order_index, q.question_type, q.cognitive_level",
+      nativeQuery = true)
+  List<Object[]> findMatrixStatsByBankId(@Param("bankId") UUID bankId);
 }
 

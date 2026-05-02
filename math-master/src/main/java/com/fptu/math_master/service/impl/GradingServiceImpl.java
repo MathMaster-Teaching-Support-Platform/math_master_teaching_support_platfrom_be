@@ -1319,6 +1319,8 @@ public class GradingServiceImpl implements GradingService {
                       .feedback(answer.getFeedback())
                       .isManuallyAdjusted(manuallyAdjustedAnswerIds.contains(answer.getId()))
                       .gradedAt(answer.getUpdatedAt())
+                      .explanation(question != null ? question.getExplanation() : null)
+                      .solutionSteps(question != null ? question.getSolutionSteps() : null)
                       .build();
                 })
             .collect(Collectors.toList());

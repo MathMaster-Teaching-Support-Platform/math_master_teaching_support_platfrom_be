@@ -41,4 +41,9 @@ public interface ExamMatrixTemplateMappingRepository
           + "AND qt.lessonId IS NOT NULL "
           + "AND qt.deletedAt IS NULL")
   List<UUID> findDistinctLessonIdsByExamMatrixId(@Param("matrixId") UUID matrixId);
+
+  // Delete all template mappings for a specific row (used when deleting a row)
+  @org.springframework.data.jpa.repository.Modifying
+  @Query("DELETE FROM ExamMatrixTemplateMapping m WHERE m.matrixRowId = :rowId")
+  void deleteByMatrixRowId(@Param("rowId") UUID rowId);
 }

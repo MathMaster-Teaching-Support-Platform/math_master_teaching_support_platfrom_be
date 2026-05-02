@@ -1,6 +1,7 @@
 package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.dto.request.QuestionBankRequest;
+import com.fptu.math_master.dto.response.QuestionBankMatrixStatsResponse;
 import com.fptu.math_master.dto.response.QuestionBankResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.entity.Chapter;
@@ -365,5 +366,112 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         .updatedAt(template.getUpdatedAt())
         .questionBankId(template.getQuestionBankId())
         .build();
+  }
+
+  @Override
+  public List<QuestionBankMatrixStatsResponse> getMatrixStats(UUID bankId) {
+    log.info("Getting matrix stats for question bank: {}", bankId);
+
+    // Verify bank exists
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    // Get raw stats from repository
+    List<Object[]> rawStats = questionRepository.findMatrixStatsByBankId(bankId);
+
+    // Group by grade level
+    Map<String, List<Object[]>> byGrade = new LinkedHashMap<>();
+    for (Object[] row : rawStats) {
+      // grade_level is INTEGER in database, convert to String for grouping
+      String gradeLevel = String.valueOf(row[0]);
+      byGrade.computeIfAbsent(gradeLevel, k -> new java.util.ArrayList<>()).add(row);
+    }
+
+    // Build response
+    List<QuestionBankMatrixStatsResponse> result = new java.util.ArrayList<>();
+
+    for (Map.Entry<String, List<Object[]>> gradeEntry : byGrade.entrySet()) {
+      String gradeLevel = gradeEntry.getKey();
+      List<Object[]> gradeRows = gradeEntry.getValue();
+
+      // Group by chapter
+      Map<UUID, List<Object[]>> byChapter = new LinkedHashMap<>();
+      for (Object[] row : gradeRows) {
+        UUID chapterId = (UUID) row[1];
+        byChapter.computeIfAbsent(chapterId, k -> new java.util.ArrayList<>()).add(row);
+      }
+
+      // Build chapter stats
+      List<QuestionBankMatrixStatsResponse.ChapterStats> chapterStatsList =
+          new java.util.ArrayList<>();
+
+      for (Map.Entry<UUID, List<Object[]>> chapterEntry : byChapter.entrySet()) {
+        UUID chapterId = chapterEntry.getKey();
+        List<Object[]> chapterRows = chapterEntry.getValue();
+        String chapterName = (String) chapterRows.get(0)[2];
+
+        // Group by question type
+        Map<String, List<Object[]>> byType = new LinkedHashMap<>();
+        for (Object[] row : chapterRows) {
+          String questionType = (String) row[3];
+          byType.computeIfAbsent(questionType, k -> new java.util.ArrayList<>()).add(row);
+        }
+
+        // Build type stats
+        List<QuestionBankMatrixStatsResponse.TypeStats> typeStatsList =
+            new java.util.ArrayList<>();
+        int chapterTotal = 0;
+
+        for (Map.Entry<String, List<Object[]>> typeEntry : byType.entrySet()) {
+          String questionType = typeEntry.getKey();
+          List<Object[]> typeRows = typeEntry.getValue();
+
+          // Build cognitive counts
+          Map<String, Integer> cognitiveCounts = new LinkedHashMap<>();
+          int typeTotal = 0;
+
+          for (Object[] row : typeRows) {
+            String cognitiveLevel = (String) row[4];
+            int count = ((Number) row[5]).intValue();
+            cognitiveCounts.put(cognitiveLevel, count);
+            typeTotal += count;
+          }
+
+          typeStatsList.add(
+              QuestionBankMatrixStatsResponse.TypeStats.builder()
+                  .questionType(questionType)
+                  .totalQuestions(typeTotal)
+                  .cognitiveCounts(cognitiveCounts)
+                  .build());
+
+          chapterTotal += typeTotal;
+        }
+
+        chapterStatsList.add(
+            QuestionBankMatrixStatsResponse.ChapterStats.builder()
+                .chapterId(chapterId)
+                .chapterName(chapterName)
+                .totalQuestions(chapterTotal)
+                .types(typeStatsList)
+                .build());
+      }
+
+      int gradeTotal =
+          chapterStatsList.stream()
+              .mapToInt(QuestionBankMatrixStatsResponse.ChapterStats::getTotalQuestions)
+              .sum();
+
+      result.add(
+          QuestionBankMatrixStatsResponse.builder()
+              .gradeLevel(gradeLevel)
+              .totalQuestions(gradeTotal)
+              .chapters(chapterStatsList)
+              .build());
+    }
+
+    log.info("Matrix stats retrieved for bank {}: {} grade levels", bankId, result.size());
+    return result;
   }
 }

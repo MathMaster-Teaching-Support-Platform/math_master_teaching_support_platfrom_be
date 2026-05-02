@@ -240,4 +240,19 @@ public class QuestionBankController {
                 .result(questionBankService.getMappedTemplates(id))
                 .build();
     }
+
+    @GetMapping("/{id}/matrix-stats")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Get matrix-friendly statistics for a question bank",
+            description =
+                    "Get hierarchical question distribution grouped by: Grade Level > Chapter > Question Type > Cognitive Level. "
+                            + "Provides matrix-friendly view for better visualization of question bank coverage.")
+    public ApiResponse<List<com.fptu.math_master.dto.response.QuestionBankMatrixStatsResponse>> getMatrixStats(
+            @PathVariable UUID id) {
+        log.info("REST request to get matrix stats for question bank: {}", id);
+        return ApiResponse.<List<com.fptu.math_master.dto.response.QuestionBankMatrixStatsResponse>>builder()
+                .result(questionBankService.getMatrixStats(id))
+                .build();
+    }
 }

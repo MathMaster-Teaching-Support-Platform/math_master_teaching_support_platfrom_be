@@ -24,12 +24,14 @@ public class QuestionTemplateResponse {
   private String creatorName;
   private String name;
   private String description;
+  private UUID chapterId;
   private QuestionType templateType;
   private TemplateVariant templateVariant;
   private Map<String, Object> templateText;
   private Map<String, Object> parameters;
   private String answerFormula;
   private String diagramTemplate;
+  private String solutionStepsTemplate;
   private Map<String, Object> optionsGenerator;
   private String topic;
   private String[] constraints;
