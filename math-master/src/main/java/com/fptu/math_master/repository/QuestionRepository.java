@@ -515,5 +515,118 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
               + "ORDER BY sg.grade_level, c.order_index, q.question_type, q.cognitive_level",
       nativeQuery = true)
   List<Object[]> findMatrixStatsByBankId(@Param("bankId") UUID bankId);
+
+  // ========================================================================
+  // TF Clause-Level Queries (Finale2: JSONB expansion)
+  // ========================================================================
+
+  /**
+   * Matrix stats for non-TF questions only (MCQ, SHORT_ANSWER, etc.).
+   * Same as findMatrixStatsByBankId but excludes TRUE_FALSE.
+   */
+  @Query(
+      value =
+          "SELECT "
+              + "  sg.grade_level as gradeLevel, "
+              + "  c.id as chapterId, "
+              + "  c.title as chapterName, "
+              + "  q.question_type as questionType, "
+              + "  q.cognitive_level as cognitiveLevel, "
+              + "  COUNT(q.id) as questionCount "
+              + "FROM questions q "
+              + "JOIN question_templates t ON q.template_id = t.id "
+              + "JOIN chapters c ON t.chapter_id = c.id "
+              + "JOIN subjects s ON c.subject_id = s.id "
+              + "JOIN school_grades sg ON s.school_grade_id = sg.id "
+              + "WHERE q.question_bank_id = :bankId "
+              + "  AND q.question_type != 'TRUE_FALSE' "
+              + "  AND q.question_status = 'APPROVED' "
+              + "  AND q.deleted_at IS NULL "
+              + "GROUP BY sg.grade_level, c.id, c.title, q.question_type, q.cognitive_level "
+              + "ORDER BY sg.grade_level, c.order_index, q.question_type, q.cognitive_level",
+      nativeQuery = true)
+  List<Object[]> findNonTFMatrixStatsByBankId(@Param("bankId") UUID bankId);
+
+  /**
+   * TF clause-level stats: expands generation_metadata->'tfClauses' into individual rows.
+   * Each clause (A/B/C/D) with its own cognitiveLevel is counted separately.
+   * Returns same column shape as findMatrixStatsByBankId.
+   */
+  @Query(
+      value =
+          "SELECT "
+              + "  sg.grade_level as gradeLevel, "
+              + "  c.id as chapterId, "
+              + "  c.title as chapterName, "
+              + "  'TRUE_FALSE' as questionType, "
+              + "  clause_data.cognitive as cognitiveLevel, "
+              + "  COUNT(*) as questionCount "
+              + "FROM questions q "
+              + "JOIN question_templates t ON q.template_id = t.id "
+              + "JOIN chapters c ON t.chapter_id = c.id "
+              + "JOIN subjects s ON c.subject_id = s.id "
+              + "JOIN school_grades sg ON s.school_grade_id = sg.id, "
+              + "LATERAL ( "
+              + "  SELECT value->>'cognitiveLevel' as cognitive "
+              + "  FROM jsonb_each(q.generation_metadata->'tfClauses') "
+              + "  WHERE value->>'cognitiveLevel' IS NOT NULL "
+              + ") clause_data "
+              + "WHERE q.question_bank_id = :bankId "
+              + "  AND q.question_type = 'TRUE_FALSE' "
+              + "  AND q.question_status = 'APPROVED' "
+              + "  AND q.deleted_at IS NULL "
+              + "  AND q.generation_metadata IS NOT NULL "
+              + "  AND q.generation_metadata->'tfClauses' IS NOT NULL "
+              + "GROUP BY sg.grade_level, c.id, c.title, clause_data.cognitive "
+              + "ORDER BY sg.grade_level, c.order_index, clause_data.cognitive",
+      nativeQuery = true)
+  List<Object[]> findTFClauseStatsByBankId(@Param("bankId") UUID bankId);
+
+  /**
+   * Count TF questions that have at least one clause matching the given cognitive level.
+   * Used by QuestionSelectionService for TF-aware matrix validation.
+   */
+  @Query(
+      value =
+          "SELECT COUNT(DISTINCT q.id) FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.chapter_id = :chapterId "
+              + "AND q.question_type = 'TRUE_FALSE' "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND q.generation_metadata IS NOT NULL "
+              + "AND EXISTS ( "
+              + "  SELECT 1 FROM jsonb_each(q.generation_metadata->'tfClauses') "
+              + "  WHERE value->>'cognitiveLevel' = CAST(:cognitiveLevel AS text) "
+              + ")",
+      nativeQuery = true)
+  long countTFByBankAndChapterAndClauseCognitive(
+      @Param("bankId") UUID bankId,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel);
+
+  /**
+   * Find TF question IDs that have at least one clause matching the given cognitive level.
+   * Used by QuestionSelectionService for TF-aware matrix generation.
+   */
+  @Query(
+      value =
+          "SELECT DISTINCT q.id FROM questions q "
+              + "WHERE q.question_bank_id = :bankId "
+              + "AND q.chapter_id = :chapterId "
+              + "AND q.question_type = 'TRUE_FALSE' "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND q.generation_metadata IS NOT NULL "
+              + "AND EXISTS ( "
+              + "  SELECT 1 FROM jsonb_each(q.generation_metadata->'tfClauses') "
+              + "  WHERE value->>'cognitiveLevel' = CAST(:cognitiveLevel AS text) "
+              + ") "
+              + "ORDER BY q.id",
+      nativeQuery = true)
+  List<UUID> findTFIdsByBankAndChapterAndClauseCognitive(
+      @Param("bankId") UUID bankId,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel);
 }
 

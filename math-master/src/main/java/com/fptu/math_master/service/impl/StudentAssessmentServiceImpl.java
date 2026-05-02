@@ -787,10 +787,29 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
 
   private AttemptQuestionResponse mapToAttemptQuestion(AssessmentQuestion aq) {
     Question question = aq.getQuestion();
+    
+    // Determine partNumber from question type
+    Integer partNumber = null;
+    if (question.getQuestionType() != null) {
+      switch (question.getQuestionType()) {
+        case MULTIPLE_CHOICE:
+          partNumber = 1;
+          break;
+        case TRUE_FALSE:
+          partNumber = 2;
+          break;
+        case SHORT_ANSWER:
+          partNumber = 3;
+          break;
+        default:
+          partNumber = null;
+      }
+    }
 
     return AttemptQuestionResponse.builder()
         .questionId(question.getId())
         .orderIndex(aq.getOrderIndex())
+        .partNumber(partNumber)
         .questionType(question.getQuestionType())
         .questionText(question.getQuestionText())
       .diagramData(question.getDiagramData())

@@ -25,6 +25,7 @@ import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.CanonicalQuestionRepository;
+import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionRepository;
@@ -62,6 +63,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
   QuestionTemplateRepository questionTemplateRepository;
+  ChapterRepository chapterRepository;
   LessonRepository lessonRepository;
   AIEnhancementService aiEnhancementService;
   GeminiService geminiService;
@@ -552,6 +554,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         metadata.put("status", "AI_DRAFT");
         metadata.put("generationMode", mode.name());
         metadata.put("usedParameters", sample.getUsedParameters());
+        
+        // Merge sample's generationMetadata (contains tfClauses for TF questions)
+        if (sample.getGenerationMetadata() != null) {
+          metadata.putAll(sample.getGenerationMetadata());
+        }
 
         Question question =
             Question.builder()
@@ -955,7 +962,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   }
 
   private QuestionTemplateResponse mapToResponse(QuestionTemplate template) {
-    QuestionTemplateResponse response =
+    QuestionTemplateResponse.QuestionTemplateResponseBuilder builder =
         QuestionTemplateResponse.builder()
             .id(template.getId())
             .createdBy(template.getCreatedBy())
@@ -980,8 +987,22 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .createdAt(template.getCreatedAt())
             .updatedAt(template.getUpdatedAt())
             .questionBankId(template.getQuestionBankId())
-            .canonicalQuestionId(template.getCanonicalQuestionId())
-            .build();
+            .canonicalQuestionId(template.getCanonicalQuestionId());
+
+    // Populate chapter, subject, and grade info if chapterId exists
+    if (template.getChapterId() != null) {
+      chapterRepository.findById(template.getChapterId()).ifPresent(chapter -> {
+        builder.chapterName(chapter.getTitle());
+        if (chapter.getSubject() != null) {
+          builder.subjectName(chapter.getSubject().getName());
+          if (chapter.getSubject().getSchoolGrade() != null) {
+            builder.gradeLevel(String.valueOf(chapter.getSubject().getSchoolGrade().getGradeLevel()));
+          }
+        }
+      });
+    }
+
+    QuestionTemplateResponse response = builder.build();
 
     if (template.getCreator() != null) {
       response.setCreatorName(template.getCreator().getFullName());

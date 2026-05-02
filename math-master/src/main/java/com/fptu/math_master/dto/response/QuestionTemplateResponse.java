@@ -25,6 +25,9 @@ public class QuestionTemplateResponse {
   private String name;
   private String description;
   private UUID chapterId;
+  private String chapterName;
+  private String subjectName;
+  private String gradeLevel;
   private QuestionType templateType;
   private TemplateVariant templateVariant;
   private Map<String, Object> templateText;

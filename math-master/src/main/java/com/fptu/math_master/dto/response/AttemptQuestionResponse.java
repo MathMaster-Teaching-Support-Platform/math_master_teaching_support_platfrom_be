@@ -17,6 +17,7 @@ public class AttemptQuestionResponse {
 
   private UUID questionId;
   private Integer orderIndex;
+  private Integer partNumber;
   private QuestionType questionType;
   private String questionText;
   private String diagramData;

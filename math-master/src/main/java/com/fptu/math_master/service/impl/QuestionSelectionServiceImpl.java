@@ -5,6 +5,7 @@ import com.fptu.math_master.entity.ExamMatrix;
 import com.fptu.math_master.entity.ExamMatrixBankMapping;
 import com.fptu.math_master.entity.ExamMatrixRow;
 import com.fptu.math_master.entity.Question;
+import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ExamMatrixBankMappingRepository;
@@ -226,6 +227,12 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     if (questionType == null) {
       return 0;
     }
+
+    // Finale2: TF clause-level matching via JSONB generation_metadata
+    if (mapping.getQuestionType() == QuestionType.TRUE_FALSE) {
+      return questionRepository.countTFByBankAndChapterAndClauseCognitive(
+          bankId, chapterId, cognitiveLevel);
+    }
     
     return questionRepository.countApprovedByBankAndChapterAndCognitiveAndType(
         bankId, chapterId, cognitiveLevel, questionType);
@@ -244,6 +251,12 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
         mapping.getQuestionType() != null ? mapping.getQuestionType().name() : null;
     if (questionType == null) {
       return new ArrayList<>();
+    }
+
+    // Finale2: TF clause-level matching via JSONB generation_metadata
+    if (mapping.getQuestionType() == QuestionType.TRUE_FALSE) {
+      return questionRepository.findTFIdsByBankAndChapterAndClauseCognitive(
+          bankId, chapterId, cognitiveLevel);
     }
     
     return questionRepository.findApprovedIdsByBankAndChapterAndCognitiveAndType(
