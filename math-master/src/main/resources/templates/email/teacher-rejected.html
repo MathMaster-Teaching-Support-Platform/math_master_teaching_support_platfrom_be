@@ -1,45 +1,139 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 20px auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
-        .header { background: #f5f5f5; padding: 30px; text-align: center; color: #444; border-bottom: 3px solid #f44336; }
-        .content { padding: 30px; background: #ffffff; }
-        .footer { background: #f9f9f9; padding: 20px; text-align: center; font-size: 12px; color: #777; }
-        .btn { display: inline-block; padding: 12px 24px; background-color: #444; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 20px; }
-        .logo { font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #667eea; }
-        h1 { margin: 0; font-size: 20px; }
-        .reason-box { background-color: #fff8f8; border-left: 4px solid #f44336; padding: 15px; margin: 20px 0; font-style: italic; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hồ sơ giảng viên chưa đạt yêu cầu — MathMaster</title>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <div class="logo">MathMaster 📚</div>
-            <h1>Thông tin về hồ sơ đăng ký của bạn</h1>
-        </div>
-        <div class="content">
-            <p>Xin chào <span th:text="${name}">Giảng viên</span>,</p>
-            <p>Cảm ơn bạn đã quan tâm và gửi hồ sơ đăng ký giảng viên trên <strong>MathMaster</strong>.</p>
-            <p>Sau khi xem xét kỹ lưỡng hồ sơ và các tài liệu xác minh của bạn, chúng tôi rất tiếc phải thông báo rằng hồ sơ của bạn chưa được phê duyệt tại thời điểm này.</p>
-            <p><strong>Lý do từ ban quản trị:</strong></p>
-            <div class="reason-box">
-                <span th:text="${reason}">Hồ sơ chưa đạt yêu cầu xác minh.</span>
-            </div>
-            <p>Đừng nản lòng! Bạn hoàn toàn có thể cập nhật lại hồ sơ, bổ sung các giấy tờ cần thiết và gửi lại yêu cầu xác minh.</p>
-            <div style="text-align: center;">
-                <a th:href="${retryUrl}" class="btn">Cập nhật hồ sơ & Gửi lại</a>
-            </div>
-            <p>Nếu bạn cần làm rõ thêm về lý do từ chối hoặc cần hỗ trợ, vui lòng phản hồi email này hoặc liên hệ <a href="mailto:support@mathmaster.vn">support@mathmaster.vn</a>.</p>
-            <p>Trân trọng,<br>Đội ngũ MathMaster</p>
-        </div>
-        <div class="footer">
-            &copy; 2026 MathMaster App. Tất cả các quyền được bảo lưu.<br>
-            Email này được gửi tự động từ hệ thống quản trị hồ sơ MathMaster.
-        </div>
-    </div>
+<body style="margin:0;padding:0;background-color:#f5f4ed;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f4ed;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0"
+               style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+          <!-- HEADER -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#c2410c 0%,#ea580c 60%,#f97316 100%);padding:0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:20px 32px 0;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td><span style="font-size:20px;font-weight:800;color:#ffffff;">∑ MathMaster</span></td>
+                        <td align="right"><span style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.75);text-transform:uppercase;letter-spacing:0.08em;">Thông báo phê duyệt</span></td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding:28px 32px 32px;">
+                    <table cellpadding="0" cellspacing="0" border="0" align="center">
+                      <tr>
+                        <td align="center" style="width:72px;height:72px;background-color:rgba(255,255,255,0.2);border-radius:50%;border:2px solid rgba(255,255,255,0.35);">
+                          <span style="font-size:36px;line-height:72px;">📝</span>
+                        </td>
+                      </tr>
+                    </table>
+                    <h1 style="margin:16px 0 6px;font-size:26px;font-weight:800;color:#ffffff;">Hồ sơ cần bổ sung</h1>
+                    <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.85);">Hồ sơ giảng viên của bạn chưa đạt yêu cầu.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding:32px 36px 0;">
+              <p style="margin:0;font-size:16px;color:#4d4c48;line-height:1.7;">
+                Xin chào <strong style="color:#141413;" th:text="${name}">Giảng viên</strong>,
+              </p>
+              <p style="margin:12px 0 0;font-size:15px;color:#5e5d59;line-height:1.75;">
+                Cảm ơn bạn đã quan tâm và đăng ký trở thành giảng viên trên
+                <strong style="color:#c2410c;">MathMaster</strong>. Sau khi xem xét, chúng tôi nhận thấy
+                hồ sơ của bạn cần được cập nhật và bổ sung thêm thông tin.
+              </p>
+            </td>
+          </tr>
+
+          <!-- REASON BOX -->
+          <tr>
+            <td style="padding:24px 36px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background-color:#fff7ed;border-radius:12px;border:1px solid #fed7aa;overflow:hidden;">
+                <tr>
+                  <td style="padding:14px 20px;background-color:#ffedd5;border-bottom:1px solid #fed7aa;">
+                    <span style="font-size:11px;font-weight:700;color:#c2410c;text-transform:uppercase;letter-spacing:0.08em;">⚠️ Lý do từ chối</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0;font-size:14px;color:#9a3412;line-height:1.6;" th:text="${reason}">
+                      Hồ sơ chưa đạt yêu cầu xác minh.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td align="center" style="padding:28px 36px 0;">
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="background:linear-gradient(135deg,#c2410c,#ea580c);border-radius:12px;">
+                    <a th:href="${retryUrl}" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;">
+                      ✏️ &nbsp;Cập nhật hồ sơ
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:12px 0 0;font-size:12px;color:#a09f98;">
+                Bạn có thể nộp lại hồ sơ bất cứ lúc nào sau khi đã bổ sung đầy đủ thông tin.
+              </p>
+            </td>
+          </tr>
+
+          <!-- DIVIDER -->
+          <tr><td style="padding:28px 36px 0;"><hr style="border:none;border-top:1px solid #ede8dc;margin:0;"/></td></tr>
+
+          <!-- SIGN OFF -->
+          <tr>
+            <td style="padding:20px 36px 32px;">
+              <p style="margin:0;font-size:13px;color:#87867f;line-height:1.7;">
+                Nếu có câu hỏi, hãy liên hệ với chúng tôi qua
+                <a href="mailto:support@mathmaster.vn" style="color:#c2410c;font-weight:600;text-decoration:none;">support@mathmaster.vn</a>.
+              </p>
+              <p style="margin:16px 0 0;font-size:15px;color:#141413;font-weight:600;">
+                Rất mong sớm nhận được hồ sơ cập nhật của bạn!<br/>
+                <span style="font-weight:400;color:#87867f;font-size:13px;">Đội ngũ MathMaster</span>
+              </p>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="background-color:#f5f4ed;border-top:1px solid #ede8dc;padding:24px 36px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center">
+                    <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#4d4c48;">∑ MathMaster</p>
+                    <p style="margin:0 0 14px;font-size:12px;color:#a09f98;">Nền tảng học toán trực tuyến hàng đầu Việt Nam</p>
+                    <p style="margin:0;font-size:11px;color:#b8b6ae;line-height:1.6;">
+                      © 2026 MathMaster. Bảo lưu mọi quyền.<br/>Email này được gửi tự động — vui lòng không trả lời.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
