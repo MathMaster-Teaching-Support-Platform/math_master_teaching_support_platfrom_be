@@ -1,5 +1,6 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.dto.request.RejectWithdrawalRequest;
 import com.fptu.math_master.dto.request.VerifyWithdrawalOtpRequest;
 import com.fptu.math_master.dto.request.WithdrawalRequestDto;
@@ -49,6 +50,7 @@ public class WithdrawalServiceImpl implements WithdrawalService {
   TransactionRepository transactionRepository;
   EmailService emailService;
   UploadService uploadService;
+  MinioProperties minioProperties;
   PasswordEncoder passwordEncoder;
 
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -326,7 +328,7 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         .bankAccountNumber(wr.getBankAccountNumber())
         .bankAccountName(wr.getBankAccountName())
         .status(wr.getStatus())
-        .proofImageUrl(wr.getProofImageUrl())
+        .proofImageUrl(resolveProofImageUrl(wr.getProofImageUrl()))
         .adminNote(wr.getAdminNote())
         .transactionId(wr.getTransaction() != null ? wr.getTransaction().getId() : null)
         .processedAt(wr.getProcessedAt())
@@ -347,12 +349,31 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         .bankAccountNumber(wr.getBankAccountNumber())
         .bankAccountName(wr.getBankAccountName())
         .status(wr.getStatus())
-        .proofImageUrl(wr.getProofImageUrl())
+        .proofImageUrl(resolveProofImageUrl(wr.getProofImageUrl()))
         .adminNote(wr.getAdminNote())
         .transactionId(wr.getTransaction() != null ? wr.getTransaction().getId() : null)
         .processedAt(wr.getProcessedAt())
         .createdAt(wr.getCreatedAt())
         .updatedAt(wr.getUpdatedAt())
         .build();
+  }
+
+  private String resolveProofImageUrl(String rawProofImageUrl) {
+    if (rawProofImageUrl == null || rawProofImageUrl.isBlank()) {
+      return rawProofImageUrl;
+    }
+
+    // Already absolute URL (legacy/public) -> return as-is.
+    if (rawProofImageUrl.startsWith("http://") || rawProofImageUrl.startsWith("https://")) {
+      return rawProofImageUrl;
+    }
+
+    // Stored as MinIO object key -> convert to temporary accessible URL for FE.
+    try {
+      return uploadService.getPresignedUrl(rawProofImageUrl, minioProperties.getTemplateBucket());
+    } catch (Exception ex) {
+      log.warn("Failed to generate presigned proof image URL for key={}: {}", rawProofImageUrl, ex.getMessage());
+      return rawProofImageUrl;
+    }
   }
 }
