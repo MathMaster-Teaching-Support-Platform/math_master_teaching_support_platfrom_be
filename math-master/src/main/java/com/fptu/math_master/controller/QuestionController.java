@@ -6,13 +6,16 @@ import com.fptu.math_master.dto.request.CreateQuestionRequest;
 import com.fptu.math_master.dto.request.ImportQuestionsRequest;
 import com.fptu.math_master.dto.request.QuestionBatchImportRequest;
 import com.fptu.math_master.dto.request.UpdateQuestionRequest;
+import com.fptu.math_master.dto.request.AIEnhancementRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.ImportQuestionsResponse;
 import com.fptu.math_master.dto.response.QuestionBatchImportResponse;
 import com.fptu.math_master.dto.response.QuestionExcelPreviewResponse;
 import com.fptu.math_master.dto.response.QuestionResponse;
+import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.service.QuestionExcelImportService;
 import com.fptu.math_master.service.QuestionService;
+import com.fptu.math_master.service.AIEnhancementService;
 import org.springframework.http.ResponseEntity;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -45,6 +48,7 @@ public class QuestionController {
 
   QuestionService questionService;
   QuestionExcelImportService questionExcelImportService;
+  AIEnhancementService aiEnhancementService;
 
   @PostMapping
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
@@ -369,5 +373,30 @@ public class QuestionController {
         .header("Content-Disposition", "attachment; filename=question_import.xlsx")
         .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
         .body(excelBytes);
+  }
+
+  @PostMapping("/enhance")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Enhance question with AI",
+      description = "Use AI to generate explanation and solution steps for a question. Works for all question types (MCQ, TF, SA).")
+  public ApiResponse<AIEnhancedQuestionResponse> enhanceQuestion(
+      @Valid @RequestBody AIEnhancementRequest request) {
+    log.info("REST request to enhance question with AI: type={}", request.getQuestionType());
+    AIEnhancedQuestionResponse response = aiEnhancementService.enhanceQuestion(request);
+    
+    String message;
+    if (response.isEnhanced() && response.isValid()) {
+      message = "Question enhanced successfully with AI-generated explanation and solution steps.";
+    } else if (!response.isValid()) {
+      message = "AI enhancement validation failed. Errors: " + String.join(", ", response.getValidationErrors());
+    } else {
+      message = "AI enhancement failed. Please try again.";
+    }
+    
+    return ApiResponse.<AIEnhancedQuestionResponse>builder()
+        .message(message)
+        .result(response)
+        .build();
   }
 }
