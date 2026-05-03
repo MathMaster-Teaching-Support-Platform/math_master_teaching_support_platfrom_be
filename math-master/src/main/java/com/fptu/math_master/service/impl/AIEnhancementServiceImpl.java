@@ -755,19 +755,27 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       gradingMetadata.put("answerValidationMode", "EXACT");
       gradingMetadata.put("answerTolerance", 0.001);
 
-      // Return generated question
-      return GeneratedQuestionSample.builder()
-          .questionText(questionText)
-          .options(null)  // No options for SHORT_ANSWER
-          .correctAnswer(correctAnswer)
-          .explanation("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
-          .solutionSteps("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
-          .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
-          .calculatedDifficulty(difficulty)
-          .usedParameters(params)
-          .answerCalculation(template.getAnswerFormula() + " = " + correctAnswer)
-          .generationMetadata(gradingMetadata)
-          .build();
+      // Step 6: Call AI to generate explanation and solution steps
+      try {
+        String prompt = buildGenerationPrompt(template, params, correctAnswer, questionText, sampleIndex);
+        String aiContent = geminiService.sendMessage(prompt);
+        return parseGeneratedQuestion(aiContent, template, params, correctAnswer, difficulty, questionText);
+      } catch (Exception aiError) {
+        log.error("AI generation failed for SHORT_ANSWER, using fallback: {}", aiError.getMessage());
+        // Fallback to basic explanation if AI fails
+        return GeneratedQuestionSample.builder()
+            .questionText(questionText)
+            .options(null)  // No options for SHORT_ANSWER
+            .correctAnswer(correctAnswer)
+            .explanation("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
+            .solutionSteps("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
+            .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
+            .calculatedDifficulty(difficulty)
+            .usedParameters(params)
+            .answerCalculation(template.getAnswerFormula() + " = " + correctAnswer)
+            .generationMetadata(gradingMetadata)
+            .build();
+      }
 
     } catch (Exception e) {
       log.error("Failed to generate SHORT_ANSWER question: {}", e.getMessage(), e);
@@ -863,19 +871,41 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         correctAnswer = "A";  // Default if no true clauses
       }
 
-      // Return generated question
-      return GeneratedQuestionSample.builder()
-          .questionText(questionStem)
-          .options(clauses)
-          .correctAnswer(correctAnswer)
-          .explanation("Xét các mệnh đề: " + String.join(", ", trueKeys.isEmpty() ? List.of("Không có mệnh đề nào đúng") : trueKeys))
-          .solutionSteps("Phân tích từng mệnh đề dựa trên các tính chất toán học")
-          .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
-          .calculatedDifficulty(difficulty)
-          .usedParameters(params)
-          .answerCalculation("Các mệnh đề đúng: " + (trueKeys.isEmpty() ? "Không có" : String.join(", ", trueKeys)))
-          .generationMetadata(gradingMetadata)
-          .build();
+      // Step 8: Call AI to generate explanation and solution steps
+      try {
+        String prompt = buildGenerationPrompt(template, params, correctAnswer, questionStem, sampleIndex);
+        String aiContent = geminiService.sendMessage(prompt);
+        GeneratedQuestionSample aiGenerated = parseGeneratedQuestion(aiContent, template, params, correctAnswer, difficulty, questionStem);
+        
+        // Use AI-generated explanation and solution steps, but keep our clauses and correct answer
+        return GeneratedQuestionSample.builder()
+            .questionText(questionStem)
+            .options(clauses)  // Use our generated clauses, not AI's
+            .correctAnswer(correctAnswer)  // Use our computed correct answer
+            .explanation(aiGenerated.getExplanation())  // Use AI explanation
+            .solutionSteps(aiGenerated.getSolutionSteps())  // Use AI solution steps
+            .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
+            .calculatedDifficulty(difficulty)
+            .usedParameters(params)
+            .answerCalculation("Các mệnh đề đúng: " + (trueKeys.isEmpty() ? "Không có" : String.join(", ", trueKeys)))
+            .generationMetadata(gradingMetadata)
+            .build();
+      } catch (Exception aiError) {
+        log.error("AI generation failed for TRUE_FALSE, using fallback: {}", aiError.getMessage());
+        // Fallback to basic explanation if AI fails
+        return GeneratedQuestionSample.builder()
+            .questionText(questionStem)
+            .options(clauses)
+            .correctAnswer(correctAnswer)
+            .explanation("Xét các mệnh đề: " + String.join(", ", trueKeys.isEmpty() ? List.of("Không có mệnh đề nào đúng") : trueKeys))
+            .solutionSteps("Phân tích từng mệnh đề dựa trên các tính chất toán học")
+            .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
+            .calculatedDifficulty(difficulty)
+            .usedParameters(params)
+            .answerCalculation("Các mệnh đề đúng: " + (trueKeys.isEmpty() ? "Không có" : String.join(", ", trueKeys)))
+            .generationMetadata(gradingMetadata)
+            .build();
+      }
 
     } catch (Exception e) {
       log.error("Failed to generate TRUE_FALSE question: {}", e.getMessage(), e);
@@ -1757,6 +1787,17 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       String correctAnswer,
       String baseQuestionText,
       int sampleIndex) {
+    
+    // Delegate to type-specific prompt builders
+    QuestionType questionType = template.getTemplateType();
+    
+    if (questionType == QuestionType.TRUE_FALSE) {
+      return buildTFGenerationPrompt(template, params, baseQuestionText, sampleIndex);
+    } else if (questionType == QuestionType.SHORT_ANSWER) {
+      return buildSAGenerationPrompt(template, params, correctAnswer, baseQuestionText, sampleIndex);
+    }
+    
+    // Default: MCQ prompt (existing logic)
     boolean textualOptions = templateUsesTextualOptions(template);
     boolean optionPlaceholderMode = templateUsesDynamicOptionPlaceholders(template);
     Set<String> optionPlaceholderNames = collectOptionPlaceholderNames(template);
@@ -1854,6 +1895,152 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     return p.toString();
   }
 
+  /**
+   * Build AI prompt for TRUE/FALSE question generation
+   */
+  private String buildTFGenerationPrompt(
+      QuestionTemplate template,
+      Map<String, Object> params,
+      String baseQuestionText,
+      int sampleIndex) {
+    
+    StringBuilder p = new StringBuilder();
+    p.append("Return ONLY a JSON object. No markdown, no explanation outside JSON.\n\n");
+    p.append("Task: Generate explanation and solution steps for a TRUE/FALSE question in Vietnamese.\n\n");
+
+    p.append("Question statement: ").append(baseQuestionText).append("\n");
+    p.append("Parameters used: ").append(serializeParamsForPrompt(params)).append("\n");
+    
+    // Include the actual clauses from the template
+    Map<String, Object> statementMutations = template.getStatementMutations() != null 
+        ? template.getStatementMutations() 
+        : new HashMap<>();
+    
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> clauseTemplates = 
+        (List<Map<String, Object>>) statementMutations.getOrDefault("clauseTemplates", new ArrayList<>());
+    
+    if (!clauseTemplates.isEmpty()) {
+      p.append("\nClauses:\n");
+      for (int i = 0; i < Math.min(4, clauseTemplates.size()); i++) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> clauseTemplate = clauseTemplates.get(i);
+        String key = String.valueOf((char) ('A' + i));
+        String clauseText = (String) clauseTemplate.get("text");
+        Boolean truthValue = (Boolean) clauseTemplate.get("truthValue");
+        
+        if (clauseText != null) {
+          clauseText = fillText(clauseText, params);
+          p.append(key).append(") ").append(clauseText)
+            .append(" [").append(truthValue != null && truthValue ? "TRUE" : "FALSE").append("]\n");
+        }
+      }
+    }
+    
+    p.append("\nSample #: ").append(sampleIndex + 1).append("\n\n");
+
+    p.append("Rules:\n");
+    p.append("1. DO NOT generate new clauses - use the clauses provided above.\n");
+    p.append("2. Generate an overall explanation connecting all clauses (2-3 sentences in Vietnamese).\n");
+    p.append("3. Generate detailed solution steps explaining why each clause is true or false.\n");
+    p.append("4. Focus on mathematical reasoning and concepts.\n");
+    p.append("5. All text MUST be natural Vietnamese with proper accents (UTF-8).\n\n");
+
+    p.append("JSON format:\n");
+    p.append("{\n");
+    p.append("  \"questionText\": \"").append(baseQuestionText.replace("\"", "\\\"")).append("\",\n");
+    p.append("  \"options\": {},\n");  // Empty - we'll use template clauses
+    p.append("  \"correctAnswer\": \"A\",\n");  // Placeholder - we'll use template answer
+    p.append("  \"explanation\": \"Overall explanation connecting all clauses...\",\n");
+    p.append("  \"solutionSteps\": \"Clause A: [reasoning why true/false]\\nClause B: [reasoning]\\nClause C: [reasoning]\\nClause D: [reasoning]\",\n");
+    p.append("  \"difficulty\": \"EASY|MEDIUM|HARD\",\n");
+    p.append("  \"usedParameters\": {");
+    
+    // Add parameters
+    StringBuilder paramStr = new StringBuilder();
+    params.forEach((k, v) -> {
+      if (paramStr.length() > 0) paramStr.append(",");
+      Object value = v;
+      if (value instanceof Number) {
+        paramStr.append("\"").append(k).append("\":").append(formatParameterValue(value));
+      } else {
+        paramStr.append("\"").append(k).append("\":\"")
+            .append(String.valueOf(value).replace("\"", "\\\"")).append("\"");
+      }
+    });
+    p.append(paramStr);
+    p.append("}\n}\n");
+
+    return p.toString();
+  }
+
+  /**
+   * Build AI prompt for SHORT ANSWER question generation
+   */
+  private String buildSAGenerationPrompt(
+      QuestionTemplate template,
+      Map<String, Object> params,
+      String correctAnswer,
+      String baseQuestionText,
+      int sampleIndex) {
+    
+    StringBuilder p = new StringBuilder();
+    p.append("Return ONLY a JSON object. No markdown, no explanation outside JSON.\n\n");
+    p.append("Task: Generate a SHORT ANSWER question in Vietnamese.\n\n");
+
+    p.append("Question (already formed): ").append(baseQuestionText).append("\n");
+    p.append("Correct answer (pre-computed, DO NOT change): ").append(correctAnswer).append("\n");
+    p.append("Parameters used: ").append(serializeParamsForPrompt(params)).append("\n");
+    
+    if (template.getAnswerFormula() != null && !template.getAnswerFormula().isBlank()) {
+      p.append("Formula: ").append(template.getAnswerFormula()).append("\n");
+    }
+    
+    p.append("Sample #: ").append(sampleIndex + 1).append("\n\n");
+
+    p.append("Rules:\n");
+    p.append("1. correctAnswer = \"").append(correctAnswer).append("\" (DO NOT change this value).\n");
+    p.append("2. explanation = concept explanation in Vietnamese, 2-3 sentences.\n");
+    p.append("3. solutionSteps = detailed step-by-step solution showing how to arrive at the answer.\n");
+    p.append("4. Include reasoning and key formulas used.\n");
+    p.append("5. All text MUST be natural Vietnamese with proper accents (UTF-8).\n");
+    p.append("6. Keep parameter placeholders in double braces (e.g. {{a}}, {{x1}}).\n\n");
+
+    p.append("JSON format:\n");
+    p.append("{\n");
+    p.append("  \"questionText\": \"").append(baseQuestionText.replace("\"", "\\\"")).append("\",\n");
+    p.append("  \"options\": {},\n");
+    p.append("  \"correctAnswer\": \"").append(correctAnswer).append("\",\n");
+    p.append("  \"explanation\": \"Concept explanation in Vietnamese...\",\n");
+    p.append("  \"solutionSteps\": \"Step 1: ...\\nStep 2: ...\\nStep 3: ...\",\n");
+    p.append("  \"difficulty\": \"EASY|MEDIUM|HARD\",\n");
+    p.append("  \"answerCalculation\": \"");
+    
+    if (template.getAnswerFormula() != null) {
+      p.append(template.getAnswerFormula()).append(" = ").append(correctAnswer);
+    }
+    
+    p.append("\",\n");
+    p.append("  \"usedParameters\": {");
+    
+    // Add parameters
+    StringBuilder paramStr = new StringBuilder();
+    params.forEach((k, v) -> {
+      if (paramStr.length() > 0) paramStr.append(",");
+      Object value = v;
+      if (value instanceof Number) {
+        paramStr.append("\"").append(k).append("\":").append(formatParameterValue(value));
+      } else {
+        paramStr.append("\"").append(k).append("\":\"")
+            .append(String.valueOf(value).replace("\"", "\\\"")).append("\"");
+      }
+    });
+    p.append(paramStr);
+    p.append("}\n}\n");
+
+    return p.toString();
+  }
+
   @SuppressWarnings("unchecked")
   private GeneratedQuestionSample parseGeneratedQuestion(
       String aiContent,
@@ -1897,6 +2084,14 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         explanation = "Solution provided by AI";
       }
       explanation = fillText(explanation, effectiveParams);
+
+      // Parse solutionSteps from AI response (fallback to explanation if not provided)
+      String solutionSteps = root.path("solutionSteps").asText();
+      if (solutionSteps == null || solutionSteps.isBlank()) {
+        solutionSteps = buildSolutionSteps(explanation);
+      } else {
+        solutionSteps = fillText(solutionSteps, effectiveParams);
+      }
 
       // Difficulty from LLM or pre-computed
       String diffStr = root.path("difficulty").asText("").trim().toUpperCase();
@@ -1956,7 +2151,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .options(options)
           .correctAnswer(correctKey) // KEY (A/B/C/D), not numeric value
           .explanation(explanation)
-          .solutionSteps(buildSolutionSteps(explanation))
+          .solutionSteps(solutionSteps)
           .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), effectiveParams))
           .calculatedDifficulty(difficulty)
           .usedParameters(effectiveParams)
