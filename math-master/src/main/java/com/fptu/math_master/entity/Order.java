@@ -85,9 +85,4 @@ public class Order extends BaseEntity {
   @JoinColumn(name = "enrollment_id", insertable = false, updatable = false)
   private Enrollment enrollment;
 
-  @OneToOne(mappedBy = "order", cascade = CascadeType.ALL)
-  private Transaction studentTransaction;
-
-  @OneToOne(mappedBy = "order", cascade = CascadeType.ALL)
-  private Transaction instructorTransaction;
 }

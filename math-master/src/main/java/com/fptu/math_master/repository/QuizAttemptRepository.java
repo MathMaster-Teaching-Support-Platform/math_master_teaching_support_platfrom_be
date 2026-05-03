@@ -39,4 +39,6 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, UUID> 
       "SELECT qa FROM QuizAttempt qa WHERE qa.status = 'IN_PROGRESS' "
           + "AND qa.startedAt < :expirationTime")
   List<QuizAttempt> findExpiredAttempts(@Param("expirationTime") Instant expirationTime);
+
+  long countByCreatedAtBetween(Instant start, Instant end);
 }

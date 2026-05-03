@@ -27,4 +27,6 @@ public interface TeacherProfileRepository extends JpaRepository<TeacherProfile, 
 
   @Query("SELECT COUNT(tp) FROM TeacherProfile tp WHERE tp.status = 'PENDING'")
   long countPendingProfiles();
+
+  long countByStatusAndCreatedAtBetween(ProfileStatus status, java.time.Instant start, java.time.Instant end);
 }
