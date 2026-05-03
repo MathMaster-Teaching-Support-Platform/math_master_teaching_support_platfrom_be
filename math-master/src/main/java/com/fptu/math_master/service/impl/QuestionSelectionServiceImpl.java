@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -68,13 +70,25 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
       rowById.put(row.getId(), row);
     }
 
+    // ISSUE-04: Separate TF and non-TF mappings for validation
+    Map<UUID, List<ExamMatrixBankMapping>> tfByRow = new LinkedHashMap<>();
+    List<ExamMatrixBankMapping> nonTFValidation = new ArrayList<>();
+
     for (ExamMatrixBankMapping mapping : mappings) {
+      if (mapping.getQuestionType() == QuestionType.TRUE_FALSE) {
+        tfByRow.computeIfAbsent(mapping.getMatrixRowId(), k -> new ArrayList<>()).add(mapping);
+      } else {
+        nonTFValidation.add(mapping);
+      }
+    }
+
+    // Validate non-TF as before
+    for (ExamMatrixBankMapping mapping : nonTFValidation) {
       int required = requiredQuestions(mapping);
       if (required <= 0) {
         continue;
       }
 
-      // Get chapter from the row
       ExamMatrixRow row = rowById.get(mapping.getMatrixRowId());
       if (row == null || row.getChapterId() == null) {
         log.warn(
@@ -94,6 +108,35 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
             mapping.getCognitiveLevel(),
             required,
             available);
+        throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
+      }
+    }
+
+    // ISSUE-04: Validate TF: aggregate clauses per row → check whole question availability
+    for (Map.Entry<UUID, List<ExamMatrixBankMapping>> entry : tfByRow.entrySet()) {
+      ExamMatrixRow row = rowById.get(entry.getKey());
+      if (row == null || row.getChapterId() == null) {
+        log.warn("TF row {} has no chapter - skipping validation", entry.getKey());
+        continue;
+      }
+
+      int totalClauses = entry.getValue().stream()
+          .mapToInt(this::requiredQuestions).sum();
+      int tfQuestionsNeeded = (int) Math.ceil(totalClauses / 4.0);
+
+      // Count ALL TF questions for this chapter (any clause cognitive level)
+      Set<UUID> allTFIds = new HashSet<>();
+      for (ExamMatrixBankMapping m : entry.getValue()) {
+        String level = m.getCognitiveLevel() != null ? m.getCognitiveLevel().name() : null;
+        if (level == null) continue;
+        allTFIds.addAll(questionRepository.findTFIdsByBankAndChapterAndClauseCognitive(
+            questionBankId, row.getChapterId(), level));
+      }
+
+      if (allTFIds.size() < tfQuestionsNeeded) {
+        log.error(
+            "Insufficient TF questions: chapter={}, clausesNeeded={}, questionsNeeded={}, available={}",
+            row.getChapterId(), totalClauses, tfQuestionsNeeded, allTFIds.size());
         throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
       }
     }
@@ -133,7 +176,23 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     SelectionContext context =
         new SelectionContext(new ArrayList<>(), new HashSet<>(), startOrderIndex, 0);
 
+    // ISSUE-04: Separate TF and non-TF mappings
+    List<ExamMatrixBankMapping> nonTFMappings = new ArrayList<>();
+    // Group TF mappings by matrixRowId
+    Map<UUID, List<ExamMatrixBankMapping>> tfMappingsByRow = new LinkedHashMap<>();
+
     for (ExamMatrixBankMapping mapping : mappings) {
+      if (mapping.getQuestionType() == QuestionType.TRUE_FALSE) {
+        tfMappingsByRow
+            .computeIfAbsent(mapping.getMatrixRowId(), k -> new ArrayList<>())
+            .add(mapping);
+      } else {
+        nonTFMappings.add(mapping);
+      }
+    }
+
+    // Process non-TF mappings as before (1 mapping = 1 selection round)
+    for (ExamMatrixBankMapping mapping : nonTFMappings) {
       int required = requiredQuestions(mapping);
       ExamMatrixRow row = rowById.get(mapping.getMatrixRowId());
 
@@ -147,7 +206,164 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
           assessmentId, questionBankId, row.getChapterId(), mapping, required, context);
     }
 
+    // ISSUE-04: Process TF mappings: aggregate clause requirements per row → select whole questions
+    for (Map.Entry<UUID, List<ExamMatrixBankMapping>> entry : tfMappingsByRow.entrySet()) {
+      UUID matrixRowId = entry.getKey();
+      List<ExamMatrixBankMapping> tfMappings = entry.getValue();
+      ExamMatrixRow row = rowById.get(matrixRowId);
+      if (row == null || row.getChapterId() == null) {
+        log.warn("TF row {} has no chapter - skipping", matrixRowId);
+        continue;
+      }
+      appendTFSelectionForRow(
+          assessmentId, questionBankId, row.getChapterId(), tfMappings, context);
+    }
+
     return new SelectionPlan(context.plannedQuestions(), context.totalPoints());
+  }
+
+  // ========================================================================
+  // TF Clause-Level Selection (ISSUE-04)
+  // ========================================================================
+
+  /**
+   * TF clause-level selection.
+   * Matrix cells for TF represent CLAUSE counts, not question counts.
+   * Example: NB=2, TH=1, VD=1 means 4 total clauses = 1 TF question.
+   * 
+   * Algorithm:
+   * 1. Sum all clause requirements: totalClausesNeeded = sum of all questionCount
+   * 2. Calculate whole TF questions needed: ceil(totalClausesNeeded / 4)
+   * 3. Find TF questions in the bank for this chapter that have at least one
+   *    matching clause for ANY of the required cognitive levels
+   * 4. Score each candidate by how well its clause composition matches the requirement
+   * 5. Select the best-matching questions
+   */
+  private void appendTFSelectionForRow(
+      UUID assessmentId,
+      UUID questionBankId,
+      UUID chapterId,
+      List<ExamMatrixBankMapping> tfMappings,
+      SelectionContext context) {
+
+    // Step 1: Build clause requirement map
+    Map<String, Integer> clauseRequirement = new LinkedHashMap<>();
+    int totalClausesNeeded = 0;
+    ExamMatrixBankMapping firstMapping = tfMappings.get(0); // For pointsPerQuestion
+
+    for (ExamMatrixBankMapping mapping : tfMappings) {
+      int count = requiredQuestions(mapping); // This is CLAUSE count for TF
+      if (count <= 0) continue;
+      String level = mapping.getCognitiveLevel().name();
+      clauseRequirement.merge(level, count, Integer::sum);
+      totalClausesNeeded += count;
+    }
+
+    if (totalClausesNeeded <= 0) return;
+
+    // Step 2: Calculate whole TF questions needed (each has 4 clauses)
+    int tfQuestionsNeeded = (int) Math.ceil(totalClausesNeeded / 4.0);
+
+    log.info(
+        "TF clause selection: chapter={}, clauseRequirement={}, totalClauses={}, questionsNeeded={}",
+        chapterId, clauseRequirement, totalClausesNeeded, tfQuestionsNeeded);
+
+    // Step 3: Find ALL TF candidate questions for this chapter
+    // Use a union of all cognitive levels to get the widest candidate pool
+    Set<UUID> allCandidateIds = new LinkedHashSet<>();
+    for (String level : clauseRequirement.keySet()) {
+      List<UUID> idsForLevel = questionRepository.findTFIdsByBankAndChapterAndClauseCognitive(
+          questionBankId, chapterId, level);
+      allCandidateIds.addAll(idsForLevel);
+    }
+
+    // Remove already-used questions
+    allCandidateIds.removeIf(context.usedQuestionIds()::contains);
+
+    if (allCandidateIds.size() < tfQuestionsNeeded) {
+      log.error(
+          "Insufficient TF questions: chapter={}, clauseReq={}, needed={} questions, available={}",
+          chapterId, clauseRequirement, tfQuestionsNeeded, allCandidateIds.size());
+      throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
+    }
+
+    // Step 4: Score candidates by clause composition match
+    List<UUID> candidateList = new ArrayList<>(allCandidateIds);
+    Map<UUID, Question> candidateMap = new HashMap<>();
+    for (Question q : questionRepository.findAllById(candidateList)) {
+      candidateMap.put(q.getId(), q);
+    }
+
+    // Score each candidate: how many of its clauses match the required levels
+    List<UUID> scoredCandidates = new ArrayList<>(candidateList);
+    scoredCandidates.sort((a, b) -> {
+      int scoreA = scoreTFQuestion(candidateMap.get(a), clauseRequirement);
+      int scoreB = scoreTFQuestion(candidateMap.get(b), clauseRequirement);
+      return Integer.compare(scoreB, scoreA); // Higher score first
+    });
+
+    // Add deterministic shuffle among equally-scored candidates
+    deterministicShuffle(scoredCandidates, assessmentId,
+        firstMapping != null ? firstMapping.getId() : UUID.randomUUID());
+
+    // Re-sort by score after shuffle to maintain best-match priority
+    scoredCandidates.sort((a, b) -> {
+      int scoreA = scoreTFQuestion(candidateMap.get(a), clauseRequirement);
+      int scoreB = scoreTFQuestion(candidateMap.get(b), clauseRequirement);
+      return Integer.compare(scoreB, scoreA);
+    });
+
+    // Step 5: Select top N questions
+    List<UUID> selected = scoredCandidates.subList(0, Math.min(tfQuestionsNeeded, scoredCandidates.size()));
+
+    for (UUID questionId : selected) {
+      context.plannedQuestions().add(
+          AssessmentQuestion.builder()
+              .assessmentId(assessmentId)
+              .questionId(questionId)
+              .matrixBankMappingId(firstMapping.getId())
+              .orderIndex(context.nextOrderIndex())
+              .pointsOverride(firstMapping.getPointsPerQuestion())
+              .build());
+
+      context.incrementOrderIndex();
+      context.usedQuestionIds().add(questionId);
+      context.totalPoints +=
+          firstMapping.getPointsPerQuestion() != null
+              ? firstMapping.getPointsPerQuestion().intValue() : 0;
+    }
+
+    log.info("Selected {} TF questions for chapter {} (clause requirement: {})",
+        selected.size(), chapterId, clauseRequirement);
+  }
+
+  /**
+   * Score a TF question by how well its clause cognitive levels match the requirement.
+   * Higher score = better match.
+   *
+   * Reads generation_metadata -> tfClauses -> {A: {cognitiveLevel: "NHAN_BIET"}, ...}
+   */
+  private int scoreTFQuestion(Question question, Map<String, Integer> clauseRequirement) {
+    if (question == null || question.getGenerationMetadata() == null) return 0;
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> tfClauses =
+        (Map<String, Object>) question.getGenerationMetadata().get("tfClauses");
+    if (tfClauses == null) return 0;
+
+    int score = 0;
+    // Count how many of this question's clauses match any required level
+    for (Map.Entry<String, Object> clauseEntry : tfClauses.entrySet()) {
+      if (clauseEntry.getValue() instanceof Map) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> clauseData = (Map<String, Object>) clauseEntry.getValue();
+        String clauseLevel = (String) clauseData.get("cognitiveLevel");
+        if (clauseLevel != null && clauseRequirement.containsKey(clauseLevel)) {
+          score++; // Each matching clause adds 1 to the score
+        }
+      }
+    }
+    return score;
   }
 
   // ========================================================================

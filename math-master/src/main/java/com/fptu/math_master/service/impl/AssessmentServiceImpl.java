@@ -36,6 +36,7 @@ import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.MatrixStatus;
+import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
@@ -1634,15 +1635,37 @@ public class AssessmentServiceImpl implements AssessmentService {
     java.util.Map<String, Integer> distribution =
         (request.getDistribution() != null) ? request.getDistribution() : java.util.Collections.emptyMap();
 
+    // AUDIT-01 FIX: Batch-fetch ALL questions once instead of N+1 queries
+    List<UUID> questionIds = allAQs.stream()
+        .map(AssessmentQuestion::getQuestionId)
+        .collect(java.util.stream.Collectors.toList());
+    
+    java.util.Map<UUID, Question> questionCache = new java.util.HashMap<>();
+    for (Question q : questionRepository.findAllById(questionIds)) {
+      questionCache.put(q.getId(), q);
+    }
+
+    // ISSUE-02: Calculate effective "question weight" — TF questions have 4 clauses, so weight = 4
+    // Other questions weight = 1
+    java.util.Map<UUID, Integer> questionWeights = new java.util.HashMap<>();
+    for (AssessmentQuestion aq : allAQs) {
+      Question q = questionCache.get(aq.getQuestionId());
+      if (q != null && q.getQuestionType() == QuestionType.TRUE_FALSE) {
+        questionWeights.put(aq.getQuestionId(), 4); // 4 clauses
+      } else {
+        questionWeights.put(aq.getQuestionId(), 1);
+      }
+    }
+
     // Group AssessmentQuestion by cognitiveLevel of underlying question
     java.util.Map<String, List<AssessmentQuestion>> byLevel = new java.util.LinkedHashMap<>();
     List<AssessmentQuestion> unmatched = new java.util.ArrayList<>();
 
     for (AssessmentQuestion aq : allAQs) {
-      Question q =
-          questionRepository
-              .findByIdAndNotDeleted(aq.getQuestionId())
-              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+      Question q = questionCache.get(aq.getQuestionId());
+      if (q == null) {
+        throw new AppException(ErrorCode.QUESTION_NOT_FOUND);
+      }
       String levelKey =
           (q.getCognitiveLevel() != null) ? q.getCognitiveLevel().name() : null;
       if (levelKey != null && distribution.containsKey(levelKey)) {
@@ -1658,37 +1681,70 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     List<AssessmentQuestion> toSave = new java.util.ArrayList<>();
 
+    // ISSUE-02: Distribute by weight for each cognitive level group
     for (java.util.Map.Entry<String, Integer> entry : distribution.entrySet()) {
       List<AssessmentQuestion> group = byLevel.getOrDefault(entry.getKey(), java.util.Collections.emptyList());
       if (group.isEmpty()) continue;
+      
       java.math.BigDecimal groupPoints =
           totalPoints.multiply(java.math.BigDecimal.valueOf(entry.getValue()))
               .divide(java.math.BigDecimal.valueOf(100), 10, java.math.RoundingMode.HALF_UP);
-      java.math.BigDecimal perQuestion =
-          groupPoints.divide(java.math.BigDecimal.valueOf(group.size()), 2, java.math.RoundingMode.HALF_UP);
+      
+      // Calculate total weight for the group
+      int totalWeight = group.stream()
+          .mapToInt(aq -> questionWeights.getOrDefault(aq.getQuestionId(), 1))
+          .sum();
+      
+      // Distribute by weight: TF gets 4× share, others get 1× share
+      java.math.BigDecimal pointPerUnit = groupPoints.divide(
+          java.math.BigDecimal.valueOf(totalWeight), 10, java.math.RoundingMode.HALF_UP);
+      
       for (AssessmentQuestion aq : group) {
-        aq.setPointsOverride(perQuestion);
+        int weight = questionWeights.getOrDefault(aq.getQuestionId(), 1);
+        java.math.BigDecimal questionPoints = pointPerUnit
+            .multiply(java.math.BigDecimal.valueOf(weight))
+            .setScale(2, java.math.RoundingMode.HALF_UP);
+        aq.setPointsOverride(questionPoints);
         toSave.add(aq);
       }
     }
 
-    // Distribute remaining points to unmatched questions
+    // ISSUE-02: Distribute remaining points to unmatched questions by weight
     if (!unmatched.isEmpty() && remainingPct > 0) {
       java.math.BigDecimal remainingPoints =
           totalPoints.multiply(java.math.BigDecimal.valueOf(remainingPct))
               .divide(java.math.BigDecimal.valueOf(100), 10, java.math.RoundingMode.HALF_UP);
-      java.math.BigDecimal perQuestion =
-          remainingPoints.divide(java.math.BigDecimal.valueOf(unmatched.size()), 2, java.math.RoundingMode.HALF_UP);
+      
+      int totalUnmatchedWeight = unmatched.stream()
+          .mapToInt(aq -> questionWeights.getOrDefault(aq.getQuestionId(), 1))
+          .sum();
+      
+      java.math.BigDecimal pointPerUnit = remainingPoints.divide(
+          java.math.BigDecimal.valueOf(totalUnmatchedWeight), 10, java.math.RoundingMode.HALF_UP);
+      
       for (AssessmentQuestion aq : unmatched) {
-        aq.setPointsOverride(perQuestion);
+        int weight = questionWeights.getOrDefault(aq.getQuestionId(), 1);
+        java.math.BigDecimal questionPoints = pointPerUnit
+            .multiply(java.math.BigDecimal.valueOf(weight))
+            .setScale(2, java.math.RoundingMode.HALF_UP);
+        aq.setPointsOverride(questionPoints);
         toSave.add(aq);
       }
     } else if (!unmatched.isEmpty()) {
-      // No percentage reserved — split totalPoints equally among unmatched
-      java.math.BigDecimal perQuestion =
-          totalPoints.divide(java.math.BigDecimal.valueOf(allAQs.size()), 2, java.math.RoundingMode.HALF_UP);
+      // No percentage reserved — split totalPoints equally among all questions by weight
+      int totalAllWeight = allAQs.stream()
+          .mapToInt(aq -> questionWeights.getOrDefault(aq.getQuestionId(), 1))
+          .sum();
+      
+      java.math.BigDecimal pointPerUnit = totalPoints.divide(
+          java.math.BigDecimal.valueOf(totalAllWeight), 10, java.math.RoundingMode.HALF_UP);
+      
       for (AssessmentQuestion aq : unmatched) {
-        aq.setPointsOverride(perQuestion);
+        int weight = questionWeights.getOrDefault(aq.getQuestionId(), 1);
+        java.math.BigDecimal questionPoints = pointPerUnit
+            .multiply(java.math.BigDecimal.valueOf(weight))
+            .setScale(2, java.math.RoundingMode.HALF_UP);
+        aq.setPointsOverride(questionPoints);
         toSave.add(aq);
       }
     }
