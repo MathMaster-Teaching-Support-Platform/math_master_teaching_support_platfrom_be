@@ -138,7 +138,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
   @Override
   @Transactional
-  public AssessmentResponse updateAssessment(UUID id, AssessmentRequest request) {
+  public AssessmentResponse updateAssessment(UUID id, com.fptu.math_master.dto.request.UpdateAssessmentRequest request) {
     log.info("Updating assessment with id: {}", id);
 
     Assessment assessment = loadAssessmentOrThrow(id);
@@ -152,17 +152,21 @@ public class AssessmentServiceImpl implements AssessmentService {
       throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
     }
 
-    validateDates(request.getStartDate(), request.getEndDate());
-    ExamMatrix matrix = validateAndGetAccessibleMatrix(request.getExamMatrixId(), currentUserId);
-    // Lessons are now auto-populated from matrix, no need for manual selection
+    if (request.getStartDate() != null && request.getEndDate() != null) {
+      validateDates(request.getStartDate(), request.getEndDate());
+    } else if (request.getStartDate() != null) {
+      validateDates(request.getStartDate(), assessment.getEndDate());
+    } else if (request.getEndDate() != null) {
+      validateDates(assessment.getStartDate(), request.getEndDate());
+    }
 
-    assessment.setTitle(request.getTitle());
-    assessment.setDescription(request.getDescription());
-    assessment.setAssessmentType(request.getAssessmentType());
-    assessment.setTimeLimitMinutes(request.getTimeLimitMinutes());
-    assessment.setPassingScore(request.getPassingScore());
-    assessment.setStartDate(request.getStartDate());
-    assessment.setEndDate(request.getEndDate());
+    if (request.getTitle() != null) assessment.setTitle(request.getTitle());
+    if (request.getDescription() != null) assessment.setDescription(request.getDescription());
+    if (request.getAssessmentType() != null) assessment.setAssessmentType(request.getAssessmentType());
+    if (request.getTimeLimitMinutes() != null) assessment.setTimeLimitMinutes(request.getTimeLimitMinutes());
+    if (request.getPassingScore() != null) assessment.setPassingScore(request.getPassingScore());
+    if (request.getStartDate() != null) assessment.setStartDate(request.getStartDate());
+    if (request.getEndDate() != null) assessment.setEndDate(request.getEndDate());
 
     if (request.getRandomizeQuestions() != null) {
       assessment.setRandomizeQuestions(request.getRandomizeQuestions());
@@ -173,7 +177,13 @@ public class AssessmentServiceImpl implements AssessmentService {
     if (request.getAssessmentMode() != null) {
       assessment.setAssessmentMode(request.getAssessmentMode());
     }
-    assessment.setExamMatrixId(matrix.getId());
+    
+    ExamMatrix matrix = null;
+    if (request.getExamMatrixId() != null) {
+      matrix = validateAndGetAccessibleMatrix(request.getExamMatrixId(), currentUserId);
+      assessment.setExamMatrixId(matrix.getId());
+    }
+    
     if (request.getAllowMultipleAttempts() != null) {
       assessment.setAllowMultipleAttempts(request.getAllowMultipleAttempts());
     }
@@ -190,7 +200,9 @@ public class AssessmentServiceImpl implements AssessmentService {
     assessment = assessmentRepository.save(assessment);
     
     // BUG FIX #4: Auto-populate lessons from matrix when matrix changes
-    autoPopulateLessonsFromMatrix(assessment.getId(), matrix.getId());
+    if (matrix != null) {
+      autoPopulateLessonsFromMatrix(assessment.getId(), matrix.getId());
+    }
     
     log.info("Assessment updated successfully: {}", id);
     return mapToResponse(assessment);
@@ -953,15 +965,62 @@ public class AssessmentServiceImpl implements AssessmentService {
       throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
     }
 
-    for (ExamMatrixBankMapping mapping : mappings) {
-      long requiredCount = mapping.getQuestionCount() != null ? Math.max(0, mapping.getQuestionCount()) : 0;
+    // Group mappings by rowId to validate TF collectively
+    Map<UUID, List<ExamMatrixBankMapping>> mappingsByRow = mappings.stream()
+        .collect(Collectors.groupingBy(ExamMatrixBankMapping::getMatrixRowId));
 
-      long actualCount =
-          assessmentQuestionRepository.countByAssessmentIdAndMatrixBankMappingId(
+    for (Map.Entry<UUID, List<ExamMatrixBankMapping>> rowEntry : mappingsByRow.entrySet()) {
+      List<ExamMatrixBankMapping> rowMappings = rowEntry.getValue();
+      
+      // Separate TF and non-TF mappings
+      List<ExamMatrixBankMapping> tfMappings = new ArrayList<>();
+      List<ExamMatrixBankMapping> otherMappings = new ArrayList<>();
+      
+      for (ExamMatrixBankMapping m : rowMappings) {
+        if (m.getQuestionType() == QuestionType.TRUE_FALSE) {
+          tfMappings.add(m);
+        } else {
+          otherMappings.add(m);
+        }
+      }
+
+      // Validate MCQ/SA (must match exactly per cell)
+      for (ExamMatrixBankMapping mapping : otherMappings) {
+        long requiredCount = mapping.getQuestionCount() != null ? Math.max(0, mapping.getQuestionCount()) : 0;
+        if (requiredCount == 0) continue;
+
+        long actualCount = assessmentQuestionRepository.countByAssessmentIdAndMatrixBankMappingId(
+            assessment.getId(), mapping.getId());
+
+        if (actualCount != requiredCount) {
+          log.warn("MCQ/SA mapping {} has requiredCount={} but actualCount={}",
+              mapping.getId(), requiredCount, actualCount);
+          throw new AppException(ErrorCode.MATRIX_CELL_FILL_INCOMPLETE);
+        }
+      }
+
+      // Validate TF (aggregated per row)
+      // Because database constraints prevent linking one question to multiple mappings,
+      // the selection service links ALL TF questions for a row to the FIRST TF mapping.
+      if (!tfMappings.isEmpty()) {
+        int totalClausesRequired = 0;
+        long totalActualTFQuestions = 0;
+
+        for (ExamMatrixBankMapping mapping : tfMappings) {
+          int count = mapping.getQuestionCount() != null ? Math.max(0, mapping.getQuestionCount()) : 0;
+          totalClausesRequired += count;
+          totalActualTFQuestions += assessmentQuestionRepository.countByAssessmentIdAndMatrixBankMappingId(
               assessment.getId(), mapping.getId());
+        }
 
-      if (actualCount != requiredCount) {
-        throw new AppException(ErrorCode.MATRIX_CELL_FILL_INCOMPLETE);
+        if (totalClausesRequired > 0) {
+          int expectedTFQuestions = (int) Math.ceil(totalClausesRequired / 4.0);
+          if (totalActualTFQuestions < expectedTFQuestions) {
+            log.warn("TF row {} requires {} clauses ({} questions) but found {} questions",
+                rowEntry.getKey(), totalClausesRequired, expectedTFQuestions, totalActualTFQuestions);
+            throw new AppException(ErrorCode.MATRIX_CELL_FILL_INCOMPLETE);
+          }
+        }
       }
     }
 

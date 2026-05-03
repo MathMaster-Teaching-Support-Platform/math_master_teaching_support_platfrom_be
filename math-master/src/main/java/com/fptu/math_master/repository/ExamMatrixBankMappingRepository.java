@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
 public interface ExamMatrixBankMappingRepository extends JpaRepository<ExamMatrixBankMapping, UUID> {
 
   @Query(
-      "SELECT m FROM ExamMatrixBankMapping m WHERE m.examMatrixId = :matrixId ORDER BY m.createdAt")
+      "SELECT m FROM ExamMatrixBankMapping m WHERE m.examMatrixId = :matrixId AND m.deletedAt IS NULL ORDER BY m.createdAt")
   List<ExamMatrixBankMapping> findByExamMatrixIdOrderByCreatedAt(@Param("matrixId") UUID matrixId);
 
   @Query("SELECT m FROM ExamMatrixBankMapping m WHERE m.id = :id AND m.examMatrixId = :matrixId")
@@ -57,7 +57,8 @@ public interface ExamMatrixBankMappingRepository extends JpaRepository<ExamMatri
   @Query(
       "SELECT m FROM ExamMatrixBankMapping m "
           + "WHERE m.examMatrixId = :matrixId AND m.matrixRowId = :rowId "
-          + "AND m.partNumber = :partNumber AND m.cognitiveLevel = :cognitiveLevel")
+          + "AND m.partNumber = :partNumber AND m.cognitiveLevel = :cognitiveLevel "
+          + "AND m.deletedAt IS NULL")
   Optional<ExamMatrixBankMapping> findByExamMatrixIdAndMatrixRowIdAndPartNumberAndCognitiveLevel(
       @Param("matrixId") UUID matrixId,
       @Param("rowId") UUID rowId,

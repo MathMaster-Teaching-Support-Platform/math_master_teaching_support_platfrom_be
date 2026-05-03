@@ -606,14 +606,15 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       @Param("cognitiveLevel") String cognitiveLevel);
 
   /**
-   * Find TF question IDs that have at least one clause matching the given cognitive level.
-   * Used by QuestionSelectionService for TF-aware matrix generation.
+   * Find TF question IDs that have at least one clause matching BOTH the given chapter AND
+   * cognitive level inside tfClauses JSON.
+   * A TF question can have clauses from multiple chapters, so we filter at clause level.
+   * tfClauses structure: {"A": {"cognitiveLevel": "NHAN_BIET", "chapterId": "uuid", ...}, ...}
    */
   @Query(
       value =
           "SELECT DISTINCT q.id FROM questions q "
               + "WHERE q.question_bank_id = :bankId "
-              + "AND q.chapter_id = :chapterId "
               + "AND q.question_type = 'TRUE_FALSE' "
               + "AND q.question_status = 'APPROVED' "
               + "AND q.deleted_at IS NULL "
@@ -621,6 +622,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
               + "AND EXISTS ( "
               + "  SELECT 1 FROM jsonb_each(q.generation_metadata->'tfClauses') "
               + "  WHERE value->>'cognitiveLevel' = CAST(:cognitiveLevel AS text) "
+              + "  AND value->>'chapterId' = CAST(:chapterId AS text) "
               + ") "
               + "ORDER BY q.id",
       nativeQuery = true)

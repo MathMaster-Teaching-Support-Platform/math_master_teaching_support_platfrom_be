@@ -77,7 +77,7 @@ public class AssessmentController {
               + "When updating matrix/lessons, selected lessonIds must remain valid for examMatrixId. "
               + "Published assessments cannot be modified unless unpublished first.")
   public ApiResponse<AssessmentResponse> updateAssessment(
-      @PathVariable UUID id, @Valid @RequestBody AssessmentRequest request) {
+      @PathVariable UUID id, @Valid @RequestBody com.fptu.math_master.dto.request.UpdateAssessmentRequest request) {
     log.info("REST request to update assessment: {}", id);
     return ApiResponse.<AssessmentResponse>builder()
         .message("Assessment updated successfully")

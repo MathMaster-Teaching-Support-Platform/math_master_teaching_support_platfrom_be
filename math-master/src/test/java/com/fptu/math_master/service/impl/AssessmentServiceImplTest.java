@@ -113,6 +113,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
   private Assessment draftAssessment;
   private ExamMatrix approvedMatrix;
   private AssessmentRequest validRequest;
+  private com.fptu.math_master.dto.request.UpdateAssessmentRequest validUpdateRequest;
 
   @BeforeEach
   void setUp() {
@@ -168,6 +169,19 @@ class AssessmentServiceImplTest extends BaseUnitTest {
             .maxAttempts(null)
             .attemptScoringPolicy(null)
             .showScoreImmediately(null)
+            .build();
+            
+    validUpdateRequest =
+        com.fptu.math_master.dto.request.UpdateAssessmentRequest.builder()
+            .title("Đánh giá năng lực Đại số")
+            .description("Bài kiểm tra đánh giá năng lực sau khi kết thúc chương")
+            .assessmentType(AssessmentType.QUIZ)
+            .timeLimitMinutes(45)
+            .passingScore(new BigDecimal("7.50"))
+            .startDate(Instant.now().plusSeconds(3600))
+            .endDate(Instant.now().plusSeconds(7200))
+            .assessmentMode(AssessmentMode.MATRIX_BASED)
+            .examMatrixId(matrixId)
             .build();
   }
 
@@ -1325,7 +1339,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
           .thenReturn(Collections.emptyList());
 
       // ===== ACT =====
-      AssessmentResponse result = assessmentService.updateAssessment(assessmentId, validRequest);
+      AssessmentResponse result = assessmentService.updateAssessment(assessmentId, validUpdateRequest);
 
       // ===== ASSERT =====
       assertNotNull(result);
@@ -1646,7 +1660,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
       when(assessmentRepository.findByIdAndNotDeleted(assessmentId)).thenReturn(Optional.of(published));
       AppException ex =
           assertThrows(
-              AppException.class, () -> assessmentService.updateAssessment(assessmentId, validRequest));
+              AppException.class, () -> assessmentService.updateAssessment(assessmentId, validUpdateRequest));
       assertEquals(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED, ex.getErrorCode());
     }
 

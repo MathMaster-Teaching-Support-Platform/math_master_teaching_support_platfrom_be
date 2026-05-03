@@ -27,4 +27,10 @@ public class AnswerGradeResponse {
   private Instant gradedAt;
   private String explanation;
   private String solutionSteps;
+  
+  // Fields needed by UI to render correctly
+  private com.fptu.math_master.enums.QuestionType questionType;
+  private java.util.Map<String, Object> options;
+  private Boolean needsManualGrading;
+  private java.util.Map<String, Object> scoringDetail;
 }

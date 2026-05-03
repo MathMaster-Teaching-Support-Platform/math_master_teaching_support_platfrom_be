@@ -294,11 +294,11 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
       candidateMap.put(q.getId(), q);
     }
 
-    // Score each candidate: how many of its clauses match the required levels
+    // Score each candidate: how many chapter-matching clauses fit the required levels
     List<UUID> scoredCandidates = new ArrayList<>(candidateList);
     scoredCandidates.sort((a, b) -> {
-      int scoreA = scoreTFQuestion(candidateMap.get(a), clauseRequirement);
-      int scoreB = scoreTFQuestion(candidateMap.get(b), clauseRequirement);
+      int scoreA = scoreTFQuestion(candidateMap.get(a), chapterId, clauseRequirement);
+      int scoreB = scoreTFQuestion(candidateMap.get(b), chapterId, clauseRequirement);
       return Integer.compare(scoreB, scoreA); // Higher score first
     });
 
@@ -308,42 +308,119 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
 
     // Re-sort by score after shuffle to maintain best-match priority
     scoredCandidates.sort((a, b) -> {
-      int scoreA = scoreTFQuestion(candidateMap.get(a), clauseRequirement);
-      int scoreB = scoreTFQuestion(candidateMap.get(b), clauseRequirement);
+      int scoreA = scoreTFQuestion(candidateMap.get(a), chapterId, clauseRequirement);
+      int scoreB = scoreTFQuestion(candidateMap.get(b), chapterId, clauseRequirement);
       return Integer.compare(scoreB, scoreA);
     });
 
     // Step 5: Select top N questions
     List<UUID> selected = scoredCandidates.subList(0, Math.min(tfQuestionsNeeded, scoredCandidates.size()));
 
+    log.info("Selected {} TF questions for chapter {} (clause requirement: {})",
+        selected.size(), chapterId, clauseRequirement);
+
+    // Validate that the selected questions ACTUALLY fulfill the strict clause requirements
+    Map<String, Integer> totalSelectedComposition = new HashMap<>();
     for (UUID questionId : selected) {
+      Question q = candidateMap.get(questionId);
+      if (q != null && q.getGenerationMetadata() != null) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> tfClauses = (Map<String, Object>) q.getGenerationMetadata().get("tfClauses");
+        if (tfClauses != null) {
+          for (Map.Entry<String, Object> clauseEntry : tfClauses.entrySet()) {
+            if (clauseEntry.getValue() instanceof Map) {
+              @SuppressWarnings("unchecked")
+              Map<String, Object> clauseData = (Map<String, Object>) clauseEntry.getValue();
+              String clauseChapterId = (String) clauseData.get("chapterId");
+              // Only count clauses that belong to the required chapter
+              if (chapterId != null && !chapterId.toString().equals(clauseChapterId)) continue;
+              
+              String clauseLevel = (String) clauseData.get("cognitiveLevel");
+              if (clauseLevel != null) {
+                totalSelectedComposition.merge(clauseLevel, 1, Integer::sum);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Check if we met the minimum requirements for all requested levels
+    for (Map.Entry<String, Integer> required : clauseRequirement.entrySet()) {
+      int needed = required.getValue();
+      int actual = totalSelectedComposition.getOrDefault(required.getKey(), 0);
+      if (actual < needed) {
+        log.error("Selected TF questions do not fulfill matrix requirements for chapter {}. Level {} needs {} but selected questions only provide {}.", 
+            chapterId, required.getKey(), needed, actual);
+        throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
+      }
+    }
+
+    // Log details of each selected question for verification
+    for (UUID questionId : selected) {
+      Question q = candidateMap.get(questionId);
+      if (q != null) {
+        int score = scoreTFQuestion(q, chapterId, clauseRequirement);
+        Map<String, Integer> actualComposition = new HashMap<>();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> tfClauses =
+            (Map<String, Object>) q.getGenerationMetadata().get("tfClauses");
+        if (tfClauses != null) {
+          for (Map.Entry<String, Object> clauseEntry : tfClauses.entrySet()) {
+            if (clauseEntry.getValue() instanceof Map) {
+              @SuppressWarnings("unchecked")
+              Map<String, Object> clauseData = (Map<String, Object>) clauseEntry.getValue();
+              String clauseLevel = (String) clauseData.get("cognitiveLevel");
+              if (clauseLevel != null) {
+                actualComposition.merge(clauseLevel, 1, Integer::sum);
+              }
+            }
+          }
+        }
+        log.info("  → Question ID={}, Chapter={}, Score={}, Composition={}",
+            questionId, q.getChapterId(), score, actualComposition);
+      }
+
+      // Link the TF question to the first mapping for this row.
+      // (Database unique constraints prevent linking the same question to multiple mappings)
+      int slotIndex = context.nextOrderIndex(); // Capture before incrementing
       context.plannedQuestions().add(
           AssessmentQuestion.builder()
               .assessmentId(assessmentId)
               .questionId(questionId)
               .matrixBankMappingId(firstMapping.getId())
-              .orderIndex(context.nextOrderIndex())
+              .orderIndex(slotIndex)
               .pointsOverride(firstMapping.getPointsPerQuestion())
               .build());
 
       context.incrementOrderIndex();
       context.usedQuestionIds().add(questionId);
+      // Points: use firstMapping's pointsPerQuestion as the base for the full TF question
       context.totalPoints +=
           firstMapping.getPointsPerQuestion() != null
               ? firstMapping.getPointsPerQuestion().intValue() : 0;
     }
-
-    log.info("Selected {} TF questions for chapter {} (clause requirement: {})",
-        selected.size(), chapterId, clauseRequirement);
   }
 
   /**
-   * Score a TF question by how well its clause cognitive levels match the requirement.
-   * Higher score = better match.
+   * Score a TF question by how well its clause composition matches the requirement.
+   * Returns a score where higher = better match.
+   * 
+   * Scoring logic:
+   * - Perfect match (exact composition) = 1000 + matching clauses
+   * - Partial match (has required clauses but extras) = matching clauses
+   * - No match (missing required clauses) = 0
+   * 
+   * Example requirement: {NHAN_BIET=2, THONG_HIEU=1, VAN_DUNG=1}
+   * - Question with [NB, NB, TH, VD] → Perfect match → Score = 1004
+   * - Question with [NB, NB, NB, TH] → Partial (has 2 NB, 1 TH, missing VD) → Score = 3
+   * - Question with [VDC, VDC, VDC, VDC] → No match → Score = 0
    *
-   * Reads generation_metadata -> tfClauses -> {A: {cognitiveLevel: "NHAN_BIET"}, ...}
+  /**
+   * Score a TF question by how well its clause composition (filtered to the required chapter)
+   * matches the requirement.
    */
-  private int scoreTFQuestion(Question question, Map<String, Integer> clauseRequirement) {
+  private int scoreTFQuestion(Question question, UUID chapterId, Map<String, Integer> clauseRequirement) {
     if (question == null || question.getGenerationMetadata() == null) return 0;
 
     @SuppressWarnings("unchecked")
@@ -351,19 +428,60 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
         (Map<String, Object>) question.getGenerationMetadata().get("tfClauses");
     if (tfClauses == null) return 0;
 
-    int score = 0;
-    // Count how many of this question's clauses match any required level
+    // Count the actual clause composition in this question, FILTERED by chapterId
+    Map<String, Integer> actualComposition = new HashMap<>();
     for (Map.Entry<String, Object> clauseEntry : tfClauses.entrySet()) {
       if (clauseEntry.getValue() instanceof Map) {
         @SuppressWarnings("unchecked")
         Map<String, Object> clauseData = (Map<String, Object>) clauseEntry.getValue();
+        String clauseChapterId = (String) clauseData.get("chapterId");
+        // Only count clauses that belong to the required chapter
+        if (chapterId != null && !chapterId.toString().equals(clauseChapterId)) continue;
         String clauseLevel = (String) clauseData.get("cognitiveLevel");
-        if (clauseLevel != null && clauseRequirement.containsKey(clauseLevel)) {
-          score++; // Each matching clause adds 1 to the score
+        if (clauseLevel != null) {
+          actualComposition.merge(clauseLevel, 1, Integer::sum);
         }
       }
     }
-    return score;
+
+    // Check if this is a perfect match (exact composition)
+    boolean isPerfectMatch = true;
+    int matchingClauses = 0;
+
+    // Check all required levels are present with exact counts
+    for (Map.Entry<String, Integer> required : clauseRequirement.entrySet()) {
+      String level = required.getKey();
+      int requiredCount = required.getValue();
+      int actualCount = actualComposition.getOrDefault(level, 0);
+
+      if (actualCount < requiredCount) {
+        // Missing required clauses for this chapter
+        isPerfectMatch = false;
+        matchingClauses += actualCount; // Partial credit
+      } else if (actualCount == requiredCount) {
+        matchingClauses += actualCount;
+      } else {
+        // Has more than required - not a perfect match
+        isPerfectMatch = false;
+        matchingClauses += requiredCount;
+      }
+    }
+
+    // Check if there are extra levels not in the requirement
+    for (String level : actualComposition.keySet()) {
+      if (!clauseRequirement.containsKey(level)) {
+        isPerfectMatch = false;
+      }
+    }
+
+    if (matchingClauses == 0) return 0; // No useful clauses for this chapter
+
+    // Perfect match gets bonus score to prioritize exact matches
+    if (isPerfectMatch) {
+      return 1000 + matchingClauses;
+    } else {
+      return matchingClauses;
+    }
   }
 
   // ========================================================================

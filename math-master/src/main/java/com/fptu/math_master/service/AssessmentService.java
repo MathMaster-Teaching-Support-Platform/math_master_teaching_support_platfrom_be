@@ -28,7 +28,7 @@ public interface AssessmentService {
 
   AssessmentResponse createAssessment(AssessmentRequest request);
 
-  AssessmentResponse updateAssessment(UUID id, AssessmentRequest request);
+  AssessmentResponse updateAssessment(UUID id, com.fptu.math_master.dto.request.UpdateAssessmentRequest request);
 
   AssessmentResponse setPointsOverride(UUID assessmentId, PointsOverrideRequest request);
 

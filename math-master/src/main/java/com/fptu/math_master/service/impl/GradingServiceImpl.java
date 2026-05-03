@@ -1313,14 +1313,18 @@ public class GradingServiceImpl implements GradingService {
                       // needed
                       .correctAnswer(question != null ? question.getCorrectAnswer() : null)
                       .isCorrect(answer.getIsCorrect())
-                        .pointsEarned(
+                      .pointsEarned(
                           answer.getPointsEarned() != null ? answer.getPointsEarned() : BigDecimal.ZERO)
-                        .maxPoints(effectiveMaxPoints)
+                      .maxPoints(effectiveMaxPoints)
                       .feedback(answer.getFeedback())
                       .isManuallyAdjusted(manuallyAdjustedAnswerIds.contains(answer.getId()))
                       .gradedAt(answer.getUpdatedAt())
                       .explanation(question != null ? question.getExplanation() : null)
                       .solutionSteps(question != null ? question.getSolutionSteps() : null)
+                      .questionType(question != null ? question.getQuestionType() : null)
+                      .options(getOptionsForQuestion(question))
+                      .needsManualGrading(answer.getPointsEarned() == null)
+                      .scoringDetail(answer.getScoringDetail() != null ? answer.getScoringDetail() : null)
                       .build();
                 })
             .collect(Collectors.toList());
@@ -1386,5 +1390,36 @@ public class GradingServiceImpl implements GradingService {
         .reviewedAt(request.getReviewedAt())
         .createdAt(request.getCreatedAt())
         .build();
+  }
+  @SuppressWarnings("unchecked")
+  private java.util.Map<String, Object> getOptionsForQuestion(Question question) {
+    if (question == null || question.getGenerationMetadata() == null) {
+      return null;
+    }
+    
+    java.util.Map<String, Object> metadata = question.getGenerationMetadata();
+    
+    if (question.getQuestionType() == com.fptu.math_master.enums.QuestionType.TRUE_FALSE) {
+      // For TF questions, clauses are under "tfClauses". The frontend expects just the text in options.
+      if (metadata.containsKey("tfClauses")) {
+        java.util.Map<String, Object> tfClauses = (java.util.Map<String, Object>) metadata.get("tfClauses");
+        java.util.Map<String, Object> mappedOptions = new java.util.HashMap<>();
+        for (java.util.Map.Entry<String, Object> entry : tfClauses.entrySet()) {
+          if (entry.getValue() instanceof java.util.Map) {
+            java.util.Map<String, Object> clauseData = (java.util.Map<String, Object>) entry.getValue();
+            if (clauseData.containsKey("content")) {
+              mappedOptions.put(entry.getKey(), clauseData.get("content"));
+            }
+          }
+        }
+        return mappedOptions.isEmpty() ? null : mappedOptions;
+      }
+    } else {
+      if (metadata.containsKey("options")) {
+        return (java.util.Map<String, Object>) metadata.get("options");
+      }
+    }
+    
+    return null;
   }
 }

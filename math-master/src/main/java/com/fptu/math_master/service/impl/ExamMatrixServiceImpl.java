@@ -1678,16 +1678,48 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         throw new AppException(ErrorCode.INVALID_REQUEST);
       }
 
+      // DIAGNOSTIC: Log all mappings for this row so we can see what's actually in the DB
+      List<ExamMatrixBankMapping> allRowMappings =
+          bankMappingRepository.findByExamMatrixIdAndMatrixRowIdOrderByCreatedAt(matrixId, row.getId());
+      log.info("[CELL DEBUG] All stored mappings for row={}: count={}", row.getId(), allRowMappings.size());
+      for (ExamMatrixBankMapping m : allRowMappings) {
+        log.info("[CELL DEBUG]   stored: id={} part={} level={} count={} deletedAt={}",
+            m.getId(), m.getPartNumber(), m.getCognitiveLevel(), m.getQuestionCount(), m.getDeletedAt());
+      }
+
       // Find existing cell by unique key (matrixId, rowId, partNumber, cognitiveLevel)
+      // ALSO try legacy English enum equivalent (old data stored UNDERSTAND/REMEMBER/APPLY/ANALYZE)
       Optional<ExamMatrixBankMapping> existing =
           bankMappingRepository.findByExamMatrixIdAndMatrixRowIdAndPartNumberAndCognitiveLevel(
               matrixId, row.getId(), cell.getPartNumber(), cell.getCognitiveLevel());
 
+      if (existing.isEmpty()) {
+        CognitiveLevel legacyLevel = toLegacyCognitiveLevel(cell.getCognitiveLevel());
+        if (legacyLevel != null) {
+          existing = bankMappingRepository.findByExamMatrixIdAndMatrixRowIdAndPartNumberAndCognitiveLevel(
+              matrixId, row.getId(), cell.getPartNumber(), legacyLevel);
+          if (existing.isPresent()) {
+            log.info("[CELL DEBUG] Found mapping via legacy level {} for new level {}",
+                legacyLevel, cell.getCognitiveLevel());
+          }
+        }
+      }
+
       int questionCount = cell.getQuestionCount() != null ? Math.max(0, cell.getQuestionCount()) : 0;
+
+      log.info("[CELL DEBUG] row={} part={} level={} count={} existingFound={}",
+          row.getId(), cell.getPartNumber(), cell.getCognitiveLevel(), questionCount, existing.isPresent());
 
       if (questionCount == 0) {
         // DELETE if exists
-        existing.ifPresent(bankMappingRepository::delete);
+        if (existing.isPresent()) {
+          log.info("[CELL DEBUG] DELETING mapping id={}", existing.get().getId());
+          bankMappingRepository.delete(existing.get());
+          bankMappingRepository.flush();
+          log.info("[CELL DEBUG] DELETE flushed for mapping id={}", existing.get().getId());
+        } else {
+          log.info("[CELL DEBUG] DELETE skipped - no existing mapping found");
+        }
         continue;
       }
 
@@ -1697,13 +1729,17 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
               : (defaultPointsPerQuestion != null ? defaultPointsPerQuestion : BigDecimal.ONE);
 
       if (existing.isPresent()) {
-        // UPDATE existing cell
+        // UPDATE existing cell — also normalize legacy English enum to Vietnamese
         ExamMatrixBankMapping mapping = existing.get();
+        log.info("[CELL DEBUG] UPDATING mapping id={} newCount={}", mapping.getId(), questionCount);
         mapping.setQuestionCount(questionCount);
         mapping.setPointsPerQuestion(pointsPerQuestion);
         mapping.setQuestionType(part.getQuestionType());
         mapping.setPartId(part.getId());
+        // Normalize legacy English cognitiveLevel → Vietnamese on every update
+        mapping.setCognitiveLevel(cell.getCognitiveLevel());
         bankMappingRepository.save(mapping);
+        log.info("[CELL DEBUG] UPDATE saved for mapping id={}", mapping.getId());
       } else {
         // INSERT new cell
         ExamMatrixBankMapping mapping =
@@ -1792,6 +1828,22 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         int rowTotalQ = 0;
         BigDecimal rowTotalPts = BigDecimal.ZERO;
 
+        // Fetch the actual grade from the Chapter entity, not the snapshot
+        String actualGradeName = row.getSchoolGradeName(); // Default to snapshot
+        if (row.getChapterId() != null) {
+          var chapterOpt = chapterRepository.findById(row.getChapterId());
+          if (chapterOpt.isPresent()) {
+            Chapter chapter = chapterOpt.get();
+            // Get grade from chapter's subject's schoolGrade
+            if (chapter.getSubject() != null && chapter.getSubject().getSchoolGrade() != null) {
+              SchoolGrade schoolGrade = chapter.getSubject().getSchoolGrade();
+              if (schoolGrade.getName() != null) {
+                actualGradeName = schoolGrade.getName();
+              }
+            }
+          }
+        }
+
         for (ExamMatrixBankMapping cell : templateCells) {
           String label = cognitiveLevelLabel(cell.getCognitiveLevel());
             int count = getQuestionCountFromBankMapping(cell);
@@ -1825,7 +1877,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
                 .chapterId(row.getChapterId())
                 .lessonId(row.getLessonId())
                 .subjectName(row.getSubjectName())
-                .schoolGradeName(row.getSchoolGradeName())
+                .schoolGradeName(actualGradeName)  // Use actual grade from Chapter/Subject
                 .chapterName(row.getChapterName())
                 .questionDifficulty(row.getQuestionDifficulty())
                 .questionTypeName(row.getQuestionTypeName())
@@ -1925,6 +1977,23 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
       case THONG_HIEU, UNDERSTAND -> "TH";
       case VAN_DUNG, APPLY -> "VD";
       case VAN_DUNG_CAO, ANALYZE, EVALUATE, CREATE -> "VDC";
+    };
+  }
+
+  /**
+   * Maps a new Vietnamese CognitiveLevel to its legacy English equivalent.
+   * Old matrix data was stored with REMEMBER/UNDERSTAND/APPLY/ANALYZE enum values.
+   * New FE sends NHAN_BIET/THONG_HIEU/VAN_DUNG/VAN_DUNG_CAO.
+   * This allows the upsert to find old rows by trying the legacy key.
+   */
+  private static CognitiveLevel toLegacyCognitiveLevel(CognitiveLevel level) {
+    if (level == null) return null;
+    return switch (level) {
+      case NHAN_BIET -> CognitiveLevel.REMEMBER;
+      case THONG_HIEU -> CognitiveLevel.UNDERSTAND;
+      case VAN_DUNG -> CognitiveLevel.APPLY;
+      case VAN_DUNG_CAO -> CognitiveLevel.ANALYZE;
+      default -> null; // Already a legacy value or unknown
     };
   }
 }

@@ -3,10 +3,12 @@ package com.fptu.math_master.dto.request;
 import com.fptu.math_master.enums.AssessmentMode;
 import com.fptu.math_master.enums.AssessmentType;
 import com.fptu.math_master.enums.AttemptScoringPolicy;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,18 +19,14 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AssessmentRequest {
+public class UpdateAssessmentRequest {
 
-  @NotBlank(message = "Title is required")
   @Size(max = 255, message = "Title must not exceed 255 characters")
   private String title;
 
   private String description;
 
-  @NotNull(message = "Assessment type is required")
   private AssessmentType assessmentType;
-
-  private List<@NotNull(message = "Lesson id is required") UUID> lessonIds;
 
   @Min(value = 1, message = "Time limit must be greater than 0")
   private Integer timeLimitMinutes;
@@ -38,24 +36,13 @@ public class AssessmentRequest {
   private BigDecimal passingScore;
 
   private Instant startDate;
-
   private Instant endDate;
-
   private Boolean randomizeQuestions;
-
   private Boolean showCorrectAnswers;
-
   private AssessmentMode assessmentMode;
-
-  @NotNull(message = "Exam matrix is required")
   private UUID examMatrixId;
-
   private Boolean allowMultipleAttempts;
-
-  @Min(value = 1, message = "Max attempts must be at least 1")
   private Integer maxAttempts;
-
   private AttemptScoringPolicy attemptScoringPolicy;
-
   private Boolean showScoreImmediately;
 }
