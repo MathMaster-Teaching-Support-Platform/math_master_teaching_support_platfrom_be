@@ -69,4 +69,6 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
   List<Enrollment> findByCourseIdAndDeletedAtIsNull(UUID courseId);
 
   long countByCourseIdAndDeletedAtIsNull(UUID courseId);
+
+  long countByStatusAndUpdatedAtBetween(EnrollmentStatus status, java.time.Instant start, java.time.Instant end);
 }

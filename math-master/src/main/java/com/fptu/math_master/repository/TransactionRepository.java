@@ -60,11 +60,28 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
   @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t WHERE t.status = 'SUCCESS'")
   BigDecimal sumAllSuccessfulRevenue();
 
-  /** Sum of SUCCESS deposits in a given time window */
+  /** Sum of ALL SUCCESS transaction amounts in a given time window */
   @Query(
       "SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t "
           + "WHERE t.status = 'SUCCESS' AND t.createdAt >= :from AND t.createdAt < :to")
-  java.math.BigDecimal sumSuccessfulRevenue(
+  BigDecimal sumSuccessfulRevenue(
+      @Param("from") Instant from, @Param("to") Instant to);
+
+  /** Sum of PLATFORM revenue (COMMISSION + SUBSCRIPTION PAYMENTS) in a given time window */
+  @Query(
+      "SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t "
+          + "WHERE t.status = 'SUCCESS' "
+          + "AND t.type IN ('PLATFORM_COMMISSION', 'PAYMENT') "
+          + "AND t.createdAt >= :from AND t.createdAt < :to")
+  BigDecimal sumSuccessfulPlatformRevenue(
+      @Param("from") Instant from, @Param("to") Instant to);
+
+  /** Sum of ALL successful deposits (cash inflow) */
+  @Query(
+      "SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t "
+          + "WHERE t.status = 'SUCCESS' AND t.type = 'DEPOSIT' "
+          + "AND t.createdAt >= :from AND t.createdAt < :to")
+  BigDecimal sumSuccessfulDeposits(
       @Param("from") Instant from, @Param("to") Instant to);
 
   /** Monthly revenue grouped by month for a given year */
@@ -142,6 +159,19 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
   /** Count transactions by status list and date range */
   long countByStatusInAndCreatedAtBetween(List<TransactionStatus> statuses, Instant start, Instant end);
+
+  /** Count transactions by status list, type list and date range */
+  long countByStatusInAndTypeInAndCreatedAtBetween(
+          List<TransactionStatus> statuses, List<TransactionType> types, Instant start, Instant end);
+
+  /** Count unique users who had a successful transaction of a certain type */
+  @Query("SELECT COUNT(DISTINCT t.wallet.user.id) FROM Transaction t " +
+         "WHERE t.status = 'SUCCESS' AND t.type = :type " +
+         "AND t.createdAt >= :from AND t.createdAt < :to")
+  long countUniqueUsersByTypeAndDateRange(
+      @Param("type") TransactionType type,
+      @Param("from") Instant from,
+      @Param("to") Instant to);
 
   /** Find transactions by date range */
   List<Transaction> findByCreatedAtBetween(Instant start, Instant end);
