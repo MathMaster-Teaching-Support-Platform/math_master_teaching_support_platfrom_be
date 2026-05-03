@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -122,6 +123,26 @@ public class AdminFinancialController {
                 .code(200)
                 .message("System health retrieved successfully")
                 .result(health)
+                .build());
+    }
+
+    @GetMapping("/dashboard/full-analytics")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+        summary = "Get full system analytics",
+        description = "Get comprehensive analytics including user, engagement, teacher and revenue stats"
+    )
+    public ResponseEntity<ApiResponse<AdminAnalyticsResponse>> getFullAnalytics(
+            @Parameter(description = "Year (default: current year)")
+            @RequestParam(required = false) Integer year) {
+        log.info("Admin requesting full analytics for year: {}", year);
+        
+        AdminAnalyticsResponse analytics = adminFinancialService.getFullAnalytics(year != null ? year : LocalDate.now().getYear());
+        
+        return ResponseEntity.ok(ApiResponse.<AdminAnalyticsResponse>builder()
+                .code(200)
+                .message("Full analytics retrieved successfully")
+                .result(analytics)
                 .build());
     }
 }

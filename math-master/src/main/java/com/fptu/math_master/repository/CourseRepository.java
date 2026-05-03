@@ -88,4 +88,8 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
     Page<Course> findByDeletedAtIsNullOrderByUpdatedAtDesc(Pageable pageable);
 
   List<Course> findByTeacherIdAndDeletedAtIsNull(UUID teacherId);
+
+  List<Course> findBySubjectIdAndDeletedAtIsNull(UUID subjectId);
+
+  long countByCreatedAtBetweenAndDeletedAtIsNull(java.time.Instant start, java.time.Instant end);
 }

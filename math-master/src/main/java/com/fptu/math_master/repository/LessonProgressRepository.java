@@ -68,4 +68,12 @@ public interface LessonProgressRepository extends JpaRepository<LessonProgress, 
   List<Instant> findLastWatchedAtAfter(
       @Param("studentId") UUID studentId,
       @Param("from") Instant from);
+
+  long countByUpdatedAtBetween(Instant start, Instant end);
+
+  long countByIsCompletedTrueAndUpdatedAtBetween(Instant start, Instant end);
+
+  long countByCourseLessonCourseIdInAndUpdatedAtBetween(List<UUID> courseIds, Instant start, Instant end);
+
+  long countByIsCompletedTrueAndCourseLessonCourseIdIn(List<UUID> courseIds);
 }
