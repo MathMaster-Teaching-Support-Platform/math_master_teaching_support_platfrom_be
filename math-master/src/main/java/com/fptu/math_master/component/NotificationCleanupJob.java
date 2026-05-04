@@ -27,7 +27,7 @@ public class NotificationCleanupJob {
         try {
             Instant cutoffDate = Instant.now().minus(90, ChronoUnit.DAYS);
             
-            long deletedCount = notificationRepository.deleteByCreatedAtBefore(cutoffDate);
+            int deletedCount = notificationRepository.deleteByCreatedAtBefore(cutoffDate);
             
             if (deletedCount > 0) {
                 log.info("Cleaned up {} old notifications (older than 90 days)", deletedCount);
@@ -47,7 +47,7 @@ public class NotificationCleanupJob {
     @Transactional
     public void cleanupOrphanedNotifications() {
         try {
-            long deletedCount = notificationRepository.deleteOrphanedNotifications();
+            int deletedCount = notificationRepository.deleteOrphanedNotifications();
             
             if (deletedCount > 0) {
                 log.info("Cleaned up {} orphaned notifications", deletedCount);
