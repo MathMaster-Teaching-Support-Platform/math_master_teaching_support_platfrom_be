@@ -650,34 +650,69 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
   @Override
   public GeneratedQuestionSample generateQuestion(QuestionTemplate template, int sampleIndex) {
-    log.info(
-        "Generating question from template '{}' using LLM (sample #{})",
-        template.getName(),
-        sampleIndex + 1);
+    return generateQuestion(template, sampleIndex, null);
+  }
 
-    // Dispatch based on question type
+  /**
+   * Constraint-aware overload. When {@code presetParams} is supplied (non-null,
+   * non-empty), the blueprint methods use those values verbatim — they were
+   * picked by {@link com.fptu.math_master.service.BlueprintService#selectValueSets}
+   * to satisfy the template's per-parameter {@code constraintText} and
+   * {@code globalConstraints}. The legacy {@code pickParameters} sampler — which
+   * still reads {@code min}/{@code max} keys that the V112-era parameter shape
+   * no longer contains — is bypassed entirely.
+   *
+   * <p>When {@code presetParams} is null/empty we fall back to the legacy sampler
+   * so callers without an AI tuple (test-template preview, lesson-content
+   * generator) keep working.
+   */
+  @Override
+  public GeneratedQuestionSample generateQuestion(
+      QuestionTemplate template, int sampleIndex, Map<String, Object> presetParams) {
+    log.info(
+        "Generating question from template '{}' using LLM (sample #{}, preset={})",
+        template.getName(),
+        sampleIndex + 1,
+        presetParams != null && !presetParams.isEmpty());
+
     switch (template.getTemplateType()) {
       case SHORT_ANSWER:
-        return generateShortAnswerQuestion(template, sampleIndex);
+        return generateShortAnswerQuestion(template, sampleIndex, presetParams);
       case TRUE_FALSE:
-        return generateTrueFalseQuestion(template, sampleIndex);
+        return generateTrueFalseQuestion(template, sampleIndex, presetParams);
       case MULTIPLE_CHOICE:
       default:
-        return generateMultipleChoiceQuestion(template, sampleIndex);
+        return generateMultipleChoiceQuestion(template, sampleIndex, presetParams);
     }
+  }
+
+  /**
+   * Returns {@code presetParams} when it carries values (constraint-aware path)
+   * and otherwise calls the legacy random sampler. Centralised so the three
+   * blueprint methods can't accidentally bypass the AI tuple.
+   */
+  private Map<String, Object> resolveParameters(
+      QuestionTemplate template, int sampleIndex, Map<String, Object> presetParams) {
+    if (presetParams != null && !presetParams.isEmpty()) {
+      return new LinkedHashMap<>(presetParams);
+    }
+    return pickParameters(template, sampleIndex);
   }
 
   /**
    * Generate a MULTIPLE_CHOICE question from template (existing MCQ flow)
    */
-  private GeneratedQuestionSample generateMultipleChoiceQuestion(QuestionTemplate template, int sampleIndex) {
+  private GeneratedQuestionSample generateMultipleChoiceQuestion(
+      QuestionTemplate template, int sampleIndex, Map<String, Object> presetParams) {
     log.info(
         "Generating MCQ from template '{}' (sample #{})",
         template.getName(),
         sampleIndex + 1);
 
-    // Step 1: always compute params + answer in Java first (guaranteed correct)
-    Map<String, Object> params = pickParameters(template, sampleIndex);
+    // Step 1: resolve parameter values. When the BlueprintService AI selector
+    // already gave us a constraint-respecting tuple, use it verbatim; otherwise
+    // fall back to the legacy random sampler.
+    Map<String, Object> params = resolveParameters(template, sampleIndex, presetParams);
     String correctAnswerStr = evaluateFormula(template.getAnswerFormula(), params);
 
     // DEBUG: Log what we computed
@@ -746,15 +781,16 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
    * Generate a SHORT_ANSWER question from template
    * Flow: Resolve parameters → Substitute into template → Evaluate formula → Return answer
    */
-  private GeneratedQuestionSample generateShortAnswerQuestion(QuestionTemplate template, int sampleIndex) {
+  private GeneratedQuestionSample generateShortAnswerQuestion(
+      QuestionTemplate template, int sampleIndex, Map<String, Object> presetParams) {
     log.info(
         "Generating SHORT_ANSWER from template '{}' (sample #{})",
         template.getName(),
         sampleIndex + 1);
 
     try {
-      // Step 1: Resolve parameters
-      Map<String, Object> params = pickParameters(template, sampleIndex);
+      // Step 1: Resolve parameters (preset from AI selector, or fall back to sampler)
+      Map<String, Object> params = resolveParameters(template, sampleIndex, presetParams);
       log.info("Resolved parameters: {}", params);
 
       // Step 2: Substitute into template text
@@ -818,15 +854,16 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
    * Generate a TRUE_FALSE question from template
    * Flow: Resolve parameters → Generate 4 clauses → Determine true/false for each → Return question
    */
-  private GeneratedQuestionSample generateTrueFalseQuestion(QuestionTemplate template, int sampleIndex) {
+  private GeneratedQuestionSample generateTrueFalseQuestion(
+      QuestionTemplate template, int sampleIndex, Map<String, Object> presetParams) {
     log.info(
         "Generating TRUE_FALSE from template '{}' (sample #{})",
         template.getName(),
         sampleIndex + 1);
 
     try {
-      // Step 1: Resolve parameters
-      Map<String, Object> params = pickParameters(template, sampleIndex);
+      // Step 1: Resolve parameters (preset from AI selector, or fall back to sampler)
+      Map<String, Object> params = resolveParameters(template, sampleIndex, presetParams);
       log.info("Resolved parameters: {}", params);
 
       // Step 2: Substitute into template text (stem)
@@ -857,10 +894,14 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         Map<String, Object> clauseTemplate = clauseTemplates.get(i);
         String key = String.valueOf((char) ('A' + i));
 
-        // Substitute parameters in clause text
+        // Substitute parameters in clause text, then evaluate any inline
+        // arithmetic blocks ($...$) so a clause like
+        // "f(0) = $2*0 + 3$" displays as "f(0) = $3$" instead of leaving
+        // the un-simplified expression visible to students.
         String clauseText = (String) clauseTemplate.get("text");
         if (clauseText != null) {
           clauseText = fillText(clauseText, params);
+          clauseText = evaluateInlineArithmetic(clauseText, params);
         } else {
           clauseText = "Clause " + key;
         }
@@ -1953,7 +1994,12 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         Boolean truthValue = (Boolean) clauseTemplate.get("truthValue");
         
         if (clauseText != null) {
+          // Same evaluation pass as the runtime clause builder so the prompt
+          // we send to Gemini shows the *evaluated* clause, not the un-simplified
+          // formula. Otherwise the AI explanation would describe e.g. "2*0+3"
+          // when the student actually sees "3".
           clauseText = fillText(clauseText, params);
+          clauseText = evaluateInlineArithmetic(clauseText, params);
           p.append(key).append(") ").append(clauseText)
             .append(" [").append(truthValue != null && truthValue ? "TRUE" : "FALSE").append("]\n");
         }
@@ -2527,6 +2573,19 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   /**
    * For options: if there is no parameter placeholder, keep original value unchanged.
    * Only render placeholders when present.
+   *
+   * <p>After {{param}} substitution the value can still contain a raw expression
+   * like {@code "$(-3)/2$"}. Teachers expect the option to display the computed
+   * value ({@code "$-1.5$"}), not the formula that produced it. We pass the
+   * substituted string through {@link #evaluateInlineArithmetic} which:
+   *
+   * <ul>
+   *   <li>finds {@code $...$} math blocks and replaces each block's content
+   *       with the evaluated numeric result if the content is pure arithmetic;</li>
+   *   <li>if the entire option (after stripping a single outer {@code $...$})
+   *       is itself pure arithmetic, evaluates the whole option;</li>
+   *   <li>leaves natural-language text alone so clause/option prose is preserved.</li>
+   * </ul>
    */
   private String renderOptionValue(String rawValue, Map<String, Object> params) {
     if (rawValue == null) {
@@ -2534,12 +2593,85 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     }
 
     boolean hasPlaceholder = PLACEHOLDER_PATTERN.matcher(rawValue).find();
-    if (!hasPlaceholder) {
-      return rawValue;
+    String rendered = hasPlaceholder ? fillText(rawValue, params) : rawValue;
+    if (rendered == null) {
+      rendered = rawValue;
+    }
+    return evaluateInlineArithmetic(rendered, params);
+  }
+
+  /**
+   * Pure-arithmetic detector: a string consisting of digits, parens, the
+   * usual operators, and whitespace — i.e. something that {@code evaluateFormula}
+   * can crunch without falling through to the symbolic fallback. Variables and
+   * letters are excluded so we don't accidentally evaluate prose.
+   */
+  private static final Pattern PURE_ARITHMETIC =
+      Pattern.compile("^[\\s0-9+\\-*/().,^%]+$");
+
+  /**
+   * Evaluates arithmetic inside {@code $...$} math blocks and (if the whole
+   * input minus a single outer {@code $...$} is itself pure arithmetic) the
+   * whole input. Used for options and clause text post-substitution.
+   *
+   * <p>A clause like {@code "f(0) = 2*0 + 3"} after substitution becomes
+   * {@code "f(0) = 2*0 + 3"} — the equation is mixed prose+math, so the
+   * outer text is left untouched. If the same clause is written as
+   * {@code "f(0) = $2*0 + 3$"} the LaTeX block is collapsed to {@code "$3$"}.
+   */
+  private String evaluateInlineArithmetic(String input, Map<String, Object> params) {
+    if (input == null || input.isBlank()) {
+      return input;
     }
 
-    String rendered = fillText(rawValue, params);
-    return rendered == null ? rawValue : rendered;
+    // 1. Replace each $...$ math block with its evaluated value when the
+    //    inner content is pure arithmetic. We use a non-greedy match so
+    //    multiple inline blocks inside one string each evaluate independently.
+    Matcher m = INLINE_MATH_BLOCK.matcher(input);
+    StringBuffer sb = new StringBuffer();
+    while (m.find()) {
+      String inner = m.group(1);
+      String evaluated = tryEvaluate(inner, params);
+      String replacement = evaluated != null ? "$" + evaluated + "$" : m.group();
+      m.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+    }
+    m.appendTail(sb);
+    String afterInline = sb.toString();
+
+    // 2. If the whole result (or the result with a single outer $...$ stripped)
+    //    is itself pure arithmetic, collapse it. Covers options written without
+    //    LaTeX wrappers, e.g. raw "{{a}}+{{b}}" → "2+3" → "5".
+    String stripped = stripOuterMathDelims(afterInline);
+    String wholeEvaluated = tryEvaluate(stripped, params);
+    if (wholeEvaluated != null) {
+      return afterInline.equals(stripped) ? wholeEvaluated : "$" + wholeEvaluated + "$";
+    }
+    return afterInline;
+  }
+
+  private static final Pattern INLINE_MATH_BLOCK = Pattern.compile("\\$([^$]+)\\$");
+
+  /** Returns evaluated arithmetic value or null when content is not pure arithmetic. */
+  private String tryEvaluate(String expr, Map<String, Object> params) {
+    if (expr == null) return null;
+    String trimmed = expr.trim();
+    if (trimmed.isEmpty() || !PURE_ARITHMETIC.matcher(trimmed).matches()) {
+      return null;
+    }
+    String result = evaluateFormula(trimmed, params);
+    if (result == null || "?".equals(result) || result.equals(trimmed)) {
+      return null;
+    }
+    return result;
+  }
+
+  private String stripOuterMathDelims(String s) {
+    if (s == null) return null;
+    String t = s.trim();
+    if (t.length() >= 2 && t.startsWith("$") && t.endsWith("$") && t.indexOf('$', 1) == t.length() - 1) {
+      return t.substring(1, t.length() - 1);
+    }
+    return t;
   }
 
   private Object resolvePlaceholderValue(String token, Map<String, Object> params) {

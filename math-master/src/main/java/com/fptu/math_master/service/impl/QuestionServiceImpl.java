@@ -339,9 +339,29 @@ public class QuestionServiceImpl implements QuestionService {
   @Override
   public Page<QuestionResponse> listReviewQueue(UUID templateId, Pageable pageable) {
     UUID currentUserId = getCurrentUserId();
-    return questionRepository
-        .findReviewQueue(currentUserId, templateId, pageable)
-        .map(this::mapToResponse);
+    Page<Question> page =
+        questionRepository.findReviewQueue(currentUserId, templateId, pageable);
+    // Avoid N+1: resolve every templateName the page needs in a single query.
+    Map<UUID, String> templateNames = batchLookupTemplateNames(page.getContent());
+    return page.map(q -> mapToResponse(q, templateNames));
+  }
+
+  /**
+   * Single-query lookup of {@code templateName} for the given questions. Returns
+   * an empty map when no question references a template.
+   */
+  private Map<UUID, String> batchLookupTemplateNames(java.util.List<Question> questions) {
+    Set<UUID> ids = new java.util.LinkedHashSet<>();
+    for (Question q : questions) {
+      if (q.getTemplateId() != null) ids.add(q.getTemplateId());
+    }
+    if (ids.isEmpty()) return java.util.Collections.emptyMap();
+    Map<UUID, String> out = new java.util.HashMap<>();
+    for (com.fptu.math_master.entity.QuestionTemplate t :
+        questionTemplateRepository.findAllById(ids)) {
+      out.put(t.getId(), t.getName());
+    }
+    return out;
   }
 
   /**
@@ -655,7 +675,25 @@ public class QuestionServiceImpl implements QuestionService {
     return removedCount;
   }
 
+  /**
+   * Single-question variant: looks up {@code templateName} on demand. Used by
+   * {@code approve}, {@code update}, and other one-off paths. List paths should
+   * call {@link #mapToResponse(Question, Map)} with a batched lookup to avoid
+   * N+1 queries.
+   */
   private QuestionResponse mapToResponse(Question question) {
+    Map<UUID, String> single = java.util.Collections.emptyMap();
+    if (question.getTemplateId() != null) {
+      String name = questionTemplateRepository
+          .findById(question.getTemplateId())
+          .map(com.fptu.math_master.entity.QuestionTemplate::getName)
+          .orElse(null);
+      if (name != null) single = java.util.Map.of(question.getTemplateId(), name);
+    }
+    return mapToResponse(question, single);
+  }
+
+  private QuestionResponse mapToResponse(Question question, Map<UUID, String> templateNames) {
     String creatorName =
         userRepository.findById(question.getCreatedBy()).map(User::getFullName).orElse("Unknown");
 
@@ -667,6 +705,9 @@ public class QuestionServiceImpl implements QuestionService {
               .map(QuestionBank::getName)
               .orElse(null);
     }
+
+    String templateName =
+        question.getTemplateId() == null ? null : templateNames.get(question.getTemplateId());
 
     return QuestionResponse.builder()
         .id(question.getId())
@@ -685,6 +726,7 @@ public class QuestionServiceImpl implements QuestionService {
         .questionSourceType(question.getQuestionSourceType())
         .tags(question.getTags())
         .templateId(question.getTemplateId())
+        .templateName(templateName)
         .canonicalQuestionId(question.getCanonicalQuestionId())
         .questionBankId(question.getQuestionBankId())
         .questionBankName(bankName)

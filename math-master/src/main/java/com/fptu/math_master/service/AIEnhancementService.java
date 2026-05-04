@@ -56,6 +56,20 @@ public interface AIEnhancementService {
   GeneratedQuestionSample generateQuestion(QuestionTemplate template, int sampleIndex);
 
   /**
+   * Same as {@link #generateQuestion(QuestionTemplate, int)} but uses the supplied
+   * parameter values instead of the legacy {@code pickParameters} sampler.
+   *
+   * <p>Used by the constraint-aware batch flow: {@code BlueprintService.selectValueSets}
+   * picks tuples that satisfy {@code constraintText} and {@code globalConstraints},
+   * and the substitutor renders the question against those exact values. When
+   * {@code presetParams} is null or empty the method falls back to the legacy
+   * sampler so callers that don't have a tuple (e.g. the "test template" preview)
+   * keep working.
+   */
+  GeneratedQuestionSample generateQuestion(
+      QuestionTemplate template, int sampleIndex, java.util.Map<String, Object> presetParams);
+
+  /**
    * Generate a question by keeping semantic structure from a canonical teacher-authored question.
    * The result is still compatible with existing matrix-based flows.
    */
