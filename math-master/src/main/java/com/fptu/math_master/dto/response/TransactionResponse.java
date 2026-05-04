@@ -29,6 +29,9 @@ public class TransactionResponse {
   /** Wallet balance snapshot right after this transaction is applied (SUCCESS only). */
   private BigDecimal balanceAfterTransaction;
 
+  /** Backward-compatible alias for FE screens bound to `balance`. */
+  private BigDecimal balance;
+
   private TransactionType type;
 
   private TransactionStatus status;
