@@ -2,6 +2,7 @@ package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.CreateSubjectRequest;
 import com.fptu.math_master.dto.request.LinkGradeSubjectRequest;
+import com.fptu.math_master.dto.request.UpdateSubjectRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.SubjectResponse;
 import com.fptu.math_master.service.SubjectService;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -66,6 +68,18 @@ public class SubjectController {
   public ApiResponse<SubjectResponse> getSubjectById(@PathVariable UUID subjectId) {
     return ApiResponse.<SubjectResponse>builder()
         .result(subjectService.getSubjectById(subjectId))
+        .build();
+  }
+
+  @PutMapping("/{subjectId}")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(summary = "Update subject")
+  public ApiResponse<SubjectResponse> updateSubject(
+      @PathVariable UUID subjectId, @Valid @RequestBody UpdateSubjectRequest request) {
+    log.info("REST request to update subject: {}", subjectId);
+    return ApiResponse.<SubjectResponse>builder()
+        .message("Subject updated successfully.")
+        .result(subjectService.updateSubject(subjectId, request))
         .build();
   }
 

@@ -2,6 +2,7 @@ package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.CreateSubjectRequest;
 import com.fptu.math_master.dto.request.LinkGradeSubjectRequest;
+import com.fptu.math_master.dto.request.UpdateSubjectRequest;
 import com.fptu.math_master.dto.response.SubjectResponse;
 import java.util.List;
 import java.util.UUID;
@@ -13,6 +14,9 @@ public interface SubjectService {
 
   /** Get a subject by its id. */
   SubjectResponse getSubjectById(UUID subjectId);
+
+  /** Update a subject (ADMIN only). */
+  SubjectResponse updateSubject(UUID subjectId, UpdateSubjectRequest request);
 
   /** List all active subjects. */
   List<SubjectResponse> getAllSubjects();
