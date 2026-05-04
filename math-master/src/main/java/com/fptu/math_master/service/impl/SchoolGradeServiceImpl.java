@@ -7,8 +7,8 @@ import com.fptu.math_master.entity.SchoolGrade;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.SchoolGradeRepository;
+import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.service.SchoolGradeService;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SchoolGradeServiceImpl implements SchoolGradeService {
 
   SchoolGradeRepository schoolGradeRepository;
+  SubjectRepository subjectRepository;
 
   @Override
   @Transactional
@@ -99,7 +100,11 @@ public class SchoolGradeServiceImpl implements SchoolGradeService {
         schoolGradeRepository
             .findByIdAndNotDeleted(id)
             .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
-    schoolGrade.setDeletedAt(Instant.now());
+
+    if (subjectRepository.countBySchoolGradeIdAndIsActiveTrueAndDeletedAtIsNull(id) > 0) {
+      throw new AppException(ErrorCode.SCHOOL_GRADE_HAS_SUBJECTS);
+    }
+
     schoolGrade.setIsActive(false);
     schoolGradeRepository.save(schoolGrade);
   }
