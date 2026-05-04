@@ -137,7 +137,7 @@ public class WalletService {
 
     return transactionRepository
         .findByWalletId(wallet.getId(), pageable)
-        .map(this::mapToTransactionResponse);
+      .map(transaction -> mapToTransactionResponse(transaction, wallet.getBalance()));
   }
 
   public Page<TransactionResponse> getMyTransactionsByStatus(
@@ -151,7 +151,7 @@ public class WalletService {
 
     return transactionRepository
         .findByWalletIdAndStatus(wallet.getId(), status, pageable)
-        .map(this::mapToTransactionResponse);
+      .map(transaction -> mapToTransactionResponse(transaction, wallet.getBalance()));
   }
 
   private WalletResponse mapToWalletResponse(Wallet wallet) {
@@ -178,12 +178,22 @@ public class WalletService {
         .build();
   }
 
-  private TransactionResponse mapToTransactionResponse(Transaction transaction) {
+  private TransactionResponse mapToTransactionResponse(
+      Transaction transaction, BigDecimal currentWalletBalance) {
+    BigDecimal balanceAfterTransaction = null;
+    if (transaction.getCreatedAt() != null) {
+      BigDecimal deltaAfter =
+          transactionRepository.sumSuccessfulBalanceDeltaAfter(
+              transaction.getWallet().getId(), transaction.getCreatedAt());
+      balanceAfterTransaction = currentWalletBalance.subtract(deltaAfter);
+    }
+
     return TransactionResponse.builder()
         .transactionId(transaction.getId())
         .walletId(transaction.getWallet().getId())
         .orderCode(transaction.getOrderCode())
         .amount(transaction.getAmount())
+        .balanceAfterTransaction(balanceAfterTransaction)
         .type(transaction.getType())
         .status(transaction.getStatus())
         .description(transaction.getDescription())
