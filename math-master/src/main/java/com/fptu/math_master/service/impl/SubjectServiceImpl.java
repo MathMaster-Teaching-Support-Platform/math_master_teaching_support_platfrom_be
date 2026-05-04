@@ -8,6 +8,7 @@ import com.fptu.math_master.entity.SchoolGrade;
 import com.fptu.math_master.entity.Subject;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.service.SubjectService;
@@ -35,6 +36,7 @@ public class SubjectServiceImpl implements SubjectService {
 
   SubjectRepository subjectRepository;
   SchoolGradeRepository schoolGradeRepository;
+  ChapterRepository chapterRepository;
 
   @Override
   @Transactional
@@ -175,6 +177,11 @@ public class SubjectServiceImpl implements SubjectService {
   @Transactional
   public void deactivateSubject(UUID subjectId) {
     Subject subject = loadOrThrow(subjectId);
+
+    if (chapterRepository.countActiveBySubjectId(subjectId) > 0) {
+      throw new AppException(ErrorCode.SUBJECT_HAS_CHAPTERS);
+    }
+
     subject.setIsActive(false);
     subjectRepository.save(subject);
     log.info("Subject deactivated: id={}", subjectId);

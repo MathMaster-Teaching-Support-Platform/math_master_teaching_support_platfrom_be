@@ -27,6 +27,9 @@ public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
   @Query("SELECT COUNT(c) FROM Chapter c WHERE c.subjectId = :subjectId AND c.deletedAt IS NULL")
   Long countBySubjectIdAndNotDeleted(@Param("subjectId") UUID subjectId);
 
+    @Query("SELECT COUNT(c) FROM Chapter c WHERE c.subjectId = :subjectId AND c.deletedAt IS NULL")
+    long countActiveBySubjectId(@Param("subjectId") UUID subjectId);
+
   @Query(
       "SELECT c FROM Chapter c WHERE c.curriculumId = :curriculumId AND c.title = :title"
           + " AND c.deletedAt IS NULL")

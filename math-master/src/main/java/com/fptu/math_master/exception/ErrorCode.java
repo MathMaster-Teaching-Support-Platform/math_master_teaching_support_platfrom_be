@@ -217,6 +217,10 @@ public enum ErrorCode {
       HttpStatus.BAD_REQUEST),
   SUBJECT_NOT_FOUND(1122, "Subject not found", HttpStatus.NOT_FOUND),
   SUBJECT_ALREADY_EXISTS(1123, "Subject with this code already exists", HttpStatus.BAD_REQUEST),
+  SUBJECT_HAS_CHAPTERS(
+      1123_1,
+      "Cannot deactivate subject while it still has chapters",
+      HttpStatus.BAD_REQUEST),
   GRADE_SUBJECT_ALREADY_EXISTS(
       1124, "This subject is already linked to the given grade level", HttpStatus.BAD_REQUEST),
   GRADE_SUBJECT_NOT_FOUND(
@@ -226,6 +230,10 @@ public enum ErrorCode {
   MATRIX_ROW_QUESTION_TYPE_REQUIRED(
       1127, "questionTypeName is required when templateId is not provided", HttpStatus.BAD_REQUEST),
   SCHOOL_GRADE_NOT_FOUND(1128, "School grade not found", HttpStatus.NOT_FOUND),
+    SCHOOL_GRADE_HAS_SUBJECTS(
+            1128_1,
+            "Cannot deactivate school grade while it still has subjects",
+            HttpStatus.BAD_REQUEST),
   DOCUMENT_NOT_FOUND(1129, "Document not found", HttpStatus.NOT_FOUND),
   SCHOOL_GRADE_ALREADY_EXISTS(1129, "School grade already exists", HttpStatus.BAD_REQUEST),
   STUDENT_MULTIPLE_GRADES_NOT_ALLOWED(1132, "Students can only select one grade level", HttpStatus.BAD_REQUEST),
@@ -336,6 +344,7 @@ public enum ErrorCode {
   COURSE_NOT_ENROLLED(1185, "You must be enrolled in the course to leave a review", HttpStatus.FORBIDDEN),
   ALREADY_REVIEWED(1186, "You have already reviewed this course", HttpStatus.BAD_REQUEST),
   REVIEW_NOT_FOUND(1187, "Review not found", HttpStatus.NOT_FOUND),
+    CHAPTER_HAS_LESSONS(1188, "Cannot delete chapter while it still has lessons", HttpStatus.BAD_REQUEST),
 
   // ─── Order Error Codes ────────────────────────────────────────────────────
   ORDER_NOT_FOUND(1188, "Order not found", HttpStatus.NOT_FOUND),

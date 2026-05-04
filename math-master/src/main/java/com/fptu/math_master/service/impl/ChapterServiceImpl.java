@@ -7,6 +7,7 @@ import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ChapterRepository;
+import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.service.ChapterService;
 import java.time.Instant;
@@ -28,6 +29,7 @@ public class ChapterServiceImpl implements ChapterService {
 
   ChapterRepository chapterRepository;
   SubjectRepository subjectRepository;
+  LessonRepository lessonRepository;
 
   @Override
   @Transactional
@@ -94,6 +96,11 @@ public class ChapterServiceImpl implements ChapterService {
   @Transactional
   public void deleteChapter(UUID id) {
     Chapter chapter = findActiveChapter(id);
+
+    if (lessonRepository.countByChapterIdAndNotDeleted(chapter.getId()) > 0) {
+      throw new AppException(ErrorCode.CHAPTER_HAS_LESSONS);
+    }
+
     chapter.setDeletedAt(Instant.now());
     chapterRepository.save(chapter);
   }
