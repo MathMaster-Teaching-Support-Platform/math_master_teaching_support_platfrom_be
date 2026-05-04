@@ -422,6 +422,7 @@ public class PaymentService {
         .orderCode(transaction.getOrderCode())
         .amount(transaction.getAmount())
         .balanceAfterTransaction(balanceAfterTransaction)
+        .balance(balanceAfterTransaction)
         .type(transaction.getType())
         .status(transaction.getStatus())
         .description(transaction.getDescription())
