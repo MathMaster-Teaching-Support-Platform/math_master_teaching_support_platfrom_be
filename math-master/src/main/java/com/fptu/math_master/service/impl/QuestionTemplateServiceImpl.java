@@ -118,7 +118,12 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .diagramTemplate(request.getDiagramTemplate())
             .solutionStepsTemplate(request.getSolutionStepsTemplate())
             .optionsGenerator(request.getOptionsGenerator())
-            .constraints(request.getConstraints())
+            // Cross-parameter constraints — must go to `globalConstraints` (the
+            // writable column). The legacy `constraints` setter exists but is
+            // mapped to a column with insertable=false/updatable=false, so JPA
+            // silently dropped writes through it; that was the V112-era data
+            // loss bug.
+            .globalConstraints(request.getConstraints())
             .statementMutations(request.getStatementMutations())
             .cognitiveLevel(request.getCognitiveLevel())
             .tags(request.getTags())
@@ -181,7 +186,9 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     template.setDiagramTemplate(request.getDiagramTemplate());
     template.setSolutionStepsTemplate(request.getSolutionStepsTemplate());
     template.setOptionsGenerator(request.getOptionsGenerator());
-    template.setConstraints(request.getConstraints());
+    // See note in createQuestionTemplate above — the legacy setter writes to a
+    // read-only column and gets silently dropped.
+    template.setGlobalConstraints(request.getConstraints());
     template.setStatementMutations(request.getStatementMutations());
     template.setCognitiveLevel(request.getCognitiveLevel());
     template.setTags(request.getTags());
@@ -409,7 +416,13 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     QuestionTemplate template = fetchTemplateForTesting(id);
 
     try {
-      GeneratedQuestionSample sample = aiEnhancementService.generateQuestion(template, 0);
+      // Single-sample preview: ask the constraint-aware selector for one tuple
+      // and feed it into the substitutor. If the selector returns nothing
+      // (e.g. no parameters defined, or AI hiccup) we fall through to the
+      // legacy random sampler — generateQuestion handles a null preset.
+      Map<String, Object> presetTuple = pickPreviewTuple(template);
+      GeneratedQuestionSample sample =
+          aiEnhancementService.generateQuestion(template, 0, presetTuple);
 
       AIEnhancementRequest enhancementRequest =
           AIEnhancementRequest.builder()
@@ -537,9 +550,36 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             template, requested + buffer, alreadyUsed, request.getDistinctnessHint());
 
     if (proposed.isEmpty()) {
-      warnings.add(
-          "Constraint-aware value selector returned no valid sets. Refusing to fall back to "
-              + "random sampling — please review the template's constraintText.");
+      // Distinguish the three failure modes so the FE toast points the teacher
+      // at the right thing to fix instead of showing a generic "no valid sets".
+      boolean noParams =
+          template.getParameters() == null || template.getParameters().isEmpty();
+      boolean noConstraints =
+          template.getGlobalConstraints() == null
+              || template.getGlobalConstraints().length == 0;
+      String warning;
+      if (noParams) {
+        warning =
+            "Mẫu này chưa khai báo tham số nào — generator không có gì để chọn. "
+                + "Hãy thêm ít nhất một tham số ở phần biến số.";
+        log.warn("[gen] template {} has no parameters; selector returned empty", template.getId());
+      } else if (noConstraints) {
+        warning =
+            "AI selector trả về 0 bộ giá trị mặc dù mẫu không có ràng buộc — "
+                + "có thể Gemini bị lỗi tạm thời. Hãy thử lại sau ít phút.";
+        log.warn(
+            "[gen] template {} has no globalConstraints but selector returned empty — likely AI hiccup",
+            template.getId());
+      } else {
+        warning =
+            "AI selector không tìm được bộ giá trị nào thỏa mãn ràng buộc. "
+                + "Hãy nới lỏng constraintText hoặc kiểm tra ràng buộc giữa các biến.";
+        log.warn(
+            "[gen] template {} constraints appear over-tight: globalConstraints={}",
+            template.getId(),
+            java.util.Arrays.toString(template.getGlobalConstraints()));
+      }
+      warnings.add(warning);
       return GeneratedQuestionsBatchResponse.builder()
           .totalRequested(requested)
           .totalGenerated(0)
@@ -561,17 +601,18 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       }
 
       try {
+        // Render the question against the AI-selected tuple. The substitutor used
+        // to call its own random sampler and we'd overwrite the metadata after the
+        // fact — that left the rendered text and the recorded `usedParameters` out
+        // of sync, and worse, ignored the constraint-aware tuple entirely. Now the
+        // tuple drives substitution from the start.
         GeneratedQuestionSample sample =
-            aiEnhancementService.generateQuestion(template, generatedIds.size());
+            aiEnhancementService.generateQuestion(template, generatedIds.size(), tuple);
         if (sample == null
             || sample.getQuestionText() == null
             || sample.getQuestionText().isBlank()) {
           warnings.add("Substitutor produced empty question for tuple " + tuple);
           continue;
-        }
-        // Force the generator to use the AI-selected tuple if it produced its own.
-        if (tuple != null && !tuple.isEmpty()) {
-          sample.setUsedParameters(new HashMap<>(tuple));
         }
 
         Map<String, Object> metadata = new HashMap<>();
@@ -853,9 +894,18 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
 
+    // Pre-fetch constraint-respecting tuples for the whole preview batch in one
+    // BlueprintService call (one Gemini round trip), then substitute per sample.
+    // Falls back to legacy random sampling if the selector produces nothing.
+    List<Map<String, Object>> presetTuples =
+        blueprintService.selectValueSets(template, sampleCount, java.util.List.of(), null);
+
     for (int i = 0; i < sampleCount; i++) {
       try {
-        GeneratedQuestionSample sample = aiEnhancementService.generateQuestion(template, i);
+        Map<String, Object> presetTuple =
+            i < presetTuples.size() ? presetTuples.get(i) : null;
+        GeneratedQuestionSample sample =
+            aiEnhancementService.generateQuestion(template, i, presetTuple);
         if (sample.getQuestionText().startsWith("[LLM generation failed]")) {
           errors.add("Sample " + (i + 1) + ": " + sample.getQuestionText());
         } else {
@@ -1018,7 +1068,13 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .diagramTemplate(template.getDiagramTemplate())
             .solutionStepsTemplate(template.getSolutionStepsTemplate())
             .optionsGenerator(template.getOptionsGenerator())
-            .constraints(template.getConstraints())
+            // Prefer the writable column. The legacy `constraints` column is
+            // still read for templates that pre-date V112's backfill window so
+            // historical data does not appear empty in the FE.
+            .constraints(
+                template.getGlobalConstraints() != null
+                    ? template.getGlobalConstraints()
+                    : template.getConstraints())
             .statementMutations(template.getStatementMutations())
             .cognitiveLevel(template.getCognitiveLevel())
             .tags(template.getTags())
@@ -1087,5 +1143,18 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       throw new AppException(ErrorCode.TOO_MANY_TAGS);
     }
     // Enum validation is automatic - invalid values will cause deserialization error
+  }
+
+  /**
+   * Single-tuple wrapper around {@link BlueprintService#selectValueSets}. Returns
+   * {@code null} when the selector finds no valid tuple — in that case the caller
+   * falls through to {@code AIEnhancementService}'s legacy sampler. We keep the
+   * fallback because preview/enhancement paths must still produce something for
+   * templates with no parameters or no constraints defined yet.
+   */
+  private Map<String, Object> pickPreviewTuple(QuestionTemplate template) {
+    java.util.List<Map<String, Object>> tuples =
+        blueprintService.selectValueSets(template, 1, java.util.List.of(), null);
+    return tuples.isEmpty() ? null : tuples.get(0);
   }
 }

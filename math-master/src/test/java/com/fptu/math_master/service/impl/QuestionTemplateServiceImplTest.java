@@ -47,6 +47,7 @@ import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.service.AIEnhancementService;
+import com.fptu.math_master.service.BlueprintService;
 import com.fptu.math_master.service.GeminiService;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -83,6 +84,7 @@ class QuestionTemplateServiceImplTest extends BaseUnitTest {
   @Mock private QuestionRepository questionRepository;
   @Mock private QuestionBankRepository questionBankRepository;
   @Mock private CanonicalQuestionRepository canonicalQuestionRepository;
+  @Mock private BlueprintService blueprintService;
 
   private static final UUID OWNER_ID = UUID.fromString("4a000000-0000-0000-0000-000000000010");
   private static final UUID OTHER_USER_ID = UUID.fromString("4a000000-0000-0000-0000-000000000020");
@@ -1237,7 +1239,12 @@ class QuestionTemplateServiceImplTest extends BaseUnitTest {
           buildQuestionTemplate(TEMPLATE_ID, OWNER_ID, TemplateStatus.PUBLISHED, true, null);
       when(questionTemplateRepository.findByIdWithCreator(TEMPLATE_ID))
           .thenReturn(Optional.of(published));
-      when(aiEnhancementService.generateQuestion(eq(published), any(Integer.class)))
+      // BlueprintService now supplies the constraint-aware tuples that drive
+      // generation. Stub two so the batch can produce two questions.
+      when(blueprintService.selectValueSets(eq(published), any(Integer.class), any(), any()))
+          .thenReturn(java.util.List.of(Map.of("a", 1), Map.of("a", 2)));
+      when(blueprintService.selectionPromptVersion()).thenReturn("test-prompt-v1");
+      when(aiEnhancementService.generateQuestion(eq(published), any(Integer.class), any()))
           .thenReturn(
               GeneratedQuestionSample.builder()
                   .questionText("Xác định miền xác định của hàm số cho trước.")
@@ -1266,84 +1273,12 @@ class QuestionTemplateServiceImplTest extends BaseUnitTest {
       assertNull(result.getWarnings());
     }
 
-    /**
-     * Normal case: sinh từ câu chuẩn hóa với AI_FROM_CANONICAL.
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Gọi canonical repository và generateQuestionFromCanonical</li>
-     * </ul>
-     */
-    @Test
-    void it_should_use_ai_from_canonical_when_requested() {
-      mockJwtTeacher(OWNER_ID);
-      QuestionTemplate published =
-          buildQuestionTemplate(TEMPLATE_ID, OWNER_ID, TemplateStatus.PUBLISHED, true, null);
-      published.setCanonicalQuestionId(null);
-      when(questionTemplateRepository.findByIdWithCreator(TEMPLATE_ID))
-          .thenReturn(Optional.of(published));
-      CanonicalQuestion cq = CanonicalQuestion.builder().title("Bài mẫu chuẩn").problemText("Cho dãy số...").build();
-      cq.setId(CANONICAL_ID);
-      when(canonicalQuestionRepository.findByIdAndNotDeleted(CANONICAL_ID))
-          .thenReturn(Optional.of(cq));
-      when(aiEnhancementService.generateQuestionFromCanonical(eq(cq), eq(published), any(Integer.class)))
-          .thenReturn(
-              GeneratedQuestionSample.builder()
-                  .questionText("Biến thể từ câu chuẩn hóa theo ngữ cảnh lớp học.")
-                  .build());
-      when(questionRepository.save(any(Question.class)))
-          .thenAnswer(
-              inv -> {
-                Question q = inv.getArgument(0);
-                q.setId(UUID.randomUUID());
-                return q;
-              });
-
-      GenerateTemplateQuestionsRequest req =
-          GenerateTemplateQuestionsRequest.builder()
-              .count(1)
-              .generationMode(QuestionGenerationMode.AI_FROM_CANONICAL)
-              .canonicalQuestionId(CANONICAL_ID)
-              .build();
-
-      GeneratedQuestionsBatchResponse result =
-          questionTemplateService.generateQuestionsFromTemplate(TEMPLATE_ID, req);
-
-      assertEquals(1, result.getTotalGenerated());
-      verify(canonicalQuestionRepository, times(1)).findByIdAndNotDeleted(CANONICAL_ID);
-    }
-
-    /**
-     * Abnormal case: AI_FROM_CANONICAL nhưng không có canonical id.
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>{@link ErrorCode#INVALID_KEY}</li>
-     * </ul>
-     */
-    @Test
-    void it_should_throw_when_canonical_mode_without_canonical_id() {
-      mockJwtTeacher(OWNER_ID);
-      QuestionTemplate published =
-          buildQuestionTemplate(TEMPLATE_ID, OWNER_ID, TemplateStatus.PUBLISHED, true, null);
-      published.setCanonicalQuestionId(null);
-      when(questionTemplateRepository.findByIdWithCreator(TEMPLATE_ID))
-          .thenReturn(Optional.of(published));
-
-      GenerateTemplateQuestionsRequest req =
-          GenerateTemplateQuestionsRequest.builder()
-              .count(1)
-              .generationMode(QuestionGenerationMode.AI_FROM_CANONICAL)
-              .canonicalQuestionId(null)
-              .build();
-
-      AppException ex =
-          assertThrows(
-              AppException.class,
-              () -> questionTemplateService.generateQuestionsFromTemplate(TEMPLATE_ID, req));
-
-      assertEquals(ErrorCode.INVALID_KEY, ex.getErrorCode());
-    }
+    // The legacy AI_FROM_CANONICAL generation mode and its "missing canonicalId"
+    // validation were removed when generation was unified around the Blueprint
+    // value selector. The two tests that asserted that behaviour
+    // (it_should_use_ai_from_canonical_when_requested,
+    // it_should_throw_when_canonical_mode_without_canonical_id) have been
+    // dropped intentionally — they verified surface area that no longer exists.
 
     /**
      * Abnormal case: count không dương.
@@ -1387,7 +1322,10 @@ class QuestionTemplateServiceImplTest extends BaseUnitTest {
           buildQuestionTemplate(TEMPLATE_ID, OWNER_ID, TemplateStatus.PUBLISHED, true, null);
       when(questionTemplateRepository.findByIdWithCreator(TEMPLATE_ID))
           .thenReturn(Optional.of(published));
-      when(aiEnhancementService.generateQuestion(eq(published), eq(0)))
+      when(blueprintService.selectValueSets(eq(published), any(Integer.class), any(), any()))
+          .thenReturn(java.util.List.of(Map.of("a", 1)));
+      when(blueprintService.selectionPromptVersion()).thenReturn("test-prompt-v1");
+      when(aiEnhancementService.generateQuestion(eq(published), any(Integer.class), any()))
           .thenReturn(GeneratedQuestionSample.builder().questionText("   ").build());
 
       GenerateTemplateQuestionsRequest req =
@@ -1415,7 +1353,10 @@ class QuestionTemplateServiceImplTest extends BaseUnitTest {
           buildQuestionTemplate(TEMPLATE_ID, OWNER_ID, TemplateStatus.PUBLISHED, true, null);
       when(questionTemplateRepository.findByIdWithCreator(TEMPLATE_ID))
           .thenReturn(Optional.of(published));
-      when(aiEnhancementService.generateQuestion(eq(published), eq(0)))
+      when(blueprintService.selectValueSets(eq(published), any(Integer.class), any(), any()))
+          .thenReturn(java.util.List.of(Map.of("a", 1)));
+      when(blueprintService.selectionPromptVersion()).thenReturn("test-prompt-v1");
+      when(aiEnhancementService.generateQuestion(eq(published), any(Integer.class), any()))
           .thenThrow(new RuntimeException("model overloaded"));
 
       GenerateTemplateQuestionsRequest req =
@@ -1425,7 +1366,8 @@ class QuestionTemplateServiceImplTest extends BaseUnitTest {
           questionTemplateService.generateQuestionsFromTemplate(TEMPLATE_ID, req);
 
       assertEquals(0, result.getTotalGenerated());
-      assertTrue(result.getWarnings().get(0).contains("Failed to generate"));
+      // Per-iteration substitutor failures are recorded with the new wording.
+      assertTrue(result.getWarnings().get(0).contains("Substitutor failed"));
     }
   }
 
@@ -1448,11 +1390,12 @@ class QuestionTemplateServiceImplTest extends BaseUnitTest {
           buildQuestionTemplate(TEMPLATE_ID, OWNER_ID, TemplateStatus.PUBLISHED, true, null);
       when(questionTemplateRepository.findByIdWithCreator(TEMPLATE_ID))
           .thenReturn(Optional.of(published));
-      CanonicalQuestion cq = CanonicalQuestion.builder().problemText("Chuẩn hóa đề thi giữa kỳ").build();
-      cq.setId(CANONICAL_ID);
-      when(canonicalQuestionRepository.findByIdAndNotDeleted(CANONICAL_ID))
-          .thenReturn(Optional.of(cq));
-      when(aiEnhancementService.generateQuestionFromCanonical(eq(cq), eq(published), eq(0)))
+      // The canonical-delegate now goes through the unified Blueprint path —
+      // no separate canonical generation method is called.
+      when(blueprintService.selectValueSets(eq(published), any(Integer.class), any(), any()))
+          .thenReturn(java.util.List.of(Map.of("a", 1)));
+      when(blueprintService.selectionPromptVersion()).thenReturn("test-prompt-v1");
+      when(aiEnhancementService.generateQuestion(eq(published), any(Integer.class), any()))
           .thenReturn(
               GeneratedQuestionSample.builder()
                   .questionText("Phiên bản sinh từ câu chuẩn hóa.")
