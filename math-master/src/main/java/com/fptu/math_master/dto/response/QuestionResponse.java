@@ -68,6 +68,9 @@ public class QuestionResponse {
   @Schema(description = "Template this was generated from (if applicable)")
   private UUID templateId;
 
+  @Schema(description = "Display name of the template, populated for the review queue and lists")
+  private String templateName;
+
   @Schema(description = "Canonical source question ID (if applicable)")
   private UUID canonicalQuestionId;
 
