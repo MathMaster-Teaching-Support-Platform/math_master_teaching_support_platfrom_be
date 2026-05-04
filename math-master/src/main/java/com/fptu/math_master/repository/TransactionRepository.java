@@ -28,6 +28,22 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
   Page<Transaction> findByWalletIdAndStatus(
       UUID walletId, TransactionStatus status, Pageable pageable);
 
+  /**
+   * Sum signed balance delta of successful wallet transactions after a timestamp.
+   * Positive: DEPOSIT, INSTRUCTOR_REVENUE. Negative: WITHDRAWAL, PAYMENT, COURSE_PURCHASE.
+   */
+  @Query(
+      "SELECT COALESCE(SUM(CASE "
+          + "WHEN t.type IN ('DEPOSIT', 'INSTRUCTOR_REVENUE') THEN t.amount "
+          + "WHEN t.type IN ('WITHDRAWAL', 'PAYMENT', 'COURSE_PURCHASE') THEN -t.amount "
+          + "ELSE 0 END), 0) "
+          + "FROM Transaction t "
+          + "WHERE t.wallet.id = :walletId "
+          + "AND t.status = 'SUCCESS' "
+          + "AND t.createdAt > :createdAt")
+  BigDecimal sumSuccessfulBalanceDeltaAfter(
+      @Param("walletId") UUID walletId, @Param("createdAt") Instant createdAt);
+
   /** All transactions across all wallets — admin view */
     @Query("SELECT t FROM Transaction t LEFT JOIN FETCH t.wallet w LEFT JOIN FETCH w.user")
   Page<Transaction> findAllWithUser(Pageable pageable);

@@ -26,6 +26,9 @@ public class TransactionResponse {
 
   private BigDecimal amount;
 
+  /** Wallet balance snapshot right after this transaction is applied (SUCCESS only). */
+  private BigDecimal balanceAfterTransaction;
+
   private TransactionType type;
 
   private TransactionStatus status;
