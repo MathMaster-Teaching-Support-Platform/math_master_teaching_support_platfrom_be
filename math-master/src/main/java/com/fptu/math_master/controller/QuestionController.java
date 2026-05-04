@@ -2,6 +2,7 @@ package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.BulkApproveQuestionsRequest;
 import com.fptu.math_master.dto.request.BulkAssignQuestionsToBankRequest;
+import com.fptu.math_master.dto.request.BulkRejectQuestionsRequest;
 import com.fptu.math_master.dto.request.CreateQuestionRequest;
 import com.fptu.math_master.dto.request.ImportQuestionsRequest;
 import com.fptu.math_master.dto.request.QuestionBatchImportRequest;
@@ -166,8 +167,8 @@ public class QuestionController {
   @PostMapping("/bulk-approve")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
-      summary = "Bulk approve AI draft questions",
-      description = "Approve multiple AI_DRAFT questions in one call.")
+      summary = "Bulk approve questions in review",
+      description = "Approve multiple UNDER_REVIEW (or legacy AI_DRAFT) questions in one call.")
   public ApiResponse<Integer> bulkApproveQuestions(
       @Valid @RequestBody BulkApproveQuestionsRequest request) {
     log.info("REST request to bulk approve {} questions", request.getQuestionIds().size());
@@ -175,6 +176,43 @@ public class QuestionController {
     return ApiResponse.<Integer>builder()
         .message("Bulk approve completed")
         .result(approved)
+        .build();
+  }
+
+  @PostMapping("/bulk-reject")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Bulk reject questions in review",
+      description =
+          "Reject multiple UNDER_REVIEW (or legacy AI_DRAFT) questions in one call. Rejected "
+              + "questions move to ARCHIVED and leave the review queue.")
+  public ApiResponse<Integer> bulkRejectQuestions(
+      @Valid @RequestBody BulkRejectQuestionsRequest request) {
+    log.info("REST request to bulk reject {} questions", request.getQuestionIds().size());
+    Integer rejected =
+        questionService.bulkRejectQuestions(request.getQuestionIds(), request.getReason());
+    return ApiResponse.<Integer>builder()
+        .message("Bulk reject completed")
+        .result(rejected)
+        .build();
+  }
+
+  @GetMapping("/review-queue")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "List my questions in review",
+      description =
+          "Returns the caller's UNDER_REVIEW (and legacy AI_DRAFT) questions, optionally filtered "
+              + "to one template. Used by the FE review-queue page after a generation batch.")
+  public ApiResponse<Page<QuestionResponse>> reviewQueue(
+      @RequestParam(required = false) UUID templateId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    log.info("REST request review-queue templateId={} page={} size={}", templateId, page, size);
+    Pageable pageable = PageRequest.of(page, size);
+    return ApiResponse.<Page<QuestionResponse>>builder()
+        .message("Review queue retrieved")
+        .result(questionService.listReviewQueue(templateId, pageable))
         .build();
   }
 
