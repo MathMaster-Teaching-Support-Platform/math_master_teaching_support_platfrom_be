@@ -88,9 +88,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
 
       courseLesson = courseLessonRepository.save(courseLesson);
       log.info("CourseLesson added: {} to course: {}", courseLesson.getId(), courseId);
-      
+
       courseService.syncCourseMetrics(courseId);
-      
+
       return mapToResponse(courseLesson, lesson.getTitle(), true);
 
     } else {
@@ -126,9 +126,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
 
       courseLesson = courseLessonRepository.save(courseLesson);
       log.info("[CUSTOM] CourseLesson added: {} to course: {}", courseLesson.getId(), courseId);
-      
+
       courseService.syncCourseMetrics(courseId);
-      
+
       return mapToResponse(courseLesson, request.getCustomTitle(), true);
     }
   }
@@ -214,13 +214,13 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     courseLesson.setDeletedBy(currentUserId);
     courseLessonRepository.save(courseLesson);
     log.info("CourseLesson soft-deleted and resources cleaned up: {}", courseLessonId);
-    
+
     // Reorder remaining lessons to fill the gap
     List<CourseLesson> remainingLessons = courseLessonRepository.findByCourseIdAndNotDeleted(courseId);
     remainingLessons.stream()
         .filter(lesson -> {
             if (course.getProvider() == com.fptu.math_master.enums.CourseProvider.CUSTOM) {
-                return java.util.Objects.equals(lesson.getSectionId(), courseLesson.getSectionId()) 
+                return java.util.Objects.equals(lesson.getSectionId(), courseLesson.getSectionId())
                     && lesson.getOrderIndex() > deletedOrderIndex;
             }
             return lesson.getOrderIndex() > deletedOrderIndex;
@@ -229,11 +229,11 @@ public class CourseLessonServiceImpl implements CourseLessonService {
           lesson.setOrderIndex(lesson.getOrderIndex() - 1);
           courseLessonRepository.save(lesson);
         });
-    
-    log.info("Reordered {} lessons after deletion of lesson {}", 
-        remainingLessons.stream().filter(l -> l.getOrderIndex() >= deletedOrderIndex).count(), 
+
+    log.info("Reordered {} lessons after deletion of lesson {}",
+        remainingLessons.stream().filter(l -> l.getOrderIndex() >= deletedOrderIndex).count(),
         courseLessonId);
-    
+
     courseService.syncCourseMetrics(courseId);
   }
 
@@ -270,11 +270,11 @@ public class CourseLessonServiceImpl implements CourseLessonService {
   @Transactional(readOnly = true)
   public String getAdminVideoUrl(UUID courseId, UUID courseLessonId) {
     UUID currentAdminId = SecurityUtils.getCurrentUserId();
-    log.info("Admin {} requesting video URL for lesson {} in course {}", 
+    log.info("Admin {} requesting video URL for lesson {} in course {}",
         currentAdminId, courseLessonId, courseId);
-    
+
     Course course = findCourseOrThrow(courseId);
-    
+
     CourseLesson courseLesson = courseLessonRepository
         .findByIdAndDeletedAtIsNull(courseLessonId)
         .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
@@ -292,7 +292,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
         courseLesson.getVideoUrl(),
         minioProperties.getCourseVideosBucket()
     );
-    
+
     log.info("✅ Admin {} granted video access to lesson {}", currentAdminId, courseLessonId);
     return presignedUrl;
   }
@@ -305,15 +305,15 @@ public class CourseLessonServiceImpl implements CourseLessonService {
 
     boolean isAuthorized = false;
     final String[] authReasonHolder = {"not authenticated"}; // Use array to make it effectively final
-    
+
     if (currentUserId != null) {
       // IMPORTANT: Check admin role FIRST before other checks
       boolean isAdmin = SecurityUtils.hasRole("ADMIN");
       boolean isOwner = course.getTeacherId().equals(currentUserId);
-      
-      log.info("Course {} lesson access check: userId={}, isAdmin={}, isOwner={}, courseStatus={}", 
+
+      log.info("Course {} lesson access check: userId={}, isAdmin={}, isOwner={}, courseStatus={}",
           courseId, currentUserId, isAdmin, isOwner, course.getStatus());
-      
+
       if (isAdmin) {
         isAuthorized = true;
         authReasonHolder[0] = "admin role";
@@ -338,8 +338,8 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     } else {
       log.warn("❌ Unauthenticated access attempt to course {} lessons", courseId);
     }
-    
-    log.info("Course {} lesson access result: userId={}, authorized={}, reason={}", 
+
+    log.info("Course {} lesson access result: userId={}, authorized={}, reason={}",
         courseId, currentUserId, isAuthorized, authReasonHolder[0]);
 
     // Udemy-style access: only enrolled/owner/admin can access all lessons.
@@ -487,9 +487,9 @@ public class CourseLessonServiceImpl implements CourseLessonService {
     }
 
     courseLessonRepository.save(cl);
-    
+
     courseService.syncCourseMetrics(courseId);
-    
+
     return mapToResponse(cl, getTitleForLesson(cl), true);
   }
 
@@ -520,7 +520,7 @@ public class CourseLessonServiceImpl implements CourseLessonService {
         throw new RuntimeException("Error updating materials metadata");
       }
       courseLessonRepository.save(cl);
-      
+
       courseService.syncCourseMetrics(courseId);
     }
 
