@@ -87,10 +87,10 @@ public class LessonContentController {
         .build();
   }
 
-  @GetMapping("/{lessonId}")
+  @GetMapping("/manage/{lessonId}")
   @Operation(summary = "Get a single lesson with its chapters")
   public ApiResponse<LessonResponse> getLessonById(@PathVariable UUID lessonId) {
-    log.info("GET /lessons/{}", lessonId);
+    log.info("GET /lessons/manage/{}", lessonId);
     return ApiResponse.<LessonResponse>builder()
         .result(lessonContentService.getLessonById(lessonId))
         .build();
@@ -120,12 +120,12 @@ public class LessonContentController {
   // Delete
   // -----------------------------------------------------------------------
 
-  @DeleteMapping("/{lessonId}")
+  @DeleteMapping("/manage/{lessonId}")
   @Operation(
       summary = "Soft-delete a lesson and all its chapters",
       description = "Only the owning teacher or an ADMIN can delete a lesson.")
   public ApiResponse<Void> deleteLesson(@PathVariable UUID lessonId) {
-    log.info("DELETE /lessons/{}", lessonId);
+    log.info("DELETE /lessons/manage/{}", lessonId);
     lessonContentService.deleteLesson(lessonId);
     return ApiResponse.<Void>builder().message("Lesson deleted successfully").build();
   }
@@ -147,22 +147,22 @@ public class LessonContentController {
   @Operation(
       summary = "Create a lesson",
       description = "Manually creates a lesson inside a chapter (chapterId required in body).")
-  @PostMapping
+  @PostMapping("/manage")
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<LessonResponse> createLesson(@Valid @RequestBody CreateLessonRequest request) {
-    log.info("POST /lessons – chapterId={}", request.getChapterId());
+    log.info("POST /lessons/manage - chapterId={}", request.getChapterId());
     return ApiResponse.<LessonResponse>builder()
         .result(lessonService.createLesson(request))
         .build();
   }
 
   @Operation(summary = "Update a lesson")
-  @PutMapping("/{lessonId}")
+  @PutMapping("/manage/{lessonId}")
   @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<LessonResponse> updateLesson(
       @PathVariable UUID lessonId, @Valid @RequestBody UpdateLessonRequest request) {
-    log.info("PUT /lessons/{}", lessonId);
+    log.info("PUT /lessons/manage/{}", lessonId);
     return ApiResponse.<LessonResponse>builder()
         .result(lessonService.updateLesson(lessonId, request))
         .build();
