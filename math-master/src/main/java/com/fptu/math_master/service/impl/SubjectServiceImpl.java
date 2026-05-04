@@ -2,6 +2,7 @@ package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.dto.request.CreateSubjectRequest;
 import com.fptu.math_master.dto.request.LinkGradeSubjectRequest;
+import com.fptu.math_master.dto.request.UpdateSubjectRequest;
 import com.fptu.math_master.dto.response.SubjectResponse;
 import com.fptu.math_master.entity.SchoolGrade;
 import com.fptu.math_master.entity.Subject;
@@ -67,6 +68,47 @@ public class SubjectServiceImpl implements SubjectService {
   @Transactional(readOnly = true)
   public SubjectResponse getSubjectById(UUID subjectId) {
     Subject subject = loadOrThrow(subjectId);
+    return buildResponse(subject);
+  }
+
+  @Override
+  @Transactional
+  public SubjectResponse updateSubject(UUID subjectId, UpdateSubjectRequest request) {
+    Subject subject = loadOrThrow(subjectId);
+
+    if (request.getSchoolGradeId() != null) {
+      SchoolGrade schoolGrade =
+          schoolGradeRepository
+              .findByIdAndNotDeleted(request.getSchoolGradeId())
+              .filter(g -> Boolean.TRUE.equals(g.getIsActive()))
+              .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+      subject.setSchoolGradeId(schoolGrade.getId());
+    }
+
+    if (request.getName() != null && !request.getName().isBlank()) {
+      subject.setName(request.getName().trim());
+    }
+    if (request.getDescription() != null) {
+      subject.setDescription(request.getDescription());
+    }
+    if (request.getGradeMin() != null) {
+      subject.setGradeMin(request.getGradeMin());
+    }
+    if (request.getGradeMax() != null) {
+      subject.setGradeMax(request.getGradeMax());
+    }
+    if (request.getIsActive() != null) {
+      subject.setIsActive(request.getIsActive());
+    }
+
+    if (subject.getGradeMin() != null
+        && subject.getGradeMax() != null
+        && subject.getGradeMin() > subject.getGradeMax()) {
+      throw new AppException(ErrorCode.INVALID_KEY);
+    }
+
+    subject = subjectRepository.save(subject);
+    log.info("Subject updated: id={}", subjectId);
     return buildResponse(subject);
   }
 
