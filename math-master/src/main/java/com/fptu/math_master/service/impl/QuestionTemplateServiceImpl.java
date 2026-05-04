@@ -533,21 +533,44 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     List<UUID> generatedIds = new ArrayList<>();
     List<String> warnings = new ArrayList<>();
     int sampleIndex = 0;
+    int skippedCount = 0;
 
     UUID effectiveCanonicalId =
         mode == QuestionGenerationMode.AI_FROM_CANONICAL && canonicalQuestion != null
             ? canonicalQuestion.getId()
             : template.getCanonicalQuestionId();
 
-    for (int i = 0; i < requested; i++) {
+    // Cache existing parameter sets for this template in the bank to avoid duplicates
+    Set<Map<String, Object>> existingParamSets = new HashSet<>();
+    if (request.isAvoidDuplicates()) {
+      List<Question> existingQuestions = questionRepository.findByTemplateIdAndNotDeleted(template.getId());
+      for (Question q : existingQuestions) {
+        if (q.getGenerationMetadata() != null && q.getGenerationMetadata().containsKey("usedParameters")) {
+          existingParamSets.add((Map<String, Object>) q.getGenerationMetadata().get("usedParameters"));
+        }
+      }
+    }
+
+    int attempts = 0;
+    int maxAttempts = requested * 3; // Try up to 3x requested to find unique variations
+
+    while (generatedIds.size() < requested && attempts < maxAttempts) {
+      attempts++;
       try {
         GeneratedQuestionSample sample =
             mode == QuestionGenerationMode.AI_FROM_CANONICAL
                 ? aiEnhancementService.generateQuestionFromCanonical(
                     canonicalQuestion, template, sampleIndex++)
                 : aiEnhancementService.generateQuestion(template, sampleIndex++);
+        
         if (sample == null || sample.getQuestionText() == null || sample.getQuestionText().isBlank()) {
-          warnings.add("Generated sample was empty at index " + (i + 1));
+          warnings.add("Generated sample was empty at attempt " + attempts);
+          continue;
+        }
+
+        // Deduplication check
+        if (request.isAvoidDuplicates() && existingParamSets.contains(sample.getUsedParameters())) {
+          skippedCount++;
           continue;
         }
 
@@ -586,15 +609,25 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
         Question saved = questionRepository.save(question);
         generatedIds.add(saved.getId());
+        
+        if (request.isAvoidDuplicates()) {
+          existingParamSets.add(sample.getUsedParameters());
+        }
       } catch (Exception ex) {
         log.warn(
-            "Failed to generate/save question {}/{} for template {}: {}",
-            i + 1,
-            requested,
+            "Failed to generate/save question at attempt {} for template {}: {}",
+            attempts,
             id,
             ex.getMessage());
-        warnings.add("Failed to generate question at index " + (i + 1) + ": " + ex.getMessage());
+        warnings.add("Failed to generate question at attempt " + attempts + ": " + ex.getMessage());
       }
+    }
+
+    if (skippedCount > 0) {
+      warnings.add("Skipped " + skippedCount + " duplicate variations based on parameters.");
+    }
+    if (generatedIds.size() < requested && attempts >= maxAttempts) {
+      warnings.add("Could only generate " + generatedIds.size() + " unique variations after " + maxAttempts + " attempts.");
     }
 
     return GeneratedQuestionsBatchResponse.builder()

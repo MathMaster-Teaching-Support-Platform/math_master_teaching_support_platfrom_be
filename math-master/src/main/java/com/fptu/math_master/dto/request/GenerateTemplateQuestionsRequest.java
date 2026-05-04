@@ -23,4 +23,7 @@ public class GenerateTemplateQuestionsRequest {
   private QuestionGenerationMode generationMode = QuestionGenerationMode.PARAMETRIC;
 
   private UUID canonicalQuestionId;
+  
+  @Builder.Default
+  private boolean avoidDuplicates = false;
 }
