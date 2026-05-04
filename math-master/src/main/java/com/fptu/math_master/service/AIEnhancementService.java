@@ -1,16 +1,20 @@
 package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.AIEnhancementRequest;
+import com.fptu.math_master.dto.request.AutoBlueprintRequest;
 import com.fptu.math_master.dto.request.ExtractParametersRequest;
 import com.fptu.math_master.dto.request.GenerateParametersRequest;
 import com.fptu.math_master.dto.request.SetClausePointsRequest;
 import com.fptu.math_master.dto.request.UpdateParametersRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
+import com.fptu.math_master.dto.response.AutoBlueprintResponse;
 import com.fptu.math_master.dto.response.ExtractParametersResponse;
 import com.fptu.math_master.dto.response.GenerateParametersResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionSample;
 import com.fptu.math_master.entity.CanonicalQuestion;
 import com.fptu.math_master.entity.QuestionTemplate;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** Service for enhancing questions using Gemini AI (Google AI Studio) */
@@ -72,6 +76,36 @@ public interface AIEnhancementService {
    * @return Suggestions with changeable params, fixed values, and the auto-converted template text
    */
   ExtractParametersResponse extractParameters(UUID templateId, ExtractParametersRequest request);
+
+  // =========================================================================
+  // AUTO-BLUEPRINT: Standard Teacher Flow Orchestrator
+  // =========================================================================
+
+  /**
+   * Converts a concrete question (with real numbers) into a reusable Blueprint.
+   * AI extracts placeholders, infers parameter constraints, generates the answer
+   * formula, and returns a complete QuestionTemplateRequest ready for teacher review.
+   *
+   * @param request Concrete question data submitted by teacher
+   * @return A full Blueprint (QuestionTemplateRequest) + extraction notes + confidence score
+   */
+  AutoBlueprintResponse autoBlueprint(AutoBlueprintRequest request);
+
+  // =========================================================================
+  // PHASE C: Batch Parameter Generation (AI-first, RNG fallback)
+  // =========================================================================
+
+  /**
+   * Generates a batch of parameter sets for the given template using AI.
+   * Divides count into batches of BATCH_SIZE, calls Gemini once per batch,
+   * validates each set against template constraints, and falls back to RNG
+   * for sets that fail validation.
+   *
+   * @param template The question template
+   * @param count    Number of parameter sets to generate
+   * @return Exactly count parameter sets, guaranteed non-null
+   */
+  List<Map<String, Object>> generateParameterBatch(QuestionTemplate template, int count);
 
   // =========================================================================
   // FEATURE 2: AI Generates Parameter Values (Replaces Backend Random)

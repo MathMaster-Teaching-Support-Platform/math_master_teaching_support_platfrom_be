@@ -204,15 +204,29 @@ public class TeacherEarningsService {
 
         return transactionRepository
                 .findByWalletIdAndType(wallet.getId(), TransactionType.INSTRUCTOR_REVENUE, pageable)
-                .map(this::mapToTransactionResponse);
+                .map(transaction -> mapToTransactionResponse(transaction, wallet.getBalance()));
     }
 
-    private TransactionResponse mapToTransactionResponse(Transaction transaction) {
+    private TransactionResponse mapToTransactionResponse(Transaction transaction, BigDecimal currentWalletBalance) {
+        Instant effectiveTime = transaction.getCreatedAt() != null
+                ? transaction.getCreatedAt()
+                : transaction.getTransactionDate();
+        BigDecimal balanceAfterTransaction;
+
+        if (effectiveTime != null) {
+            BigDecimal deltaAfter = transactionRepository.sumSuccessfulBalanceDeltaAfter(
+                    transaction.getWallet().getId(), effectiveTime);
+            balanceAfterTransaction = currentWalletBalance.subtract(deltaAfter);
+        } else {
+            balanceAfterTransaction = currentWalletBalance;
+        }
+
         return TransactionResponse.builder()
                 .transactionId(transaction.getId())
                 .walletId(transaction.getWallet().getId())
                 .orderCode(transaction.getOrderCode())
                 .amount(transaction.getAmount())
+                .balanceAfterTransaction(balanceAfterTransaction)
                 .type(transaction.getType())
                 .status(transaction.getStatus())
                 .description(transaction.getDescription())

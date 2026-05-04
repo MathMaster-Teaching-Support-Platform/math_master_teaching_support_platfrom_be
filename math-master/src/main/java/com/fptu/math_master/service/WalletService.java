@@ -181,11 +181,19 @@ public class WalletService {
   private TransactionResponse mapToTransactionResponse(
       Transaction transaction, BigDecimal currentWalletBalance) {
     BigDecimal balanceAfterTransaction = null;
-    if (transaction.getCreatedAt() != null) {
+    java.time.Instant effectiveTime =
+        transaction.getCreatedAt() != null
+            ? transaction.getCreatedAt()
+            : transaction.getTransactionDate();
+
+    if (effectiveTime != null) {
       BigDecimal deltaAfter =
           transactionRepository.sumSuccessfulBalanceDeltaAfter(
-              transaction.getWallet().getId(), transaction.getCreatedAt());
+              transaction.getWallet().getId(), effectiveTime);
       balanceAfterTransaction = currentWalletBalance.subtract(deltaAfter);
+    } else {
+      // Old legacy rows may miss timestamps; fallback to current wallet balance for UI display.
+      balanceAfterTransaction = currentWalletBalance;
     }
 
     return TransactionResponse.builder()

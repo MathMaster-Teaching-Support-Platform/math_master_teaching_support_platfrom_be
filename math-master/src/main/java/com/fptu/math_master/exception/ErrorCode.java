@@ -381,7 +381,21 @@ public enum ErrorCode {
   WITHDRAWAL_AMOUNT_TOO_SMALL(
       1212, "Withdrawal amount must be at least 10,000 VND", HttpStatus.BAD_REQUEST),
   TEMPLATE_PREVIEW_IMAGE_NOT_FOUND(
-      1213, "This template does not have a preview image", HttpStatus.NOT_FOUND);
+      1213, "This template does not have a preview image", HttpStatus.NOT_FOUND),
+
+  // ─── Course Material Download Error Codes ────────────────────────────────
+  MATERIAL_NOT_ENROLLED(
+      1214,
+      "You must be enrolled in this course to download materials",
+      HttpStatus.FORBIDDEN),
+  MATERIAL_ENROLLMENT_INACTIVE(
+      1215,
+      "Your enrollment is not active. Please contact the teacher to reactivate access.",
+      HttpStatus.FORBIDDEN),
+  MATERIAL_STORAGE_UNAVAILABLE(
+      1216,
+      "Material storage is temporarily unavailable. Please try again shortly.",
+      HttpStatus.SERVICE_UNAVAILABLE);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {

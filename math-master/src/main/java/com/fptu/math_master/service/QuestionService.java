@@ -52,6 +52,19 @@ public interface QuestionService {
   Integer bulkApproveQuestions(java.util.List<UUID> questionIds);
 
   /**
+   * Reject one or more UNDER_REVIEW (or legacy AI_DRAFT) questions. Rejection moves
+   * the question to {@code ARCHIVED}; the optional reason is stamped on
+   * {@code generationMetadata.rejectionReason}.
+   */
+  Integer bulkRejectQuestions(java.util.List<UUID> questionIds, String reason);
+
+  /**
+   * Lists questions in the review queue: the current user's own UNDER_REVIEW (or
+   * legacy AI_DRAFT) rows, optionally filtered by template.
+   */
+  Page<QuestionResponse> listReviewQueue(UUID templateId, Pageable pageable);
+
+  /**
    * Delete question (soft delete)
    */
   void deleteQuestion(UUID id);

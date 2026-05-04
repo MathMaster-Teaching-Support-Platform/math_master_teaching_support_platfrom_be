@@ -401,11 +401,27 @@ public class PaymentService {
   }
 
   private TransactionResponse mapToTransactionResponse(Transaction transaction) {
+    Instant effectiveTime =
+        transaction.getCreatedAt() != null
+            ? transaction.getCreatedAt()
+            : transaction.getTransactionDate();
+    java.math.BigDecimal balanceAfterTransaction = null;
+
+    if (effectiveTime != null) {
+      java.math.BigDecimal deltaAfter =
+          transactionRepository.sumSuccessfulBalanceDeltaAfter(
+              transaction.getWallet().getId(), effectiveTime);
+      balanceAfterTransaction = transaction.getWallet().getBalance().subtract(deltaAfter);
+    } else {
+      balanceAfterTransaction = transaction.getWallet().getBalance();
+    }
+
     return com.fptu.math_master.dto.response.TransactionResponse.builder()
         .transactionId(transaction.getId())
         .walletId(transaction.getWallet().getId())
         .orderCode(transaction.getOrderCode())
         .amount(transaction.getAmount())
+        .balanceAfterTransaction(balanceAfterTransaction)
         .type(transaction.getType())
         .status(transaction.getStatus())
         .description(transaction.getDescription())

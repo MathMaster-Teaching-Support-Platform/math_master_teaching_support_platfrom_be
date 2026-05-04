@@ -38,4 +38,13 @@ public interface CourseLessonService {
   /** Fetches the raw bytes of a material file from MinIO for direct streaming to the client. */
   record MaterialDownloadResult(byte[] content, String contentType, String fileName) {}
   MaterialDownloadResult downloadMaterial(UUID courseId, UUID lessonId, String materialId);
+
+  /**
+   * Bundles every material attached to a lesson into a single zip stream. Same
+   * access policy as single-material download: admin / course owner /
+   * non-owner teacher (for published courses) / ACTIVE-enrolled student.
+   *
+   * @return the zip bytes plus a suggested filename
+   */
+  MaterialDownloadResult downloadAllMaterials(UUID courseId, UUID lessonId);
 }

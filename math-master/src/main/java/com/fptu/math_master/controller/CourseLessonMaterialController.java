@@ -93,6 +93,28 @@ public class CourseLessonMaterialController {
         log.info("GET /courses/{}/lessons/{}/materials/{}/download", courseId, lessonId, materialId);
         CourseLessonService.MaterialDownloadResult result =
                 courseLessonService.downloadMaterial(courseId, lessonId, materialId);
+        writeBinary(response, result);
+    }
+
+    @Operation(
+        summary = "Stream-download every material in this lesson as a single zip",
+        description =
+            "Bundles every material attached to the lesson into a zip and streams it. Same access policy"
+                + " as single-material download. Used by the FE 'Download all' button.")
+    @GetMapping("/download-all")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'ADMIN')")
+    public void downloadAllMaterials(
+            HttpServletResponse response,
+            @PathVariable UUID courseId,
+            @PathVariable UUID lessonId) throws IOException {
+        log.info("GET /courses/{}/lessons/{}/materials/download-all", courseId, lessonId);
+        CourseLessonService.MaterialDownloadResult result =
+                courseLessonService.downloadAllMaterials(courseId, lessonId);
+        writeBinary(response, result);
+    }
+
+    private void writeBinary(HttpServletResponse response, CourseLessonService.MaterialDownloadResult result)
+            throws IOException {
         String encodedName = URLEncoder.encode(result.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
         response.setContentType(result.contentType());
         response.setContentLength(result.content().length);

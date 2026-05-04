@@ -10,7 +10,10 @@ import com.fptu.math_master.dto.response.MaterialItem;
 import com.fptu.math_master.entity.Course;
 import com.fptu.math_master.entity.CourseLesson;
 import com.fptu.math_master.entity.CustomCourseSection;
+import com.fptu.math_master.entity.Enrollment;
 import com.fptu.math_master.enums.CourseProvider;
+import com.fptu.math_master.enums.CourseStatus;
+import com.fptu.math_master.enums.EnrollmentStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.CustomCourseSectionRepository;
@@ -530,78 +533,167 @@ public class CourseLessonServiceImpl implements CourseLessonService {
   @Override
   public String getMaterialDownloadUrl(UUID courseId, UUID lessonId, String materialId) {
     Course course = findCourseOrThrow(courseId);
-    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
-
-    // Only the course owner (teacher) or students who have an ACTIVE enrollment may download.
-    boolean isOwner = currentUserId != null && course.getTeacherId().equals(currentUserId);
-    if (!isOwner) {
-      boolean enrolled = currentUserId != null && enrollmentRepository
-          .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
-          .map(e -> "ACTIVE".equals(e.getStatus().name()))
-          .orElse(false);
-      if (!enrolled) {
-        throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
-      }
-    }
-
-    CourseLesson cl = courseLessonRepository
-        .findByIdAndDeletedAtIsNull(lessonId)
-        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
-
-    MaterialItem item = getMaterialList(cl.getMaterials()).stream()
-        .filter(m -> m.getId().equals(materialId))
-        .findFirst()
-        .orElseThrow(() -> new AppException(ErrorCode.INVALID_REQUEST));
-
-    try {
-      return uploadService.getPresignedDownloadUrl(
-          item.getKey(), minioProperties.getCourseMaterialsBucket(), item.getName());
-    } catch (Exception e) {
-      // Legacy fallback: file stored in template bucket before course-materials bucket existed
-      log.warn("Material not in course-materials bucket, falling back to template bucket for key: {}", item.getKey());
-      return uploadService.getPresignedDownloadUrl(
-          item.getKey(), minioProperties.getTemplateBucket(), item.getName());
-    }
+    assertCanDownloadMaterials(course, SecurityUtils.getOptionalCurrentUserId());
+    MaterialItem item = findMaterialOrThrow(lessonId, materialId);
+    return getPresignedUrlOrThrow(item);
   }
 
   @Override
   public CourseLessonService.MaterialDownloadResult downloadMaterial(
       UUID courseId, UUID lessonId, String materialId) {
     Course course = findCourseOrThrow(courseId);
-    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+    assertCanDownloadMaterials(course, SecurityUtils.getOptionalCurrentUserId());
+    MaterialItem item = findMaterialOrThrow(lessonId, materialId);
+    byte[] content = downloadBytesOrThrow(item);
+    String ct = item.getContentType() != null ? item.getContentType() : "application/octet-stream";
+    return new CourseLessonService.MaterialDownloadResult(content, ct, item.getName());
+  }
 
-    boolean isOwner = currentUserId != null && course.getTeacherId().equals(currentUserId);
-    if (!isOwner) {
-      boolean enrolled = currentUserId != null && enrollmentRepository
-          .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
-          .map(e -> "ACTIVE".equals(e.getStatus().name()))
-          .orElse(false);
-      if (!enrolled) {
-        throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
-      }
-    }
+  @Override
+  public CourseLessonService.MaterialDownloadResult downloadAllMaterials(
+      UUID courseId, UUID lessonId) {
+    Course course = findCourseOrThrow(courseId);
+    assertCanDownloadMaterials(course, SecurityUtils.getOptionalCurrentUserId());
 
     CourseLesson cl = courseLessonRepository
         .findByIdAndDeletedAtIsNull(lessonId)
         .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+    List<MaterialItem> items = getMaterialList(cl.getMaterials());
+    if (items.isEmpty()) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
 
-    MaterialItem item = getMaterialList(cl.getMaterials()).stream()
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    java.util.Set<String> usedNames = new java.util.HashSet<>();
+    try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(baos)) {
+      for (MaterialItem item : items) {
+        byte[] bytes;
+        try {
+          bytes = uploadService.downloadFile(
+              item.getKey(), minioProperties.getCourseMaterialsBucket());
+        } catch (Exception e) {
+          // Skip missing files rather than failing the whole archive — the user
+          // can still get the rest. Log loudly so we know we're shipping a
+          // partial zip.
+          log.error(
+              "Skipping missing material '{}' (key='{}') while building zip for lesson {}: {}",
+              item.getName(),
+              item.getKey(),
+              lessonId,
+              e.getMessage());
+          continue;
+        }
+        String entryName = uniqueZipEntryName(item.getName(), usedNames);
+        java.util.zip.ZipEntry entry = new java.util.zip.ZipEntry(entryName);
+        zip.putNextEntry(entry);
+        zip.write(bytes);
+        zip.closeEntry();
+      }
+    } catch (java.io.IOException ioe) {
+      log.error("Failed to assemble materials zip for lesson {}: {}", lessonId, ioe.getMessage(), ioe);
+      throw new AppException(ErrorCode.MATERIAL_STORAGE_UNAVAILABLE);
+    }
+
+    String archiveName = "lesson-" + lessonId + "-materials.zip";
+    return new CourseLessonService.MaterialDownloadResult(
+        baos.toByteArray(), "application/zip", archiveName);
+  }
+
+  /**
+   * Avoids name collisions inside the zip by appending {@code (1)}, {@code (2)} …
+   * before the extension when two materials share a name.
+   */
+  private String uniqueZipEntryName(String original, java.util.Set<String> used) {
+    String safe = (original == null || original.isBlank()) ? "file" : original;
+    if (used.add(safe)) return safe;
+    int dot = safe.lastIndexOf('.');
+    String stem = dot > 0 ? safe.substring(0, dot) : safe;
+    String ext = dot > 0 ? safe.substring(dot) : "";
+    int n = 1;
+    while (true) {
+      String candidate = stem + " (" + n + ")" + ext;
+      if (used.add(candidate)) return candidate;
+      n++;
+    }
+  }
+
+  /**
+   * Authorisation policy for course-material download. The pre-existing logic only
+   * allowed the owning teacher and ACTIVE-enrolled students, which silently locked
+   * out admins (course review), other teachers (marketplace preview), and students
+   * whose enrollment was {@code PENDING} or {@code DROPPED} — they all received the
+   * same generic {@code COURSE_ACCESS_DENIED}.
+   *
+   * <p>The new policy:
+   *
+   * <ul>
+   *   <li>Admins always pass. They review courses and need to verify materials.</li>
+   *   <li>The owning teacher always passes.</li>
+   *   <li>Any teacher passes for a {@code PUBLISHED} course (marketplace preview).</li>
+   *   <li>Students must have a non-deleted enrollment whose status is {@code ACTIVE}.
+   *       {@code PENDING} and {@code DROPPED} produce distinct error codes so the FE
+   *       can show a useful message instead of a blanket "access denied".</li>
+   * </ul>
+   */
+  private void assertCanDownloadMaterials(Course course, UUID currentUserId) {
+    if (currentUserId == null) {
+      throw new AppException(ErrorCode.UNAUTHENTICATED);
+    }
+    if (SecurityUtils.hasRole("ADMIN")) return;
+    if (course.getTeacherId() != null && course.getTeacherId().equals(currentUserId)) return;
+    if (SecurityUtils.hasRole("TEACHER") && course.getStatus() == CourseStatus.PUBLISHED) return;
+
+    Enrollment enrollment = enrollmentRepository
+        .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, course.getId())
+        .orElseThrow(() -> new AppException(ErrorCode.MATERIAL_NOT_ENROLLED));
+    if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+      throw new AppException(ErrorCode.MATERIAL_ENROLLMENT_INACTIVE);
+    }
+  }
+
+  private MaterialItem findMaterialOrThrow(UUID lessonId, String materialId) {
+    CourseLesson cl = courseLessonRepository
+        .findByIdAndDeletedAtIsNull(lessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
+    return getMaterialList(cl.getMaterials()).stream()
         .filter(m -> m.getId().equals(materialId))
         .findFirst()
         .orElseThrow(() -> new AppException(ErrorCode.INVALID_REQUEST));
+  }
 
-    byte[] content;
+  /**
+   * Resolves a presigned URL for the material's primary bucket, surfacing a
+   * specific {@code MATERIAL_STORAGE_UNAVAILABLE} error instead of the previous
+   * silent template-bucket fallback that masked CORS/missing-bucket issues.
+   */
+  private String getPresignedUrlOrThrow(MaterialItem item) {
     try {
-      content = uploadService.downloadFile(
+      return uploadService.getPresignedDownloadUrl(
+          item.getKey(), minioProperties.getCourseMaterialsBucket(), item.getName());
+    } catch (Exception e) {
+      log.error(
+          "Failed to issue presigned URL for material key='{}' in bucket='{}': {}",
+          item.getKey(),
+          minioProperties.getCourseMaterialsBucket(),
+          e.getMessage(),
+          e);
+      throw new AppException(ErrorCode.MATERIAL_STORAGE_UNAVAILABLE);
+    }
+  }
+
+  private byte[] downloadBytesOrThrow(MaterialItem item) {
+    try {
+      return uploadService.downloadFile(
           item.getKey(), minioProperties.getCourseMaterialsBucket());
     } catch (Exception e) {
-      // Legacy fallback: file stored in template bucket before course-materials bucket existed
-      log.warn("Material not in course-materials bucket, falling back to template bucket for key: {}", item.getKey());
-      content = uploadService.downloadFile(
-          item.getKey(), minioProperties.getTemplateBucket());
+      log.error(
+          "Failed to stream material key='{}' from bucket='{}': {}",
+          item.getKey(),
+          minioProperties.getCourseMaterialsBucket(),
+          e.getMessage(),
+          e);
+      throw new AppException(ErrorCode.MATERIAL_STORAGE_UNAVAILABLE);
     }
-    String ct = item.getContentType() != null ? item.getContentType() : "application/octet-stream";
-    return new CourseLessonService.MaterialDownloadResult(content, ct, item.getName());
   }
 
   private List<MaterialItem> getMaterialList(String json) {

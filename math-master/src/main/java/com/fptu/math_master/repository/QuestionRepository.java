@@ -40,6 +40,24 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
   @Query("SELECT q FROM Question q WHERE q.id = :id AND q.deletedAt IS NULL")
   java.util.Optional<Question> findByIdAndNotDeleted(@Param("id") UUID id);
 
+  /**
+   * Review-queue listing for the unified Blueprint flow. Returns the caller's
+   * UNDER_REVIEW (and legacy AI_DRAFT) questions, optionally narrowed to one
+   * template. Sorted newest first so freshly generated batches surface first.
+   */
+  @Query(
+      "SELECT q FROM Question q "
+          + "WHERE q.createdBy = :createdBy "
+          + "AND q.deletedAt IS NULL "
+          + "AND (q.questionStatus = com.fptu.math_master.enums.QuestionStatus.UNDER_REVIEW "
+          + "     OR q.questionStatus = com.fptu.math_master.enums.QuestionStatus.AI_DRAFT) "
+          + "AND (:templateId IS NULL OR q.templateId = :templateId) "
+          + "ORDER BY q.createdAt DESC")
+  Page<Question> findReviewQueue(
+      @Param("createdBy") UUID createdBy,
+      @Param("templateId") UUID templateId,
+      Pageable pageable);
+
     Optional<Question> findFirstByRenderedLatexHashAndRenderedImageUrlIsNotNullAndDeletedAtIsNullOrderByCreatedAtDesc(
             String renderedLatexHash);
 

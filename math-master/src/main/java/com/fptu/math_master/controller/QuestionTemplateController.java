@@ -1,6 +1,7 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
+import com.fptu.math_master.dto.request.AutoBlueprintRequest;
 import com.fptu.math_master.dto.request.ExtractParametersRequest;
 import com.fptu.math_master.dto.request.GenerateParametersRequest;
 import com.fptu.math_master.dto.request.GenerateTemplateQuestionsRequest;
@@ -10,6 +11,7 @@ import com.fptu.math_master.dto.request.UpdateParametersRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.dto.response.AIGeneratedTemplatesResponse;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.BlueprintFromRealQuestionResponse;
 import com.fptu.math_master.dto.response.ExcelPreviewResponse;
 import com.fptu.math_master.dto.response.ExtractParametersResponse;
 import com.fptu.math_master.dto.response.GenerateParametersResponse;
@@ -22,6 +24,7 @@ import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.service.AIEnhancementService;
+import com.fptu.math_master.service.BlueprintService;
 import com.fptu.math_master.service.ExcelImportService;
 import com.fptu.math_master.service.QuestionTemplateService;
 import com.fptu.math_master.service.TemplateImportService;
@@ -55,6 +58,7 @@ public class QuestionTemplateController {
   TemplateImportService templateImportService;
   ExcelImportService excelImportService;
   AIEnhancementService aiEnhancementService;
+  BlueprintService blueprintService;
 
   @PostMapping
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
@@ -382,7 +386,34 @@ public class QuestionTemplateController {
   }
 
   // ===========================================================================
-  // FEATURE 1: AI Auto-Extract Parameters
+  // METHOD 1: Blueprint from a real-valued question (one AI call covers
+  //           text + formula + steps + diagram + options/clauses + constraints)
+  // POST /question-templates/blueprint-from-real-question
+  // ===========================================================================
+
+  @PostMapping("/blueprint-from-real-question")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Blueprint from a complete real-valued question (Method 1)",
+      description =
+          "Teacher writes a complete question with real numbers (no placeholders). The "
+              + "AI returns a Blueprint draft: templateText with {{a}}{{b}}, answer formula in "
+              + "placeholders, parameters with plain-text constraints, and a side-by-side diff. "
+              + "Nothing is persisted — the FE shows the diff and the teacher confirms by calling "
+              + "the existing POST /question-templates with the returned Blueprint.")
+  public ApiResponse<BlueprintFromRealQuestionResponse> blueprintFromRealQuestion(
+      @Valid @RequestBody AutoBlueprintRequest request) {
+    log.info("REST [Method1] blueprint-from-real-question, type={}", request.getQuestionType());
+    BlueprintFromRealQuestionResponse response = blueprintService.blueprintFromRealQuestion(request);
+    return ApiResponse.<BlueprintFromRealQuestionResponse>builder()
+        .message("Blueprint draft ready for teacher confirmation.")
+        .result(response)
+        .build();
+  }
+
+  // ===========================================================================
+  // FEATURE 1 (legacy): AI Auto-Extract Parameters
+  // Deprecated: prefer /blueprint-from-real-question. Kept for one release.
   // POST /question-templates/{templateId}/extract-parameters
   // ===========================================================================
 
