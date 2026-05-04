@@ -40,9 +40,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
           + "FROM Transaction t "
           + "WHERE t.wallet.id = :walletId "
           + "AND t.status = 'SUCCESS' "
-          + "AND t.createdAt > :createdAt")
+          + "AND COALESCE(t.createdAt, t.transactionDate) > :effectiveTime")
   BigDecimal sumSuccessfulBalanceDeltaAfter(
-      @Param("walletId") UUID walletId, @Param("createdAt") Instant createdAt);
+      @Param("walletId") UUID walletId, @Param("effectiveTime") Instant effectiveTime);
 
   /** All transactions across all wallets — admin view */
     @Query("SELECT t FROM Transaction t LEFT JOIN FETCH t.wallet w LEFT JOIN FETCH w.user")
