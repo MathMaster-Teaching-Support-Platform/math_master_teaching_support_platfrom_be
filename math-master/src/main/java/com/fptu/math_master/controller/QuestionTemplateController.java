@@ -1,13 +1,20 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.AIGenerateTemplatesRequest;
+import com.fptu.math_master.dto.request.AutoBlueprintRequest;
+import com.fptu.math_master.dto.request.ExtractParametersRequest;
+import com.fptu.math_master.dto.request.GenerateParametersRequest;
 import com.fptu.math_master.dto.request.GenerateTemplateQuestionsRequest;
 import com.fptu.math_master.dto.request.QuestionTemplateBatchImportRequest;
 import com.fptu.math_master.dto.request.QuestionTemplateRequest;
+import com.fptu.math_master.dto.request.UpdateParametersRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
 import com.fptu.math_master.dto.response.AIGeneratedTemplatesResponse;
 import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.BlueprintFromRealQuestionResponse;
 import com.fptu.math_master.dto.response.ExcelPreviewResponse;
+import com.fptu.math_master.dto.response.ExtractParametersResponse;
+import com.fptu.math_master.dto.response.GenerateParametersResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionsBatchResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateBatchImportResponse;
@@ -16,6 +23,8 @@ import com.fptu.math_master.dto.response.TemplateTestResponse;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
+import com.fptu.math_master.service.AIEnhancementService;
+import com.fptu.math_master.service.BlueprintService;
 import com.fptu.math_master.service.ExcelImportService;
 import com.fptu.math_master.service.QuestionTemplateService;
 import com.fptu.math_master.service.TemplateImportService;
@@ -48,6 +57,8 @@ public class QuestionTemplateController {
   QuestionTemplateService questionTemplateService;
   TemplateImportService templateImportService;
   ExcelImportService excelImportService;
+  AIEnhancementService aiEnhancementService;
+  BlueprintService blueprintService;
 
   @PostMapping
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
@@ -373,4 +384,107 @@ public class QuestionTemplateController {
         .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
         .body(excelBytes);
   }
+
+  // ===========================================================================
+  // METHOD 1: Blueprint from a real-valued question (one AI call covers
+  //           text + formula + steps + diagram + options/clauses + constraints)
+  // POST /question-templates/blueprint-from-real-question
+  // ===========================================================================
+
+  @PostMapping("/blueprint-from-real-question")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Blueprint from a complete real-valued question (Method 1)",
+      description =
+          "Teacher writes a complete question with real numbers (no placeholders). The "
+              + "AI returns a Blueprint draft: templateText with {{a}}{{b}}, answer formula in "
+              + "placeholders, parameters with plain-text constraints, and a side-by-side diff. "
+              + "Nothing is persisted — the FE shows the diff and the teacher confirms by calling "
+              + "the existing POST /question-templates with the returned Blueprint.")
+  public ApiResponse<BlueprintFromRealQuestionResponse> blueprintFromRealQuestion(
+      @Valid @RequestBody AutoBlueprintRequest request) {
+    log.info("REST [Method1] blueprint-from-real-question, type={}", request.getQuestionType());
+    BlueprintFromRealQuestionResponse response = blueprintService.blueprintFromRealQuestion(request);
+    return ApiResponse.<BlueprintFromRealQuestionResponse>builder()
+        .message("Blueprint draft ready for teacher confirmation.")
+        .result(response)
+        .build();
+  }
+
+  // ===========================================================================
+  // FEATURE 1 (legacy): AI Auto-Extract Parameters
+  // Deprecated: prefer /blueprint-from-real-question. Kept for one release.
+  // POST /question-templates/{templateId}/extract-parameters
+  // ===========================================================================
+
+  @PostMapping("/{templateId}/extract-parameters")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "AI Extract Parameters From Question Text (Feature 1)",
+      description =
+          "Teacher submits raw question text (possibly containing concrete numbers like '2x² + 3x - 5')."
+              + " AI analyzes the content and suggests which numbers should become {{param}} placeholders."
+              + " Returns: suggested params (changeable), fixed values (structural), and auto-converted template result."
+              + " Teacher can Apply All (use templateResult) or cherry-pick individual suggestions.")
+  public ApiResponse<ExtractParametersResponse> extractParameters(
+      @PathVariable UUID templateId,
+      @RequestBody ExtractParametersRequest request) {
+    log.info("REST [Feature1] extract-parameters for templateId={}", templateId);
+    ExtractParametersResponse response = aiEnhancementService.extractParameters(templateId, request);
+    return ApiResponse.<ExtractParametersResponse>builder()
+        .message("AI parameter extraction completed")
+        .result(response)
+        .build();
+  }
+
+  // ===========================================================================
+  // FEATURE 2: AI Generate Parameter Values
+  // POST /question-templates/{templateId}/generate-parameters
+  // ===========================================================================
+
+  @PostMapping("/{templateId}/generate-parameters")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "AI Generate Parameter Values (Feature 2)",
+      description =
+          "AI reads all content fields (template text, formula, steps, diagram, options/clauses, existing samples)"
+              + " and generates a valid parameter combination that satisfies all math constraints."
+              + " Returns: parameter values + per-param constraint explanation + combined constraint checks."
+              + " Replaces the backend random() approach (BUG 2 fix).")
+  public ApiResponse<GenerateParametersResponse> generateParameters(
+      @PathVariable UUID templateId,
+      @RequestBody GenerateParametersRequest request) {
+    log.info("REST [Feature2] generate-parameters for templateId={}", templateId);
+    GenerateParametersResponse response = aiEnhancementService.generateParameters(templateId, request);
+    return ApiResponse.<GenerateParametersResponse>builder()
+        .message("AI parameter generation completed")
+        .result(response)
+        .build();
+  }
+
+  // ===========================================================================
+  // FEATURE 2b: Teacher Adjusts AI Parameters Via Plain-Text Command
+  // POST /question-templates/{templateId}/update-parameters
+  // ===========================================================================
+
+  @PostMapping("/{templateId}/update-parameters")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "AI Update Parameters From Teacher Command (Feature 2)",
+      description =
+          "Teacher sends a plain-text command (e.g. 'nghiệm phải là số nguyên', 'tăng độ khó')."
+              + " AI re-generates parameter values satisfying ALL existing constraints PLUS the new requirement."
+              + " Returns updated parameter values + updated constraint explanations.")
+  public ApiResponse<GenerateParametersResponse> updateParameters(
+      @PathVariable UUID templateId,
+      @RequestBody UpdateParametersRequest request) {
+    log.info("REST [Feature2] update-parameters for templateId={}, command='{}'",
+        templateId, request.getTeacherCommand());
+    GenerateParametersResponse response = aiEnhancementService.updateParameters(templateId, request);
+    return ApiResponse.<GenerateParametersResponse>builder()
+        .message("AI parameter update completed")
+        .result(response)
+        .build();
+  }
 }
+

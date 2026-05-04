@@ -2,9 +2,11 @@ package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.BulkApproveQuestionsRequest;
 import com.fptu.math_master.dto.request.BulkAssignQuestionsToBankRequest;
+import com.fptu.math_master.dto.request.BulkRejectQuestionsRequest;
 import com.fptu.math_master.dto.request.CreateQuestionRequest;
 import com.fptu.math_master.dto.request.ImportQuestionsRequest;
 import com.fptu.math_master.dto.request.QuestionBatchImportRequest;
+import com.fptu.math_master.dto.request.SetClausePointsRequest;
 import com.fptu.math_master.dto.request.UpdateQuestionRequest;
 import com.fptu.math_master.dto.request.AIEnhancementRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -165,8 +167,8 @@ public class QuestionController {
   @PostMapping("/bulk-approve")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
-      summary = "Bulk approve AI draft questions",
-      description = "Approve multiple AI_DRAFT questions in one call.")
+      summary = "Bulk approve questions in review",
+      description = "Approve multiple UNDER_REVIEW (or legacy AI_DRAFT) questions in one call.")
   public ApiResponse<Integer> bulkApproveQuestions(
       @Valid @RequestBody BulkApproveQuestionsRequest request) {
     log.info("REST request to bulk approve {} questions", request.getQuestionIds().size());
@@ -174,6 +176,43 @@ public class QuestionController {
     return ApiResponse.<Integer>builder()
         .message("Bulk approve completed")
         .result(approved)
+        .build();
+  }
+
+  @PostMapping("/bulk-reject")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Bulk reject questions in review",
+      description =
+          "Reject multiple UNDER_REVIEW (or legacy AI_DRAFT) questions in one call. Rejected "
+              + "questions move to ARCHIVED and leave the review queue.")
+  public ApiResponse<Integer> bulkRejectQuestions(
+      @Valid @RequestBody BulkRejectQuestionsRequest request) {
+    log.info("REST request to bulk reject {} questions", request.getQuestionIds().size());
+    Integer rejected =
+        questionService.bulkRejectQuestions(request.getQuestionIds(), request.getReason());
+    return ApiResponse.<Integer>builder()
+        .message("Bulk reject completed")
+        .result(rejected)
+        .build();
+  }
+
+  @GetMapping("/review-queue")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "List my questions in review",
+      description =
+          "Returns the caller's UNDER_REVIEW (and legacy AI_DRAFT) questions, optionally filtered "
+              + "to one template. Used by the FE review-queue page after a generation batch.")
+  public ApiResponse<Page<QuestionResponse>> reviewQueue(
+      @RequestParam(required = false) UUID templateId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    log.info("REST request review-queue templateId={} page={} size={}", templateId, page, size);
+    Pageable pageable = PageRequest.of(page, size);
+    return ApiResponse.<Page<QuestionResponse>>builder()
+        .message("Review queue retrieved")
+        .result(questionService.listReviewQueue(templateId, pageable))
         .build();
   }
 
@@ -399,4 +438,31 @@ public class QuestionController {
         .result(response)
         .build();
   }
+
+  // ===========================================================================
+  // FEATURE 4: Set Overdrive Points Per TF Clause
+  // POST /questions/{questionId}/clauses/points
+  // ===========================================================================
+
+  @PostMapping("/{questionId}/clauses/points")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Set Overdrive Points Per TF Clause (Feature 4)",
+      description =
+          "For TRUE_FALSE questions: teacher sets how many points each clause (A/B/C/D) is worth."
+              + " Validation: sum(clause_points) must equal total_point."
+              + " Persists overdrive_point per clause into the options JSONB column."
+              + " Example: total=1.0, A=0.25, B=0.25, C=0.25, D=0.25")
+  public ApiResponse<QuestionResponse> setClausePoints(
+      @PathVariable UUID questionId,
+      @Valid @RequestBody SetClausePointsRequest request) {
+    log.info("REST [Feature4] set clause points for questionId={}", questionId);
+    aiEnhancementService.setClausePoints(questionId, request);
+    return ApiResponse.<QuestionResponse>builder()
+        .message(String.format("Clause points set: %s (total=%.2f)",
+            request.getClausePoints(), request.getTotalPoint().doubleValue()))
+        .result(questionService.getQuestionById(questionId))
+        .build();
+  }
 }
+

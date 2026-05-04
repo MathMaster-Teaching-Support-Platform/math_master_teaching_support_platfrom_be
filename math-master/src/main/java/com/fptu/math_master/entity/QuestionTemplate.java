@@ -101,15 +101,24 @@ public class QuestionTemplate extends BaseEntity {
   private Map<String, Object> templateText;
 
   /**
-   * Parameters that can be substituted in the template (PARAMETRIC variant)
-   * Example: {"x": {"type": "integer", "min": 1, "max": 100}, "y": {"type": "integer", "min": 1, "max": 100}}
-   * Nullable for PROPOSITIONAL templates
+   * Parameters in the unified Blueprint shape:
+   * <pre>
+   * {
+   *   "a": {
+   *     "constraintText": "integer, 1 ≤ a ≤ 9, a is even",
+   *     "sampleValue":     4,
+   *     "occurrences":    ["templateText", "answerFormula", "options.A"]
+   *   }
+   * }
+   * </pre>
+   * Both Method 1 (AI reverse-templating) and Method 2 (manual) produce this shape.
+   * Legacy {@code {type, min, max, exclude}} rows are migrated by V112.
    */
   @Type(JsonBinaryType.class)
   @Column(name = "parameters", columnDefinition = "jsonb")
   private Map<String, Object> parameters;
 
-  /** Formula to calculate the correct answer (PARAMETRIC variant) Example: "x + y" or "Math.sqrt(x^2 + y^2)" */
+  /** Formula evaluated to compute the correct answer once parameters are substituted. */
   @Column(name = "answer_formula", columnDefinition = "TEXT")
   private String answerFormula;
 
@@ -127,9 +136,24 @@ public class QuestionTemplate extends BaseEntity {
   @Column(name = "options_generator", columnDefinition = "jsonb")
   private Map<String, Object> optionsGenerator;
 
-  /** Constraints for parameter generation (PARAMETRIC variant) Example: ["x < y", "x + y < 1000"] */
+  /**
+   * Cross-parameter constraints expressed as plain text, e.g.
+   * {@code ["a < b", "a + b is divisible by 3"]}. Per-parameter constraints live
+   * inside {@link #parameters}; this field is only for relations between parameters.
+   * The new generation engine reads this; legacy column {@code constraints} is
+   * mirrored by V112 and kept only for one release as a read-only fallback.
+   */
   @Type(StringArrayType.class)
-  @Column(name = "constraints", columnDefinition = "TEXT[]")
+  @Column(name = "global_constraints", columnDefinition = "TEXT[]")
+  private String[] globalConstraints;
+
+  /**
+   * @deprecated read-only mirror of {@link #globalConstraints} until V113 drops the
+   *     legacy column. Do not write to this from new code.
+   */
+  @Deprecated
+  @Type(StringArrayType.class)
+  @Column(name = "constraints", columnDefinition = "TEXT[]", insertable = false, updatable = false)
   private String[] constraints;
 
   /** Theorem statement for PROPOSITIONAL templates - defines the mathematical proposition */
