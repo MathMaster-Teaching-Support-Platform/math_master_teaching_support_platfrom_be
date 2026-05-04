@@ -128,6 +128,15 @@ public class Question extends BaseEntity {
   @Column(name = "generation_metadata", columnDefinition = "jsonb")
   private Map<String, Object> generationMetadata;
 
+  /**
+   * Audit trail: the exact parameter values used by AI to generate this question.
+   * e.g. {"a": 2, "b": -3, "c": 1}
+   * Populated at generation time; never changes after creation.
+   */
+  @Type(JsonBinaryType.class)
+  @Column(name = "parameters_used", columnDefinition = "jsonb")
+  private Map<String, Object> parametersUsed;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "question_bank_id", insertable = false, updatable = false)
   private QuestionBank questionBank;

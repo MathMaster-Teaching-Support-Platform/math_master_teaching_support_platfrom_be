@@ -3,17 +3,30 @@ package com.fptu.math_master.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.request.AIEnhancementRequest;
+import com.fptu.math_master.dto.request.ExtractParametersRequest;
+import com.fptu.math_master.dto.request.GenerateParametersRequest;
+import com.fptu.math_master.dto.request.SetClausePointsRequest;
+import com.fptu.math_master.dto.request.UpdateParametersRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
+import com.fptu.math_master.dto.response.ExtractParametersResponse;
+import com.fptu.math_master.dto.response.GenerateParametersResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionSample;
 import com.fptu.math_master.entity.CanonicalQuestion;
+import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.QuestionRepository;
+import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.service.AIEnhancementService;
 import com.fptu.math_master.service.GeminiService;
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -33,6 +46,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
   GeminiService geminiService;
   ObjectMapper objectMapper = new ObjectMapper();
+  QuestionTemplateRepository questionTemplateRepository;
+  QuestionRepository questionRepository;
 
   @Override
   public AIEnhancedQuestionResponse enhanceQuestion(AIEnhancementRequest request) {
@@ -2856,4 +2871,441 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     sb.append("}");
     return sb.toString();
   }
+
+  // =========================================================================
+  // FEATURE 1: AI Auto-Extract Parameters From Question Text
+  // =========================================================================
+
+  @Override
+  public ExtractParametersResponse extractParameters(
+      java.util.UUID templateId, ExtractParametersRequest request) {
+    log.info("[Feature1] Extracting parameters from template text for templateId={}", templateId);
+
+    String prompt = buildExtractParametersPrompt(request);
+    try {
+      String aiContent = geminiService.sendMessage(prompt);
+      return parseExtractParametersResponse(aiContent);
+    } catch (Exception e) {
+      log.error("[Feature1] extractParameters AI call failed: {}", e.getMessage(), e);
+      throw new RuntimeException("AI parameter extraction failed: " + e.getMessage(), e);
+    }
+  }
+
+  private String buildExtractParametersPrompt(ExtractParametersRequest req) {
+    StringBuilder p = new StringBuilder();
+    p.append("Return ONLY valid JSON. No markdown, no extra text.\n\n");
+    p.append("Task: extract_parameters\n");
+    p.append("You are a Vietnamese math teacher assistant. Read the question text and all related fields.\n");
+    p.append("Identify which numbers are CHANGEABLE parameters (should become {{param}} placeholders)\n");
+    p.append("and which are FIXED structural values that must NOT change.\n\n");
+
+    p.append("RULES FOR CHANGEABLE (make into {{param}}):\n");
+    p.append("- Independent input values (coefficients, constants)\n");
+    p.append("- Numbers that directly affect the answer\n");
+    p.append("- Numbers that appear as INPUTS in answer_formula or solution_steps (not results)\n\n");
+
+    p.append("RULES FOR FIXED (do NOT change):\n");
+    p.append("- Structural math: exponents (x², x³), indices, powers\n");
+    p.append("- Mathematical constants: π, e, 0, 1 when structural\n");
+    p.append("- Derived values: computed FROM other parameters\n");
+    p.append("  e.g. 'tổng nghiệm = -b/a = 3' → 3 is derived, not param\n");
+    p.append("- LaTeX command syntax (NEVER touch \\frac, \\sqrt, \\left, etc.)\n");
+    p.append("- Step numbers in solution_steps\n\n");
+
+    p.append("SAME NUMBER IN MULTIPLE ROLES:\n");
+    p.append("- Distinguish by math context and position\n");
+    p.append("- e.g. '2' as coefficient (changeable) vs '2' in x² (fixed)\n\n");
+
+    p.append("INPUT FIELDS:\n");
+    p.append("template_text: ").append(req.getTemplateText()).append("\n");
+    if (req.getAnswerFormula() != null) {
+      p.append("answer_formula: ").append(req.getAnswerFormula()).append("\n");
+    }
+    if (req.getSolutionSteps() != null) {
+      p.append("solution_steps: ").append(req.getSolutionSteps()).append("\n");
+    }
+    if (req.getDiagramLatex() != null) {
+      p.append("diagram_latex: ").append(req.getDiagramLatex()).append("\n");
+    }
+    if (req.getOptions() != null && !req.getOptions().isEmpty()) {
+      p.append("options: ").append(req.getOptions()).append("\n");
+    }
+    if (req.getClauses() != null && !req.getClauses().isEmpty()) {
+      p.append("clauses: ").append(req.getClauses()).append("\n");
+    }
+
+    p.append("\nOUTPUT FORMAT (strict JSON):\n");
+    p.append("{\n");
+    p.append("  \"suggested_params\": [\n");
+    p.append("    {\n");
+    p.append("      \"original_value\": \"2\",\n");
+    p.append("      \"location\": \"2x² (leading coefficient)\",\n");
+    p.append("      \"suggested_name\": \"a\",\n");
+    p.append("      \"reason\": \"Independent coefficient, affects roots\",\n");
+    p.append("      \"changeable\": true\n");
+    p.append("    }\n");
+    p.append("  ],\n");
+    p.append("  \"fixed_values\": [\n");
+    p.append("    {\n");
+    p.append("      \"original_value\": \"2\",\n");
+    p.append("      \"location\": \"x² (exponent)\",\n");
+    p.append("      \"reason\": \"Structural, defines equation degree\"\n");
+    p.append("    }\n");
+    p.append("  ],\n");
+    p.append("  \"template_result\": \"Cho phương trình {{a}}x² + {{b}}x + {{c}} = 0...\"\n");
+    p.append("}\n");
+    return p.toString();
+  }
+
+  private ExtractParametersResponse parseExtractParametersResponse(String aiContent) {
+    try {
+      String json = repairTruncatedJson(extractJSON(aiContent));
+      JsonNode root = objectMapper.readTree(json);
+
+      List<ExtractParametersResponse.SuggestedParam> suggested = new ArrayList<>();
+      if (root.has("suggested_params")) {
+        for (JsonNode node : root.get("suggested_params")) {
+          suggested.add(ExtractParametersResponse.SuggestedParam.builder()
+              .originalValue(node.path("original_value").asText())
+              .location(node.path("location").asText())
+              .suggestedName(node.path("suggested_name").asText())
+              .reason(node.path("reason").asText())
+              .changeable(true)
+              .build());
+        }
+      }
+
+      List<ExtractParametersResponse.FixedValue> fixed = new ArrayList<>();
+      if (root.has("fixed_values")) {
+        for (JsonNode node : root.get("fixed_values")) {
+          fixed.add(ExtractParametersResponse.FixedValue.builder()
+              .originalValue(node.path("original_value").asText())
+              .location(node.path("location").asText())
+              .reason(node.path("reason").asText())
+              .build());
+        }
+      }
+
+      String templateResult = root.path("template_result").asText("");
+
+      return ExtractParametersResponse.builder()
+          .suggestedParams(suggested)
+          .fixedValues(fixed)
+          .templateResult(templateResult)
+          .build();
+    } catch (Exception e) {
+      log.error("[Feature1] Failed to parse extract-parameters AI response: {}", e.getMessage());
+      throw new RuntimeException("Failed to parse AI extract-parameters response", e);
+    }
+  }
+
+  // =========================================================================
+  // FEATURE 2: AI Generates Parameter Values
+  // =========================================================================
+
+  @Override
+  public GenerateParametersResponse generateParameters(
+      java.util.UUID templateId, GenerateParametersRequest request) {
+    log.info("[Feature2] Generating parameter values for templateId={}", templateId);
+    String prompt = buildGenerateParametersPrompt(request, null);
+    try {
+      String aiContent = geminiService.sendMessage(prompt);
+      GenerateParametersResponse response = parseGenerateParametersResponse(aiContent);
+      // Build filled text preview
+      if (request.getTemplateText() != null && response.getParameters() != null) {
+        String preview = fillTextWithNegativeParens(request.getTemplateText(), response.getParameters());
+        response.setFilledTextPreview(preview);
+      }
+      return response;
+    } catch (Exception e) {
+      log.error("[Feature2] generateParameters AI call failed: {}", e.getMessage(), e);
+      throw new RuntimeException("AI parameter generation failed: " + e.getMessage(), e);
+    }
+  }
+
+  @Override
+  public GenerateParametersResponse updateParameters(
+      java.util.UUID templateId, UpdateParametersRequest request) {
+    log.info("[Feature2] Updating parameter values for templateId={}, command='{}'",
+        templateId, request.getTeacherCommand());
+    String prompt = buildUpdateParametersPrompt(request);
+    try {
+      String aiContent = geminiService.sendMessage(prompt);
+      GenerateParametersResponse response = parseGenerateParametersResponse(aiContent);
+      if (request.getTemplateText() != null && response.getParameters() != null) {
+        String preview = fillTextWithNegativeParens(request.getTemplateText(), response.getParameters());
+        response.setFilledTextPreview(preview);
+      }
+      return response;
+    } catch (Exception e) {
+      log.error("[Feature2] updateParameters AI call failed: {}", e.getMessage(), e);
+      throw new RuntimeException("AI parameter update failed: " + e.getMessage(), e);
+    }
+  }
+
+  private String buildGenerateParametersPrompt(
+      GenerateParametersRequest req, String additionalInstruction) {
+    StringBuilder p = new StringBuilder();
+    p.append("Return ONLY valid JSON. No markdown, no extra text.\n\n");
+    p.append("Task: generate_parameters\n");
+    p.append("You are a Vietnamese math teacher assistant.\n");
+    p.append("Read ALL content fields below. Detect math constraints from the formula.\n");
+    p.append("Generate a valid, non-duplicate parameter combination that satisfies ALL constraints.\n\n");
+
+    p.append("CONSTRAINT DETECTION RULES:\n");
+    p.append("- 'sqrt(b²-4ac)' in formula → b²-4ac ≥ 0 required\n");
+    p.append("- '/ 2a' in formula          → a ≠ 0 required\n");
+    p.append("- Integer options            → parameters should yield integer answers\n");
+    p.append("- 'has 2 distinct roots' in clauses → delta > 0 required\n\n");
+
+    p.append("CONTENT FIELDS:\n");
+    p.append("template_text: ").append(req.getTemplateText()).append("\n");
+    if (req.getAnswerFormula() != null) {
+      p.append("answer_formula: ").append(req.getAnswerFormula()).append("\n");
+    }
+    if (req.getSolutionSteps() != null) {
+      p.append("solution_steps: ").append(req.getSolutionSteps()).append("\n");
+    }
+    if (req.getDiagramLatex() != null) {
+      p.append("diagram_latex: ").append(req.getDiagramLatex()).append("\n");
+    }
+    if (req.getOptions() != null && !req.getOptions().isEmpty()) {
+      p.append("options: ").append(req.getOptions()).append("\n");
+    }
+    if (req.getClauses() != null && !req.getClauses().isEmpty()) {
+      p.append("clauses: ").append(req.getClauses()).append("\n");
+    }
+    if (req.getParameters() != null && !req.getParameters().isEmpty()) {
+      p.append("parameter_names: ").append(req.getParameters()).append("\n");
+    }
+    if (req.getSampleQuestions() != null && !req.getSampleQuestions().isEmpty()) {
+      p.append("existing_samples (AVOID DUPLICATES): ").append(req.getSampleQuestions()).append("\n");
+    }
+    if (additionalInstruction != null) {
+      p.append("\nADDITIONAL TEACHER REQUIREMENT (highest priority):\n");
+      p.append(additionalInstruction).append("\n");
+    }
+
+    p.append("\nOUTPUT FORMAT (strict JSON):\n");
+    p.append("{\n");
+    p.append("  \"parameters\": {\"a\": 2, \"b\": -3, \"c\": 1},\n");
+    p.append("  \"constraint_text\": {\n");
+    p.append("    \"a\": \"a = 2, số nguyên dương, khác 0 để giữ bậc 2\",\n");
+    p.append("    \"b\": \"b = -3, đảm bảo delta = 9 - 8 = 1 ≥ 0\",\n");
+    p.append("    \"c\": \"c = 1, cho nghiệm thực x = 1 và x = 0.5\"\n");
+    p.append("  },\n");
+    p.append("  \"combined_constraints\": [\n");
+    p.append("    \"b² - 4ac = 1 ≥ 0: phương trình có nghiệm thực\",\n");
+    p.append("    \"Bộ {a:2, b:-3, c:1} chưa tồn tại trong hệ thống\"\n");
+    p.append("  ]\n");
+    p.append("}\n");
+    return p.toString();
+  }
+
+  private String buildUpdateParametersPrompt(UpdateParametersRequest req) {
+    StringBuilder p = new StringBuilder();
+    p.append("Return ONLY valid JSON. No markdown, no extra text.\n\n");
+    p.append("Task: update_parameters\n");
+    p.append("You are a Vietnamese math teacher assistant.\n");
+    p.append("Current parameter values: ").append(req.getCurrentParameters()).append("\n");
+    p.append("Current constraint explanations: ").append(req.getCurrentConstraintText()).append("\n");
+    p.append("Teacher command (NEW REQUIREMENT - highest priority): "
+        + req.getTeacherCommand()).append("\n");
+    if (req.getTemplateText() != null) {
+      p.append("Template text: ").append(req.getTemplateText()).append("\n");
+    }
+    if (req.getAnswerFormula() != null) {
+      p.append("Formula: ").append(req.getAnswerFormula()).append("\n");
+    }
+    p.append("\nRe-generate parameter values satisfying ALL existing constraints PLUS the teacher command.\n");
+    p.append("Update constraint_text to reflect the new values and teacher requirement.\n");
+
+    p.append("\nOUTPUT FORMAT (same as generate_parameters):\n");
+    p.append("{\"parameters\": {...}, \"constraint_text\": {...}, \"combined_constraints\": [...]}\n");
+    return p.toString();
+  }
+
+  private GenerateParametersResponse parseGenerateParametersResponse(String aiContent) {
+    try {
+      String json = repairTruncatedJson(extractJSON(aiContent));
+      JsonNode root = objectMapper.readTree(json);
+
+      // Parse parameters
+      Map<String, Object> parameters = new LinkedHashMap<>();
+      JsonNode paramsNode = root.path("parameters");
+      if (paramsNode.isObject()) {
+        Iterator<String> fields = paramsNode.fieldNames();
+        while (fields.hasNext()) {
+          String key = fields.next();
+          JsonNode val = paramsNode.get(key);
+          if (val.isIntegralNumber()) {
+            parameters.put(key, val.intValue());
+          } else if (val.isFloatingPointNumber()) {
+            parameters.put(key, val.doubleValue());
+          } else {
+            parameters.put(key, val.asText());
+          }
+        }
+      }
+
+      // Parse constraint_text
+      Map<String, String> constraintText = new LinkedHashMap<>();
+      JsonNode ctNode = root.path("constraint_text");
+      if (ctNode.isObject()) {
+        Iterator<String> fields = ctNode.fieldNames();
+        while (fields.hasNext()) {
+          String key = fields.next();
+          constraintText.put(key, ctNode.get(key).asText());
+        }
+      }
+
+      // Parse combined_constraints
+      List<String> combinedConstraints = new ArrayList<>();
+      JsonNode ccNode = root.path("combined_constraints");
+      if (ccNode.isArray()) {
+        for (JsonNode item : ccNode) {
+          combinedConstraints.add(item.asText());
+        }
+      }
+
+      return GenerateParametersResponse.builder()
+          .parameters(parameters)
+          .constraintText(constraintText)
+          .combinedConstraints(combinedConstraints)
+          .build();
+    } catch (Exception e) {
+      log.error("[Feature2] Failed to parse generate-parameters AI response: {}", e.getMessage());
+      throw new RuntimeException("Failed to parse AI generate-parameters response", e);
+    }
+  }
+
+  /**
+   * Fill template text with parameter values, wrapping negative values in parentheses.
+   * BUG FIX 1: This is the CORRECT way to fill a template before sending it to AI.
+   * e.g. {{a}}x² + {{b}}x + {{c}} with {a=2, b=-3, c=1}
+   *   → "2x² + (-3)x + 1"
+   */
+  private String fillTextWithNegativeParens(String text, Map<String, Object> params) {
+    if (text == null || params == null) return text;
+    String filled = text;
+    for (Map.Entry<String, Object> entry : params.entrySet()) {
+      String token = "{{" + entry.getKey() + "}}";
+      Object val = entry.getValue();
+      String valStr;
+      if (val instanceof Number) {
+        double d = ((Number) val).doubleValue();
+        if (d < 0) {
+          valStr = "(" + formatParameterValue(val) + ")";
+        } else {
+          valStr = formatParameterValue(val);
+        }
+      } else {
+        valStr = String.valueOf(val);
+      }
+      filled = filled.replace(token, valStr);
+    }
+    // Normalize sign combinations: "N + -M" → "N - M", "N - -M" → "N + M"
+    filled = filled.replaceAll("\\+\\s*-\\(",  "- (");
+    filled = filled.replaceAll("-\\s*-\\(", "+ (");
+    return filled;
+  }
+
+  // =========================================================================
+  // FEATURE 4: Set Overdrive Points Per Clause (TF Only)
+  // =========================================================================
+
+  @Override
+  public void setClausePoints(java.util.UUID questionId, SetClausePointsRequest request) {
+    log.info("[Feature4] Setting clause points for questionId={}", questionId);
+
+    Question question = questionRepository.findById(questionId)
+        .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+    if (question.getQuestionType() != QuestionType.TRUE_FALSE) {
+      throw new AppException(ErrorCode.INVALID_REQUEST,
+          "Clause points can only be set for TRUE_FALSE questions");
+    }
+
+    // Validate: sum(clause_points) must equal total_point
+    BigDecimal totalPoint = request.getTotalPoint();
+    Map<String, BigDecimal> clausePoints = request.getClausePoints();
+    BigDecimal sum = clausePoints.values().stream()
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    if (sum.compareTo(totalPoint) != 0) {
+      throw new AppException(ErrorCode.INVALID_REQUEST,
+          String.format("Clause points must sum to total question point (%.2f). Current sum: %.2f",
+              totalPoint.doubleValue(), sum.doubleValue()));
+    }
+
+    // Merge overdrive_point into existing options JSON per clause
+    @SuppressWarnings("unchecked")
+    Map<String, Object> options = question.getOptions() != null
+        ? new LinkedHashMap<>(question.getOptions())
+        : new LinkedHashMap<>();
+
+    for (Map.Entry<String, BigDecimal> entry : clausePoints.entrySet()) {
+      String clauseKey = entry.getKey();
+      BigDecimal clausePoint = entry.getValue();
+
+      Object existingClause = options.get(clauseKey);
+      if (existingClause instanceof Map) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> clauseMap = new LinkedHashMap<>((Map<String, Object>) existingClause);
+        clauseMap.put("overdrive_point", clausePoint.doubleValue());
+        options.put(clauseKey, clauseMap);
+      } else {
+        // Create a new clause map if it doesn't exist
+        Map<String, Object> newClause = new LinkedHashMap<>();
+        newClause.put("text", existingClause != null ? String.valueOf(existingClause) : "");
+        newClause.put("overdrive_point", clausePoint.doubleValue());
+        options.put(clauseKey, newClause);
+      }
+    }
+
+    question.setOptions(options);
+    question.setPoints(totalPoint);
+    questionRepository.save(question);
+  }
+
+  // =========================================================================
+  // FEATURE 5: Validate TF Clause Content For Matrix Selection
+  // =========================================================================
+
+  @Override
+  public boolean validateClauseForMatrix(
+      String clauseText, String chapterName, String cognitiveLevel) {
+    log.info("[Feature5] Validating clause for chapter='{}' level='{}'", chapterName, cognitiveLevel);
+    if (clauseText == null || clauseText.isBlank()) return false;
+
+    String prompt = buildClauseValidationPrompt(clauseText, chapterName, cognitiveLevel);
+    try {
+      String aiResponse = geminiService.sendMessage(prompt);
+      // Expect a simple YES/NO answer
+      String normalized = aiResponse.trim().toUpperCase();
+      boolean valid = normalized.startsWith("YES");
+      log.info("[Feature5] Clause validation result: {} for chapter='{}' level='{}'",
+          valid ? "VALID" : "INVALID", chapterName, cognitiveLevel);
+      return valid;
+    } catch (Exception e) {
+      log.error("[Feature5] Clause validation AI call failed: {}", e.getMessage());
+      // Fail open to avoid blocking question generation
+      return true;
+    }
+  }
+
+  private String buildClauseValidationPrompt(
+      String clauseText, String chapterName, String cognitiveLevel) {
+    StringBuilder p = new StringBuilder();
+    p.append("You are a Vietnamese math teacher. Answer with ONLY 'YES' or 'NO'.\n\n");
+    p.append("Given:\n");
+    p.append("  Chapter: ").append(chapterName).append("\n");
+    p.append("  Cognitive level: ").append(cognitiveLevel).append("\n");
+    p.append("  Clause: ").append(clauseText).append("\n\n");
+    p.append("Does this clause MATCH both the chapter content and the cognitive level?\n");
+    p.append("Answer YES if it matches both. Answer NO if it does not match one or both.\n");
+    p.append("Format: YES [reason] or NO [reason]\n");
+    return p.toString();
+  }
 }
+

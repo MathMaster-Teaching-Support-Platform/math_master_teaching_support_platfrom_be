@@ -5,6 +5,7 @@ import com.fptu.math_master.dto.request.BulkAssignQuestionsToBankRequest;
 import com.fptu.math_master.dto.request.CreateQuestionRequest;
 import com.fptu.math_master.dto.request.ImportQuestionsRequest;
 import com.fptu.math_master.dto.request.QuestionBatchImportRequest;
+import com.fptu.math_master.dto.request.SetClausePointsRequest;
 import com.fptu.math_master.dto.request.UpdateQuestionRequest;
 import com.fptu.math_master.dto.request.AIEnhancementRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -399,4 +400,31 @@ public class QuestionController {
         .result(response)
         .build();
   }
+
+  // ===========================================================================
+  // FEATURE 4: Set Overdrive Points Per TF Clause
+  // POST /questions/{questionId}/clauses/points
+  // ===========================================================================
+
+  @PostMapping("/{questionId}/clauses/points")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Set Overdrive Points Per TF Clause (Feature 4)",
+      description =
+          "For TRUE_FALSE questions: teacher sets how many points each clause (A/B/C/D) is worth."
+              + " Validation: sum(clause_points) must equal total_point."
+              + " Persists overdrive_point per clause into the options JSONB column."
+              + " Example: total=1.0, A=0.25, B=0.25, C=0.25, D=0.25")
+  public ApiResponse<QuestionResponse> setClausePoints(
+      @PathVariable UUID questionId,
+      @Valid @RequestBody SetClausePointsRequest request) {
+    log.info("REST [Feature4] set clause points for questionId={}", questionId);
+    aiEnhancementService.setClausePoints(questionId, request);
+    return ApiResponse.<QuestionResponse>builder()
+        .message(String.format("Clause points set: %s (total=%.2f)",
+            request.getClausePoints(), request.getTotalPoint().doubleValue()))
+        .result(questionService.getQuestionById(questionId))
+        .build();
+  }
 }
+

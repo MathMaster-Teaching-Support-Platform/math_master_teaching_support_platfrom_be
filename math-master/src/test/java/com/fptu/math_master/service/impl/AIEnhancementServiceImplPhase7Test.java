@@ -7,6 +7,8 @@ import com.fptu.math_master.dto.response.GeneratedQuestionSample;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.repository.QuestionRepository;
+import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.service.GeminiService;
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -29,12 +31,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class AIEnhancementServiceImplPhase7Test {
 
   @Mock private GeminiService geminiService;
+  @Mock private QuestionTemplateRepository questionTemplateRepository;
+  @Mock private QuestionRepository questionRepository;
 
   private AIEnhancementServiceImpl aiService;
 
   @BeforeEach
   void setUp() {
-    aiService = new AIEnhancementServiceImpl(geminiService);
+    aiService = new AIEnhancementServiceImpl(geminiService, questionTemplateRepository, questionRepository);
   }
 
   // ==================== SHORT_ANSWER Tests ====================

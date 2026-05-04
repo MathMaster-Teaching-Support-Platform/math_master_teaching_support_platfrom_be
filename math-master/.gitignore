@@ -23,3 +23,6 @@ logs/*.txt
 *.classpath
 *.org.eclipse.jdt.core.prefs
 .org.eclipse.jdt.core.prefs
+
+#Key in yaml
+application.yaml
