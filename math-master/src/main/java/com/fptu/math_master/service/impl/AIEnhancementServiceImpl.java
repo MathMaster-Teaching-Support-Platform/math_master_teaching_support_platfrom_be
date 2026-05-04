@@ -3,11 +3,16 @@ package com.fptu.math_master.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.request.AIEnhancementRequest;
+import com.fptu.math_master.dto.request.AutoBlueprintRequest;
 import com.fptu.math_master.dto.request.ExtractParametersRequest;
 import com.fptu.math_master.dto.request.GenerateParametersRequest;
+import com.fptu.math_master.dto.request.QuestionTemplateRequest;
 import com.fptu.math_master.dto.request.SetClausePointsRequest;
 import com.fptu.math_master.dto.request.UpdateParametersRequest;
 import com.fptu.math_master.dto.response.AIEnhancedQuestionResponse;
+import com.fptu.math_master.dto.response.AutoBlueprintResponse;
+import com.fptu.math_master.dto.response.BlueprintFromRealQuestionResponse;
+import com.fptu.math_master.dto.response.BlueprintParameter;
 import com.fptu.math_master.dto.response.ExtractParametersResponse;
 import com.fptu.math_master.dto.response.GenerateParametersResponse;
 import com.fptu.math_master.dto.response.GeneratedQuestionSample;
@@ -21,7 +26,9 @@ import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.service.AIEnhancementService;
+import com.fptu.math_master.service.BlueprintService;
 import com.fptu.math_master.service.GeminiService;
+import com.fptu.math_master.enums.TemplateVariant;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -48,6 +55,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   ObjectMapper objectMapper = new ObjectMapper();
   QuestionTemplateRepository questionTemplateRepository;
   QuestionRepository questionRepository;
+  BlueprintService blueprintService;
 
   @Override
   public AIEnhancedQuestionResponse enhanceQuestion(AIEnhancementRequest request) {
@@ -3306,6 +3314,91 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("Answer YES if it matches both. Answer NO if it does not match one or both.\n");
     p.append("Format: YES [reason] or NO [reason]\n");
     return p.toString();
+  }
+
+  /**
+   * Constraint-aware batch parameter generation. Delegates to the unified
+   * {@link com.fptu.math_master.service.BlueprintService} which runs one Gemini
+   * call for the whole batch and validates each set against simple programmatic
+   * guardrails. Returns at most {@code count} sets — caller must tolerate a
+   * shorter list when constraints are over-tight.
+   */
+  @Override
+  public List<Map<String, Object>> generateParameterBatch(QuestionTemplate template, int count) {
+    if (count <= 0) return Collections.emptyList();
+    return blueprintService.selectValueSets(template, count, Collections.emptyList(), null);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────────────
+  //  Method 1 reverse-templating — delegates to BlueprintService and re-shapes the
+  //  output as the legacy AutoBlueprintResponse so existing callers keep compiling.
+  //  New callers use POST /question-templates/blueprint-from-real-question, which
+  //  returns the richer BlueprintFromRealQuestionResponse directly.
+  // ─────────────────────────────────────────────────────────────────────────────────────
+  @Override
+  public AutoBlueprintResponse autoBlueprint(AutoBlueprintRequest request) {
+    BlueprintFromRealQuestionResponse rich = blueprintService.blueprintFromRealQuestion(request);
+
+    // Convert the rich response into the legacy QuestionTemplateRequest wrapper so this
+    // method's contract stays stable. The new shape is preserved inside `parameters`.
+    QuestionTemplateRequest blueprint = new QuestionTemplateRequest();
+    blueprint.setName(buildDraftTemplateName(request));
+    blueprint.setDescription("Auto-generated from a real question via Method 1");
+    blueprint.setTemplateType(request.getQuestionType());
+    blueprint.setTemplateText(Map.of("vi", rich.getTemplateText() == null ? "" : rich.getTemplateText()));
+    blueprint.setAnswerFormula(rich.getAnswerFormula());
+    blueprint.setSolutionStepsTemplate(rich.getSolutionStepsTemplate());
+    blueprint.setDiagramTemplate(rich.getDiagramTemplate());
+    if (rich.getOptionsGenerator() != null) {
+      blueprint.setOptionsGenerator(new HashMap<>(rich.getOptionsGenerator()));
+    }
+    if (rich.getClauseTemplates() != null && !rich.getClauseTemplates().isEmpty()) {
+      List<Map<String, Object>> clauseList = rich.getClauseTemplates().stream()
+          .map(c -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("text", c.getText());
+            m.put("truthValue", c.isTruthValue());
+            return m;
+          })
+          .toList();
+      blueprint.setStatementMutations(Map.of("clauseTemplates", clauseList));
+    }
+    Map<String, Object> paramMap = new LinkedHashMap<>();
+    if (rich.getParameters() != null) {
+      for (BlueprintParameter p : rich.getParameters()) {
+        Map<String, Object> def = new LinkedHashMap<>();
+        def.put("constraintText", p.getConstraintText());
+        def.put("sampleValue", p.getSampleValue());
+        def.put("occurrences", p.getOccurrences() == null ? List.of() : p.getOccurrences());
+        paramMap.put(p.getName(), def);
+      }
+    }
+    blueprint.setParameters(paramMap);
+    if (rich.getGlobalConstraints() != null) {
+      blueprint.setConstraints(rich.getGlobalConstraints().toArray(new String[0]));
+    }
+    blueprint.setCognitiveLevel(request.getCognitiveLevel());
+    // Stamp variant for downstream telemetry
+    // (the entity field, set on persistence — we hint via name only here).
+    return AutoBlueprintResponse.builder()
+        .blueprint(blueprint)
+        .extractionNotes(rich.getWarnings() == null ? List.of() : rich.getWarnings())
+        .confidence(rich.getConfidence())
+        .build();
+  }
+
+  private String buildDraftTemplateName(AutoBlueprintRequest req) {
+    String stem = req.getQuestionText() == null ? "Untitled" : req.getQuestionText().trim();
+    int max = 60;
+    if (stem.length() > max) stem = stem.substring(0, max - 1) + "…";
+    String type = req.getQuestionType() == null ? "TPL" : req.getQuestionType().name();
+    return "[" + type + "] " + stem;
+  }
+
+  /** Sanity reference so the variant enum import is used; emits a debug log only. */
+  @SuppressWarnings("unused")
+  private void touchVariantEnum() {
+    log.trace("variant in scope: {}", TemplateVariant.AI_REVERSE_TEMPLATED);
   }
 }
 

@@ -22,8 +22,10 @@ import com.fptu.math_master.util.SecurityUtils;
 import com.fptu.math_master.util.CSVParser;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -104,7 +106,7 @@ public class QuestionServiceImpl implements QuestionService {
             .templateId(request.getTemplateId())
             .chapterId(chapterId)  // Set chapterId
           .canonicalQuestionId(request.getCanonicalQuestionId())
-            .questionStatus(QuestionStatus.AI_DRAFT)
+            .questionStatus(QuestionStatus.UNDER_REVIEW)
             .questionSourceType(QuestionSourceType.MANUAL)
             .build();
     question.setCreatedBy(currentUserId);
@@ -260,7 +262,7 @@ public class QuestionServiceImpl implements QuestionService {
     }
     if (request.getStatus() != null) {
       if (request.getStatus() == QuestionStatus.APPROVED
-          && question.getQuestionStatus() != QuestionStatus.AI_DRAFT) {
+          && !isReviewable(question.getQuestionStatus())) {
         throw new AppException(ErrorCode.QUESTION_REVIEW_STATUS_INVALID);
       }
       question.setQuestionStatus(request.getStatus());
@@ -284,7 +286,7 @@ public class QuestionServiceImpl implements QuestionService {
     if (!question.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
       throw new AppException(ErrorCode.UNAUTHORIZED);
     }
-    if (question.getQuestionStatus() != QuestionStatus.AI_DRAFT) {
+    if (!isReviewable(question.getQuestionStatus())) {
       throw new AppException(ErrorCode.QUESTION_REVIEW_STATUS_INVALID);
     }
 
@@ -292,6 +294,15 @@ public class QuestionServiceImpl implements QuestionService {
     question.setUpdatedAt(Instant.now());
     question = questionRepository.save(question);
     return mapToResponse(question);
+  }
+
+  /**
+   * A question is in a reviewable state if it has been generated but not yet
+   * approved or archived. The unified Blueprint flow uses {@code UNDER_REVIEW};
+   * older rows still in {@code AI_DRAFT} are accepted for one transition window.
+   */
+  private static boolean isReviewable(QuestionStatus s) {
+    return s == QuestionStatus.UNDER_REVIEW || s == QuestionStatus.AI_DRAFT;
   }
 
   @Override
@@ -312,7 +323,7 @@ public class QuestionServiceImpl implements QuestionService {
       if (!question.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
         throw new AppException(ErrorCode.UNAUTHORIZED);
       }
-      if (question.getQuestionStatus() != QuestionStatus.AI_DRAFT) {
+      if (!isReviewable(question.getQuestionStatus())) {
         throw new AppException(ErrorCode.QUESTION_REVIEW_STATUS_INVALID);
       }
 
@@ -323,6 +334,55 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
     return approvedCount;
+  }
+
+  @Override
+  public Page<QuestionResponse> listReviewQueue(UUID templateId, Pageable pageable) {
+    UUID currentUserId = getCurrentUserId();
+    return questionRepository
+        .findReviewQueue(currentUserId, templateId, pageable)
+        .map(this::mapToResponse);
+  }
+
+  /**
+   * Reject UNDER_REVIEW (or legacy AI_DRAFT) questions in one call. Rejection moves
+   * the question to ARCHIVED so it leaves the review queue but stays in the audit
+   * trail. The optional reason is stamped onto generationMetadata.rejectionReason.
+   */
+  @Override
+  public Integer bulkRejectQuestions(List<UUID> questionIds, String reason) {
+    if (questionIds == null || questionIds.isEmpty()) return 0;
+    UUID currentUserId = getCurrentUserId();
+    int rejectedCount = 0;
+
+    for (UUID id : questionIds) {
+      Question question =
+          questionRepository
+              .findByIdAndNotDeleted(id)
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+
+      if (!question.getCreatedBy().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+      }
+      if (!isReviewable(question.getQuestionStatus())) {
+        throw new AppException(ErrorCode.QUESTION_REVIEW_STATUS_INVALID);
+      }
+
+      Map<String, Object> meta = question.getGenerationMetadata();
+      if (meta == null) meta = new LinkedHashMap<>();
+      if (reason != null && !reason.isBlank()) {
+        meta.put("rejectionReason", reason);
+      }
+      meta.put("rejectedAt", Instant.now().toString());
+      meta.put("rejectedBy", currentUserId.toString());
+      question.setGenerationMetadata(meta);
+      question.setQuestionStatus(QuestionStatus.ARCHIVED);
+      question.setUpdatedAt(Instant.now());
+      questionRepository.save(question);
+      rejectedCount++;
+    }
+
+    return rejectedCount;
   }
 
   @Override

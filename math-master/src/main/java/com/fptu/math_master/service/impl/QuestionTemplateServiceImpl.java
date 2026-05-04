@@ -11,13 +11,11 @@ import com.fptu.math_master.dto.response.GeneratedQuestionSample;
 import com.fptu.math_master.dto.response.GeneratedQuestionsBatchResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.dto.response.TemplateTestResponse;
-import com.fptu.math_master.entity.CanonicalQuestion;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.entity.QuestionBank;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.CognitiveLevel;
-import com.fptu.math_master.enums.QuestionGenerationMode;
 import com.fptu.math_master.enums.QuestionSourceType;
 import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.QuestionStatus;
@@ -31,6 +29,7 @@ import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.service.AIEnhancementService;
+import com.fptu.math_master.service.BlueprintService;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.QuestionTemplateService;
 import com.fptu.math_master.util.SecurityUtils;
@@ -70,6 +69,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   QuestionRepository questionRepository;
   QuestionBankRepository questionBankRepository;
   CanonicalQuestionRepository canonicalQuestionRepository;
+  BlueprintService blueprintService;
 
   @Override
   @Transactional
@@ -505,25 +505,6 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       UUID id, GenerateTemplateQuestionsRequest request) {
     QuestionTemplate template = fetchTemplateForTesting(id);
     UUID currentUserId = SecurityUtils.getCurrentUserId();
-    QuestionGenerationMode mode =
-        request.getGenerationMode() != null
-            ? request.getGenerationMode()
-            : QuestionGenerationMode.PARAMETRIC;
-
-    CanonicalQuestion canonicalQuestion = null;
-    if (mode == QuestionGenerationMode.AI_FROM_CANONICAL) {
-      UUID canonicalId =
-          request.getCanonicalQuestionId() != null
-              ? request.getCanonicalQuestionId()
-              : template.getCanonicalQuestionId();
-      if (canonicalId == null) {
-        throw new AppException(ErrorCode.INVALID_KEY);
-      }
-      canonicalQuestion =
-          canonicalQuestionRepository
-              .findByIdAndNotDeleted(canonicalId)
-              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_TEMPLATE_NOT_FOUND));
-    }
 
     int requested = request.getCount() != null ? request.getCount() : 0;
     if (requested <= 0) {
@@ -532,54 +513,75 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
     List<UUID> generatedIds = new ArrayList<>();
     List<String> warnings = new ArrayList<>();
-    int sampleIndex = 0;
     int skippedCount = 0;
 
-    UUID effectiveCanonicalId =
-        mode == QuestionGenerationMode.AI_FROM_CANONICAL && canonicalQuestion != null
-            ? canonicalQuestion.getId()
-            : template.getCanonicalQuestionId();
-
-    // Cache existing parameter sets for this template in the bank to avoid duplicates
-    Set<Map<String, Object>> existingParamSets = new HashSet<>();
+    // 1. Collect already-used parameter tuples for distinctness.
+    List<Map<String, Object>> alreadyUsed = new ArrayList<>();
     if (request.isAvoidDuplicates()) {
-      List<Question> existingQuestions = questionRepository.findByTemplateIdAndNotDeleted(template.getId());
+      List<Question> existingQuestions =
+          questionRepository.findByTemplateIdAndNotDeleted(template.getId());
       for (Question q : existingQuestions) {
-        if (q.getGenerationMetadata() != null && q.getGenerationMetadata().containsKey("usedParameters")) {
-          existingParamSets.add((Map<String, Object>) q.getGenerationMetadata().get("usedParameters"));
+        if (q.getGenerationMetadata() != null
+            && q.getGenerationMetadata().get("usedParameters") instanceof Map<?, ?> m) {
+          @SuppressWarnings("unchecked")
+          Map<String, Object> tuple = (Map<String, Object>) m;
+          alreadyUsed.add(tuple);
         }
       }
     }
 
-    int attempts = 0;
-    int maxAttempts = requested * 3; // Try up to 3x requested to find unique variations
+    // 2. Ask the AI value selector for `requested + buffer` value sets.
+    int buffer = Math.max(2, requested / 2);
+    List<Map<String, Object>> proposed =
+        blueprintService.selectValueSets(
+            template, requested + buffer, alreadyUsed, request.getDistinctnessHint());
 
-    while (generatedIds.size() < requested && attempts < maxAttempts) {
-      attempts++;
+    if (proposed.isEmpty()) {
+      warnings.add(
+          "Constraint-aware value selector returned no valid sets. Refusing to fall back to "
+              + "random sampling — please review the template's constraintText.");
+      return GeneratedQuestionsBatchResponse.builder()
+          .totalRequested(requested)
+          .totalGenerated(0)
+          .generatedQuestionIds(generatedIds)
+          .warnings(warnings)
+          .build();
+    }
+
+    String selectionPromptVersion = blueprintService.selectionPromptVersion();
+
+    // 3. Substitute + evaluate per set, persist as UNDER_REVIEW.
+    for (Map<String, Object> tuple : proposed) {
+      if (generatedIds.size() >= requested) break;
+
+      // Skip duplicates against existing usage.
+      if (request.isAvoidDuplicates() && alreadyUsed.contains(tuple)) {
+        skippedCount++;
+        continue;
+      }
+
       try {
         GeneratedQuestionSample sample =
-            mode == QuestionGenerationMode.AI_FROM_CANONICAL
-                ? aiEnhancementService.generateQuestionFromCanonical(
-                    canonicalQuestion, template, sampleIndex++)
-                : aiEnhancementService.generateQuestion(template, sampleIndex++);
-        
-        if (sample == null || sample.getQuestionText() == null || sample.getQuestionText().isBlank()) {
-          warnings.add("Generated sample was empty at attempt " + attempts);
+            aiEnhancementService.generateQuestion(template, generatedIds.size());
+        if (sample == null
+            || sample.getQuestionText() == null
+            || sample.getQuestionText().isBlank()) {
+          warnings.add("Substitutor produced empty question for tuple " + tuple);
           continue;
         }
-
-        // Deduplication check
-        if (request.isAvoidDuplicates() && existingParamSets.contains(sample.getUsedParameters())) {
-          skippedCount++;
-          continue;
+        // Force the generator to use the AI-selected tuple if it produced its own.
+        if (tuple != null && !tuple.isEmpty()) {
+          sample.setUsedParameters(new HashMap<>(tuple));
         }
 
         Map<String, Object> metadata = new HashMap<>();
-        metadata.put("status", "AI_DRAFT");
-        metadata.put("generationMode", mode.name());
+        metadata.put("status", QuestionStatus.UNDER_REVIEW.name());
         metadata.put("usedParameters", sample.getUsedParameters());
-
-        // Merge sample's generationMetadata (contains tfClauses for TF questions)
+        metadata.put("promptVersion", selectionPromptVersion);
+        metadata.put("valueSelectionStrategy", "AI_CONSTRAINT_AWARE");
+        if (request.getDistinctnessHint() != null && !request.getDistinctnessHint().isBlank()) {
+          metadata.put("distinctnessHint", request.getDistinctnessHint());
+        }
         if (sample.getGenerationMetadata() != null) {
           metadata.putAll(sample.getGenerationMetadata());
         }
@@ -589,7 +591,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
                 .questionBankId(template.getQuestionBankId())
                 .templateId(template.getId())
                 .chapterId(template.getChapterId())
-                .canonicalQuestionId(effectiveCanonicalId)
+                .canonicalQuestionId(template.getCanonicalQuestionId())
                 .questionType(template.getTemplateType())
                 .questionText(sample.getQuestionText())
                 .options(
@@ -601,7 +603,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
                 .solutionSteps(sample.getSolutionSteps())
                 .diagramData(sample.getDiagramData())
                 .cognitiveLevel(template.getCognitiveLevel())
-                .questionStatus(QuestionStatus.AI_DRAFT)
+                .questionStatus(QuestionStatus.UNDER_REVIEW)
                 .questionSourceType(QuestionSourceType.AI_GENERATED)
                 .generationMetadata(metadata)
                 .build();
@@ -609,25 +611,24 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
 
         Question saved = questionRepository.save(question);
         generatedIds.add(saved.getId());
-        
-        if (request.isAvoidDuplicates()) {
-          existingParamSets.add(sample.getUsedParameters());
-        }
+        alreadyUsed.add(sample.getUsedParameters());
       } catch (Exception ex) {
         log.warn(
-            "Failed to generate/save question at attempt {} for template {}: {}",
-            attempts,
-            id,
-            ex.getMessage());
-        warnings.add("Failed to generate question at attempt " + attempts + ": " + ex.getMessage());
+            "Substitutor failed for tuple {} on template {}: {}", tuple, id, ex.getMessage());
+        warnings.add("Substitutor failed for one set: " + ex.getMessage());
       }
     }
 
     if (skippedCount > 0) {
-      warnings.add("Skipped " + skippedCount + " duplicate variations based on parameters.");
+      warnings.add("Skipped " + skippedCount + " duplicate parameter sets.");
     }
-    if (generatedIds.size() < requested && attempts >= maxAttempts) {
-      warnings.add("Could only generate " + generatedIds.size() + " unique variations after " + maxAttempts + " attempts.");
+    if (generatedIds.size() < requested) {
+      warnings.add(
+          "Wanted "
+              + requested
+              + " questions, the constraint-aware selector + substitutor produced "
+              + generatedIds.size()
+              + ". Try relaxing the constraints or lowering the count.");
     }
 
     return GeneratedQuestionsBatchResponse.builder()
@@ -638,6 +639,13 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         .build();
   }
 
+  /**
+   * @deprecated The "AI from canonical" mode has been removed. The unified generator
+   *     reads the template's Blueprint and selects values via {@code BlueprintService}.
+   *     This method is retained only so existing canonical-question UI does not 404;
+   *     it now delegates to the regular template generation path.
+   */
+  @Deprecated
   @Override
   @Transactional
   public GeneratedQuestionsBatchResponse generateQuestionsFromCanonical(
@@ -645,10 +653,8 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
     GenerateTemplateQuestionsRequest delegatedRequest =
         GenerateTemplateQuestionsRequest.builder()
             .count(request.getCount())
-            .generationMode(QuestionGenerationMode.AI_FROM_CANONICAL)
-            .canonicalQuestionId(canonicalQuestionId)
+            .avoidDuplicates(true)
             .build();
-
     return generateQuestionsFromTemplate(request.getTemplateId(), delegatedRequest);
   }
 
