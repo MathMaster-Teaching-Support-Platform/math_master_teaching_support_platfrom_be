@@ -530,11 +530,21 @@ public class CourseLessonServiceImpl implements CourseLessonService {
   @Override
   public String getMaterialDownloadUrl(UUID courseId, UUID lessonId, String materialId) {
     Course course = findCourseOrThrow(courseId);
-    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+    CourseLesson cl = courseLessonRepository
+        .findByIdAndDeletedAtIsNull(lessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
 
-    // Only the course owner (teacher) or students who have an ACTIVE enrollment may download.
+    if (!cl.getCourseId().equals(courseId)) {
+      throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
+    }
+
+    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+    boolean isAdmin = SecurityUtils.hasRole("ADMIN");
+    boolean isTeacher = SecurityUtils.hasRole("TEACHER");
     boolean isOwner = currentUserId != null && course.getTeacherId().equals(currentUserId);
-    if (!isOwner) {
+    boolean isFreePreview = cl.isFreePreview();
+
+    if (!isAdmin && !isTeacher && !isOwner && !isFreePreview) {
       boolean enrolled = currentUserId != null && enrollmentRepository
           .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
           .map(e -> "ACTIVE".equals(e.getStatus().name()))
@@ -543,10 +553,6 @@ public class CourseLessonServiceImpl implements CourseLessonService {
         throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
       }
     }
-
-    CourseLesson cl = courseLessonRepository
-        .findByIdAndDeletedAtIsNull(lessonId)
-        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
 
     MaterialItem item = getMaterialList(cl.getMaterials()).stream()
         .filter(m -> m.getId().equals(materialId))
@@ -568,10 +574,21 @@ public class CourseLessonServiceImpl implements CourseLessonService {
   public CourseLessonService.MaterialDownloadResult downloadMaterial(
       UUID courseId, UUID lessonId, String materialId) {
     Course course = findCourseOrThrow(courseId);
-    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+    CourseLesson cl = courseLessonRepository
+        .findByIdAndDeletedAtIsNull(lessonId)
+        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
 
+    if (!cl.getCourseId().equals(courseId)) {
+      throw new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND);
+    }
+
+    UUID currentUserId = SecurityUtils.getOptionalCurrentUserId();
+    boolean isAdmin = SecurityUtils.hasRole("ADMIN");
+    boolean isTeacher = SecurityUtils.hasRole("TEACHER");
     boolean isOwner = currentUserId != null && course.getTeacherId().equals(currentUserId);
-    if (!isOwner) {
+    boolean isFreePreview = cl.isFreePreview();
+
+    if (!isAdmin && !isTeacher && !isOwner && !isFreePreview) {
       boolean enrolled = currentUserId != null && enrollmentRepository
           .findByStudentIdAndCourseIdAndDeletedAtIsNull(currentUserId, courseId)
           .map(e -> "ACTIVE".equals(e.getStatus().name()))
@@ -580,10 +597,6 @@ public class CourseLessonServiceImpl implements CourseLessonService {
         throw new AppException(ErrorCode.COURSE_ACCESS_DENIED);
       }
     }
-
-    CourseLesson cl = courseLessonRepository
-        .findByIdAndDeletedAtIsNull(lessonId)
-        .orElseThrow(() -> new AppException(ErrorCode.COURSE_LESSON_NOT_FOUND));
 
     MaterialItem item = getMaterialList(cl.getMaterials()).stream()
         .filter(m -> m.getId().equals(materialId))
