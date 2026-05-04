@@ -227,22 +227,30 @@ public class MinioUploadServiceImpl implements UploadService {
 
     String value = key.trim();
 
+    // If it's a full URL, extract the path
     if (value.startsWith("http://") || value.startsWith("https://")) {
       try {
         String path = URI.create(value).getPath();
-        value = path == null ? value : path;
+        if (path != null) {
+          value = path;
+          // For URLs, we often have /bucket/key, so we strip the leading slash and bucket name
+          while (value.startsWith("/")) {
+            value = value.substring(1);
+          }
+          String bucketPrefix = bucketName + "/";
+          if (value.startsWith(bucketPrefix)) {
+            value = value.substring(bucketPrefix.length());
+          }
+        }
       } catch (Exception ignored) {
         // Keep original value if URI parsing fails.
       }
-    }
-
-    while (value.startsWith("/")) {
-      value = value.substring(1);
-    }
-
-    String bucketPrefix = bucketName + "/";
-    if (value.startsWith(bucketPrefix)) {
-      value = value.substring(bucketPrefix.length());
+    } else {
+      // For non-URL keys (stored in DB), we should just ensure no leading slashes.
+      // We do NOT strip the bucket name here because the directory name might match the bucket name.
+      while (value.startsWith("/")) {
+        value = value.substring(1);
+      }
     }
 
     return value;

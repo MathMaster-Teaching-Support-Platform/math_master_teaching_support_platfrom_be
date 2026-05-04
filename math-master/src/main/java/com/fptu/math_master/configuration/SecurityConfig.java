@@ -120,6 +120,7 @@ public class SecurityConfig {
     configuration.setAllowedMethods(
         Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
     configuration.setAllowedHeaders(List.of("*"));
+    configuration.setExposedHeaders(List.of("Content-Disposition"));
     configuration.setAllowCredentials(true);
     configuration.setMaxAge(3600L);
 
