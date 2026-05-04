@@ -13,4 +13,4 @@ WHERE transaction_date IS NULL;
 -- Keep updated_at consistent for rows where it was missing.
 UPDATE transactions
 SET updated_at = COALESCE(updated_at, created_at, transaction_date, NOW())
-WHERE updated_at IS NULL;
+WHERE updated_at IS NULL;   
