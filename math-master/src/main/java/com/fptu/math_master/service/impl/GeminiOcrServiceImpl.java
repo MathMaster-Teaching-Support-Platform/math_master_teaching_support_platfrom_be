@@ -1,21 +1,5 @@
 package com.fptu.math_master.service.impl;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fptu.math_master.configuration.properties.MinioProperties;
-import com.fptu.math_master.dto.response.OcrComparisonResult;
-import com.fptu.math_master.entity.TeacherProfile;
-import com.fptu.math_master.exception.AppException;
-import com.fptu.math_master.exception.ErrorCode;
-import com.fptu.math_master.repository.TeacherProfileRepository;
-import com.fptu.math_master.service.GeminiService;
-import com.fptu.math_master.service.OcrService;
-import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
@@ -26,6 +10,24 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+
+import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fptu.math_master.configuration.properties.MinioProperties;
+import com.fptu.math_master.dto.response.OcrComparisonResult;
+import com.fptu.math_master.entity.TeacherProfile;
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.TeacherProfileRepository;
+import com.fptu.math_master.service.GeminiService;
+import com.fptu.math_master.service.OcrService;
+
+import io.minio.GetObjectArgs;
+import io.minio.MinioClient;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Implementation of OCR service using Gemini AI.
@@ -344,8 +346,8 @@ public class GeminiOcrServiceImpl implements OcrService {
         comparisons.add(positionComparison);
 
         // 3. SCHOOL NAME (Tên trường) - BẮT BUỘC
-        OcrComparisonResult.FieldComparison schoolComparison = compareField("Tên trường", 
-                extractedData.getSchoolName(), 
+        OcrComparisonResult.FieldComparison schoolComparison = compareSchoolName(
+                extractedData.getSchoolName(),
                 profileData.getSchoolName());
         comparisons.add(schoolComparison);
 
@@ -467,6 +469,57 @@ public class GeminiOcrServiceImpl implements OcrService {
                 .profileValue("Bắt buộc: Giáo viên/Giảng viên + Toán")
                 .matches(isValid)
                 .similarity(isValid ? 100.0 : 0.0)
+                .notes(notes)
+                .build();
+    }
+
+    /**
+     * Compare school name with containment-aware logic.
+     * OCR often returns "Trường THPT X" while the teacher typed "THPT X", or vice-versa.
+     * A match is declared when either:
+     *   - Levenshtein similarity >= 80%, OR
+     *   - One normalized string contains the other
+     */
+    private OcrComparisonResult.FieldComparison compareSchoolName(String ocrValue, String profileValue) {
+        if (ocrValue == null && profileValue == null) {
+            return OcrComparisonResult.FieldComparison.builder()
+                    .fieldName("Tên trường")
+                    .ocrValue(null).profileValue(null)
+                    .matches(true).similarity(100.0).notes("Both values are null")
+                    .build();
+        }
+        if (ocrValue == null || profileValue == null) {
+            return OcrComparisonResult.FieldComparison.builder()
+                    .fieldName("Tên trường")
+                    .ocrValue(ocrValue).profileValue(profileValue)
+                    .matches(false).similarity(0.0).notes("One value is null")
+                    .build();
+        }
+
+        String normalizedOcr     = normalizeString(ocrValue);
+        String normalizedProfile = normalizeString(profileValue);
+
+        double similarity = calculateSimilarity(normalizedOcr, normalizedProfile);
+
+        // Also pass when one string contains the other (handles "Truong THPT X" vs "THPT X")
+        boolean containsMatch = normalizedOcr.contains(normalizedProfile)
+                || normalizedProfile.contains(normalizedOcr);
+
+        boolean matches = similarity >= 0.8 || containsMatch;
+
+        String notes;
+        if (matches) {
+            notes = containsMatch && similarity < 0.8 ? "Match (containment)" : "Match";
+        } else {
+            notes = String.format("Mismatch (similarity: %.0f%%)", similarity * 100);
+        }
+
+        return OcrComparisonResult.FieldComparison.builder()
+                .fieldName("Tên trường")
+                .ocrValue(ocrValue)
+                .profileValue(profileValue)
+                .matches(matches)
+                .similarity(Math.max(similarity, containsMatch ? 1.0 : 0.0) * 100)
                 .notes(notes)
                 .build();
     }
