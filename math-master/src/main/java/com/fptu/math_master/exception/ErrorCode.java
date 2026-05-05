@@ -381,7 +381,16 @@ public enum ErrorCode {
   WITHDRAWAL_AMOUNT_TOO_SMALL(
       1212, "Withdrawal amount must be at least 10,000 VND", HttpStatus.BAD_REQUEST),
   TEMPLATE_PREVIEW_IMAGE_NOT_FOUND(
-      1213, "This template does not have a preview image", HttpStatus.NOT_FOUND);
+      1213, "This template does not have a preview image", HttpStatus.NOT_FOUND),
+
+  // ─── Commission Proposal Error Codes ──────────────────────────────────────
+  COMMISSION_PROPOSAL_NOT_FOUND(1214, "Commission proposal not found", HttpStatus.NOT_FOUND),
+  COMMISSION_PROPOSAL_PENDING_EXISTS(
+      1215, "You already have a pending commission proposal", HttpStatus.BAD_REQUEST),
+  COMMISSION_PROPOSAL_INVALID_ACTION(
+      1216, "Action must be APPROVED or REJECTED", HttpStatus.BAD_REQUEST),
+  COMMISSION_PROPOSAL_ALREADY_REVIEWED(
+      1217, "This proposal has already been reviewed", HttpStatus.BAD_REQUEST);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
