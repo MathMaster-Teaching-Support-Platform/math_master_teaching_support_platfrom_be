@@ -21,6 +21,7 @@ public class NotificationResponse {
   private String content;
   private Map<String, Object> metadata;
   private Boolean isRead;
+  private String actionUrl;
   private Instant createdAt;
   private Instant updatedAt;
 }

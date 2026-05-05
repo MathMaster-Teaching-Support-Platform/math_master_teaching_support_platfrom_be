@@ -66,6 +66,7 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
                             .title(notificationMessage.getTitle())
                             .content(notificationMessage.getContent())
                             .metadata(notificationMessage.getMetadata())
+                            .actionUrl(notificationMessage.getActionUrl())
                             .isRead(false)
                             .build();
 

@@ -22,6 +22,7 @@ import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -85,6 +86,9 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
     profile = teacherProfileRepository.save(profile);
     log.info("Teacher profile submitted successfully for user {} with document: {}", userId, documentUrl);
+
+    // Notify all admins about new pending profile
+    notifyAdminsProfilePendingReview(profile, user);
 
     // AUTO-TRIGGER OCR verification job
     try {
@@ -373,6 +377,30 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     }
 
     return value;
+  }
+
+  private void notifyAdminsProfilePendingReview(TeacherProfile profile, User submitter) {
+    List<UUID> adminIds = userRepository.findUserIdsByRoleName(PredefinedRole.ADMIN_ROLE);
+    if (adminIds.isEmpty()) {
+      return;
+    }
+    for (UUID adminId : adminIds) {
+      NotificationRequest notif = NotificationRequest.builder()
+          .id(UUID.randomUUID().toString())
+          .type("PROFILE_VERIFICATION")
+          .title("Hồ sơ Giáo viên mới cần xét duyệt")
+          .content("Giáo viên " + submitter.getFullName() + " vừa gửi hồ sơ đăng ký và đang chờ xét duyệt.")
+          .recipientId(adminId.toString())
+          .senderId(submitter.getId().toString())
+          .actionUrl("/admin/review-profiles?profileId=" + profile.getId())
+          .timestamp(LocalDateTime.now())
+          .build();
+      try {
+        streamPublisher.publish(notif);
+      } catch (Exception e) {
+        log.error("Failed to notify admin {} about pending profile {}", adminId, profile.getId(), e);
+      }
+    }
   }
 
   private TeacherProfileResponse mapToResponse(TeacherProfile profile) {

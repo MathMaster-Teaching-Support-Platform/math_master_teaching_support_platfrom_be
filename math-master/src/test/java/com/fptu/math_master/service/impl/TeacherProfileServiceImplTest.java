@@ -161,6 +161,8 @@ class TeacherProfileServiceImplTest extends BaseUnitTest {
       when(uploadService.uploadFilesAsZip(any(), eq("verification"), eq("verification_docs")))
           .thenReturn("verification/profile.zip");
       when(teacherProfileRepository.save(any(TeacherProfile.class))).thenReturn(profile);
+      when(userRepository.findUserIdsByRoleName(PredefinedRole.ADMIN_ROLE))
+          .thenReturn(List.of(ADMIN_ID));
       when(ocrJobProducer.createOcrJob(PROFILE_ID, USER_ID))
           .thenThrow(new RuntimeException("queue unavailable"));
 
@@ -187,6 +189,8 @@ class TeacherProfileServiceImplTest extends BaseUnitTest {
       when(uploadService.uploadFilesAsZip(any(), eq("verification"), eq("verification_docs")))
           .thenReturn("verification/profile.zip");
       when(teacherProfileRepository.save(any(TeacherProfile.class))).thenReturn(profile);
+      when(userRepository.findUserIdsByRoleName(PredefinedRole.ADMIN_ROLE))
+          .thenReturn(List.of(ADMIN_ID));
       when(ocrJobProducer.createOcrJob(PROFILE_ID, USER_ID)).thenReturn("job-02");
 
       // ===== ACT =====
@@ -196,6 +200,49 @@ class TeacherProfileServiceImplTest extends BaseUnitTest {
       // ===== ASSERT =====
       assertEquals(PROFILE_ID, response.getId());
       verify(ocrJobProducer, times(1)).createOcrJob(PROFILE_ID, USER_ID);
+    }
+
+    @Test
+    void it_should_notify_all_admins_when_teacher_profile_is_submitted() {
+      // ===== ARRANGE =====
+      UUID adminId2 = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
+      when(userRepository.findById(USER_ID)).thenReturn(Optional.of(teacherUser));
+      when(teacherProfileRepository.existsByUserId(USER_ID)).thenReturn(false);
+      when(uploadService.uploadFilesAsZip(any(), eq("verification"), eq("verification_docs")))
+          .thenReturn("verification/profile.zip");
+      when(teacherProfileRepository.save(any(TeacherProfile.class))).thenReturn(profile);
+      when(userRepository.findUserIdsByRoleName(PredefinedRole.ADMIN_ROLE))
+          .thenReturn(List.of(ADMIN_ID, adminId2));
+      when(ocrJobProducer.createOcrJob(any(UUID.class), any(UUID.class))).thenReturn("job-03");
+
+      // ===== ACT =====
+      teacherProfileService.submitProfile(profileRequest, List.of(), USER_ID);
+
+      // ===== VERIFY =====
+      verify(streamPublisher, times(2)).publish(any());
+    }
+
+    @Test
+    void it_should_not_fail_submission_when_no_admin_exists() {
+      // ===== ARRANGE =====
+      when(userRepository.findById(USER_ID)).thenReturn(Optional.of(teacherUser));
+      when(teacherProfileRepository.existsByUserId(USER_ID)).thenReturn(false);
+      when(uploadService.uploadFilesAsZip(any(), eq("verification"), eq("verification_docs")))
+          .thenReturn("verification/profile.zip");
+      when(teacherProfileRepository.save(any(TeacherProfile.class))).thenReturn(profile);
+      when(userRepository.findUserIdsByRoleName(PredefinedRole.ADMIN_ROLE))
+          .thenReturn(List.of());
+      when(ocrJobProducer.createOcrJob(any(UUID.class), any(UUID.class))).thenReturn("job-04");
+
+      // ===== ACT =====
+      TeacherProfileResponse response =
+          teacherProfileService.submitProfile(profileRequest, List.of(), USER_ID);
+
+      // ===== ASSERT =====
+      assertNotNull(response);
+
+      // ===== VERIFY =====
+      verify(streamPublisher, never()).publish(any());
     }
   }
 
