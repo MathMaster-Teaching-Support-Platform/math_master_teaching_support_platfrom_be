@@ -390,7 +390,10 @@ public enum ErrorCode {
   COMMISSION_PROPOSAL_INVALID_ACTION(
       1216, "Action must be APPROVED or REJECTED", HttpStatus.BAD_REQUEST),
   COMMISSION_PROPOSAL_ALREADY_REVIEWED(
-      1217, "This proposal has already been reviewed", HttpStatus.BAD_REQUEST);
+      1217, "This proposal has already been reviewed", HttpStatus.BAD_REQUEST),
+
+  // ─── System Config Error Codes ────────────────────────────────────────────
+  SYSTEM_CONFIG_NOT_FOUND(1218, "System config not found", HttpStatus.NOT_FOUND);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
