@@ -147,23 +147,25 @@ public class AdminFinancialService {
         List<RevenueBreakdownResponse.DailyRevenue> data = new ArrayList<>();
 
         for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
-            Instant dayStart = date.atStartOfDay(ZoneId.systemDefault()).toInstant();
-            Instant dayEnd = date.atTime(23, 59, 59).atZone(ZoneId.systemDefault()).toInstant();
+            Instant dayStart = date.atStartOfDay(ZoneOffset.UTC).toInstant();
+            Instant dayEnd = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
 
-            // Deposits
+            // Deposits (wallet top-ups)
             BigDecimal deposits = transactionRepository.sumByTypeAndStatusAndDateRange(
                     TransactionType.DEPOSIT, TransactionStatus.SUCCESS, dayStart, dayEnd);
             if (deposits == null) deposits = BigDecimal.ZERO;
 
-            // Subscriptions
+            // Subscription revenue
             BigDecimal subscriptions = transactionRepository.sumByTypeAndStatusAndDateRange(
                     TransactionType.PAYMENT, TransactionStatus.SUCCESS, dayStart, dayEnd);
             if (subscriptions == null) subscriptions = BigDecimal.ZERO;
 
             // Course sales (platform commission)
-            BigDecimal courseSales = calculatePlatformCommission(dayStart, dayEnd);
+            BigDecimal courseSales = transactionRepository.sumByTypeAndStatusAndDateRange(
+                    TransactionType.PLATFORM_COMMISSION, TransactionStatus.SUCCESS, dayStart, dayEnd);
+            if (courseSales == null) courseSales = BigDecimal.ZERO;
 
-            BigDecimal total = deposits.add(subscriptions).add(courseSales);
+            BigDecimal total = subscriptions.add(courseSales);
 
             data.add(RevenueBreakdownResponse.DailyRevenue.builder()
                     .date(date.toString())

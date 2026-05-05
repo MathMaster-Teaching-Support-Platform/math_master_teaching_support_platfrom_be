@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.http.client.OkHttp3ClientHttpRequestFactory;
 import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpStatusCodeException;
@@ -29,7 +30,7 @@ public class CrawlDataProxyController {
     @Value("${crawl-data.internal-api-key:change-me-in-production}")
     private String internalApiKey;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = new RestTemplate(new OkHttp3ClientHttpRequestFactory());
 
     private static final String PROXY_PREFIX = "/api/v1/crawl-data";
 
@@ -106,6 +107,14 @@ public class CrawlDataProxyController {
         return forward(request);
     }
 
+    @Operation(summary = "[Books] Update book metadata (title, grade, publisher, academic_year)")
+    @PatchMapping("/books/{bookId}")
+    public ResponseEntity<byte[]> booksUpdate(
+            @Parameter(description = "Book ID") @PathVariable String bookId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
     @Operation(summary = "[Books] Reprocess book from cached OCR (STEP 3+4 only)")
     @PostMapping("/books/{bookId}/reprocess")
     public ResponseEntity<byte[]> booksReprocess(
@@ -140,6 +149,36 @@ public class CrawlDataProxyController {
         return forward(request);
     }
 
+    @Operation(summary = "[Chapters] Update chapter title / roman index")
+    @PatchMapping("/chapters/{chapterId}")
+    public ResponseEntity<byte[]> chaptersUpdate(
+            @Parameter(description = "Chapter ID") @PathVariable String chapterId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Chapters] Create a new chapter in a book")
+    @PostMapping("/chapters")
+    public ResponseEntity<byte[]> chaptersCreate(HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Chapters] Get change history for a chapter")
+    @GetMapping("/chapters/{chapterId}/history")
+    public ResponseEntity<byte[]> chaptersHistory(
+            @Parameter(description = "Chapter ID") @PathVariable String chapterId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Chapters] Delete chapter and cascade lessons/content")
+    @DeleteMapping("/chapters/{chapterId}")
+    public ResponseEntity<byte[]> chaptersDelete(
+            @Parameter(description = "Chapter ID") @PathVariable String chapterId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
     // =========================================================
     // LESSONS
     // =========================================================
@@ -156,6 +195,86 @@ public class CrawlDataProxyController {
     @GetMapping("/lessons/{lessonId}/content")
     public ResponseEntity<byte[]> lessonsContent(
             @Parameter(description = "Lesson ID") @PathVariable String lessonId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Lessons] Update lesson title")
+    @PatchMapping("/lessons/{lessonId}")
+    public ResponseEntity<byte[]> lessonsUpdate(
+            @Parameter(description = "Lesson ID") @PathVariable String lessonId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Lessons] Create a new lesson in a chapter")
+    @PostMapping("/lessons")
+    public ResponseEntity<byte[]> lessonsCreate(HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Lessons] Get change history for a lesson")
+    @GetMapping("/lessons/{lessonId}/history")
+    public ResponseEntity<byte[]> lessonsHistory(
+            @Parameter(description = "Lesson ID") @PathVariable String lessonId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Lessons] Delete lesson and its content blocks")
+    @DeleteMapping("/lessons/{lessonId}")
+    public ResponseEntity<byte[]> lessonsDelete(
+            @Parameter(description = "Lesson ID") @PathVariable String lessonId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    // =========================================================
+    // CONTENT BLOCKS
+    // =========================================================
+
+    @Operation(summary = "[Content] Get a single content block by ID")
+    @GetMapping("/content/{contentId}")
+    public ResponseEntity<byte[]> contentGet(
+            @Parameter(description = "Content block ID") @PathVariable String contentId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Content] Create a new content block in a lesson")
+    @PostMapping("/content")
+    public ResponseEntity<byte[]> contentCreate(HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Content] Update a content block")
+    @PatchMapping("/content/{contentId}")
+    public ResponseEntity<byte[]> contentUpdate(
+            @Parameter(description = "Content block ID") @PathVariable String contentId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Content] Delete a content block")
+    @DeleteMapping("/content/{contentId}")
+    public ResponseEntity<byte[]> contentDelete(
+            @Parameter(description = "Content block ID") @PathVariable String contentId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Content] Get change history for a content block")
+    @GetMapping("/content/{contentId}/history")
+    public ResponseEntity<byte[]> contentHistory(
+            @Parameter(description = "Content block ID") @PathVariable String contentId,
+            HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    @Operation(summary = "[Books] Get full change history for a book")
+    @GetMapping("/books/{bookId}/history")
+    public ResponseEntity<byte[]> booksHistory(
+            @Parameter(description = "Book ID") @PathVariable String bookId,
             HttpServletRequest request) throws IOException {
         return forward(request);
     }

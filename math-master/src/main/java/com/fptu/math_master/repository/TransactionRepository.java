@@ -72,14 +72,14 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
   /** Count transactions grouped by status list */
   long countByStatusIn(List<TransactionStatus> statuses);
 
-  /** Sum of ALL SUCCESS transaction amounts (no time window) */
-  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t WHERE t.status = 'SUCCESS'")
+  /** Sum of ALL SUCCESS platform revenue (PLATFORM_COMMISSION + PAYMENT) amounts (no time window) */
+  @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t WHERE t.status = 'SUCCESS' AND t.type IN ('PLATFORM_COMMISSION', 'PAYMENT')")
   BigDecimal sumAllSuccessfulRevenue();
 
-  /** Sum of ALL SUCCESS transaction amounts in a given time window */
+  /** Sum of ALL SUCCESS platform revenue (PLATFORM_COMMISSION + PAYMENT) amounts in a given time window */
   @Query(
       "SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t "
-          + "WHERE t.status = 'SUCCESS' AND t.createdAt >= :from AND t.createdAt < :to")
+          + "WHERE t.status = 'SUCCESS' AND t.type IN ('PLATFORM_COMMISSION', 'PAYMENT') AND t.createdAt >= :from AND t.createdAt < :to")
   BigDecimal sumSuccessfulRevenue(
       @Param("from") Instant from, @Param("to") Instant to);
 
@@ -100,12 +100,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
   BigDecimal sumSuccessfulDeposits(
       @Param("from") Instant from, @Param("to") Instant to);
 
-  /** Monthly revenue grouped by month for a given year */
+  /** Monthly platform revenue (PLATFORM_COMMISSION + PAYMENT) grouped by month for a given year */
   @Query(
       value =
           "SELECT EXTRACT(MONTH FROM created_at) AS month, COALESCE(SUM(amount), 0) AS revenue "
               + "FROM transactions "
-              + "WHERE status = 'SUCCESS' AND EXTRACT(YEAR FROM created_at) = :year "
+              + "WHERE status = 'SUCCESS' AND type IN ('PLATFORM_COMMISSION', 'PAYMENT') AND EXTRACT(YEAR FROM created_at) = :year "
               + "GROUP BY EXTRACT(MONTH FROM created_at) "
               + "ORDER BY month",
       nativeQuery = true)
