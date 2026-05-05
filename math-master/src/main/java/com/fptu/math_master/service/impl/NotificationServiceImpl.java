@@ -60,7 +60,7 @@ public class NotificationServiceImpl implements NotificationService {
                 .title(notification.getTitle())
                 .content(notification.getContent())
                 .metadata(notification.getMetadata())
-                .isRead(notification.isRead())
+                .read(notification.isRead())
                 .actionUrl(notification.getActionUrl())
                 .createdAt(notification.getCreatedAt())
                 .updatedAt(notification.getUpdatedAt())

@@ -20,7 +20,7 @@ public class NotificationResponse {
   private String title;
   private String content;
   private Map<String, Object> metadata;
-  private Boolean isRead;
+  private Boolean read;
   private String actionUrl;
   private Instant createdAt;
   private Instant updatedAt;
