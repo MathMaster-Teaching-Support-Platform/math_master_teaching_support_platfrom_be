@@ -98,10 +98,10 @@ public class CashFlowController {
     // ─── 3. Chart data ────────────────────────────────────────────────────────
 
     @GetMapping("/chart")
-    @Operation(summary = "Get chart time-series data",
-               description = "Returns inflow/outflow/net aggregated by day, week, or month")
+        @Operation(summary = "Get chart time-series data",
+               description = "Returns inflow/outflow/net aggregated by hour, day, week, or month")
     public ResponseEntity<ApiResponse<List<CashFlowChartPointResponse>>> getChartData(
-            @Parameter(description = "Grouping: day | week | month")
+            @Parameter(description = "Grouping: hour | day | week | month")
             @RequestParam(defaultValue = "day") String groupBy,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {

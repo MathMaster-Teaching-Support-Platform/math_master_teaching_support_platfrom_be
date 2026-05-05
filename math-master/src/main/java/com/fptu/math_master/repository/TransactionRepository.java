@@ -230,6 +230,24 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
       @Param("to") Instant to);
 
   /**
+   * Hourly inflow vs outflow — used for 'hour' chart grouping.
+   * Columns: [0]=label (YYYY-MM-DD HH:00), [1]=inflow, [2]=outflow
+   */
+  @Query(value =
+      "SELECT TO_CHAR(DATE_TRUNC('hour', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD HH24:00') AS label, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT')), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL')), 0) AS outflow " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "GROUP BY DATE_TRUNC('hour', t.created_at AT TIME ZONE 'UTC') " +
+      "ORDER BY label",
+      nativeQuery = true)
+  List<Object[]> findCashFlowHourlyAggregates(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
    * Weekly inflow vs outflow.
    * Columns: [0]=label (YYYY-MM-DD of the week's Monday), [1]=inflow, [2]=outflow
    */
