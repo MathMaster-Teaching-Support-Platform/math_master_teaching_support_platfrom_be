@@ -842,27 +842,48 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     }
 
     // Render solution / explanation: prefer template's solutionStepsTemplate
-    // with placeholder substitution + inline arithmetic; fall back to a
-    // minimal "answerFormula = value" sentence.
-    String solutionSteps = renderSolutionSteps(template, params);
-    String explanation =
-        solutionSteps != null
-            ? solutionSteps
-            : "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr;
+    // with strict {{param}} substitution (LaTeX braces preserved). The
+    // deterministic substitution is the "ground truth" — guaranteed correct
+    // numbers, no AI hallucination. We then OPTIONALLY ask Gemini to polish
+    // the prose: expand each step with the computed value and add reasoning,
+    // strictly preserving the answer.
+    String rawSteps = renderSolutionSteps(template, params);
+    String headline =
+        "Áp dụng công thức "
+            + (template.getAnswerFormula() == null ? "" : template.getAnswerFormula() + " ")
+            + "với các tham số đã cho, đáp án bằng "
+            + correctAnswerStr
+            + ".";
     String diagram = renderDiagramTemplate(template.getDiagramTemplate(), params);
 
+    PolishedSolution polished =
+        polishExplanationWithAI(
+            template, params, correctAnswerStr, questionTextBase, rawSteps, options);
+
+    String explanation;
+    String solutionSteps;
+    if (polished != null) {
+      explanation = polished.explanation;
+      solutionSteps = polished.solutionSteps;
+    } else {
+      solutionSteps = rawSteps != null ? rawSteps : headline;
+      explanation =
+          rawSteps != null && !rawSteps.isBlank() ? headline + "\n\n" + rawSteps : headline;
+    }
+
     log.info(
-        "Deterministic MCQ generated for template '{}': correctKey={}, options={}",
+        "Deterministic MCQ generated for template '{}': correctKey={}, options={}, polished={}",
         template.getName(),
         correctKey,
-        options);
+        options,
+        polished != null);
 
     return GeneratedQuestionSample.builder()
         .questionText(questionTextBase)
         .options(new LinkedHashMap<>(options))
         .correctAnswer(correctKey)
         .explanation(explanation)
-        .solutionSteps(solutionSteps != null ? solutionSteps : explanation)
+        .solutionSteps(solutionSteps)
         .diagramData(diagram)
         .calculatedDifficulty(difficulty)
         .usedParameters(params)
@@ -870,11 +891,241 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         .build();
   }
 
+  /** Holder for the AI-polished prose; both fields non-null when this is returned. */
+  private record PolishedSolution(String explanation, String solutionSteps) {}
+
+  /**
+   * Send Gemini the deterministic stem + answer + raw substituted steps and
+   * ask it to enrich the prose. The AI is forbidden from changing the answer,
+   * the options, or any computed numbers — its only job is to expand the
+   * reasoning and tighten the LaTeX.
+   *
+   * <p>Returns {@code null} if the polish fails for any reason (no AI service
+   * configured, network error, invalid JSON, validation failure). Caller
+   * falls back to the deterministic prose.
+   */
+  private PolishedSolution polishExplanationWithAI(
+      QuestionTemplate template,
+      Map<String, Object> params,
+      String correctAnswerStr,
+      String stem,
+      String rawSteps,
+      Map<String, String> options) {
+    if (rawSteps == null || rawSteps.isBlank()) {
+      // Nothing to polish; deterministic headline is fine.
+      return null;
+    }
+    if (geminiService == null) {
+      return null;
+    }
+    try {
+      String prompt = buildPolishPrompt(template, params, correctAnswerStr, stem, rawSteps, options);
+      String aiContent = geminiService.sendMessage(prompt);
+      String json = repairTruncatedJson(extractJSON(aiContent));
+      JsonNode root = objectMapper.readTree(json);
+
+      String aiExplanation = root.path("explanation").asText();
+      String aiSteps = root.path("solutionSteps").asText();
+      if (aiExplanation == null || aiExplanation.isBlank()) return null;
+      if (aiSteps == null || aiSteps.isBlank()) return null;
+
+      // Substitute any leftover {{param}} (the AI was told to keep computed
+      // values, but if it left a placeholder we render it with strict double
+      // brace — never destroying LaTeX braces).
+      aiExplanation = fillStrictDoubleBrace(aiExplanation, params);
+      aiSteps = fillStrictDoubleBrace(aiSteps, params);
+
+      if (!isPolishOutputValid(aiExplanation, aiSteps, correctAnswerStr)) {
+        log.warn(
+            "AI polish output failed validation for template '{}': "
+                + "answer not present, braces unbalanced, or contains 'null'. "
+                + "Falling back to deterministic prose.",
+            template.getName());
+        return null;
+      }
+      return new PolishedSolution(aiExplanation, aiSteps);
+    } catch (Exception e) {
+      log.warn(
+          "AI polish failed for template '{}': {}. Falling back to deterministic prose.",
+          template.getName(),
+          e.getMessage());
+      return null;
+    }
+  }
+
+  private String buildPolishPrompt(
+      QuestionTemplate template,
+      Map<String, Object> params,
+      String correctAnswerStr,
+      String stem,
+      String rawSteps,
+      Map<String, String> options) {
+    StringBuilder p = new StringBuilder();
+    p.append("Return ONLY a JSON object. No markdown, no prose outside JSON.\n\n");
+    p.append(
+        "Task: Polish a math solution. The numbers are ALREADY correct — your job is to enrich"
+            + " the prose, expand each step with the computed value, and tighten the LaTeX.\n\n");
+    p.append("Question stem: ").append(stem).append("\n");
+    p.append("Parameters used: ").append(serializeParamsForPrompt(params)).append("\n");
+    if (template.getAnswerFormula() != null && !template.getAnswerFormula().isBlank()) {
+      p.append("Source formula: ").append(template.getAnswerFormula()).append("\n");
+    }
+    p.append("Correct answer (LOCKED): ").append(correctAnswerStr).append("\n");
+    p.append("Options (LOCKED, do NOT change values):\n");
+    for (Map.Entry<String, String> e : options.entrySet()) {
+      p.append("  ").append(e.getKey()).append(" = ").append(e.getValue()).append("\n");
+    }
+    p.append("\nRaw substituted solution steps (already correct, but mechanical):\n");
+    p.append(rawSteps).append("\n\n");
+
+    p.append("Polish rules — depth and rigour matter MORE than brevity:\n");
+    p.append(
+        "P1. Keep all numeric values EXACTLY as they appear. Do not recompute. The final answer must remain ")
+        .append(correctAnswerStr)
+        .append(".\n");
+    p.append(
+        "P2. For EACH Bước you must include all four pieces in this order:\n"
+            + "    (a) Name the concept / formula being applied (e.g. \"Diện tích tam giác đều cạnh $a$ là\");\n"
+            + "    (b) Write the formula in symbolic form ($S = \\dfrac{\\sqrt{3}}{4} a^2$);\n"
+            + "    (c) Show the substitution with the actual numbers ($S = \\dfrac{\\sqrt{3}}{4} \\cdot 2^2$);\n"
+            + "    (d) Give the simplified intermediate result ($= \\sqrt{3}$ cm²).\n");
+    p.append(
+        "P3. Add 1-2 short reasoning sentences per step explaining WHY the step is valid"
+            + " (vì đáy là tam giác đều, vì $SO$ vuông góc đáy nên áp dụng Pythagoras...). Cite the"
+            + " geometric / algebraic property by name when relevant.\n");
+    p.append(
+        "P4. Vietnamese with proper accents (UTF-8). Be SUBSTANTIVE, not telegraphic — at least"
+            + " 2 sentences per Bước. AVOID vague openings like \"Để tính X chúng ta cần ...\""
+            + " when the student already knows what X is.\n");
+    p.append(
+        "P5. The `explanation` field must be a 4-7 sentence WALK-THROUGH that names every"
+            + " formula used, shows the SUBSTITUTED numerical chain leading to the answer, and"
+            + " ends with the final value. It is NOT a high-level summary — it is a complete"
+            + " worked solution in paragraph form. Include at least 2 inline LaTeX expressions"
+            + " ($...$) that show actual numbers, not symbols.\n");
+    p.append(
+        "P6. The `solutionSteps` field is the same content broken into numbered Bước, formatted"
+            + " as a single string with literal \\n separators.\n");
+    p.append(
+        "P7. NEVER write \"trong đó X được xác định bằng Y\" without then computing Y. Compute"
+            + " every intermediate quantity to a number.\n\n");
+
+    p.append("STYLE EXAMPLE — explanation field:\n");
+    p.append(
+        "  ❌ SHALLOW (do NOT do this): \"Để tính diện tích toàn phần, ta cần diện tích đáy và"
+            + " diện tích xung quanh. Diện tích đáy là diện tích tam giác đều. Diện tích xung"
+            + " quanh tính bằng nửa chu vi nhân trung đoạn.\"\n");
+    p.append(
+        "  ✅ DETAILED (target this): \"Khối chóp tam giác đều $S.ABC$ có diện tích toàn phần"
+            + " bằng diện tích đáy cộng diện tích xung quanh. Diện tích đáy là tam giác đều cạnh"
+            + " $a = 2$ nên $S_{\\text{đáy}} = \\dfrac{\\sqrt{3}}{4} \\cdot 2^2 = \\sqrt{3}$"
+            + " cm². Bán kính nội tiếp đáy là $r = \\dfrac{a}{2\\sqrt{3}} = \\dfrac{1}{\\sqrt{3}}$"
+            + " cm; áp dụng Pythagoras trong tam giác $SOM$ vuông tại $O$, trung đoạn"
+            + " $SM = \\sqrt{SO^2 + r^2} = \\sqrt{3^2 + \\dfrac{1}{3}} = \\sqrt{\\dfrac{28}{3}}$"
+            + " cm. Diện tích xung quanh $S_{xq} = \\dfrac{1}{2} \\cdot 3a \\cdot SM = 3 \\cdot"
+            + " \\sqrt{\\dfrac{28}{3}}$ cm². Cộng lại $S_{tp} = \\sqrt{3} + 3\\sqrt{\\dfrac{28}{3}}"
+            + " \\approx ").append(correctAnswerStr).append(" cm².\"\n\n");
+
+    appendLatexStrictnessRules(p, correctAnswerStr);
+
+    p.append("JSON format:\n");
+    p.append(
+        "{\"explanation\":\"<4-7 sentence detailed worked walk-through with substituted numbers"
+            + " and explicit LaTeX>\",\"solutionSteps\":\"Bước 1: <name>. <formula>. <substitution>."
+            + " <result>. <reasoning>.\\nBước 2: ...\\nBước 3: ...\"}\n");
+    return p.toString();
+  }
+
+  private boolean isPolishOutputValid(String explanation, String steps, String expectedAnswer) {
+    if (explanation == null || steps == null) return false;
+    String combined = explanation + "\n" + steps;
+    // Forbid the literal "null" (catches answerFormula leakage from any
+    // future regression).
+    if (combined.toLowerCase().contains(" null ")
+        || combined.toLowerCase().contains("=null")
+        || combined.toLowerCase().contains("= null")) {
+      return false;
+    }
+    // Brace balance — a quick sanity check; KaTeX requires balanced { }.
+    int braceDepth = 0;
+    for (int i = 0; i < combined.length(); i++) {
+      char c = combined.charAt(i);
+      if (c == '{') braceDepth++;
+      else if (c == '}') braceDepth--;
+      if (braceDepth < 0) return false;
+    }
+    if (braceDepth != 0) return false;
+    // $...$ pairing — odd count of unescaped $ means a math block was left open.
+    int dollarCount = 0;
+    for (int i = 0; i < combined.length(); i++) {
+      if (combined.charAt(i) == '$' && (i == 0 || combined.charAt(i - 1) != '\\')) {
+        dollarCount++;
+      }
+    }
+    if (dollarCount % 2 != 0) return false;
+    // Reject shallow output: explanation must contain at least 2 inline
+    // math expressions ($...$) to count as a "worked walk-through". A polish
+    // that loses all the substituted numbers is no better than the
+    // deterministic raw steps.
+    int explanationDollars = 0;
+    for (int i = 0; i < explanation.length(); i++) {
+      if (explanation.charAt(i) == '$' && (i == 0 || explanation.charAt(i - 1) != '\\')) {
+        explanationDollars++;
+      }
+    }
+    if (explanationDollars < 4) {
+      // need at least 2 paired $...$ blocks → 4 unescaped $
+      return false;
+    }
+    // Steps must have at least 2 line breaks (3 numbered items minimum).
+    if (steps.split("\\n").length < 3) {
+      return false;
+    }
+    // Answer presence — accept partial match (numeric tolerance is hard at
+    // string level, so we only require the integer portion to appear).
+    if (expectedAnswer != null && !expectedAnswer.isBlank()) {
+      String firstNum = expectedAnswer.split("[^0-9.\\-]", 2)[0];
+      if (!firstNum.isBlank() && !combined.contains(firstNum)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Render {@code solutionStepsTemplate} using strict double-brace
+   * substitution. Unlike {@link #fillText}, this does NOT touch single
+   * {@code {...}} groupings — critical for LaTeX content where
+   * {@code \dfrac{\sqrt{3}}{4}} contains brace pairs that the legacy
+   * {@code PLACEHOLDER_PATTERN} would mistakenly consume.
+   *
+   * <p>After parameter substitution, evaluate inline arithmetic blocks like
+   * {@code $3+1$} → {@code $4$} so steps display computed values, not
+   * unsimplified expressions.
+   */
   private String renderSolutionSteps(QuestionTemplate template, Map<String, Object> params) {
     String tpl = template.getSolutionStepsTemplate();
     if (tpl == null || tpl.isBlank()) return null;
-    String filled = fillText(tpl, params);
+    String filled = fillStrictDoubleBrace(tpl, params);
     return evaluateInlineArithmetic(filled, params);
+  }
+
+  /**
+   * Replace ONLY {@code {{name}}} placeholders. Single {@code {...}}
+   * groupings are left untouched so LaTeX expressions like
+   * {@code \dfrac{\sqrt{3}}{4}} survive intact.
+   */
+  private String fillStrictDoubleBrace(String raw, Map<String, Object> params) {
+    if (raw == null || params == null || params.isEmpty()) return raw;
+    String rendered = raw;
+    for (Map.Entry<String, Object> entry : params.entrySet()) {
+      String key = entry.getKey();
+      if (key == null || key.isBlank()) continue;
+      String token = "{{" + key + "}}";
+      String value = formatParameterValue(entry.getValue());
+      rendered = rendered.replace(token, value);
+    }
+    return rendered;
   }
 
   /**
@@ -1005,9 +1256,11 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         // arithmetic blocks ($...$) so a clause like
         // "f(0) = $2*0 + 3$" displays as "f(0) = $3$" instead of leaving
         // the un-simplified expression visible to students.
+        // Use strict double-brace substitution so LaTeX braces inside the
+        // clause (e.g. $\dfrac{a}{b}$) are preserved.
         String clauseText = (String) clauseTemplate.get("text");
         if (clauseText != null) {
-          clauseText = fillText(clauseText, params);
+          clauseText = fillStrictDoubleBrace(clauseText, params);
           clauseText = evaluateInlineArithmetic(clauseText, params);
         } else {
           clauseText = "Clause " + key;
@@ -1146,11 +1399,11 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     String canonicalProblem =
         canonicalQuestion.getProblemText() != null
-            ? fillText(canonicalQuestion.getProblemText(), params)
+            ? fillStrictDoubleBrace(canonicalQuestion.getProblemText(), params)
             : null;
     String canonicalSolution =
         canonicalQuestion.getSolutionSteps() != null
-            ? fillText(canonicalQuestion.getSolutionSteps(), params)
+            ? fillStrictDoubleBrace(canonicalQuestion.getSolutionSteps(), params)
             : null;
     String diagramData =
         canonicalQuestion.getDiagramDefinition() != null
@@ -1289,19 +1542,19 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       if (questionText == null || questionText.isBlank()) {
         questionText = fallbackQuestionText;
       }
-      questionText = fillText(questionText, effectiveParams);
+      questionText = fillStrictDoubleBrace(questionText, effectiveParams);
 
       String explanation = root.path("explanation").asText();
       if (explanation == null || explanation.isBlank()) {
         explanation = fallbackExplanation;
       }
-      explanation = fillText(explanation, effectiveParams);
+      explanation = fillStrictDoubleBrace(explanation, effectiveParams);
 
       String solutionSteps = root.path("solutionSteps").asText();
       if (solutionSteps == null || solutionSteps.isBlank()) {
         solutionSteps = explanation;
       }
-      solutionSteps = fillText(solutionSteps, effectiveParams);
+      solutionSteps = fillStrictDoubleBrace(solutionSteps, effectiveParams);
 
       QuestionDifficulty difficulty = fallbackDifficulty;
       String diffStr = root.path("difficulty").asText("").trim().toUpperCase();
@@ -2039,7 +2292,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         .append(correctAnswer)
         .append(" in options.\n");
     p.append(
-        "6. explanation = correct solution steps in Vietnamese, 2-3 sentences, no self-correction.\n");
+        "6. explanation + solutionSteps follow the Depth rules below — worked walk-through, not summary, no self-correction.\n");
     p.append("7. answerCalculation = simple expression like \"(c - b) / a = ")
         .append(correctAnswer)
         .append("\".\n\n");
@@ -2052,6 +2305,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append(
         "11. You MAY propose usedParameters as numeric values. Backend will validate and use them to render final diagram and substitute placeholders.\n\n");
 
+    appendLatexStrictnessRules(p, correctAnswer);
+
     p.append("JSON format:\n");
     if (optionPlaceholderMode) {
       p.append("{\"questionText\":\"...\",\"options\":{},");
@@ -2060,7 +2315,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           "{\"questionText\":\"...\",\"options\":{\"A\":\"n\",\"B\":\"n\",\"C\":\"n\",\"D\":\"n\"},");
     }
     p.append(
-        "\"correctAnswer\":\"X\",\"explanation\":\"...\",\"difficulty\":\"EASY|MEDIUM|HARD\",");
+        "\"correctAnswer\":\"X\",\"explanation\":\"...\",\"solutionSteps\":\"Bước 1: ...\\nBước 2: ...\",\"difficulty\":\"EASY|MEDIUM|HARD\",");
     p.append("\"usedParameters\":{");
     // inline params so LLM just copies them back
     StringBuilder paramStr = new StringBuilder();
@@ -2087,6 +2342,65 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         .append("\"}\n");
 
     return p.toString();
+  }
+
+  /**
+   * Append strict LaTeX / formatting rules that every question-generation
+   * prompt should enforce. Centralised so MCQ, TRUE_FALSE, and SHORT_ANSWER
+   * prompts all get the same guarantees.
+   *
+   * @param expectedAnswer if non-null, prompt forbids the AI from recomputing
+   *                       and demands this value appear verbatim in the
+   *                       solution (used by MCQ + SA; pass {@code null} for TF
+   *                       where the "answer" is a comma-separated key list)
+   */
+  private void appendLatexStrictnessRules(StringBuilder p, String expectedAnswer) {
+    p.append("LaTeX strictness rules (MUST follow exactly):\n");
+    p.append(
+        "L1. Every \\dfrac and \\frac MUST have TWO braced arguments: \\dfrac{a}{b}, never \\dfrac a b or \\dfrac\\sqrt{3}4.\n");
+    p.append(
+        "L2. \\sqrt with multi-token argument MUST brace it: \\sqrt{a^2+b^2}. Single tokens may use \\sqrt 3 but prefer \\sqrt{3}.\n");
+    p.append(
+        "L3. Subscripts and superscripts longer than ONE character MUST be braced: S_{xq} not S_xq, x^{12} not x^12, S_{\\text{đáy}} not S_\\text{đáy}.\n");
+    p.append(
+        "L4. \\text{...} arguments MUST be braced. Always close every brace you open — the entire expression must have balanced { }.\n");
+    p.append(
+        "L5. Inline math uses single $...$, display math uses $$...$$. Each $ must have a matching $.\n");
+    p.append(
+        "L6. solutionSteps MUST be a single string with literal \\n separating each Bước. Format: \"Bước 1: ...\\nBước 2: ...\\nBước 3: ...\".\n");
+    p.append(
+        "L7. Each Bước SHOULD show the substituted numeric value, not just the symbolic formula. Example: write $S = \\dfrac{\\sqrt{3}}{4} \\cdot 2^2 = \\sqrt{3}$, not $S = \\dfrac{\\sqrt{3}}{4}a^2$.\n");
+    if (expectedAnswer != null && !expectedAnswer.isBlank()) {
+      p.append(
+          "L8. DO NOT recompute the answer. The correct numeric answer is exactly \"")
+          .append(expectedAnswer)
+          .append("\" — copy this value into the solution; do not reach a different number.\n");
+    }
+    p.append(
+        "L9. NEVER output the literal word \"null\" anywhere in explanation or solutionSteps.\n\n");
+
+    // Detail / depth rules — apply to every generation prompt so every output
+    // is a worked walk-through, not a high-level description of the approach.
+    p.append("Depth rules (explanation + solutionSteps must be SUBSTANTIVE):\n");
+    p.append(
+        "D1. `explanation` is a 4-7 sentence WORKED walk-through, NOT a summary. It must:\n"
+            + "    - name every formula used,\n"
+            + "    - show the substituted numerical chain leading to the answer,\n"
+            + "    - contain at least 2 inline LaTeX expressions ($...$) that show actual numbers,\n"
+            + "    - end with the final value.\n");
+    p.append(
+        "D2. `solutionSteps` has 3+ numbered Bước. Each Bước contains ALL of:\n"
+            + "    (a) name of the concept / formula being applied,\n"
+            + "    (b) symbolic form of the formula,\n"
+            + "    (c) substituted form with the actual numbers,\n"
+            + "    (d) simplified intermediate result,\n"
+            + "    (e) 1 short reasoning sentence (\"vì ..., áp dụng ..., do đó ...\").\n");
+    p.append(
+        "D3. NEVER write \"trong đó X được xác định bằng Y\" without then computing Y to a"
+            + " concrete number. Compute every intermediate quantity.\n");
+    p.append(
+        "D4. AVOID vague openings (\"Để tính ... chúng ta cần ...\", \"Bài này yêu cầu ...\")"
+            + " followed by an abstract description. Jump straight into the worked computation.\n\n");
   }
 
   /**
@@ -2131,7 +2445,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           // we send to Gemini shows the *evaluated* clause, not the un-simplified
           // formula. Otherwise the AI explanation would describe e.g. "2*0+3"
           // when the student actually sees "3".
-          clauseText = fillText(clauseText, params);
+          clauseText = fillStrictDoubleBrace(clauseText, params);
           clauseText = evaluateInlineArithmetic(clauseText, params);
           p.append(key)
               .append(") ")
@@ -2148,10 +2462,17 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("Rules:\n");
     p.append("1. DO NOT generate new clauses - use the clauses provided above.\n");
     p.append(
-        "2. Generate an overall explanation connecting all clauses (2-3 sentences in Vietnamese).\n");
-    p.append("3. Generate detailed solution steps explaining why each clause is true or false.\n");
-    p.append("4. Focus on mathematical reasoning and concepts.\n");
+        "2. `explanation` is a 4-7 sentence WORKED walk-through — it must show the substituted"
+            + " numerical reasoning that decides each clause's truth, not just describe the"
+            + " concepts.\n");
+    p.append(
+        "3. `solutionSteps` has one Mệnh đề-X block per clause (A, B, C, D in order), each"
+            + " with the symbolic check, the substituted check with actual numbers, the verdict"
+            + " (đúng / sai), and 1 reasoning sentence citing the property used.\n");
+    p.append("4. Focus on mathematical reasoning. Cite specific properties / theorems by name.\n");
     p.append("5. All text MUST be natural Vietnamese with proper accents (UTF-8).\n\n");
+
+    appendLatexStrictnessRules(p, null);
 
     p.append("JSON format:\n");
     p.append("{\n");
@@ -2162,7 +2483,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("  \"correctAnswer\": \"A\",\n"); // Placeholder - we'll use template answer
     p.append("  \"explanation\": \"Overall explanation connecting all clauses...\",\n");
     p.append(
-        "  \"solutionSteps\": \"Clause A: [reasoning why true/false]\\nClause B: [reasoning]\\nClause C: [reasoning]\\nClause D: [reasoning]\",\n");
+        "  \"solutionSteps\": \"Mệnh đề A: [reasoning why true/false]\\nMệnh đề B: [reasoning]\\nMệnh đề C: [reasoning]\\nMệnh đề D: [reasoning]\",\n");
     p.append("  \"difficulty\": \"EASY|MEDIUM|HARD\",\n");
     p.append("  \"usedParameters\": {");
 
@@ -2217,12 +2538,18 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("1. correctAnswer = \"")
         .append(correctAnswer)
         .append("\" (DO NOT change this value).\n");
-    p.append("2. explanation = concept explanation in Vietnamese, 2-3 sentences.\n");
     p.append(
-        "3. solutionSteps = detailed step-by-step solution showing how to arrive at the answer.\n");
-    p.append("4. Include reasoning and key formulas used.\n");
+        "2. `explanation` is a 4-7 sentence WORKED walk-through — name every formula used,"
+            + " show the substituted numerical chain, end with the final value. NOT a 2-3 sentence"
+            + " summary.\n");
+    p.append(
+        "3. `solutionSteps` has 3+ numbered Bước, each containing: concept name, symbolic"
+            + " formula, substitution with numbers, simplified result, 1 reasoning sentence.\n");
+    p.append("4. Include reasoning and key formulas used. Compute every intermediate quantity.\n");
     p.append("5. All text MUST be natural Vietnamese with proper accents (UTF-8).\n");
     p.append("6. Keep parameter placeholders in double braces (e.g. {{a}}, {{x1}}).\n\n");
+
+    appendLatexStrictnessRules(p, correctAnswer);
 
     p.append("JSON format:\n");
     p.append("{\n");
@@ -2232,7 +2559,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("  \"options\": {},\n");
     p.append("  \"correctAnswer\": \"").append(correctAnswer).append("\",\n");
     p.append("  \"explanation\": \"Concept explanation in Vietnamese...\",\n");
-    p.append("  \"solutionSteps\": \"Step 1: ...\\nStep 2: ...\\nStep 3: ...\",\n");
+    p.append("  \"solutionSteps\": \"Bước 1: ...\\nBước 2: ...\\nBước 3: ...\",\n");
     p.append("  \"difficulty\": \"EASY|MEDIUM|HARD\",\n");
     p.append("  \"answerCalculation\": \"");
 
@@ -2302,20 +2629,20 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
             questionText);
         questionText = fallbackQuestionText;
       }
-      questionText = fillText(questionText, effectiveParams);
+      questionText = fillStrictDoubleBrace(questionText, effectiveParams);
 
       String explanation = root.path("explanation").asText();
       if (explanation == null || explanation.isBlank()) {
         explanation = "Solution provided by AI";
       }
-      explanation = fillText(explanation, effectiveParams);
+      explanation = fillStrictDoubleBrace(explanation, effectiveParams);
 
       // Parse solutionSteps from AI response (fallback to explanation if not provided)
       String solutionSteps = root.path("solutionSteps").asText();
       if (solutionSteps == null || solutionSteps.isBlank()) {
         solutionSteps = buildSolutionSteps(explanation);
       } else {
-        solutionSteps = fillText(solutionSteps, effectiveParams);
+        solutionSteps = fillStrictDoubleBrace(solutionSteps, effectiveParams);
       }
 
       // Difficulty from LLM or pre-computed
@@ -2386,24 +2713,66 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     } catch (Exception e) {
       log.error("Failed to parse LLM-generated question, using base fallback: {}", e.getMessage());
-      // Build a minimal valid sample using Java-computed values
-      Map<String, String> fallbackOptions = buildFallbackOptions(correctAnswer, params);
-      String correctKey = findKeyByValue(fallbackOptions, correctAnswer);
-      if (correctKey == null) correctKey = "A";
+      // Build a type-aware minimal sample. The legacy MCQ-shaped fallback
+      // produced "Áp dụng công thức: null = A,C" for TRUE_FALSE templates
+      // (which have no answerFormula). Branch by type to keep the message
+      // sensible regardless of which generator path triggered the parse.
+      String renderedSteps = renderSolutionSteps(template, params);
+      String fallbackExplanation =
+          buildTypeAwareFallbackExplanation(template, correctAnswer, renderedSteps);
+      QuestionType type = template.getTemplateType();
+      Map<String, String> fallbackOptions =
+          type == QuestionType.MULTIPLE_CHOICE
+              ? buildFallbackOptions(correctAnswer, params)
+              : null;
+      String correctKey = correctAnswer;
+      if (type == QuestionType.MULTIPLE_CHOICE && fallbackOptions != null) {
+        String matched = findKeyByValue(fallbackOptions, correctAnswer);
+        correctKey = matched != null ? matched : "A";
+      }
       return GeneratedQuestionSample.builder()
           .questionText(baseQuestionText)
           .options(fallbackOptions)
-          .correctAnswer(correctKey) // KEY (A/B/C/D)
-          .explanation("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
-          .solutionSteps(
-              buildSolutionSteps(
-                  "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer))
+          .correctAnswer(correctKey)
+          .explanation(fallbackExplanation)
+          .solutionSteps(renderedSteps != null ? renderedSteps : fallbackExplanation)
           .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
-          .answerCalculation(template.getAnswerFormula() + " = " + correctAnswer)
+          .answerCalculation(
+              template.getAnswerFormula() != null
+                  ? template.getAnswerFormula() + " = " + correctAnswer
+                  : "= " + correctAnswer)
           .build();
     }
+  }
+
+  private String buildTypeAwareFallbackExplanation(
+      QuestionTemplate template, String correctAnswer, String renderedSteps) {
+    QuestionType type = template.getTemplateType();
+    String headline;
+    if (type == QuestionType.TRUE_FALSE) {
+      headline =
+          correctAnswer == null || correctAnswer.isBlank()
+              ? "Phân tích từng mệnh đề và xét tính đúng/sai dựa vào nội dung đề bài."
+              : "Các mệnh đề đúng: "
+                  + correctAnswer
+                  + ". Phân tích từng mệnh đề dựa vào nội dung đề bài.";
+    } else if (template.getAnswerFormula() != null
+        && !template.getAnswerFormula().isBlank()) {
+      headline =
+          "Áp dụng công thức "
+              + template.getAnswerFormula()
+              + " với các tham số đã cho, đáp án bằng "
+              + correctAnswer
+              + ".";
+    } else {
+      headline = "Đáp án: " + correctAnswer + ".";
+    }
+    if (renderedSteps != null && !renderedSteps.isBlank()) {
+      return headline + "\n\n" + renderedSteps;
+    }
+    return headline;
   }
 
   private String buildSolutionSteps(String aiExplanation) {
