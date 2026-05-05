@@ -21,6 +21,7 @@ public class AttemptQuestionResponse {
   private QuestionType questionType;
   private String questionText;
   private String diagramData;
+  private String diagramUrl;
   private Map<String, Object> options;
   private BigDecimal points;
 }

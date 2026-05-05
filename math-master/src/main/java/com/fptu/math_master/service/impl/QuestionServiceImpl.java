@@ -720,6 +720,7 @@ public class QuestionServiceImpl implements QuestionService {
         .explanation(question.getExplanation())
         .solutionSteps(question.getSolutionSteps())
         .diagramData(question.getDiagramData())
+        .diagramUrl(question.getRenderedImageUrl())
         .points(question.getPoints())
         .cognitiveLevel(question.getCognitiveLevel())
         .questionStatus(question.getQuestionStatus())

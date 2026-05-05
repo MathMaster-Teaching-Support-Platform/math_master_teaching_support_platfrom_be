@@ -50,6 +50,9 @@ public class QuestionResponse {
   @Schema(description = "Generated diagram latex")
   private String diagramData;
 
+  @Schema(description = "Cached rendered diagram image URL (QuickLaTeX); null when not yet rendered")
+  private String diagramUrl;
+
   @Schema(description = "Points value")
   private BigDecimal points;
 
