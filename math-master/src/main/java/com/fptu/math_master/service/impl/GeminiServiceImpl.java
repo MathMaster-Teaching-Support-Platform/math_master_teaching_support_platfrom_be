@@ -22,6 +22,9 @@ import org.springframework.web.client.RestClient;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class GeminiServiceImpl implements GeminiService {
 
+  private static final int MAX_RETRY_ATTEMPTS = 4;
+  private static final long INITIAL_BACKOFF_MS = 800L;
+
   RestClient geminiRestClient;
   GeminiProperties geminiProperties;
   ObjectMapper objectMapper;
@@ -73,31 +76,7 @@ public class GeminiServiceImpl implements GeminiService {
                           .build()))
               .build();
 
-      String uri =
-          "/v1beta/models/"
-              + geminiProperties.getModel()
-              + ":generateContent?key="
-              + geminiProperties.getApiKey();
-
-      String raw =
-          geminiRestClient
-              .post()
-              .uri(uri)
-              .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-              .body(request)
-              .exchange(
-                  (req, resp) -> {
-                    java.io.InputStream inputStream = resp.getBody();
-                    String body =
-                        new String(
-                            inputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-                    int statusCode = resp.getStatusCode().value();
-                    if (statusCode != 200) {
-                      throw new RuntimeException(
-                          "Gemini API returned HTTP " + statusCode + ": " + body);
-                    }
-                    return body;
-                  });
+        String raw = callGeminiWithRetry(request, "text-generation");
 
       long duration = System.currentTimeMillis() - startTime;
       log.info("Gemini API responded in {} ms", duration);
@@ -189,31 +168,7 @@ public class GeminiServiceImpl implements GeminiService {
                           .build()))
               .build();
 
-      String uri =
-          "/v1beta/models/"
-              + geminiProperties.getModel()
-              + ":generateContent?key="
-              + geminiProperties.getApiKey();
-
-      String raw =
-          geminiRestClient
-              .post()
-              .uri(uri)
-              .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-              .body(request)
-              .exchange(
-                  (req, resp) -> {
-                    java.io.InputStream inputStream = resp.getBody();
-                    String body =
-                        new String(
-                            inputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-                    int statusCode = resp.getStatusCode().value();
-                    if (statusCode != 200) {
-                      throw new RuntimeException(
-                          "Gemini API returned HTTP " + statusCode + ": " + body);
-                    }
-                    return body;
-                  });
+        String raw = callGeminiWithRetry(request, "image-analysis");
 
       long duration = System.currentTimeMillis() - startTime;
       log.info("Gemini API image analysis completed in {} ms", duration);
@@ -236,6 +191,89 @@ public class GeminiServiceImpl implements GeminiService {
       long duration = System.currentTimeMillis() - startTime;
       log.error("Error analyzing image with Gemini API after {} ms: {}", duration, e.getMessage(), e);
       throw new RuntimeException("Failed to analyze image with Gemini API: " + e.getMessage(), e);
+    }
+  }
+
+  private String callGeminiWithRetry(GeminiRequest request, String operationName) throws Exception {
+    long backoffMs = INITIAL_BACKOFF_MS;
+    GeminiApiException lastTransientException = null;
+
+    for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+      try {
+        String uri =
+            "/v1beta/models/"
+                + geminiProperties.getModel()
+                + ":generateContent?key="
+                + geminiProperties.getApiKey();
+
+        return geminiRestClient
+            .post()
+            .uri(uri)
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .body(request)
+            .exchange(
+                (req, resp) -> {
+                  java.io.InputStream inputStream = resp.getBody();
+                  String body =
+                      new String(
+                          inputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                  int statusCode = resp.getStatusCode().value();
+                  if (statusCode != 200) {
+                    throw new GeminiApiException(statusCode, body);
+                  }
+                  return body;
+                });
+
+      } catch (GeminiApiException ex) {
+        if (!isTransientStatus(ex.statusCode) || attempt == MAX_RETRY_ATTEMPTS) {
+          throw new RuntimeException(
+              "Gemini API returned HTTP " + ex.statusCode + ": " + ex.responseBody);
+        }
+
+        lastTransientException = ex;
+        log.warn(
+            "Gemini {} transient failure (HTTP {}) on attempt {}/{}. Retrying in {} ms",
+            operationName,
+            ex.statusCode,
+            attempt,
+            MAX_RETRY_ATTEMPTS,
+            backoffMs);
+        sleepQuietly(backoffMs);
+        backoffMs *= 2;
+      }
+    }
+
+    if (lastTransientException != null) {
+      throw new RuntimeException(
+          "Gemini API returned HTTP "
+              + lastTransientException.statusCode
+              + ": "
+              + lastTransientException.responseBody);
+    }
+    throw new RuntimeException("Gemini API call failed");
+  }
+
+  private boolean isTransientStatus(int statusCode) {
+    return statusCode == 503 || statusCode == 429;
+  }
+
+  private void sleepQuietly(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("Retry interrupted", ie);
+    }
+  }
+
+  private static final class GeminiApiException extends RuntimeException {
+    private final int statusCode;
+    private final String responseBody;
+
+    private GeminiApiException(int statusCode, String responseBody) {
+      super("Gemini API returned HTTP " + statusCode + ": " + responseBody);
+      this.statusCode = statusCode;
+      this.responseBody = responseBody;
     }
   }
 }
