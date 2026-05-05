@@ -21,6 +21,7 @@ import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.enums.QuestionDifficulty;
 import com.fptu.math_master.enums.QuestionType;
+import com.fptu.math_master.enums.TemplateVariant;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.QuestionRepository;
@@ -28,12 +29,10 @@ import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.service.AIEnhancementService;
 import com.fptu.math_master.service.BlueprintService;
 import com.fptu.math_master.service.GeminiService;
-import com.fptu.math_master.enums.TemplateVariant;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -551,7 +550,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     // Try to parse as number for numeric comparison
     try {
-      double num = Double.parseDouble(normalizeNumericLocale(normalized).replaceAll("[^0-9.-]", ""));
+      double num =
+          Double.parseDouble(normalizeNumericLocale(normalized).replaceAll("[^0-9.-]", ""));
       return formatDecimal(num, 2);
     } catch (NumberFormatException e) {
       return normalized;
@@ -704,10 +704,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
    */
   private GeneratedQuestionSample generateMultipleChoiceQuestion(
       QuestionTemplate template, int sampleIndex, Map<String, Object> presetParams) {
-    log.info(
-        "Generating MCQ from template '{}' (sample #{})",
-        template.getName(),
-        sampleIndex + 1);
+    log.info("Generating MCQ from template '{}' (sample #{})", template.getName(), sampleIndex + 1);
 
     // Step 1: resolve parameter values. When the BlueprintService AI selector
     // already gave us a constraint-respecting tuple, use it verbatim; otherwise
@@ -746,8 +743,19 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     QuestionDifficulty difficulty = determineDifficulty(null, params);
     String questionTextBase = fillTemplateText(template.getTemplateText(), params);
 
+    // Step 2a: deterministic short-circuit. If optionsGenerator holds 4 fully
+    // evaluable formulas keyed A-D, compute them ourselves — no LLM call,
+    // no LaTeX rendering surprises, distractors are exactly the pedagogical
+    // mistakes the template author encoded.
+    GeneratedQuestionSample deterministic =
+        tryGenerateMcqFromOptionsGenerator(
+            template, params, correctAnswerStr, questionTextBase, difficulty);
+    if (deterministic != null) {
+      return deterministic;
+    }
+
     try {
-      // Step 2: ask LLM only for question wording + 3 distractors
+      // Step 2b: fall back to LLM for question wording + 3 distractors
       String prompt =
           buildGenerationPrompt(template, params, correctAnswerStr, questionTextBase, sampleIndex);
       String aiContent = geminiService.sendMessage(prompt);
@@ -768,13 +776,105 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .correctAnswer(correctKey) // KEY (A/B/C/D)
           .explanation(
               "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr)
-          .solutionSteps("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr)
+          .solutionSteps(
+              "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr)
           .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
           .answerCalculation(template.getAnswerFormula() + " = " + correctAnswerStr)
           .build();
     }
+  }
+
+  /**
+   * If {@code optionsGenerator} contains 4 evaluable formulas keyed A/B/C/D,
+   * compute each one and return a fully-formed {@link GeneratedQuestionSample}
+   * with consistent numeric options — no LLM call needed.
+   *
+   * <p>Returns {@code null} when the template either has no
+   * {@code optionsGenerator}, doesn't have all 4 keys, has any non-string /
+   * blank value, or any formula fails to evaluate. The caller falls back to
+   * the existing LLM path in those cases.
+   *
+   * <p>This is the deterministic guarantee that pedagogical-distractor
+   * formulas in the template (forgot-base, wrong-radius, h-as-slant, …)
+   * actually appear in the rendered question. The previous flow handed
+   * those formulas to Gemini as a "style hint" — the AI improvised LaTeX
+   * that often broke KaTeX rendering downstream.
+   */
+  private GeneratedQuestionSample tryGenerateMcqFromOptionsGenerator(
+      QuestionTemplate template,
+      Map<String, Object> params,
+      String correctAnswerStr,
+      String questionTextBase,
+      QuestionDifficulty difficulty) {
+    Map<String, Object> generator = template.getOptionsGenerator();
+    if (generator == null || generator.isEmpty()) return null;
+
+    String[] keys = {"A", "B", "C", "D"};
+    Map<String, String> options = new LinkedHashMap<>();
+    for (String key : keys) {
+      Object raw = generator.get(key);
+      if (!(raw instanceof String formula) || formula.isBlank()) {
+        return null;
+      }
+      String evaluated = evaluateFormula(formula, params);
+      if (evaluated == null || "?".equals(evaluated)) {
+        log.debug(
+            "Deterministic MCQ skipped for template '{}': option {} formula '{}' did not evaluate",
+            template.getName(),
+            key,
+            formula);
+        return null;
+      }
+      options.put(key, evaluated);
+    }
+
+    String correctKey = findKeyByValue(options, correctAnswerStr);
+    if (correctKey == null) {
+      log.warn(
+          "Deterministic MCQ for template '{}': no option matched correctAnswer '{}' from"
+              + " optionsGenerator values {}. Falling back to LLM.",
+          template.getName(),
+          correctAnswerStr,
+          options);
+      return null;
+    }
+
+    // Render solution / explanation: prefer template's solutionStepsTemplate
+    // with placeholder substitution + inline arithmetic; fall back to a
+    // minimal "answerFormula = value" sentence.
+    String solutionSteps = renderSolutionSteps(template, params);
+    String explanation =
+        solutionSteps != null
+            ? solutionSteps
+            : "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswerStr;
+    String diagram = renderDiagramTemplate(template.getDiagramTemplate(), params);
+
+    log.info(
+        "Deterministic MCQ generated for template '{}': correctKey={}, options={}",
+        template.getName(),
+        correctKey,
+        options);
+
+    return GeneratedQuestionSample.builder()
+        .questionText(questionTextBase)
+        .options(new LinkedHashMap<>(options))
+        .correctAnswer(correctKey)
+        .explanation(explanation)
+        .solutionSteps(solutionSteps != null ? solutionSteps : explanation)
+        .diagramData(diagram)
+        .calculatedDifficulty(difficulty)
+        .usedParameters(params)
+        .answerCalculation(template.getAnswerFormula() + " = " + correctAnswerStr)
+        .build();
+  }
+
+  private String renderSolutionSteps(QuestionTemplate template, Map<String, Object> params) {
+    String tpl = template.getSolutionStepsTemplate();
+    if (tpl == null || tpl.isBlank()) return null;
+    String filled = fillText(tpl, params);
+    return evaluateInlineArithmetic(filled, params);
   }
 
   /**
@@ -816,18 +916,23 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
       // Step 6: Call AI to generate explanation and solution steps
       try {
-        String prompt = buildGenerationPrompt(template, params, correctAnswer, questionText, sampleIndex);
+        String prompt =
+            buildGenerationPrompt(template, params, correctAnswer, questionText, sampleIndex);
         String aiContent = geminiService.sendMessage(prompt);
-        return parseGeneratedQuestion(aiContent, template, params, correctAnswer, difficulty, questionText);
+        return parseGeneratedQuestion(
+            aiContent, template, params, correctAnswer, difficulty, questionText);
       } catch (Exception aiError) {
-        log.error("AI generation failed for SHORT_ANSWER, using fallback: {}", aiError.getMessage());
+        log.error(
+            "AI generation failed for SHORT_ANSWER, using fallback: {}", aiError.getMessage());
         // Fallback to basic explanation if AI fails
         return GeneratedQuestionSample.builder()
             .questionText(questionText)
-            .options(null)  // No options for SHORT_ANSWER
+            .options(null) // No options for SHORT_ANSWER
             .correctAnswer(correctAnswer)
-            .explanation("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
-            .solutionSteps("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
+            .explanation(
+                "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
+            .solutionSteps(
+                "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
             .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
             .calculatedDifficulty(difficulty)
             .usedParameters(params)
@@ -871,13 +976,15 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       log.info("Question stem: {}", questionStem);
 
       // Step 3: Get clause templates from statementMutations
-      Map<String, Object> statementMutations = template.getStatementMutations() != null 
-          ? template.getStatementMutations() 
-          : new HashMap<>();
-      
+      Map<String, Object> statementMutations =
+          template.getStatementMutations() != null
+              ? template.getStatementMutations()
+              : new HashMap<>();
+
       @SuppressWarnings("unchecked")
-      List<Map<String, Object>> clauseTemplates = 
-          (List<Map<String, Object>>) statementMutations.getOrDefault("clauseTemplates", new ArrayList<>());
+      List<Map<String, Object>> clauseTemplates =
+          (List<Map<String, Object>>)
+              statementMutations.getOrDefault("clauseTemplates", new ArrayList<>());
 
       if (clauseTemplates.isEmpty()) {
         log.warn("No clause templates found for TRUE_FALSE question");
@@ -932,26 +1039,31 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       // Step 7: Build correct answer (comma-separated true keys)
       String correctAnswer = String.join(",", trueKeys);
       if (correctAnswer.isEmpty()) {
-        correctAnswer = "A";  // Default if no true clauses
+        correctAnswer = "A"; // Default if no true clauses
       }
 
       // Step 8: Call AI to generate explanation and solution steps
       try {
-        String prompt = buildGenerationPrompt(template, params, correctAnswer, questionStem, sampleIndex);
+        String prompt =
+            buildGenerationPrompt(template, params, correctAnswer, questionStem, sampleIndex);
         String aiContent = geminiService.sendMessage(prompt);
-        GeneratedQuestionSample aiGenerated = parseGeneratedQuestion(aiContent, template, params, correctAnswer, difficulty, questionStem);
-        
+        GeneratedQuestionSample aiGenerated =
+            parseGeneratedQuestion(
+                aiContent, template, params, correctAnswer, difficulty, questionStem);
+
         // Use AI-generated explanation and solution steps, but keep our clauses and correct answer
         return GeneratedQuestionSample.builder()
             .questionText(questionStem)
-            .options(clauses)  // Use our generated clauses, not AI's
-            .correctAnswer(correctAnswer)  // Use our computed correct answer
-            .explanation(aiGenerated.getExplanation())  // Use AI explanation
-            .solutionSteps(aiGenerated.getSolutionSteps())  // Use AI solution steps
+            .options(clauses) // Use our generated clauses, not AI's
+            .correctAnswer(correctAnswer) // Use our computed correct answer
+            .explanation(aiGenerated.getExplanation()) // Use AI explanation
+            .solutionSteps(aiGenerated.getSolutionSteps()) // Use AI solution steps
             .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
             .calculatedDifficulty(difficulty)
             .usedParameters(params)
-            .answerCalculation("Các mệnh đề đúng: " + (trueKeys.isEmpty() ? "Không có" : String.join(", ", trueKeys)))
+            .answerCalculation(
+                "Các mệnh đề đúng: "
+                    + (trueKeys.isEmpty() ? "Không có" : String.join(", ", trueKeys)))
             .generationMetadata(gradingMetadata)
             .build();
       } catch (Exception aiError) {
@@ -961,12 +1073,17 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
             .questionText(questionStem)
             .options(clauses)
             .correctAnswer(correctAnswer)
-            .explanation("Xét các mệnh đề: " + String.join(", ", trueKeys.isEmpty() ? List.of("Không có mệnh đề nào đúng") : trueKeys))
+            .explanation(
+                "Xét các mệnh đề: "
+                    + String.join(
+                        ", ", trueKeys.isEmpty() ? List.of("Không có mệnh đề nào đúng") : trueKeys))
             .solutionSteps("Phân tích từng mệnh đề dựa trên các tính chất toán học")
             .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
             .calculatedDifficulty(difficulty)
             .usedParameters(params)
-            .answerCalculation("Các mệnh đề đúng: " + (trueKeys.isEmpty() ? "Không có" : String.join(", ", trueKeys)))
+            .answerCalculation(
+                "Các mệnh đề đúng: "
+                    + (trueKeys.isEmpty() ? "Không có" : String.join(", ", trueKeys)))
             .generationMetadata(gradingMetadata)
             .build();
       }
@@ -990,104 +1107,110 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
    */
   private List<Map<String, Object>> generateDefaultClauseTemplates() {
     List<Map<String, Object>> clauses = new ArrayList<>();
-    clauses.add(Map.of(
-        "text", "Mệnh đề A",
-        "truthValue", true,
-        "chapterId", "default",
-        "cognitiveLevel", "THONG_HIEU"
-    ));
-    clauses.add(Map.of(
-        "text", "Mệnh đề B",
-        "truthValue", false,
-        "chapterId", "default",
-        "cognitiveLevel", "THONG_HIEU"
-    ));
-    clauses.add(Map.of(
-        "text", "Mệnh đề C",
-        "truthValue", true,
-        "chapterId", "default",
-        "cognitiveLevel", "VAN_DUNG"
-    ));
-    clauses.add(Map.of(
-        "text", "Mệnh đề D",
-        "truthValue", false,
-        "chapterId", "default",
-        "cognitiveLevel", "VAN_DUNG"
-    ));
+    clauses.add(
+        Map.of(
+            "text", "Mệnh đề A",
+            "truthValue", true,
+            "chapterId", "default",
+            "cognitiveLevel", "THONG_HIEU"));
+    clauses.add(
+        Map.of(
+            "text", "Mệnh đề B",
+            "truthValue", false,
+            "chapterId", "default",
+            "cognitiveLevel", "THONG_HIEU"));
+    clauses.add(
+        Map.of(
+            "text", "Mệnh đề C",
+            "truthValue", true,
+            "chapterId", "default",
+            "cognitiveLevel", "VAN_DUNG"));
+    clauses.add(
+        Map.of(
+            "text", "Mệnh đề D",
+            "truthValue", false,
+            "chapterId", "default",
+            "cognitiveLevel", "VAN_DUNG"));
     return clauses;
   }
 
-      @Override
-      public GeneratedQuestionSample generateQuestionFromCanonical(
-        CanonicalQuestion canonicalQuestion, QuestionTemplate template, int sampleIndex) {
-      if (canonicalQuestion == null) {
-        return generateQuestion(template, sampleIndex);
-      }
+  @Override
+  public GeneratedQuestionSample generateQuestionFromCanonical(
+      CanonicalQuestion canonicalQuestion, QuestionTemplate template, int sampleIndex) {
+    if (canonicalQuestion == null) {
+      return generateQuestion(template, sampleIndex);
+    }
 
-      Map<String, Object> params = pickParameters(template, sampleIndex);
-      QuestionDifficulty difficulty = determineDifficulty(null, params);
+    Map<String, Object> params = pickParameters(template, sampleIndex);
+    QuestionDifficulty difficulty = determineDifficulty(null, params);
 
-      String canonicalProblem =
+    String canonicalProblem =
         canonicalQuestion.getProblemText() != null
-          ? fillText(canonicalQuestion.getProblemText(), params)
-          : null;
-      String canonicalSolution =
+            ? fillText(canonicalQuestion.getProblemText(), params)
+            : null;
+    String canonicalSolution =
         canonicalQuestion.getSolutionSteps() != null
-          ? fillText(canonicalQuestion.getSolutionSteps(), params)
-          : null;
-      String diagramData =
+            ? fillText(canonicalQuestion.getSolutionSteps(), params)
+            : null;
+    String diagramData =
         canonicalQuestion.getDiagramDefinition() != null
-          ? renderDiagramTemplate(canonicalQuestion.getDiagramDefinition(), params)
-          : renderDiagramTemplate(template.getDiagramTemplate(), params);
+            ? renderDiagramTemplate(canonicalQuestion.getDiagramDefinition(), params)
+            : renderDiagramTemplate(template.getDiagramTemplate(), params);
 
-      String fallbackQuestionText =
-          canonicalProblem != null && !canonicalProblem.isBlank()
-              ? canonicalProblem
-              : fillTemplateText(template.getTemplateText(), params);
-      String fallbackExplanation =
-          canonicalSolution != null && !canonicalSolution.isBlank()
-              ? canonicalSolution
-              : "AI-generated explanation from canonical source";
+    String fallbackQuestionText =
+        canonicalProblem != null && !canonicalProblem.isBlank()
+            ? canonicalProblem
+            : fillTemplateText(template.getTemplateText(), params);
+    String fallbackExplanation =
+        canonicalSolution != null && !canonicalSolution.isBlank()
+            ? canonicalSolution
+            : "AI-generated explanation from canonical source";
 
-      try {
-        String prompt =
-            buildCanonicalGenerationPrompt(
-                canonicalQuestion, template, params, fallbackQuestionText, fallbackExplanation, sampleIndex);
-        String aiContent = geminiService.sendMessage(prompt);
-        return parseCanonicalGeneratedQuestion(
-            aiContent,
-            template,
-            params,
-            difficulty,
-            fallbackQuestionText,
-            fallbackExplanation,
-            diagramData);
-      } catch (Exception e) {
-        log.error(
-            "Canonical generation failed for canonical '{}' with template '{}': {}",
-            canonicalQuestion.getId(),
-            template.getId(),
-            e.getMessage());
+    try {
+      String prompt =
+          buildCanonicalGenerationPrompt(
+              canonicalQuestion,
+              template,
+              params,
+              fallbackQuestionText,
+              fallbackExplanation,
+              sampleIndex);
+      String aiContent = geminiService.sendMessage(prompt);
+      return parseCanonicalGeneratedQuestion(
+          aiContent,
+          template,
+          params,
+          difficulty,
+          fallbackQuestionText,
+          fallbackExplanation,
+          diagramData);
+    } catch (Exception e) {
+      log.error(
+          "Canonical generation failed for canonical '{}' with template '{}': {}",
+          canonicalQuestion.getId(),
+          template.getId(),
+          e.getMessage());
 
-        Map<String, String> fallbackOptions = buildCanonicalFallbackOptions(template, params);
-        String fallbackCorrectAnswer =
-            template.getTemplateType() == QuestionType.MULTIPLE_CHOICE
-                ? "A"
-                : (template.getAnswerFormula() != null ? template.getAnswerFormula() : "N/A");
+      Map<String, String> fallbackOptions = buildCanonicalFallbackOptions(template, params);
+      String fallbackCorrectAnswer =
+          template.getTemplateType() == QuestionType.MULTIPLE_CHOICE
+              ? "A"
+              : (template.getAnswerFormula() != null ? template.getAnswerFormula() : "N/A");
 
-        return GeneratedQuestionSample.builder()
-            .questionText(fallbackQuestionText)
-            .options(template.getTemplateType() == QuestionType.MULTIPLE_CHOICE ? fallbackOptions : null)
-            .correctAnswer(fallbackCorrectAnswer)
-            .explanation(fallbackExplanation)
-            .solutionSteps(fallbackExplanation)
-            .diagramData(diagramData)
-            .calculatedDifficulty(difficulty)
-            .usedParameters(params)
-            .answerCalculation(template.getAnswerFormula())
-            .build();
-      }
-      }
+      return GeneratedQuestionSample.builder()
+          .questionText(fallbackQuestionText)
+          .options(
+              template.getTemplateType() == QuestionType.MULTIPLE_CHOICE ? fallbackOptions : null)
+          .correctAnswer(fallbackCorrectAnswer)
+          .explanation(fallbackExplanation)
+          .solutionSteps(fallbackExplanation)
+          .diagramData(diagramData)
+          .calculatedDifficulty(difficulty)
+          .usedParameters(params)
+          .answerCalculation(template.getAnswerFormula())
+          .build();
+    }
+  }
 
   private String buildCanonicalGenerationPrompt(
       CanonicalQuestion canonicalQuestion,
@@ -1100,7 +1223,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("Return ONLY valid JSON. No markdown, no extra text.\n\n");
     p.append("You are a Vietnamese math teacher assistant.\n");
     p.append("Generate ONE new question inspired by canonical problem and solution.\n");
-    p.append("Keep mathematical consistency with canonical source, but wording can vary naturally.\n\n");
+    p.append(
+        "Keep mathematical consistency with canonical source, but wording can vary naturally.\n\n");
 
     p.append("CANONICAL PROBLEM:\n").append(canonicalProblem).append("\n\n");
     p.append("CANONICAL SOLUTION:\n").append(canonicalSolution).append("\n\n");
@@ -1114,7 +1238,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     p.append("QUESTION TYPE: ").append(template.getTemplateType()).append("\n");
     p.append("SAMPLE INDEX: ").append(sampleIndex + 1).append("\n");
-    p.append("PARAMETERS (backend picked): ").append(serializeParamsForPrompt(params)).append("\n\n");
+    p.append("PARAMETERS (backend picked): ")
+        .append(serializeParamsForPrompt(params))
+        .append("\n\n");
 
     p.append("Rules:\n");
     p.append("1. Output strictly in Vietnamese with natural wording.\n");
@@ -1230,7 +1356,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       Map<String, String> fallbackOptions = buildCanonicalFallbackOptions(template, params);
       return GeneratedQuestionSample.builder()
           .questionText(fallbackQuestionText)
-          .options(template.getTemplateType() == QuestionType.MULTIPLE_CHOICE ? fallbackOptions : null)
+          .options(
+              template.getTemplateType() == QuestionType.MULTIPLE_CHOICE ? fallbackOptions : null)
           .correctAnswer(template.getTemplateType() == QuestionType.MULTIPLE_CHOICE ? "A" : "N/A")
           .explanation(fallbackExplanation)
           .solutionSteps(fallbackExplanation)
@@ -1242,7 +1369,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     }
   }
 
-  private Map<String, String> parseCanonicalOptions(JsonNode optionsNode, Map<String, Object> params) {
+  private Map<String, String> parseCanonicalOptions(
+      JsonNode optionsNode, Map<String, Object> params) {
     Map<String, String> options = new LinkedHashMap<>();
     if (optionsNode == null || !optionsNode.isObject()) {
       return options;
@@ -1851,16 +1979,17 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       String correctAnswer,
       String baseQuestionText,
       int sampleIndex) {
-    
+
     // Delegate to type-specific prompt builders
     QuestionType questionType = template.getTemplateType();
-    
+
     if (questionType == QuestionType.TRUE_FALSE) {
       return buildTFGenerationPrompt(template, params, baseQuestionText, sampleIndex);
     } else if (questionType == QuestionType.SHORT_ANSWER) {
-      return buildSAGenerationPrompt(template, params, correctAnswer, baseQuestionText, sampleIndex);
+      return buildSAGenerationPrompt(
+          template, params, correctAnswer, baseQuestionText, sampleIndex);
     }
-    
+
     // Default: MCQ prompt (existing logic)
     boolean textualOptions = templateUsesTextualOptions(template);
     boolean optionPlaceholderMode = templateUsesDynamicOptionPlaceholders(template);
@@ -1887,21 +2016,21 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         .append(").\n");
     if (optionPlaceholderMode) {
       p.append(
-        "2. DO NOT generate option values yourself. Keep options empty {} (or omit options).\n");
+          "2. DO NOT generate option values yourself. Keep options empty {} (or omit options).\n");
       p.append("3. Provide usedParameters for option placeholders: ")
           .append(optionPlaceholderNames)
-        .append(".\n");
+          .append(".\n");
       p.append(
-        "4. If placeholder {{para}} exists, generate one concise Vietnamese paragraph for key para.\n");
+          "4. If placeholder {{para}} exists, generate one concise Vietnamese paragraph for key para.\n");
       p.append(
-        "5. Keep placeholder values plain text (no wrapping with {{}} in usedParameters).\n");
+          "5. Keep placeholder values plain text (no wrapping with {{}} in usedParameters).\n");
     } else if (textualOptions) {
       p.append(
-        "2. Create 3 wrong options as plausible statement-level distractors (text), keep style consistent with the template.\n");
+          "2. Create 3 wrong options as plausible statement-level distractors (text), keep style consistent with the template.\n");
       p.append("3. All 4 option values must be distinct statements.\n");
     } else {
       p.append(
-        "2. Create 3 wrong options representing common student mistakes. Numeric values only (e.g. \"5\", \"-3.14\"). NO text.\n");
+          "2. Create 3 wrong options representing common student mistakes. Numeric values only (e.g. \"5\", \"-3.14\"). NO text.\n");
       p.append("3. All 4 option values must be distinct numbers.\n");
     }
     p.append(
@@ -1914,20 +2043,21 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("7. answerCalculation = simple expression like \"(c - b) / a = ")
         .append(correctAnswer)
         .append("\".\n\n");
-    p.append("8. questionText and explanation MUST be natural Vietnamese with proper accents (UTF-8), no transliteration.\n");
-    p.append("9. Numeric values must use plain format: no thousands separators, use dot for decimal if needed (e.g. 3.5).\n\n");
     p.append(
-      "10. IMPORTANT: keep parameter placeholders in double braces (e.g. {{a}}, {{x1}}, {{yMax}}). Do NOT replace placeholders with concrete numbers; backend will substitute values.\n\n");
+        "8. questionText and explanation MUST be natural Vietnamese with proper accents (UTF-8), no transliteration.\n");
     p.append(
-      "11. You MAY propose usedParameters as numeric values. Backend will validate and use them to render final diagram and substitute placeholders.\n\n");
+        "9. Numeric values must use plain format: no thousands separators, use dot for decimal if needed (e.g. 3.5).\n\n");
+    p.append(
+        "10. IMPORTANT: keep parameter placeholders in double braces (e.g. {{a}}, {{x1}}, {{yMax}}). Do NOT replace placeholders with concrete numbers; backend will substitute values.\n\n");
+    p.append(
+        "11. You MAY propose usedParameters as numeric values. Backend will validate and use them to render final diagram and substitute placeholders.\n\n");
 
     p.append("JSON format:\n");
     if (optionPlaceholderMode) {
-      p.append(
-        "{\"questionText\":\"...\",\"options\":{},");
+      p.append("{\"questionText\":\"...\",\"options\":{},");
     } else {
       p.append(
-        "{\"questionText\":\"...\",\"options\":{\"A\":\"n\",\"B\":\"n\",\"C\":\"n\",\"D\":\"n\"},");
+          "{\"questionText\":\"...\",\"options\":{\"A\":\"n\",\"B\":\"n\",\"C\":\"n\",\"D\":\"n\"},");
     }
     p.append(
         "\"correctAnswer\":\"X\",\"explanation\":\"...\",\"difficulty\":\"EASY|MEDIUM|HARD\",");
@@ -1967,23 +2097,26 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       Map<String, Object> params,
       String baseQuestionText,
       int sampleIndex) {
-    
+
     StringBuilder p = new StringBuilder();
     p.append("Return ONLY a JSON object. No markdown, no explanation outside JSON.\n\n");
-    p.append("Task: Generate explanation and solution steps for a TRUE/FALSE question in Vietnamese.\n\n");
+    p.append(
+        "Task: Generate explanation and solution steps for a TRUE/FALSE question in Vietnamese.\n\n");
 
     p.append("Question statement: ").append(baseQuestionText).append("\n");
     p.append("Parameters used: ").append(serializeParamsForPrompt(params)).append("\n");
-    
+
     // Include the actual clauses from the template
-    Map<String, Object> statementMutations = template.getStatementMutations() != null 
-        ? template.getStatementMutations() 
-        : new HashMap<>();
-    
+    Map<String, Object> statementMutations =
+        template.getStatementMutations() != null
+            ? template.getStatementMutations()
+            : new HashMap<>();
+
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> clauseTemplates = 
-        (List<Map<String, Object>>) statementMutations.getOrDefault("clauseTemplates", new ArrayList<>());
-    
+    List<Map<String, Object>> clauseTemplates =
+        (List<Map<String, Object>>)
+            statementMutations.getOrDefault("clauseTemplates", new ArrayList<>());
+
     if (!clauseTemplates.isEmpty()) {
       p.append("\nClauses:\n");
       for (int i = 0; i < Math.min(4, clauseTemplates.size()); i++) {
@@ -1992,7 +2125,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         String key = String.valueOf((char) ('A' + i));
         String clauseText = (String) clauseTemplate.get("text");
         Boolean truthValue = (Boolean) clauseTemplate.get("truthValue");
-        
+
         if (clauseText != null) {
           // Same evaluation pass as the runtime clause builder so the prompt
           // we send to Gemini shows the *evaluated* clause, not the un-simplified
@@ -2000,43 +2133,56 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           // when the student actually sees "3".
           clauseText = fillText(clauseText, params);
           clauseText = evaluateInlineArithmetic(clauseText, params);
-          p.append(key).append(") ").append(clauseText)
-            .append(" [").append(truthValue != null && truthValue ? "TRUE" : "FALSE").append("]\n");
+          p.append(key)
+              .append(") ")
+              .append(clauseText)
+              .append(" [")
+              .append(truthValue != null && truthValue ? "TRUE" : "FALSE")
+              .append("]\n");
         }
       }
     }
-    
+
     p.append("\nSample #: ").append(sampleIndex + 1).append("\n\n");
 
     p.append("Rules:\n");
     p.append("1. DO NOT generate new clauses - use the clauses provided above.\n");
-    p.append("2. Generate an overall explanation connecting all clauses (2-3 sentences in Vietnamese).\n");
+    p.append(
+        "2. Generate an overall explanation connecting all clauses (2-3 sentences in Vietnamese).\n");
     p.append("3. Generate detailed solution steps explaining why each clause is true or false.\n");
     p.append("4. Focus on mathematical reasoning and concepts.\n");
     p.append("5. All text MUST be natural Vietnamese with proper accents (UTF-8).\n\n");
 
     p.append("JSON format:\n");
     p.append("{\n");
-    p.append("  \"questionText\": \"").append(baseQuestionText.replace("\"", "\\\"")).append("\",\n");
-    p.append("  \"options\": {},\n");  // Empty - we'll use template clauses
-    p.append("  \"correctAnswer\": \"A\",\n");  // Placeholder - we'll use template answer
+    p.append("  \"questionText\": \"")
+        .append(baseQuestionText.replace("\"", "\\\""))
+        .append("\",\n");
+    p.append("  \"options\": {},\n"); // Empty - we'll use template clauses
+    p.append("  \"correctAnswer\": \"A\",\n"); // Placeholder - we'll use template answer
     p.append("  \"explanation\": \"Overall explanation connecting all clauses...\",\n");
-    p.append("  \"solutionSteps\": \"Clause A: [reasoning why true/false]\\nClause B: [reasoning]\\nClause C: [reasoning]\\nClause D: [reasoning]\",\n");
+    p.append(
+        "  \"solutionSteps\": \"Clause A: [reasoning why true/false]\\nClause B: [reasoning]\\nClause C: [reasoning]\\nClause D: [reasoning]\",\n");
     p.append("  \"difficulty\": \"EASY|MEDIUM|HARD\",\n");
     p.append("  \"usedParameters\": {");
-    
+
     // Add parameters
     StringBuilder paramStr = new StringBuilder();
-    params.forEach((k, v) -> {
-      if (paramStr.length() > 0) paramStr.append(",");
-      Object value = v;
-      if (value instanceof Number) {
-        paramStr.append("\"").append(k).append("\":").append(formatParameterValue(value));
-      } else {
-        paramStr.append("\"").append(k).append("\":\"")
-            .append(String.valueOf(value).replace("\"", "\\\"")).append("\"");
-      }
-    });
+    params.forEach(
+        (k, v) -> {
+          if (paramStr.length() > 0) paramStr.append(",");
+          Object value = v;
+          if (value instanceof Number) {
+            paramStr.append("\"").append(k).append("\":").append(formatParameterValue(value));
+          } else {
+            paramStr
+                .append("\"")
+                .append(k)
+                .append("\":\"")
+                .append(String.valueOf(value).replace("\"", "\\\""))
+                .append("\"");
+          }
+        });
     p.append(paramStr);
     p.append("}\n}\n");
 
@@ -2052,7 +2198,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       String correctAnswer,
       String baseQuestionText,
       int sampleIndex) {
-    
+
     StringBuilder p = new StringBuilder();
     p.append("Return ONLY a JSON object. No markdown, no explanation outside JSON.\n\n");
     p.append("Task: Generate a SHORT ANSWER question in Vietnamese.\n\n");
@@ -2060,50 +2206,60 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("Question (already formed): ").append(baseQuestionText).append("\n");
     p.append("Correct answer (pre-computed, DO NOT change): ").append(correctAnswer).append("\n");
     p.append("Parameters used: ").append(serializeParamsForPrompt(params)).append("\n");
-    
+
     if (template.getAnswerFormula() != null && !template.getAnswerFormula().isBlank()) {
       p.append("Formula: ").append(template.getAnswerFormula()).append("\n");
     }
-    
+
     p.append("Sample #: ").append(sampleIndex + 1).append("\n\n");
 
     p.append("Rules:\n");
-    p.append("1. correctAnswer = \"").append(correctAnswer).append("\" (DO NOT change this value).\n");
+    p.append("1. correctAnswer = \"")
+        .append(correctAnswer)
+        .append("\" (DO NOT change this value).\n");
     p.append("2. explanation = concept explanation in Vietnamese, 2-3 sentences.\n");
-    p.append("3. solutionSteps = detailed step-by-step solution showing how to arrive at the answer.\n");
+    p.append(
+        "3. solutionSteps = detailed step-by-step solution showing how to arrive at the answer.\n");
     p.append("4. Include reasoning and key formulas used.\n");
     p.append("5. All text MUST be natural Vietnamese with proper accents (UTF-8).\n");
     p.append("6. Keep parameter placeholders in double braces (e.g. {{a}}, {{x1}}).\n\n");
 
     p.append("JSON format:\n");
     p.append("{\n");
-    p.append("  \"questionText\": \"").append(baseQuestionText.replace("\"", "\\\"")).append("\",\n");
+    p.append("  \"questionText\": \"")
+        .append(baseQuestionText.replace("\"", "\\\""))
+        .append("\",\n");
     p.append("  \"options\": {},\n");
     p.append("  \"correctAnswer\": \"").append(correctAnswer).append("\",\n");
     p.append("  \"explanation\": \"Concept explanation in Vietnamese...\",\n");
     p.append("  \"solutionSteps\": \"Step 1: ...\\nStep 2: ...\\nStep 3: ...\",\n");
     p.append("  \"difficulty\": \"EASY|MEDIUM|HARD\",\n");
     p.append("  \"answerCalculation\": \"");
-    
+
     if (template.getAnswerFormula() != null) {
       p.append(template.getAnswerFormula()).append(" = ").append(correctAnswer);
     }
-    
+
     p.append("\",\n");
     p.append("  \"usedParameters\": {");
-    
+
     // Add parameters
     StringBuilder paramStr = new StringBuilder();
-    params.forEach((k, v) -> {
-      if (paramStr.length() > 0) paramStr.append(",");
-      Object value = v;
-      if (value instanceof Number) {
-        paramStr.append("\"").append(k).append("\":").append(formatParameterValue(value));
-      } else {
-        paramStr.append("\"").append(k).append("\":\"")
-            .append(String.valueOf(value).replace("\"", "\\\"")).append("\"");
-      }
-    });
+    params.forEach(
+        (k, v) -> {
+          if (paramStr.length() > 0) paramStr.append(",");
+          Object value = v;
+          if (value instanceof Number) {
+            paramStr.append("\"").append(k).append("\":").append(formatParameterValue(value));
+          } else {
+            paramStr
+                .append("\"")
+                .append(k)
+                .append("\":\"")
+                .append(String.valueOf(value).replace("\"", "\\\""))
+                .append("\"");
+          }
+        });
     p.append(paramStr);
     p.append("}\n}\n");
 
@@ -2207,7 +2363,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         options.put("A", effectiveCorrectAnswer);
         correctKey = "A";
         log.warn(
-            "LLM did not include correct answer '{}' in options — injected at A", effectiveCorrectAnswer);
+            "LLM did not include correct answer '{}' in options — injected at A",
+            effectiveCorrectAnswer);
       }
 
       String answerCalc =
@@ -2238,7 +2395,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .options(fallbackOptions)
           .correctAnswer(correctKey) // KEY (A/B/C/D)
           .explanation("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer)
-          .solutionSteps(buildSolutionSteps("Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer))
+          .solutionSteps(
+              buildSolutionSteps(
+                  "Áp dụng công thức: " + template.getAnswerFormula() + " = " + correctAnswer))
           .diagramData(renderDiagramTemplate(template.getDiagramTemplate(), params))
           .calculatedDifficulty(difficulty)
           .usedParameters(params)
@@ -2606,8 +2765,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
    * can crunch without falling through to the symbolic fallback. Variables and
    * letters are excluded so we don't accidentally evaluate prose.
    */
-  private static final Pattern PURE_ARITHMETIC =
-      Pattern.compile("^[\\s0-9+\\-*/().,^%]+$");
+  private static final Pattern PURE_ARITHMETIC = Pattern.compile("^[\\s0-9+\\-*/().,^%]+$");
 
   /**
    * Evaluates arithmetic inside {@code $...$} math blocks and (if the whole
@@ -2668,7 +2826,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   private String stripOuterMathDelims(String s) {
     if (s == null) return null;
     String t = s.trim();
-    if (t.length() >= 2 && t.startsWith("$") && t.endsWith("$") && t.indexOf('$', 1) == t.length() - 1) {
+    if (t.length() >= 2
+        && t.startsWith("$")
+        && t.endsWith("$")
+        && t.indexOf('$', 1) == t.length() - 1) {
       return t.substring(1, t.length() - 1);
     }
     return t;
@@ -2751,18 +2912,18 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     }
 
     String fixed = input;
-    // Fix: \addplot[...] coordinates (...)  ->  \addplot[...] coordinates { (...) 
-    fixed = fixed.replaceAll(
-        "(\\\\addplot\\s*\\[[^\\]]*]\\s*coordinates)\\s*\\(", "$1 {\\n    (");
+    // Fix: \addplot[...] coordinates (...)  ->  \addplot[...] coordinates { (...)
+    fixed = fixed.replaceAll("(\\\\addplot\\s*\\[[^\\]]*]\\s*coordinates)\\s*\\(", "$1 {\\n    (");
 
     // If opening '{' exists but block ends with ');', convert to proper '};'.
-    fixed = fixed.replaceAll(
-        "(\\\\addplot\\s*\\[[^\\]]*]\\s*coordinates\\s*\\{[\\s\\S]*?)\\)\\s*;",
-        "$1)\\n};");
+    fixed =
+        fixed.replaceAll(
+            "(\\\\addplot\\s*\\[[^\\]]*]\\s*coordinates\\s*\\{[\\s\\S]*?)\\)\\s*;", "$1)\\n};");
     return fixed;
   }
 
-  private Map<String, String> buildTemplateOptions(QuestionTemplate template, Map<String, Object> params) {
+  private Map<String, String> buildTemplateOptions(
+      QuestionTemplate template, Map<String, Object> params) {
     Map<String, String> built = new LinkedHashMap<>();
     if (template == null || template.getOptionsGenerator() == null) {
       return built;
@@ -3035,14 +3196,17 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     StringBuilder p = new StringBuilder();
     p.append("Return ONLY valid JSON. No markdown, no extra text.\n\n");
     p.append("Task: extract_parameters\n");
-    p.append("You are a Vietnamese math teacher assistant. Read the question text and all related fields.\n");
-    p.append("Identify which numbers are CHANGEABLE parameters (should become {{param}} placeholders)\n");
+    p.append(
+        "You are a Vietnamese math teacher assistant. Read the question text and all related fields.\n");
+    p.append(
+        "Identify which numbers are CHANGEABLE parameters (should become {{param}} placeholders)\n");
     p.append("and which are FIXED structural values that must NOT change.\n\n");
 
     p.append("RULES FOR CHANGEABLE (make into {{param}}):\n");
     p.append("- Independent input values (coefficients, constants)\n");
     p.append("- Numbers that directly affect the answer\n");
-    p.append("- Numbers that appear as INPUTS in answer_formula or solution_steps (not results)\n\n");
+    p.append(
+        "- Numbers that appear as INPUTS in answer_formula or solution_steps (not results)\n\n");
 
     p.append("RULES FOR FIXED (do NOT change):\n");
     p.append("- Structural math: exponents (x², x³), indices, powers\n");
@@ -3105,24 +3269,26 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       List<ExtractParametersResponse.SuggestedParam> suggested = new ArrayList<>();
       if (root.has("suggested_params")) {
         for (JsonNode node : root.get("suggested_params")) {
-          suggested.add(ExtractParametersResponse.SuggestedParam.builder()
-              .originalValue(node.path("original_value").asText())
-              .location(node.path("location").asText())
-              .suggestedName(node.path("suggested_name").asText())
-              .reason(node.path("reason").asText())
-              .changeable(true)
-              .build());
+          suggested.add(
+              ExtractParametersResponse.SuggestedParam.builder()
+                  .originalValue(node.path("original_value").asText())
+                  .location(node.path("location").asText())
+                  .suggestedName(node.path("suggested_name").asText())
+                  .reason(node.path("reason").asText())
+                  .changeable(true)
+                  .build());
         }
       }
 
       List<ExtractParametersResponse.FixedValue> fixed = new ArrayList<>();
       if (root.has("fixed_values")) {
         for (JsonNode node : root.get("fixed_values")) {
-          fixed.add(ExtractParametersResponse.FixedValue.builder()
-              .originalValue(node.path("original_value").asText())
-              .location(node.path("location").asText())
-              .reason(node.path("reason").asText())
-              .build());
+          fixed.add(
+              ExtractParametersResponse.FixedValue.builder()
+                  .originalValue(node.path("original_value").asText())
+                  .location(node.path("location").asText())
+                  .reason(node.path("reason").asText())
+                  .build());
         }
       }
 
@@ -3153,7 +3319,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       GenerateParametersResponse response = parseGenerateParametersResponse(aiContent);
       // Build filled text preview
       if (request.getTemplateText() != null && response.getParameters() != null) {
-        String preview = fillTextWithNegativeParens(request.getTemplateText(), response.getParameters());
+        String preview =
+            fillTextWithNegativeParens(request.getTemplateText(), response.getParameters());
         response.setFilledTextPreview(preview);
       }
       return response;
@@ -3166,14 +3333,17 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   @Override
   public GenerateParametersResponse updateParameters(
       java.util.UUID templateId, UpdateParametersRequest request) {
-    log.info("[Feature2] Updating parameter values for templateId={}, command='{}'",
-        templateId, request.getTeacherCommand());
+    log.info(
+        "[Feature2] Updating parameter values for templateId={}, command='{}'",
+        templateId,
+        request.getTeacherCommand());
     String prompt = buildUpdateParametersPrompt(request);
     try {
       String aiContent = geminiService.sendMessage(prompt);
       GenerateParametersResponse response = parseGenerateParametersResponse(aiContent);
       if (request.getTemplateText() != null && response.getParameters() != null) {
-        String preview = fillTextWithNegativeParens(request.getTemplateText(), response.getParameters());
+        String preview =
+            fillTextWithNegativeParens(request.getTemplateText(), response.getParameters());
         response.setFilledTextPreview(preview);
       }
       return response;
@@ -3190,7 +3360,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("Task: generate_parameters\n");
     p.append("You are a Vietnamese math teacher assistant.\n");
     p.append("Read ALL content fields below. Detect math constraints from the formula.\n");
-    p.append("Generate a valid, non-duplicate parameter combination that satisfies ALL constraints.\n\n");
+    p.append(
+        "Generate a valid, non-duplicate parameter combination that satisfies ALL constraints.\n\n");
 
     p.append("CONSTRAINT DETECTION RULES:\n");
     p.append("- 'sqrt(b²-4ac)' in formula → b²-4ac ≥ 0 required\n");
@@ -3219,7 +3390,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       p.append("parameter_names: ").append(req.getParameters()).append("\n");
     }
     if (req.getSampleQuestions() != null && !req.getSampleQuestions().isEmpty()) {
-      p.append("existing_samples (AVOID DUPLICATES): ").append(req.getSampleQuestions()).append("\n");
+      p.append("existing_samples (AVOID DUPLICATES): ")
+          .append(req.getSampleQuestions())
+          .append("\n");
     }
     if (additionalInstruction != null) {
       p.append("\nADDITIONAL TEACHER REQUIREMENT (highest priority):\n");
@@ -3248,20 +3421,24 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     p.append("Task: update_parameters\n");
     p.append("You are a Vietnamese math teacher assistant.\n");
     p.append("Current parameter values: ").append(req.getCurrentParameters()).append("\n");
-    p.append("Current constraint explanations: ").append(req.getCurrentConstraintText()).append("\n");
-    p.append("Teacher command (NEW REQUIREMENT - highest priority): "
-        + req.getTeacherCommand()).append("\n");
+    p.append("Current constraint explanations: ")
+        .append(req.getCurrentConstraintText())
+        .append("\n");
+    p.append("Teacher command (NEW REQUIREMENT - highest priority): " + req.getTeacherCommand())
+        .append("\n");
     if (req.getTemplateText() != null) {
       p.append("Template text: ").append(req.getTemplateText()).append("\n");
     }
     if (req.getAnswerFormula() != null) {
       p.append("Formula: ").append(req.getAnswerFormula()).append("\n");
     }
-    p.append("\nRe-generate parameter values satisfying ALL existing constraints PLUS the teacher command.\n");
+    p.append(
+        "\nRe-generate parameter values satisfying ALL existing constraints PLUS the teacher command.\n");
     p.append("Update constraint_text to reflect the new values and teacher requirement.\n");
 
     p.append("\nOUTPUT FORMAT (same as generate_parameters):\n");
-    p.append("{\"parameters\": {...}, \"constraint_text\": {...}, \"combined_constraints\": [...]}\n");
+    p.append(
+        "{\"parameters\": {...}, \"constraint_text\": {...}, \"combined_constraints\": [...]}\n");
     return p.toString();
   }
 
@@ -3345,7 +3522,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       filled = filled.replace(token, valStr);
     }
     // Normalize sign combinations: "N + -M" → "N - M", "N - -M" → "N + M"
-    filled = filled.replaceAll("\\+\\s*-\\(",  "- (");
+    filled = filled.replaceAll("\\+\\s*-\\(", "- (");
     filled = filled.replaceAll("-\\s*-\\(", "+ (");
     return filled;
   }
@@ -3358,31 +3535,35 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   public void setClausePoints(java.util.UUID questionId, SetClausePointsRequest request) {
     log.info("[Feature4] Setting clause points for questionId={}", questionId);
 
-    Question question = questionRepository.findById(questionId)
-        .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
+    Question question =
+        questionRepository
+            .findById(questionId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
 
     if (question.getQuestionType() != QuestionType.TRUE_FALSE) {
-      throw new AppException(ErrorCode.INVALID_REQUEST,
-          "Clause points can only be set for TRUE_FALSE questions");
+      throw new AppException(
+          ErrorCode.INVALID_REQUEST, "Clause points can only be set for TRUE_FALSE questions");
     }
 
     // Validate: sum(clause_points) must equal total_point
     BigDecimal totalPoint = request.getTotalPoint();
     Map<String, BigDecimal> clausePoints = request.getClausePoints();
-    BigDecimal sum = clausePoints.values().stream()
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal sum = clausePoints.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
 
     if (sum.compareTo(totalPoint) != 0) {
-      throw new AppException(ErrorCode.INVALID_REQUEST,
-          String.format("Clause points must sum to total question point (%.2f). Current sum: %.2f",
+      throw new AppException(
+          ErrorCode.INVALID_REQUEST,
+          String.format(
+              "Clause points must sum to total question point (%.2f). Current sum: %.2f",
               totalPoint.doubleValue(), sum.doubleValue()));
     }
 
     // Merge overdrive_point into existing options JSON per clause
     @SuppressWarnings("unchecked")
-    Map<String, Object> options = question.getOptions() != null
-        ? new LinkedHashMap<>(question.getOptions())
-        : new LinkedHashMap<>();
+    Map<String, Object> options =
+        question.getOptions() != null
+            ? new LinkedHashMap<>(question.getOptions())
+            : new LinkedHashMap<>();
 
     for (Map.Entry<String, BigDecimal> entry : clausePoints.entrySet()) {
       String clauseKey = entry.getKey();
@@ -3415,7 +3596,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   @Override
   public boolean validateClauseForMatrix(
       String clauseText, String chapterName, String cognitiveLevel) {
-    log.info("[Feature5] Validating clause for chapter='{}' level='{}'", chapterName, cognitiveLevel);
+    log.info(
+        "[Feature5] Validating clause for chapter='{}' level='{}'", chapterName, cognitiveLevel);
     if (clauseText == null || clauseText.isBlank()) return false;
 
     String prompt = buildClauseValidationPrompt(clauseText, chapterName, cognitiveLevel);
@@ -3424,8 +3606,11 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       // Expect a simple YES/NO answer
       String normalized = aiResponse.trim().toUpperCase();
       boolean valid = normalized.startsWith("YES");
-      log.info("[Feature5] Clause validation result: {} for chapter='{}' level='{}'",
-          valid ? "VALID" : "INVALID", chapterName, cognitiveLevel);
+      log.info(
+          "[Feature5] Clause validation result: {} for chapter='{}' level='{}'",
+          valid ? "VALID" : "INVALID",
+          chapterName,
+          cognitiveLevel);
       return valid;
     } catch (Exception e) {
       log.error("[Feature5] Clause validation AI call failed: {}", e.getMessage());
@@ -3477,7 +3662,8 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     blueprint.setName(buildDraftTemplateName(request));
     blueprint.setDescription("Auto-generated from a real question via Method 1");
     blueprint.setTemplateType(request.getQuestionType());
-    blueprint.setTemplateText(Map.of("vi", rich.getTemplateText() == null ? "" : rich.getTemplateText()));
+    blueprint.setTemplateText(
+        Map.of("vi", rich.getTemplateText() == null ? "" : rich.getTemplateText()));
     blueprint.setAnswerFormula(rich.getAnswerFormula());
     blueprint.setSolutionStepsTemplate(rich.getSolutionStepsTemplate());
     blueprint.setDiagramTemplate(rich.getDiagramTemplate());
@@ -3485,14 +3671,16 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       blueprint.setOptionsGenerator(new HashMap<>(rich.getOptionsGenerator()));
     }
     if (rich.getClauseTemplates() != null && !rich.getClauseTemplates().isEmpty()) {
-      List<Map<String, Object>> clauseList = rich.getClauseTemplates().stream()
-          .map(c -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("text", c.getText());
-            m.put("truthValue", c.isTruthValue());
-            return m;
-          })
-          .toList();
+      List<Map<String, Object>> clauseList =
+          rich.getClauseTemplates().stream()
+              .map(
+                  c -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("text", c.getText());
+                    m.put("truthValue", c.isTruthValue());
+                    return m;
+                  })
+              .toList();
       blueprint.setStatementMutations(Map.of("clauseTemplates", clauseList));
     }
     Map<String, Object> paramMap = new LinkedHashMap<>();
@@ -3533,4 +3721,3 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     log.trace("variant in scope: {}", TemplateVariant.AI_REVERSE_TEMPLATED);
   }
 }
-

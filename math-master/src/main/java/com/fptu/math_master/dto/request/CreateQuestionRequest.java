@@ -69,4 +69,10 @@ public class CreateQuestionRequest {
 
   @Schema(description = "Generated diagram latex")
   private String diagramData;
+
+  @Schema(
+      description =
+          "Grading / generation metadata stored as JSONB. Used for SHORT_ANSWER validation"
+              + " (answerValidationMode, answerTolerance) and TRUE_FALSE tfClauses metadata.")
+  private Map<String, Object> generationMetadata;
 }
