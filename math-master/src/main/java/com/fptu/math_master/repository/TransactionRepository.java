@@ -284,6 +284,63 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
       @Param("to") Instant to);
 
   /**
+   * Revenue breakdown grouped by hour.
+   * Columns: [0]=label (YYYY-MM-DD HH:00), [1]=deposits, [2]=subscriptions, [3]=courseSales
+   */
+  @Query(value =
+      "SELECT TO_CHAR(DATE_TRUNC('hour', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD HH24:00') AS label, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'DEPOSIT'), 0) AS deposits, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'PAYMENT'), 0) AS subscriptions, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'PLATFORM_COMMISSION'), 0) AS course_sales " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "GROUP BY DATE_TRUNC('hour', t.created_at AT TIME ZONE 'UTC') " +
+      "ORDER BY label",
+      nativeQuery = true)
+  List<Object[]> findRevenueBreakdownHourlyAggregates(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Revenue breakdown grouped by day.
+   * Columns: [0]=label (YYYY-MM-DD), [1]=deposits, [2]=subscriptions, [3]=courseSales
+   */
+  @Query(value =
+      "SELECT TO_CHAR(DATE_TRUNC('day', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS label, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'DEPOSIT'), 0) AS deposits, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'PAYMENT'), 0) AS subscriptions, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'PLATFORM_COMMISSION'), 0) AS course_sales " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "GROUP BY DATE_TRUNC('day', t.created_at AT TIME ZONE 'UTC') " +
+      "ORDER BY label",
+      nativeQuery = true)
+  List<Object[]> findRevenueBreakdownDailyAggregates(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Revenue breakdown grouped by month.
+   * Columns: [0]=label (YYYY-MM), [1]=deposits, [2]=subscriptions, [3]=courseSales
+   */
+  @Query(value =
+      "SELECT TO_CHAR(DATE_TRUNC('month', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM') AS label, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'DEPOSIT'), 0) AS deposits, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'PAYMENT'), 0) AS subscriptions, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'PLATFORM_COMMISSION'), 0) AS course_sales " +
+      "FROM transactions t " +
+      "WHERE t.status = 'SUCCESS' " +
+      "  AND t.created_at >= :from AND t.created_at < :to " +
+      "GROUP BY DATE_TRUNC('month', t.created_at AT TIME ZONE 'UTC') " +
+      "ORDER BY label",
+      nativeQuery = true)
+  List<Object[]> findRevenueBreakdownMonthlyAggregates(
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
    * Category breakdown: sums per TransactionType within a date range.
    * Columns: [0]=type (TransactionType name), [1]=total
    */
