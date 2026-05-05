@@ -18,8 +18,8 @@ import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.QuestionService;
-import com.fptu.math_master.util.SecurityUtils;
 import com.fptu.math_master.util.CSVParser;
+import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -83,10 +83,11 @@ public class QuestionServiceImpl implements QuestionService {
     // If chapterId not provided but templateId is, fetch chapterId from template
     UUID chapterId = request.getChapterId();
     if (chapterId == null && request.getTemplateId() != null) {
-      chapterId = questionTemplateRepository
-          .findById(request.getTemplateId())
-          .map(QuestionTemplate::getChapterId)
-          .orElse(null);
+      chapterId =
+          questionTemplateRepository
+              .findById(request.getTemplateId())
+              .map(QuestionTemplate::getChapterId)
+              .orElse(null);
       log.info("Auto-populated chapterId {} from template {}", chapterId, request.getTemplateId());
     }
 
@@ -97,15 +98,16 @@ public class QuestionServiceImpl implements QuestionService {
             .options(request.getOptions())
             .correctAnswer(correctAnswer)
             .explanation(explanation)
-          .solutionSteps(request.getSolutionSteps())
-          .diagramData(request.getDiagramData())
+            .solutionSteps(request.getSolutionSteps())
+            .diagramData(request.getDiagramData())
+            .generationMetadata(request.getGenerationMetadata())
             .points(request.getPoints())
             .cognitiveLevel(request.getCognitiveLevel())
             .tags(request.getTags())
             .questionBankId(request.getQuestionBankId())
             .templateId(request.getTemplateId())
-            .chapterId(chapterId)  // Set chapterId
-          .canonicalQuestionId(request.getCanonicalQuestionId())
+            .chapterId(chapterId) // Set chapterId
+            .canonicalQuestionId(request.getCanonicalQuestionId())
             .questionStatus(QuestionStatus.UNDER_REVIEW)
             .questionSourceType(QuestionSourceType.MANUAL)
             .build();
@@ -139,7 +141,8 @@ public class QuestionServiceImpl implements QuestionService {
         question.getExplanation() == null
             ? "null"
             : question
-                .getExplanation().substring(0, Math.min(50, question.getExplanation().length())));
+                .getExplanation()
+                .substring(0, Math.min(50, question.getExplanation().length())));
     log.info("  - chapterId: {}", question.getChapterId());
 
     return mapToResponse(question);
@@ -339,8 +342,7 @@ public class QuestionServiceImpl implements QuestionService {
   @Override
   public Page<QuestionResponse> listReviewQueue(UUID templateId, Pageable pageable) {
     UUID currentUserId = getCurrentUserId();
-    Page<Question> page =
-        questionRepository.findReviewQueue(currentUserId, templateId, pageable);
+    Page<Question> page = questionRepository.findReviewQueue(currentUserId, templateId, pageable);
     // Avoid N+1: resolve every templateName the page needs in a single query.
     Map<UUID, String> templateNames = batchLookupTemplateNames(page.getContent());
     return page.map(q -> mapToResponse(q, templateNames));
@@ -469,14 +471,14 @@ public class QuestionServiceImpl implements QuestionService {
                 .options(questionRequest.getOptions())
                 .correctAnswer(questionRequest.getCorrectAnswer())
                 .explanation(questionRequest.getExplanation())
-              .solutionSteps(questionRequest.getSolutionSteps())
-              .diagramData(questionRequest.getDiagramData())
+                .solutionSteps(questionRequest.getSolutionSteps())
+                .diagramData(questionRequest.getDiagramData())
                 .points(questionRequest.getPoints())
                 .cognitiveLevel(questionRequest.getCognitiveLevel())
                 .tags(questionRequest.getTags())
                 .questionBankId(questionRequest.getQuestionBankId())
                 .templateId(questionRequest.getTemplateId())
-              .canonicalQuestionId(questionRequest.getCanonicalQuestionId())
+                .canonicalQuestionId(questionRequest.getCanonicalQuestionId())
                 .questionStatus(QuestionStatus.AI_DRAFT)
                 .questionSourceType(QuestionSourceType.BANK_IMPORTED)
                 .build();
@@ -568,8 +570,7 @@ public class QuestionServiceImpl implements QuestionService {
   }
 
   @Override
-  public Page<QuestionResponse> searchQuestions(
-      String searchTerm, String type, Pageable pageable) {
+  public Page<QuestionResponse> searchQuestions(String searchTerm, String type, Pageable pageable) {
     UUID currentUserId = getCurrentUserId();
 
     if (searchTerm != null && !searchTerm.isEmpty()) {
@@ -684,10 +685,11 @@ public class QuestionServiceImpl implements QuestionService {
   private QuestionResponse mapToResponse(Question question) {
     Map<UUID, String> single = java.util.Collections.emptyMap();
     if (question.getTemplateId() != null) {
-      String name = questionTemplateRepository
-          .findById(question.getTemplateId())
-          .map(com.fptu.math_master.entity.QuestionTemplate::getName)
-          .orElse(null);
+      String name =
+          questionTemplateRepository
+              .findById(question.getTemplateId())
+              .map(com.fptu.math_master.entity.QuestionTemplate::getName)
+              .orElse(null);
       if (name != null) single = java.util.Map.of(question.getTemplateId(), name);
     }
     return mapToResponse(question, single);
@@ -720,6 +722,7 @@ public class QuestionServiceImpl implements QuestionService {
         .explanation(question.getExplanation())
         .solutionSteps(question.getSolutionSteps())
         .diagramData(question.getDiagramData())
+        .diagramUrl(question.getRenderedImageUrl())
         .points(question.getPoints())
         .cognitiveLevel(question.getCognitiveLevel())
         .questionStatus(question.getQuestionStatus())

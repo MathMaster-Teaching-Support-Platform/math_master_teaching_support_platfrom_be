@@ -14,6 +14,7 @@ import com.fptu.math_master.repository.EnrollmentRepository;
 import com.fptu.math_master.repository.TransactionRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.repository.WalletRepository;
+import com.fptu.math_master.service.CommissionProposalService;
 import com.fptu.math_master.service.EnrollmentService;
 import com.fptu.math_master.service.WalletService;
 import com.fptu.math_master.service.UploadService;
@@ -62,6 +63,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
   StreamPublisher streamPublisher;
   UploadService uploadService;
   MinioProperties minioProperties;
+  CommissionProposalService commissionProposalService;
 
   @Override
   public EnrollmentResponse enroll(UUID courseId) {
@@ -141,8 +143,9 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         // Deduct full amount from student
         walletService.deductBalance(studentWallet.getId(), activePrice);
 
-        // Calculate Split
-        BigDecimal instructorEarnings = activePrice.multiply(new BigDecimal("0.9"))
+        // Calculate Split — use teacher's approved rate or platform default (90/10)
+        BigDecimal activeInstructorShare = commissionProposalService.getActiveTeacherShare(course.getTeacherId());
+        BigDecimal instructorEarnings = activePrice.multiply(activeInstructorShare)
             .setScale(2, RoundingMode.HALF_UP);
         BigDecimal platformCommission = activePrice.subtract(instructorEarnings);
 

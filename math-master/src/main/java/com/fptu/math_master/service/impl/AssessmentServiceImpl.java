@@ -884,6 +884,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         .explanation(question.getExplanation())
         .solutionSteps(question.getSolutionSteps())
         .diagramData(question.getDiagramData())
+        .diagramUrl(question.getRenderedImageUrl())
         .points(question.getPoints())
         .cognitiveLevel(question.getCognitiveLevel())
         .questionStatus(question.getQuestionStatus())

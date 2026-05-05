@@ -11,6 +11,7 @@ import com.fptu.math_master.enums.TransactionType;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
+import com.fptu.math_master.service.CommissionProposalService;
 import com.fptu.math_master.service.OrderService;
 import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.service.WalletService;
@@ -53,14 +54,15 @@ public class OrderServiceImpl implements OrderService {
     com.fptu.math_master.service.EmailService emailService;
     UploadService uploadService;
     MinioProperties minioProperties;
+    CommissionProposalService commissionProposalService;
 
     @NonFinal
     @Value("${app.frontend-url:http://localhost:3000}")
     String frontendUrl;
 
     private static final Duration ORDER_EXPIRY_DURATION = Duration.ofMinutes(15);
-    private static final BigDecimal INSTRUCTOR_SHARE = new BigDecimal("0.90");
-    private static final BigDecimal PLATFORM_SHARE = new BigDecimal("0.10");
+    /** Fallback teacher share used when no approved proposal exists. */
+    private static final java.math.BigDecimal DEFAULT_INSTRUCTOR_SHARE = new java.math.BigDecimal("0.90");
 
     @Override
     @Transactional
@@ -101,8 +103,9 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal finalPrice = calculateFinalPrice(course);
         BigDecimal discountAmount = originalPrice.subtract(finalPrice);
 
-        // 5. Calculate split
-        BigDecimal instructorEarnings = finalPrice.multiply(INSTRUCTOR_SHARE).setScale(2, RoundingMode.HALF_UP);
+        // 5. Calculate split — use teacher's approved rate or platform default (90/10)
+        BigDecimal activeInstructorShare = commissionProposalService.getActiveTeacherShare(course.getTeacherId());
+        BigDecimal instructorEarnings = finalPrice.multiply(activeInstructorShare).setScale(2, RoundingMode.HALF_UP);
         BigDecimal platformCommission = finalPrice.subtract(instructorEarnings);
 
         // 6. Generate order number

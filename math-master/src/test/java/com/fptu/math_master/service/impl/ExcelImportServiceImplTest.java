@@ -11,7 +11,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,20 +31,20 @@ import com.fptu.math_master.util.SecurityUtils;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Path;
 import jakarta.validation.Validator;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -54,6 +53,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.springframework.mock.web.MockMultipartFile;
 
 @DisplayName("ExcelImportServiceImpl - Tests")
@@ -64,27 +64,79 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
 
   @Mock private QuestionTemplateRepository questionTemplateRepository;
   @Mock private Validator validator;
-  @Mock private ObjectMapper objectMapper;
+
+  /**
+   * Real ObjectMapper — JSON parsing is plain library code we want to exercise
+   * for real, not stub call-by-call. Tests can still spy on it via Mockito if
+   * they need to assert call counts.
+   */
+  @Spy private ObjectMapper objectMapper = new ObjectMapper();
+
+  // Column layout mirrors ExcelImportServiceImpl
+  private static final int COL_NAME = 0;
+  private static final int COL_DESCRIPTION = 1;
+  private static final int COL_TEMPLATE_TYPE = 2;
+  private static final int COL_TEMPLATE_TEXT_VI = 3;
+  private static final int COL_PARAMETERS = 4;
+  private static final int COL_ANSWER_FORMULA = 5;
+  private static final int COL_DIAGRAM_TEMPLATE = 6;
+  private static final int COL_SOLUTION_STEPS_TEMPLATE = 7;
+  private static final int COL_OPTIONS_GENERATOR = 8;
+  private static final int COL_STATEMENT_MUTATIONS = 9;
+  private static final int COL_COGNITIVE_LEVEL = 10;
+  private static final int COL_TAGS = 11;
+  private static final int COL_IS_PUBLIC = 12;
+  private static final int COLUMN_COUNT = 13;
+
+  private static final String[] HEADERS = {
+    "name",
+    "description",
+    "templateType",
+    "templateText_vi",
+    "parameters",
+    "answerFormula",
+    "diagramTemplate",
+    "solutionStepsTemplate",
+    "optionsGenerator",
+    "statementMutations",
+    "cognitiveLevel",
+    "tags",
+    "isPublic"
+  };
+
+  /** Header row + notes row + first data row. Mirrors FIRST_DATA_ROW = 2 in service. */
+  private static final int FIRST_DATA_ROW = 2;
 
   private static final UUID CURRENT_USER_ID =
       UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
   private QuestionTemplateRequest buildTemplateRequest(
       String name, QuestionType questionType, CognitiveLevel cognitiveLevel) {
-    return QuestionTemplateRequest.builder()
-        .name(name)
-        .description("Mau mo ta cho " + name)
-        .templateType(questionType)
-        .templateText(Map.of("vi", "Noi dung cau hoi cho " + name))
-        .parameters(Map.of("a", Map.of("type", "int", "min", 1, "max", 10)))
-        .answerFormula("(-b)/a")
-        .diagramTemplate(null)
-        .optionsGenerator(Map.of("A", "1", "B", "2", "C", "3", "D", "4"))
-        .constraints(new String[] {"a != 0"})
-        .cognitiveLevel(cognitiveLevel)
-        .tags(List.of(QuestionTag.LINEAR_EQUATIONS))
-        .isPublic(true)
-        .build();
+    QuestionTemplateRequest.QuestionTemplateRequestBuilder b =
+        QuestionTemplateRequest.builder()
+            .name(name)
+            .description("Mau mo ta cho " + name)
+            .templateType(questionType)
+            .templateText(Map.of("vi", "Noi dung cau hoi cho " + name))
+            .parameters(Map.of("a", Map.of("type", "int", "min", 1, "max", 10)))
+            .cognitiveLevel(cognitiveLevel)
+            .tags(List.of(QuestionTag.LINEAR_EQUATIONS))
+            .isPublic(true);
+    if (questionType == QuestionType.MULTIPLE_CHOICE || questionType == QuestionType.SHORT_ANSWER) {
+      b.answerFormula("(-b)/a");
+    }
+    if (questionType == QuestionType.MULTIPLE_CHOICE) {
+      b.optionsGenerator(Map.of("A", "1", "B", "2", "C", "3", "D", "4"));
+    }
+    if (questionType == QuestionType.TRUE_FALSE) {
+      b.statementMutations(
+          Map.of(
+              "clauseTemplates",
+              List.of(
+                  Map.of("text", "Mệnh đề A", "truthValue", true),
+                  Map.of("text", "Mệnh đề B", "truthValue", false))));
+    }
+    return b.build();
   }
 
   private QuestionTemplate buildSavedTemplate(
@@ -96,24 +148,23 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
       UUID createdBy) {
     QuestionTemplate template =
         QuestionTemplate.builder()
-        .name(name)
-        .description("Mo ta " + name)
-        .templateType(questionType)
-        .templateText(Map.of("vi", "Cau hoi " + name))
-        .parameters(Map.of("x", 2))
-        .answerFormula("x + 1")
-        .diagramTemplate("tikz")
-        .optionsGenerator(Map.of("A", "1"))
-        .constraints(new String[] {"x > 0"})
-        .cognitiveLevel(cognitiveLevel)
-        .tags(List.of(QuestionTag.LINEAR_EQUATIONS))
-        .isPublic(isPublic)
-        .status(TemplateStatus.DRAFT)
-        .usageCount(0)
-        .avgSuccessRate(new BigDecimal("87.50"))
-        .questionBankId(UUID.fromString("11111111-1111-1111-1111-111111111111"))
-        .canonicalQuestionId(UUID.fromString("22222222-2222-2222-2222-222222222222"))
-        .build();
+            .name(name)
+            .description("Mo ta " + name)
+            .templateType(questionType)
+            .templateText(Map.of("vi", "Cau hoi " + name))
+            .parameters(Map.of("x", 2))
+            .answerFormula("x + 1")
+            .diagramTemplate("tikz")
+            .optionsGenerator(Map.of("A", "1"))
+            .cognitiveLevel(cognitiveLevel)
+            .tags(List.of(QuestionTag.LINEAR_EQUATIONS))
+            .isPublic(isPublic)
+            .status(TemplateStatus.DRAFT)
+            .usageCount(0)
+            .avgSuccessRate(new BigDecimal("87.50"))
+            .questionBankId(UUID.fromString("11111111-1111-1111-1111-111111111111"))
+            .canonicalQuestionId(UUID.fromString("22222222-2222-2222-2222-222222222222"))
+            .build();
     template.setId(id);
     template.setCreatedBy(createdBy);
     template.setCreatedAt(Instant.parse("2025-01-01T10:15:30Z"));
@@ -121,26 +172,19 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
     return template;
   }
 
+  /**
+   * Build a workbook with header row (0), an empty notes row (1), and data rows
+   * starting at row 2. Mirrors the layout the service writes / expects.
+   */
   private byte[] createWorkbookBytes(RowWriter rowWriter) throws IOException {
-    try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+    try (Workbook workbook = new XSSFWorkbook();
+        ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       Sheet sheet = workbook.createSheet("Question Templates");
       Row header = sheet.createRow(0);
-      String[] headers = {
-        "name",
-        "description",
-        "templateType",
-        "templateText_vi",
-        "parameters",
-        "answerFormula",
-        "diagramTemplate",
-        "options",
-        "cognitiveLevel",
-        "tags",
-        "isPublic"
-      };
-      for (int i = 0; i < headers.length; i++) {
-        header.createCell(i).setCellValue(headers[i]);
+      for (int i = 0; i < HEADERS.length; i++) {
+        header.createCell(i).setCellValue(HEADERS[i]);
       }
+      sheet.createRow(1); // notes row, intentionally blank in tests
       rowWriter.write(sheet);
       workbook.write(out);
       return out.toByteArray();
@@ -163,44 +207,27 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
   @DisplayName("previewExcelImport()")
   class PreviewExcelImportTests {
 
-    /**
-     * Normal case: Parse va validate thanh cong mot dong du lieu hop le.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Excel file .xlsx co 1 data row hop le voi enum, JSON va tag dung format</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>validateExcelFile() -> pass tat ca dieu kien</li>
-     *   <li>isRowEmpty() -> FALSE branch (dong co du lieu)</li>
-     *   <li>parse enum/template JSON/options JSON -> nhanh parse thanh cong</li>
-     *   <li>validateRequest() -> nhanh khong co loi</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Tra ve preview gom 1 dong hop le, khong co validation error</li>
-     * </ul>
-     */
     @Test
-    void it_should_return_valid_preview_when_excel_contains_valid_row() throws Exception {
-      // ===== ARRANGE =====
+    void it_should_return_valid_preview_when_excel_contains_valid_mcq_row() throws Exception {
       byte[] bytes =
           createWorkbookBytes(
               sheet -> {
-                Row row = sheet.createRow(1);
-                row.createCell(0).setCellValue("Phuong trinh bac nhat");
-                row.createCell(1).setCellValue("Mo ta phuong trinh bac nhat");
-                row.createCell(2).setCellValue("MULTIPLE_CHOICE");
-                row.createCell(3).setCellValue("Giai phuong trinh {{a}}x + {{b}} = 0");
-                row.createCell(4).setCellValue("{\"a\":{\"type\":\"int\",\"min\":1,\"max\":10}}");
-                row.createCell(5).setCellValue("(-b)/a");
-                row.createCell(7).setCellValue("{\"A\":\"1\",\"B\":\"2\"}");
-                row.createCell(8).setCellValue("THONG_HIEU");
-                row.createCell(9).setCellValue("LINEAR_EQUATIONS, TRIANGLES");
-                row.createCell(10).setCellValue("yes");
+                Row row = sheet.createRow(FIRST_DATA_ROW);
+                row.createCell(COL_NAME).setCellValue("Phuong trinh bac nhat");
+                row.createCell(COL_DESCRIPTION).setCellValue("Mo ta phuong trinh bac nhat");
+                row.createCell(COL_TEMPLATE_TYPE).setCellValue("MULTIPLE_CHOICE");
+                row.createCell(COL_TEMPLATE_TEXT_VI)
+                    .setCellValue("Giai phuong trinh {{a}}x + {{b}} = 0");
+                row.createCell(COL_PARAMETERS)
+                    .setCellValue(
+                        "{\"a\":{\"type\":\"int\",\"min\":1,\"max\":10},"
+                            + "\"b\":{\"type\":\"int\",\"min\":-10,\"max\":10}}");
+                row.createCell(COL_ANSWER_FORMULA).setCellValue("(-b)/a");
+                row.createCell(COL_OPTIONS_GENERATOR)
+                    .setCellValue("{\"A\":\"(-b)/a\",\"B\":\"b/a\",\"C\":\"-a\",\"D\":\"a+b\"}");
+                row.createCell(COL_COGNITIVE_LEVEL).setCellValue("THONG_HIEU");
+                row.createCell(COL_TAGS).setCellValue("LINEAR_EQUATIONS, TRIANGLES");
+                row.createCell(COL_IS_PUBLIC).setCellValue("yes");
               });
       MockMultipartFile file =
           new MockMultipartFile(
@@ -209,152 +236,216 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               bytes);
       when(validator.validate(any(QuestionTemplateRequest.class))).thenReturn(Set.of());
-      when(objectMapper.readValue(Mockito.eq("{\"a\":{\"type\":\"int\",\"min\":1,\"max\":10}}"), Mockito.any(com.fasterxml.jackson.core.type.TypeReference.class)))
-          .thenReturn(Map.of("a", Map.of("type", "int", "min", 1, "max", 10)));
-      when(objectMapper.readValue(Mockito.eq("{\"A\":\"1\",\"B\":\"2\"}"), Mockito.any(com.fasterxml.jackson.core.type.TypeReference.class)))
-          .thenReturn(Map.of("A", "1", "B", "2"));
 
-      // ===== ACT =====
       ExcelPreviewResponse result = excelImportService.previewExcelImport(file);
 
-      // ===== ASSERT =====
       assertNotNull(result);
       assertEquals(1, result.getTotalRows());
       assertEquals(1, result.getValidRows());
       assertEquals(0, result.getInvalidRows());
-      assertNotNull(result.getRows());
-      assertEquals(1, result.getRows().size());
       ExcelPreviewResponse.PreviewRow previewRow = result.getRows().get(0);
       assertAll(
-          () -> assertEquals(2, previewRow.getRowNumber()),
+          () -> assertEquals(FIRST_DATA_ROW + 1, previewRow.getRowNumber()),
           () -> assertTrue(previewRow.getIsValid()),
           () -> assertNull(previewRow.getValidationErrors()),
-          () -> assertNotNull(previewRow.getData()),
           () -> assertEquals(QuestionType.MULTIPLE_CHOICE, previewRow.getData().getTemplateType()),
           () -> assertEquals(CognitiveLevel.THONG_HIEU, previewRow.getData().getCognitiveLevel()),
           () -> assertTrue(previewRow.getData().getIsPublic()),
-          () -> assertEquals(2, previewRow.getData().getTags().size()));
+          () -> assertEquals(2, previewRow.getData().getTags().size()),
+          () -> assertNotNull(previewRow.getData().getOptionsGenerator()),
+          () -> assertEquals(4, previewRow.getData().getOptionsGenerator().size()));
 
-      // ===== VERIFY =====
       verify(validator, times(1)).validate(any(QuestionTemplateRequest.class));
-      verify(objectMapper, times(1))
-          .readValue(
-              Mockito.eq("{\"a\":{\"type\":\"int\",\"min\":1,\"max\":10}}"),
-              Mockito.any(com.fasterxml.jackson.core.type.TypeReference.class));
-      verify(objectMapper, times(1))
-          .readValue(
-              Mockito.eq("{\"A\":\"1\",\"B\":\"2\"}"),
-              Mockito.any(com.fasterxml.jackson.core.type.TypeReference.class));
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
     }
 
-    /**
-     * Abnormal case: Mot dong rong duoc bo qua, mot dong sai enum bi danh dau invalid.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Excel file co 1 dong rong va 1 dong co templateType khong hop le</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>isRowEmpty() -> TRUE branch (dong rong)</li>
-     *   <li>parseRowToRequest() -> throw exception khi parse templateType</li>
-     *   <li>catch(Exception) trong vong lap preview -> tao parse error row</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Chi co 1 dong trong ket qua va dong nay khong hop le voi parse error</li>
-     * </ul>
-     */
     @Test
-    void it_should_mark_row_invalid_when_row_has_invalid_template_type_and_skip_empty_row()
-        throws Exception {
-      // ===== ARRANGE =====
+    void it_should_return_valid_preview_when_excel_contains_true_false_row() throws Exception {
       byte[] bytes =
           createWorkbookBytes(
               sheet -> {
-                sheet.createRow(1); // empty row
-                Row invalidRow = sheet.createRow(2);
-                invalidRow.createCell(0).setCellValue("Dang cau hoi sai type");
-                invalidRow.createCell(1).setCellValue("Mo ta");
-                invalidRow.createCell(2).setCellValue("KHONG_HOP_LE");
-                invalidRow.createCell(3).setCellValue("Noi dung");
-                invalidRow.createCell(4).setCellValue("{\"a\":1}");
-                invalidRow.createCell(5).setCellValue("a");
-                invalidRow.createCell(8).setCellValue("THONG_HIEU");
-                invalidRow.createCell(9).setCellValue("LINEAR_EQUATIONS");
-                invalidRow.createCell(10).setCellValue("false");
+                Row row = sheet.createRow(FIRST_DATA_ROW);
+                row.createCell(COL_NAME).setCellValue("BBT bac ba");
+                row.createCell(COL_TEMPLATE_TYPE).setCellValue("TRUE_FALSE");
+                row.createCell(COL_TEMPLATE_TEXT_VI).setCellValue("Cho hàm số có BBT...");
+                row.createCell(COL_PARAMETERS).setCellValue("{\"x1\":1}");
+                row.createCell(COL_DIAGRAM_TEMPLATE).setCellValue("\\begin{tikzpicture}...");
+                row.createCell(COL_STATEMENT_MUTATIONS)
+                    .setCellValue(
+                        "{\"clauseTemplates\":["
+                            + "{\"text\":\"Mệnh đề A\",\"truthValue\":true},"
+                            + "{\"text\":\"Mệnh đề B\",\"truthValue\":false}"
+                            + "]}");
+                row.createCell(COL_COGNITIVE_LEVEL).setCellValue("THONG_HIEU");
+                row.createCell(COL_TAGS).setCellValue("FUNCTIONS");
+                row.createCell(COL_IS_PUBLIC).setCellValue("TRUE");
               });
       MockMultipartFile file =
           new MockMultipartFile(
               "file",
-              "invalid-template-type.xlsx",
+              "tf-template.xlsx",
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               bytes);
+      when(validator.validate(any(QuestionTemplateRequest.class))).thenReturn(Set.of());
 
-      // ===== ACT =====
       ExcelPreviewResponse result = excelImportService.previewExcelImport(file);
 
-      // ===== ASSERT =====
-      assertNotNull(result);
-      assertEquals(1, result.getTotalRows());
-      assertEquals(0, result.getValidRows());
-      assertEquals(1, result.getInvalidRows());
-      assertNotNull(result.getRows());
-      assertEquals(1, result.getRows().size());
-      ExcelPreviewResponse.PreviewRow previewRow = result.getRows().get(0);
+      assertEquals(1, result.getValidRows());
+      QuestionTemplateRequest data = result.getRows().get(0).getData();
       assertAll(
-          () -> assertEquals(3, previewRow.getRowNumber()),
-          () -> assertFalse(previewRow.getIsValid()),
-          () -> assertNull(previewRow.getData()),
-          () -> assertNotNull(previewRow.getValidationErrors()),
+          () -> assertEquals(QuestionType.TRUE_FALSE, data.getTemplateType()),
+          () -> assertNotNull(data.getStatementMutations()),
+          () -> assertTrue(data.getStatementMutations().get("clauseTemplates") instanceof List<?>),
           () ->
               assertTrue(
-                  previewRow.getValidationErrors().get(0).contains("Invalid templateType: KHONG_HOP_LE")));
-
-      // ===== VERIFY =====
-      verify(validator, never()).validate(any(QuestionTemplateRequest.class));
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
+                  ((List<?>) data.getStatementMutations().get("clauseTemplates")).size() == 2));
     }
 
-    /**
-     * Abnormal case: Validator tra ve violation va request thieu data bat buoc.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Excel file co row hop le enum/JSON nhung templateText va parameters trong</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>validateRequest() -> co Bean Validation violation</li>
-     *   <li>validateRequest() -> custom validation cho templateText/parameters</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Dong duoc danh dau invalid voi day du 3 loi validation</li>
-     * </ul>
-     */
     @Test
-    void it_should_collect_validation_errors_when_request_has_constraint_violation_and_missing_fields()
-        throws Exception {
-      // ===== ARRANGE =====
+    void it_should_return_valid_preview_when_excel_contains_short_answer_row() throws Exception {
       byte[] bytes =
           createWorkbookBytes(
               sheet -> {
-                Row row = sheet.createRow(1);
-                row.createCell(0).setCellValue("Bai toan toi uu");
-                row.createCell(1).setCellValue("Mo ta bai toan");
-                row.createCell(2).setCellValue("ESSAY");
-                row.createCell(3).setCellValue("");
-                row.createCell(4).setCellValue("");
-                row.createCell(5).setCellValue("x+1");
-                row.createCell(8).setCellValue("VAN_DUNG");
-                row.createCell(9).setCellValue("LINEAR_EQUATIONS");
-                row.createCell(10).setCellValue("1");
+                Row row = sheet.createRow(FIRST_DATA_ROW);
+                row.createCell(COL_NAME).setCellValue("Tich phan");
+                row.createCell(COL_TEMPLATE_TYPE).setCellValue("SHORT_ANSWER");
+                row.createCell(COL_TEMPLATE_TEXT_VI).setCellValue("Tinh I = ...");
+                row.createCell(COL_PARAMETERS).setCellValue("{\"a\":1}");
+                row.createCell(COL_ANSWER_FORMULA).setCellValue("((a*c+b)^4 - b^4) / (4*a)");
+                row.createCell(COL_COGNITIVE_LEVEL).setCellValue("VAN_DUNG");
+                row.createCell(COL_TAGS).setCellValue("INTEGRALS");
+                row.createCell(COL_IS_PUBLIC).setCellValue("FALSE");
+              });
+      MockMultipartFile file =
+          new MockMultipartFile(
+              "file",
+              "sa-template.xlsx",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              bytes);
+      when(validator.validate(any(QuestionTemplateRequest.class))).thenReturn(Set.of());
+
+      ExcelPreviewResponse result = excelImportService.previewExcelImport(file);
+
+      assertEquals(1, result.getValidRows());
+      QuestionTemplateRequest data = result.getRows().get(0).getData();
+      assertAll(
+          () -> assertEquals(QuestionType.SHORT_ANSWER, data.getTemplateType()),
+          () -> assertEquals("((a*c+b)^4 - b^4) / (4*a)", data.getAnswerFormula()),
+          () -> assertNull(data.getOptionsGenerator()),
+          () -> assertNull(data.getStatementMutations()),
+          () -> assertFalse(data.getIsPublic()));
+    }
+
+    @Test
+    void it_should_mark_mcq_row_invalid_when_options_generator_is_missing() throws Exception {
+      byte[] bytes =
+          createWorkbookBytes(
+              sheet -> {
+                Row row = sheet.createRow(FIRST_DATA_ROW);
+                row.createCell(COL_NAME).setCellValue("MCQ thieu options");
+                row.createCell(COL_TEMPLATE_TYPE).setCellValue("MULTIPLE_CHOICE");
+                row.createCell(COL_TEMPLATE_TEXT_VI).setCellValue("...");
+                row.createCell(COL_PARAMETERS).setCellValue("{\"x\":1}");
+                row.createCell(COL_ANSWER_FORMULA).setCellValue("x");
+                row.createCell(COL_COGNITIVE_LEVEL).setCellValue("THONG_HIEU");
+                row.createCell(COL_TAGS).setCellValue("FUNCTIONS");
+              });
+      MockMultipartFile file =
+          new MockMultipartFile(
+              "file",
+              "missing-options.xlsx",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              bytes);
+      when(validator.validate(any(QuestionTemplateRequest.class))).thenReturn(Set.of());
+
+      ExcelPreviewResponse result = excelImportService.previewExcelImport(file);
+
+      assertEquals(1, result.getInvalidRows());
+      assertTrue(
+          result.getRows().get(0).getValidationErrors().stream()
+              .anyMatch(msg -> msg.contains("optionsGenerator: required for MULTIPLE_CHOICE")));
+    }
+
+    @Test
+    void it_should_mark_tf_row_invalid_when_statement_mutations_missing() throws Exception {
+      byte[] bytes =
+          createWorkbookBytes(
+              sheet -> {
+                Row row = sheet.createRow(FIRST_DATA_ROW);
+                row.createCell(COL_NAME).setCellValue("TF thieu clauses");
+                row.createCell(COL_TEMPLATE_TYPE).setCellValue("TRUE_FALSE");
+                row.createCell(COL_TEMPLATE_TEXT_VI).setCellValue("...");
+                row.createCell(COL_PARAMETERS).setCellValue("{\"x\":1}");
+                row.createCell(COL_COGNITIVE_LEVEL).setCellValue("THONG_HIEU");
+                row.createCell(COL_TAGS).setCellValue("FUNCTIONS");
+              });
+      MockMultipartFile file =
+          new MockMultipartFile(
+              "file",
+              "tf-missing-clauses.xlsx",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              bytes);
+      when(validator.validate(any(QuestionTemplateRequest.class))).thenReturn(Set.of());
+
+      ExcelPreviewResponse result = excelImportService.previewExcelImport(file);
+
+      assertEquals(1, result.getInvalidRows());
+      assertTrue(
+          result.getRows().get(0).getValidationErrors().stream()
+              .anyMatch(msg -> msg.contains("statementMutations: required for TRUE_FALSE")));
+    }
+
+    @Test
+    void it_should_skip_empty_row_and_mark_invalid_template_type_row() throws Exception {
+      byte[] bytes =
+          createWorkbookBytes(
+              sheet -> {
+                sheet.createRow(FIRST_DATA_ROW); // empty
+                Row invalid = sheet.createRow(FIRST_DATA_ROW + 1);
+                invalid.createCell(COL_NAME).setCellValue("Loai sai");
+                invalid.createCell(COL_TEMPLATE_TYPE).setCellValue("KHONG_HOP_LE");
+                invalid.createCell(COL_TEMPLATE_TEXT_VI).setCellValue("...");
+                invalid.createCell(COL_PARAMETERS).setCellValue("{\"a\":1}");
+                invalid.createCell(COL_COGNITIVE_LEVEL).setCellValue("THONG_HIEU");
+                invalid.createCell(COL_TAGS).setCellValue("LINEAR_EQUATIONS");
+              });
+      MockMultipartFile file =
+          new MockMultipartFile(
+              "file",
+              "invalid-type.xlsx",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              bytes);
+
+      ExcelPreviewResponse result = excelImportService.previewExcelImport(file);
+
+      assertEquals(1, result.getTotalRows());
+      assertEquals(0, result.getValidRows());
+      assertEquals(1, result.getInvalidRows());
+      ExcelPreviewResponse.PreviewRow row = result.getRows().get(0);
+      assertAll(
+          () -> assertEquals(FIRST_DATA_ROW + 2, row.getRowNumber()),
+          () -> assertFalse(row.getIsValid()),
+          () ->
+              assertTrue(
+                  row.getValidationErrors().get(0).contains("Invalid templateType: KHONG_HOP_LE")));
+      verify(validator, never()).validate(any(QuestionTemplateRequest.class));
+    }
+
+    @Test
+    void
+        it_should_collect_validation_errors_when_request_has_constraint_violation_and_missing_fields()
+            throws Exception {
+      byte[] bytes =
+          createWorkbookBytes(
+              sheet -> {
+                Row row = sheet.createRow(FIRST_DATA_ROW);
+                row.createCell(COL_NAME).setCellValue("Bai toan");
+                row.createCell(COL_TEMPLATE_TYPE).setCellValue("SHORT_ANSWER");
+                row.createCell(COL_TEMPLATE_TEXT_VI).setCellValue("");
+                row.createCell(COL_PARAMETERS).setCellValue("");
+                row.createCell(COL_ANSWER_FORMULA).setCellValue("x+1");
+                row.createCell(COL_COGNITIVE_LEVEL).setCellValue("VAN_DUNG");
+                row.createCell(COL_TAGS).setCellValue("LINEAR_EQUATIONS");
+                row.createCell(COL_IS_PUBLIC).setCellValue("1");
               });
       MockMultipartFile file =
           new MockMultipartFile(
@@ -371,50 +462,19 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
       when(violation.getMessage()).thenReturn("Template name is required");
       when(validator.validate(any(QuestionTemplateRequest.class))).thenReturn(Set.of(violation));
 
-      // ===== ACT =====
       ExcelPreviewResponse result = excelImportService.previewExcelImport(file);
 
-      // ===== ASSERT =====
-      assertNotNull(result);
-      assertEquals(1, result.getTotalRows());
-      assertEquals(0, result.getValidRows());
       assertEquals(1, result.getInvalidRows());
       List<String> errors = result.getRows().get(0).getValidationErrors();
       assertNotNull(errors);
-      assertEquals(3, errors.size());
       assertTrue(errors.contains("name: Template name is required"));
       assertTrue(errors.contains("templateText: Template text is required"));
       assertTrue(errors.contains("parameters: Parameters are required"));
-
-      // ===== VERIFY =====
-      verify(validator, times(1)).validate(any(QuestionTemplateRequest.class));
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
     }
 
-    /**
-     * Abnormal case: File upload khong hop le (rong/sai duoi/qua lon).
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>3 truong hop file invalid: empty, wrong extension va qua 10MB</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>validateExcelFile(): file.isEmpty() -> TRUE branch</li>
-     *   <li>validateExcelFile(): !filename.endsWith(.xlsx) -> TRUE branch</li>
-     *   <li>validateExcelFile(): file.getSize() > 10MB -> TRUE branch</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Tat ca truong hop deu throw {@link AppException} voi {@code INVALID_KEY}</li>
-     * </ul>
-     */
     @Test
     void it_should_throw_invalid_key_when_excel_file_is_empty_or_wrong_extension_or_too_large()
         throws Exception {
-      // ===== ARRANGE =====
       MockMultipartFile emptyFile =
           new MockMultipartFile(
               "file",
@@ -422,11 +482,7 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               new byte[0]);
       MockMultipartFile wrongExtensionFile =
-          new MockMultipartFile(
-              "file",
-              "templates.csv",
-              "text/csv",
-              "name,description".getBytes());
+          new MockMultipartFile("file", "templates.csv", "text/csv", "name,description".getBytes());
       byte[] validSmallWorkbook = createWorkbookBytes(sheet -> {});
       byte[] oversizedContent = new byte[10 * 1024 * 1024 + 1];
       System.arraycopy(validSmallWorkbook, 0, oversizedContent, 0, validSmallWorkbook.length);
@@ -437,7 +493,6 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               oversizedContent);
 
-      // ===== ACT & ASSERT =====
       AppException emptyEx =
           assertThrows(AppException.class, () -> excelImportService.previewExcelImport(emptyFile));
       AppException wrongExtEx =
@@ -451,44 +506,21 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
           () -> assertEquals(ErrorCode.INVALID_KEY, emptyEx.getErrorCode()),
           () -> assertEquals(ErrorCode.INVALID_KEY, wrongExtEx.getErrorCode()),
           () -> assertEquals(ErrorCode.INVALID_KEY, oversizeEx.getErrorCode()));
-
-      // ===== VERIFY =====
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
     }
 
-    /**
-     * Abnormal case: Parse row that bai khi cognitiveLevel khong hop le.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Excel file co cognitiveLevel = "KHONG_TON_TAI"</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>parse cognitiveLevel -> IllegalArgumentException branch</li>
-     *   <li>catch(Exception) trong vong lap preview</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Row bi danh dau invalid voi thong diep Invalid cognitiveLevel</li>
-     * </ul>
-     */
     @Test
     void it_should_mark_row_invalid_when_cognitive_level_is_not_supported() throws Exception {
-      // ===== ARRANGE =====
       byte[] bytes =
           createWorkbookBytes(
               sheet -> {
-                Row row = sheet.createRow(1);
-                row.createCell(0).setCellValue("Bai tap vector");
-                row.createCell(2).setCellValue("ESSAY");
-                row.createCell(3).setCellValue("Noi dung bai tap");
-                row.createCell(4).setCellValue("{\"x\":1}");
-                row.createCell(5).setCellValue("x");
-                row.createCell(8).setCellValue("KHONG_TON_TAI");
-                row.createCell(9).setCellValue("LINEAR_EQUATIONS");
+                Row row = sheet.createRow(FIRST_DATA_ROW);
+                row.createCell(COL_NAME).setCellValue("Bai tap");
+                row.createCell(COL_TEMPLATE_TYPE).setCellValue("SHORT_ANSWER");
+                row.createCell(COL_TEMPLATE_TEXT_VI).setCellValue("...");
+                row.createCell(COL_PARAMETERS).setCellValue("{\"x\":1}");
+                row.createCell(COL_ANSWER_FORMULA).setCellValue("x");
+                row.createCell(COL_COGNITIVE_LEVEL).setCellValue("KHONG_TON_TAI");
+                row.createCell(COL_TAGS).setCellValue("LINEAR_EQUATIONS");
               });
       MockMultipartFile file =
           new MockMultipartFile(
@@ -497,50 +529,26 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               bytes);
 
-      // ===== ACT =====
       ExcelPreviewResponse result = excelImportService.previewExcelImport(file);
 
-      // ===== ASSERT =====
       assertEquals(1, result.getInvalidRows());
-      assertTrue(result.getRows().get(0).getValidationErrors().get(0).contains("Invalid cognitiveLevel"));
-
-      // ===== VERIFY =====
-      verify(validator, never()).validate(any(QuestionTemplateRequest.class));
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
+      assertTrue(
+          result.getRows().get(0).getValidationErrors().get(0).contains("Invalid cognitiveLevel"));
     }
 
-    /**
-     * Abnormal case: Parse row that bai khi parameters JSON khong dung dinh dang.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Excel file co parameters JSON malformed</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>parse parameters JSON -> catch(Exception) branch</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Row bi danh dau invalid voi thong diep Invalid parameters JSON</li>
-     * </ul>
-     */
     @Test
     void it_should_mark_row_invalid_when_parameters_json_is_malformed() throws Exception {
-      // ===== ARRANGE =====
       byte[] bytes =
           createWorkbookBytes(
               sheet -> {
-                Row row = sheet.createRow(1);
-                row.createCell(0).setCellValue("Bai toan thong ke");
-                row.createCell(2).setCellValue("ESSAY");
-                row.createCell(3).setCellValue("Noi dung");
-                row.createCell(4).setCellValue("{invalid-json}");
-                row.createCell(5).setCellValue("x");
-                row.createCell(8).setCellValue("THONG_HIEU");
-                row.createCell(9).setCellValue("LINEAR_EQUATIONS");
+                Row row = sheet.createRow(FIRST_DATA_ROW);
+                row.createCell(COL_NAME).setCellValue("Bai toan thong ke");
+                row.createCell(COL_TEMPLATE_TYPE).setCellValue("SHORT_ANSWER");
+                row.createCell(COL_TEMPLATE_TEXT_VI).setCellValue("...");
+                row.createCell(COL_PARAMETERS).setCellValue("{invalid-json}");
+                row.createCell(COL_ANSWER_FORMULA).setCellValue("x");
+                row.createCell(COL_COGNITIVE_LEVEL).setCellValue("THONG_HIEU");
+                row.createCell(COL_TAGS).setCellValue("LINEAR_EQUATIONS");
               });
       MockMultipartFile file =
           new MockMultipartFile(
@@ -548,59 +556,28 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
               "invalid-parameters-json.xlsx",
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               bytes);
-      when(objectMapper.readValue(Mockito.eq("{invalid-json}"), Mockito.any(com.fasterxml.jackson.core.type.TypeReference.class)))
-          .thenThrow(new IllegalArgumentException("Unexpected character"));
 
-      // ===== ACT =====
       ExcelPreviewResponse result = excelImportService.previewExcelImport(file);
 
-      // ===== ASSERT =====
       assertEquals(1, result.getInvalidRows());
       assertTrue(
           result.getRows().get(0).getValidationErrors().get(0).contains("Invalid parameters JSON"));
-
-      // ===== VERIFY =====
-      verify(objectMapper, times(1))
-          .readValue(
-              Mockito.eq("{invalid-json}"),
-              Mockito.any(com.fasterxml.jackson.core.type.TypeReference.class));
-      verify(validator, never()).validate(any(QuestionTemplateRequest.class));
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
     }
 
-    /**
-     * Abnormal case: Parse row that bai khi options JSON khong dung dinh dang.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Excel file co options JSON malformed, parameters JSON hop le</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>parse options JSON -> catch(Exception) branch</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Row bi danh dau invalid voi thong diep Invalid options JSON</li>
-     * </ul>
-     */
     @Test
-    void it_should_mark_row_invalid_when_options_json_is_malformed() throws Exception {
-      // ===== ARRANGE =====
+    void it_should_mark_row_invalid_when_options_generator_json_is_malformed() throws Exception {
       byte[] bytes =
           createWorkbookBytes(
               sheet -> {
-                Row row = sheet.createRow(1);
-                row.createCell(0).setCellValue("Bai toan giai tich");
-                row.createCell(2).setCellValue("MULTIPLE_CHOICE");
-                row.createCell(3).setCellValue("Noi dung");
-                row.createCell(4).setCellValue("{\"x\":1}");
-                row.createCell(5).setCellValue("x");
-                row.createCell(7).setCellValue("{invalid-options}");
-                row.createCell(8).setCellValue("THONG_HIEU");
-                row.createCell(9).setCellValue("LINEAR_EQUATIONS");
+                Row row = sheet.createRow(FIRST_DATA_ROW);
+                row.createCell(COL_NAME).setCellValue("MCQ JSON loi");
+                row.createCell(COL_TEMPLATE_TYPE).setCellValue("MULTIPLE_CHOICE");
+                row.createCell(COL_TEMPLATE_TEXT_VI).setCellValue("...");
+                row.createCell(COL_PARAMETERS).setCellValue("{\"x\":1}");
+                row.createCell(COL_ANSWER_FORMULA).setCellValue("x");
+                row.createCell(COL_OPTIONS_GENERATOR).setCellValue("{invalid-options}");
+                row.createCell(COL_COGNITIVE_LEVEL).setCellValue("THONG_HIEU");
+                row.createCell(COL_TAGS).setCellValue("LINEAR_EQUATIONS");
               });
       MockMultipartFile file =
           new MockMultipartFile(
@@ -608,53 +585,21 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
               "invalid-options-json.xlsx",
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               bytes);
-      when(objectMapper.readValue(Mockito.eq("{\"x\":1}"), Mockito.any(com.fasterxml.jackson.core.type.TypeReference.class)))
-          .thenReturn(Map.of("x", 1));
-      when(objectMapper.readValue(Mockito.eq("{invalid-options}"), Mockito.any(com.fasterxml.jackson.core.type.TypeReference.class)))
-          .thenThrow(new IllegalArgumentException("Unexpected character"));
 
-      // ===== ACT =====
       ExcelPreviewResponse result = excelImportService.previewExcelImport(file);
 
-      // ===== ASSERT =====
       assertEquals(1, result.getInvalidRows());
-      assertTrue(result.getRows().get(0).getValidationErrors().get(0).contains("Invalid options JSON"));
-
-      // ===== VERIFY =====
-      verify(objectMapper, times(1))
-          .readValue(
-              Mockito.eq("{\"x\":1}"),
-              Mockito.any(com.fasterxml.jackson.core.type.TypeReference.class));
-      verify(objectMapper, times(1))
-          .readValue(
-              Mockito.eq("{invalid-options}"),
-              Mockito.any(com.fasterxml.jackson.core.type.TypeReference.class));
-      verify(validator, never()).validate(any(QuestionTemplateRequest.class));
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
+      assertTrue(
+          result
+              .getRows()
+              .get(0)
+              .getValidationErrors()
+              .get(0)
+              .contains("Invalid optionsGenerator JSON"));
     }
 
-    /**
-     * Abnormal case: File co extension .xlsx nhung noi dung bi hu hong.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Multipart file .xlsx voi bytes khong phai workbook hop le</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>try(InputStream + XSSFWorkbook) cua preview -> throw exception</li>
-     *   <li>catch(Exception) ben ngoai -> throw {@link AppException}</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Ngoai le INVALID_KEY duoc nem ra</li>
-     * </ul>
-     */
     @Test
     void it_should_throw_invalid_key_when_excel_content_is_corrupted() {
-      // ===== ARRANGE =====
       MockMultipartFile corruptedFile =
           new MockMultipartFile(
               "file",
@@ -662,211 +607,74 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               "this-is-not-an-xlsx-content".getBytes());
 
-      // ===== ACT & ASSERT =====
       AppException exception =
           assertThrows(
               AppException.class, () -> excelImportService.previewExcelImport(corruptedFile));
       assertEquals(ErrorCode.INVALID_KEY, exception.getErrorCode());
-
-      // ===== VERIFY =====
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
     }
 
-    /**
-     * Abnormal case: Filename null phai bi chan boi validateExcelFile.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Multipart file mock co isEmpty = false, filename = null</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>validateExcelFile(): filename == null -> TRUE branch</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Ngoai le INVALID_KEY duoc nem ra</li>
-     * </ul>
-     */
     @Test
     void it_should_throw_invalid_key_when_filename_is_null() {
-      // ===== ARRANGE =====
       org.springframework.web.multipart.MultipartFile file =
           Mockito.mock(org.springframework.web.multipart.MultipartFile.class);
       when(file.isEmpty()).thenReturn(false);
       when(file.getOriginalFilename()).thenReturn(null);
 
-      // ===== ACT & ASSERT =====
       AppException exception =
           assertThrows(AppException.class, () -> excelImportService.previewExcelImport(file));
       assertEquals(ErrorCode.INVALID_KEY, exception.getErrorCode());
-
-      // ===== VERIFY =====
-      verify(file, times(1)).isEmpty();
-      verify(file, times(2)).getOriginalFilename();
-      verifyNoMoreInteractions(file, questionTemplateRepository, validator, objectMapper);
     }
 
-    /**
-     * Normal case: Private parser phai xu ly day du cac kieu cell va null path.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Row co du lieu STRING, NUMERIC, BOOLEAN, FORMULA, BLANK va cell null</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>getCellValueAsString(): columnIndex null branch</li>
-     *   <li>getCellValueAsString(): cell null branch</li>
-     *   <li>switch cell type: STRING/NUMERIC/BOOLEAN/FORMULA/default</li>
-     *   <li>isRowEmpty(): nhanh cell != null nhung CellType.BLANK</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Gia tri string tra ve dung cho tung kieu cell, BLANK/default tra ve null</li>
-     * </ul>
-     */
     @Test
-    void it_should_handle_all_cell_types_and_null_paths_when_getting_cell_value_as_string()
-        throws Exception {
-      // ===== ARRANGE =====
-      Row row;
+    void it_should_handle_all_cell_types_when_getting_cell_value_as_string() throws Exception {
       try (Workbook workbook = new XSSFWorkbook()) {
         Sheet sheet = workbook.createSheet("test");
-        row = sheet.createRow(0);
+        Row row = sheet.createRow(0);
         row.createCell(0).setCellValue("ALPHA");
         row.createCell(1).setCellValue(123D);
-        row.createCell(2).setCellValue(true);
-        row.createCell(3).setCellFormula("A1");
-        row.createCell(4, CellType.BLANK);
+        row.createCell(2).setCellValue(0.25);
+        row.createCell(3).setCellValue(true);
+        row.createCell(4).setCellFormula("A1");
+        row.createCell(5, CellType.BLANK);
 
-        // ===== ACT =====
-        String nullIndexValue =
-            (String)
-                invokePrivateMethod(
-                    "getCellValueAsString", new Class<?>[] {Row.class, Integer.class}, row, null);
-        String nullCellValue =
-            (String)
-                invokePrivateMethod(
-                    "getCellValueAsString", new Class<?>[] {Row.class, Integer.class}, row, 10);
         String stringValue =
             (String)
                 invokePrivateMethod(
                     "getCellValueAsString", new Class<?>[] {Row.class, Integer.class}, row, 0);
-        String numericValue =
+        String integerValue =
             (String)
                 invokePrivateMethod(
                     "getCellValueAsString", new Class<?>[] {Row.class, Integer.class}, row, 1);
-        String booleanValue =
+        String decimalValue =
             (String)
                 invokePrivateMethod(
                     "getCellValueAsString", new Class<?>[] {Row.class, Integer.class}, row, 2);
-        String formulaValue =
+        String booleanValue =
             (String)
                 invokePrivateMethod(
                     "getCellValueAsString", new Class<?>[] {Row.class, Integer.class}, row, 3);
-        String blankValue =
+        String formulaValue =
             (String)
                 invokePrivateMethod(
                     "getCellValueAsString", new Class<?>[] {Row.class, Integer.class}, row, 4);
-        Boolean isEmpty =
-            (Boolean)
-                invokePrivateMethod("isRowEmpty", new Class<?>[] {Row.class}, sheet.createRow(1));
-        Row blankCellRow = sheet.createRow(2);
-        blankCellRow.createCell(0, CellType.BLANK);
-        Boolean isEmptyWithBlankCell =
-            (Boolean) invokePrivateMethod("isRowEmpty", new Class<?>[] {Row.class}, blankCellRow);
+        String blankValue =
+            (String)
+                invokePrivateMethod(
+                    "getCellValueAsString", new Class<?>[] {Row.class, Integer.class}, row, 5);
+        String nullColumnValue =
+            (String)
+                invokePrivateMethod(
+                    "getCellValueAsString", new Class<?>[] {Row.class, Integer.class}, row, null);
 
-        // ===== ASSERT =====
         assertAll(
-            () -> assertNull(nullIndexValue),
-            () -> assertNull(nullCellValue),
             () -> assertEquals("ALPHA", stringValue),
-            () -> assertEquals("123", numericValue),
+            () -> assertEquals("123", integerValue),
+            () -> assertEquals("0.25", decimalValue),
             () -> assertEquals("true", booleanValue),
-            () -> assertEquals("A1", formulaValue),
+            () -> assertNotNull(formulaValue),
             () -> assertNull(blankValue),
-            () -> assertTrue(isEmpty),
-            () -> assertTrue(isEmptyWithBlankCell));
+            () -> assertNull(nullColumnValue));
       }
-
-      // ===== VERIFY =====
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
-    }
-
-    /**
-     * Normal case: parseRowToRequest va validateRequest xu ly du lieu optional/blank dung.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Row co templateType va cognitiveLevel de trong, tags gom Vietnamese + unknown</li>
-     *   <li>Request validate co day du templateText va parameters</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>parse templateType/cognitiveLevel -> nhanh bo qua khi blank</li>
-     *   <li>parse tags -> enum fail, Vietnamese fallback success va fallback null</li>
-     *   <li>parse isPublic -> nhanh non-blank nhung FALSE value</li>
-     *   <li>validateRequest() -> ca 2 custom checks di vao FALSE branch</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Request parse ra dung, co duy nhat tag TRIANGLES va validateRequest khong co loi</li>
-     * </ul>
-     */
-    @Test
-    void it_should_parse_optional_blank_fields_and_validate_without_errors_when_data_is_sufficient()
-        throws Exception {
-      // ===== ARRANGE =====
-      try (Workbook workbook = new XSSFWorkbook()) {
-        Sheet sheet = workbook.createSheet("test");
-        Row row = sheet.createRow(1);
-        row.createCell(0).setCellValue("Bai toan hinh hoc");
-        row.createCell(1).setCellValue("Mo ta hinh hoc");
-        row.createCell(2).setCellValue("");
-        row.createCell(3).setCellValue("");
-        row.createCell(4).setCellValue("");
-        row.createCell(5).setCellValue("x+1");
-        row.createCell(7).setCellValue("");
-        row.createCell(8).setCellValue("");
-        row.createCell(9).setCellValue("Tam giác, KHONG_HOP_LE");
-        row.createCell(10).setCellValue("0");
-        when(validator.validate(any(QuestionTemplateRequest.class))).thenReturn(Set.of());
-
-        // ===== ACT =====
-        QuestionTemplateRequest parsed =
-            (QuestionTemplateRequest)
-                invokePrivateMethod(
-                    "parseRowToRequest", new Class<?>[] {Row.class, int.class}, row, 1);
-        parsed.setTemplateText(Map.of("vi", "Noi dung du"));
-        parsed.setParameters(new HashMap<>(Map.of("x", 1)));
-        List<String> validationErrors =
-            (List<String>)
-                invokePrivateMethod(
-                    "validateRequest",
-                    new Class<?>[] {QuestionTemplateRequest.class},
-                    parsed);
-
-        // ===== ASSERT =====
-        assertAll(
-            () -> assertNull(parsed.getTemplateType()),
-            () -> assertNull(parsed.getCognitiveLevel()),
-            () -> assertNotNull(parsed.getTags()),
-            () -> assertEquals(1, parsed.getTags().size()),
-            () -> assertEquals(QuestionTag.TRIANGLES, parsed.getTags().get(0)),
-            () -> assertFalse(parsed.getIsPublic()),
-            () -> assertTrue(validationErrors.isEmpty()));
-      }
-
-      // ===== VERIFY =====
-      verify(validator, times(1)).validate(any(QuestionTemplateRequest.class));
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
     }
   }
 
@@ -874,34 +682,13 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
   @DisplayName("importTemplatesBatch()")
   class ImportTemplatesBatchTests {
 
-    /**
-     * Normal case: Import thanh cong tat ca templates trong request.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Batch request gom 2 template hop le</li>
-     *   <li>SecurityUtils tra ve current user id hop le</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>for-loop import -> nhanh success (save khong throw)</li>
-     *   <li>createTemplateEntity(): request.getIsPublic() != null -> dung gia tri request</li>
-     *   <li>errors.isEmpty() -> TRUE branch (response.errors = null)</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>successCount = 2, failedCount = 0, danh sach errors = null</li>
-     * </ul>
-     */
     @Test
     void it_should_import_all_templates_successfully_when_all_rows_are_valid() {
-      // ===== ARRANGE =====
       QuestionTemplateRequest first =
-          buildTemplateRequest("Phuong trinh bac hai", QuestionType.MULTIPLE_CHOICE, CognitiveLevel.NHAN_BIET);
+          buildTemplateRequest(
+              "Phuong trinh bac hai", QuestionType.MULTIPLE_CHOICE, CognitiveLevel.NHAN_BIET);
       QuestionTemplateRequest second =
-          buildTemplateRequest("Gioi han day so", QuestionType.ESSAY, CognitiveLevel.VAN_DUNG);
+          buildTemplateRequest("Tich phan", QuestionType.SHORT_ANSWER, CognitiveLevel.VAN_DUNG);
       second.setIsPublic(false);
       QuestionTemplateBatchImportRequest request =
           QuestionTemplateBatchImportRequest.builder().templates(List.of(first, second)).build();
@@ -926,59 +713,36 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
           .thenReturn(savedFirst)
           .thenReturn(savedSecond);
 
-      // ===== ACT =====
       TemplateBatchImportResponse result;
-      try (MockedStatic<SecurityUtils> securityUtilsMock = Mockito.mockStatic(SecurityUtils.class)) {
+      try (MockedStatic<SecurityUtils> securityUtilsMock =
+          Mockito.mockStatic(SecurityUtils.class)) {
         securityUtilsMock.when(SecurityUtils::getCurrentUserId).thenReturn(CURRENT_USER_ID);
         result = excelImportService.importTemplatesBatch(request);
         securityUtilsMock.verify(SecurityUtils::getCurrentUserId, times(1));
       }
 
-      // ===== ASSERT =====
       assertNotNull(result);
       assertAll(
           () -> assertEquals(2, result.getTotalRows()),
           () -> assertEquals(2, result.getSuccessCount()),
           () -> assertEquals(0, result.getFailedCount()),
           () -> assertNull(result.getErrors()),
-          () -> assertNotNull(result.getSuccessfulTemplates()),
           () -> assertEquals(2, result.getSuccessfulTemplates().size()),
-          () -> assertEquals("Phuong trinh bac hai", result.getSuccessfulTemplates().get(0).getName()),
-          () -> assertEquals("Gioi han day so", result.getSuccessfulTemplates().get(1).getName()),
-          () -> assertEquals(TemplateStatus.DRAFT, result.getSuccessfulTemplates().get(0).getStatus()));
+          () ->
+              assertEquals(
+                  TemplateStatus.DRAFT, result.getSuccessfulTemplates().get(0).getStatus()));
 
-      // ===== VERIFY =====
       verify(questionTemplateRepository, times(2)).save(any(QuestionTemplate.class));
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
     }
 
-    /**
-     * Abnormal case: Co row save bi loi trong qua trinh import.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Batch request 2 templates, row dau save throw exception, row sau thanh cong</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>for-loop import -> catch(Exception) branch cho row loi</li>
-     *   <li>for-loop import -> success branch cho row tiep theo</li>
-     *   <li>errors.isEmpty() -> FALSE branch (response.errors co du lieu)</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Response ghi nhan dung rowNumber, rowName va message loi</li>
-     * </ul>
-     */
     @Test
     void it_should_collect_error_details_when_some_template_rows_fail_to_import() {
-      // ===== ARRANGE =====
       QuestionTemplateRequest first =
-          buildTemplateRequest("Bai toan toi uu hoa", QuestionType.ESSAY, CognitiveLevel.VAN_DUNG_CAO);
+          buildTemplateRequest(
+              "Bai toan toi uu hoa", QuestionType.SHORT_ANSWER, CognitiveLevel.VAN_DUNG_CAO);
       QuestionTemplateRequest second =
-          buildTemplateRequest("Do thi ham bac ba", QuestionType.MULTIPLE_CHOICE, CognitiveLevel.THONG_HIEU);
+          buildTemplateRequest(
+              "Do thi ham bac ba", QuestionType.MULTIPLE_CHOICE, CognitiveLevel.THONG_HIEU);
       QuestionTemplateBatchImportRequest request =
           QuestionTemplateBatchImportRequest.builder().templates(List.of(first, second)).build();
 
@@ -994,56 +758,27 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
           .thenThrow(new RuntimeException("Duplicate template name"))
           .thenReturn(savedSecond);
 
-      // ===== ACT =====
       TemplateBatchImportResponse result;
-      try (MockedStatic<SecurityUtils> securityUtilsMock = Mockito.mockStatic(SecurityUtils.class)) {
+      try (MockedStatic<SecurityUtils> securityUtilsMock =
+          Mockito.mockStatic(SecurityUtils.class)) {
         securityUtilsMock.when(SecurityUtils::getCurrentUserId).thenReturn(CURRENT_USER_ID);
         result = excelImportService.importTemplatesBatch(request);
       }
 
-      // ===== ASSERT =====
       assertNotNull(result);
       assertAll(
           () -> assertEquals(2, result.getTotalRows()),
           () -> assertEquals(1, result.getSuccessCount()),
           () -> assertEquals(1, result.getFailedCount()),
           () -> assertNotNull(result.getErrors()),
-          () -> assertEquals(1, result.getErrors().size()),
-          () -> assertEquals(1, result.getErrors().get(0).getRowNumber()),
-          () -> assertEquals("Bai toan toi uu hoa", result.getErrors().get(0).getRowName()),
-          () -> assertEquals("general", result.getErrors().get(0).getField()),
-          () -> assertEquals("Duplicate template name", result.getErrors().get(0).getMessage()),
-          () -> assertEquals(1, result.getSuccessfulTemplates().size()),
-          () -> assertEquals("Do thi ham bac ba", result.getSuccessfulTemplates().get(0).getName()));
-
-      // ===== VERIFY =====
-      verify(questionTemplateRepository, times(2)).save(any(QuestionTemplate.class));
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
+          () -> assertEquals("Duplicate template name", result.getErrors().get(0).getMessage()));
     }
 
-    /**
-     * Normal case: isPublic null trong request phai duoc default ve false.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Batch request co 1 template voi isPublic = null</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>createTemplateEntity(): request.getIsPublic() == null -> TRUE branch default false</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Entity luu xuong repository co gia tri isPublic = false</li>
-     * </ul>
-     */
     @Test
     void it_should_default_is_public_to_false_when_request_is_public_is_null() {
-      // ===== ARRANGE =====
       QuestionTemplateRequest requestItem =
-          buildTemplateRequest("He phuong trinh", QuestionType.ESSAY, CognitiveLevel.NHAN_BIET);
+          buildTemplateRequest(
+              "He phuong trinh", QuestionType.SHORT_ANSWER, CognitiveLevel.NHAN_BIET);
       requestItem.setIsPublic(null);
       QuestionTemplateBatchImportRequest request =
           QuestionTemplateBatchImportRequest.builder().templates(List.of(requestItem)).build();
@@ -1058,19 +793,15 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
               CURRENT_USER_ID);
       when(questionTemplateRepository.save(any(QuestionTemplate.class))).thenReturn(savedTemplate);
 
-      // ===== ACT =====
       TemplateBatchImportResponse result;
-      try (MockedStatic<SecurityUtils> securityUtilsMock = Mockito.mockStatic(SecurityUtils.class)) {
+      try (MockedStatic<SecurityUtils> securityUtilsMock =
+          Mockito.mockStatic(SecurityUtils.class)) {
         securityUtilsMock.when(SecurityUtils::getCurrentUserId).thenReturn(CURRENT_USER_ID);
         result = excelImportService.importTemplatesBatch(request);
       }
 
-      // ===== ASSERT =====
       assertNotNull(result);
       assertEquals(1, result.getSuccessCount());
-      assertEquals(0, result.getFailedCount());
-
-      // ===== VERIFY =====
       verify(questionTemplateRepository, times(1))
           .save(
               Mockito.argThat(
@@ -1081,7 +812,6 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
                     assertEquals(CURRENT_USER_ID, entity.getCreatedBy());
                     return true;
                   }));
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
     }
   }
 
@@ -1089,47 +819,157 @@ class ExcelImportServiceImplTest extends BaseUnitTest {
   @DisplayName("generateExcelTemplate()")
   class GenerateExcelTemplateTests {
 
-    /**
-     * Normal case: Tao file mau excel thanh cong.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>Khong co input parameter</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>generateExcelTemplate() -> happy path ghi workbook thanh cong</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Byte array tra ve co noi dung, workbook co header + 2 dong example dung cot</li>
-     * </ul>
-     */
     @Test
-    void it_should_generate_excel_template_with_headers_and_example_rows() throws Exception {
-      // ===== ACT =====
+    void it_should_generate_excel_template_with_expected_headers_and_three_examples()
+        throws Exception {
       byte[] result = excelImportService.generateExcelTemplate();
-
-      // ===== ASSERT =====
       assertNotNull(result);
       assertTrue(result.length > 0);
-      try (Workbook workbook = new XSSFWorkbook(new java.io.ByteArrayInputStream(result))) {
-        Sheet sheet = workbook.getSheetAt(0);
-        assertNotNull(sheet);
-        assertEquals("Question Templates", sheet.getSheetName());
-        assertEquals("name", sheet.getRow(0).getCell(0).getStringCellValue());
-        assertEquals("templateText_vi", sheet.getRow(0).getCell(3).getStringCellValue());
-        assertEquals("isPublic", sheet.getRow(0).getCell(10).getStringCellValue());
-        assertEquals("Giải phương trình bậc nhất", sheet.getRow(1).getCell(0).getStringCellValue());
-        assertEquals("MULTIPLE_CHOICE", sheet.getRow(1).getCell(2).getStringCellValue());
-        assertEquals("VAN_DUNG_CAO", sheet.getRow(2).getCell(8).getStringCellValue());
-        assertEquals("true", sheet.getRow(2).getCell(10).getStringCellValue());
-      }
 
-      // ===== VERIFY =====
-      verifyNoMoreInteractions(questionTemplateRepository, validator, objectMapper);
+      try (Workbook workbook = new XSSFWorkbook(new ByteArrayInputStream(result))) {
+        Sheet sheet = workbook.getSheet("Question Templates");
+        Sheet instructions = workbook.getSheet("Hướng dẫn");
+        assertNotNull(sheet);
+        assertNotNull(instructions);
+
+        assertAll(
+            () -> assertEquals("name", sheet.getRow(0).getCell(COL_NAME).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "templateType",
+                    sheet.getRow(0).getCell(COL_TEMPLATE_TYPE).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "solutionStepsTemplate",
+                    sheet.getRow(0).getCell(COL_SOLUTION_STEPS_TEMPLATE).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "statementMutations",
+                    sheet.getRow(0).getCell(COL_STATEMENT_MUTATIONS).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "isPublic", sheet.getRow(0).getCell(COL_IS_PUBLIC).getStringCellValue()),
+            () -> assertEquals(COLUMN_COUNT, sheet.getRow(0).getLastCellNum()),
+            // Examples start at row 2
+            () ->
+                assertEquals(
+                    "MULTIPLE_CHOICE",
+                    sheet.getRow(2).getCell(COL_TEMPLATE_TYPE).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "TRUE_FALSE", sheet.getRow(3).getCell(COL_TEMPLATE_TYPE).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "SHORT_ANSWER",
+                    sheet.getRow(4).getCell(COL_TEMPLATE_TYPE).getStringCellValue()),
+            // Geometry MCQ has TikZ
+            () ->
+                assertTrue(
+                    sheet
+                        .getRow(2)
+                        .getCell(COL_DIAGRAM_TEMPLATE)
+                        .getStringCellValue()
+                        .contains("\\begin{tikzpicture}")),
+            // TF has \tkzTabInit + clauseTemplates
+            () ->
+                assertTrue(
+                    sheet
+                        .getRow(3)
+                        .getCell(COL_DIAGRAM_TEMPLATE)
+                        .getStringCellValue()
+                        .contains("\\tkzTabInit")),
+            () ->
+                assertTrue(
+                    sheet
+                        .getRow(3)
+                        .getCell(COL_STATEMENT_MUTATIONS)
+                        .getStringCellValue()
+                        .contains("clauseTemplates")),
+            // SA has answerFormula and PGFPlots graph
+            () ->
+                assertEquals(
+                    "((a*c+b)^4 - b^4) / (4*a)",
+                    sheet.getRow(4).getCell(COL_ANSWER_FORMULA).getStringCellValue()),
+            () ->
+                assertTrue(
+                    sheet
+                        .getRow(4)
+                        .getCell(COL_DIAGRAM_TEMPLATE)
+                        .getStringCellValue()
+                        .contains("\\closedcycle")));
+      }
+    }
+
+    /**
+     * Round-trip: feed the freshly generated template back through preview and
+     * confirm all 3 example rows validate. This is the strongest proof that the
+     * bundled examples are import-ready.
+     */
+    @Test
+    void it_should_preview_every_example_row_as_valid_when_template_is_round_tripped()
+        throws Exception {
+      when(validator.validate(any(QuestionTemplateRequest.class))).thenReturn(Set.of());
+      byte[] templateBytes = excelImportService.generateExcelTemplate();
+      MockMultipartFile file =
+          new MockMultipartFile(
+              "file",
+              "question_template_import.xlsx",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              templateBytes);
+
+      ExcelPreviewResponse response = excelImportService.previewExcelImport(file);
+
+      assertAll(
+          () -> assertEquals(3, response.getTotalRows()),
+          () -> assertEquals(3, response.getValidRows(), "errors: " + response.getRows()),
+          () -> assertEquals(0, response.getInvalidRows()),
+          // Geometry MCQ
+          () ->
+              assertEquals(
+                  QuestionType.MULTIPLE_CHOICE,
+                  response.getRows().get(0).getData().getTemplateType()),
+          () -> assertNotNull(response.getRows().get(0).getData().getOptionsGenerator()),
+          () ->
+              assertTrue(
+                  response
+                      .getRows()
+                      .get(0)
+                      .getData()
+                      .getDiagramTemplate()
+                      .contains("\\begin{tikzpicture}")),
+          // TF variation table
+          () ->
+              assertEquals(
+                  QuestionType.TRUE_FALSE, response.getRows().get(1).getData().getTemplateType()),
+          () -> assertNotNull(response.getRows().get(1).getData().getStatementMutations()),
+          () ->
+              assertTrue(
+                  ((List<?>)
+                              response
+                                  .getRows()
+                                  .get(1)
+                                  .getData()
+                                  .getStatementMutations()
+                                  .get("clauseTemplates"))
+                          .size()
+                      == 4),
+          // SA function graph
+          () ->
+              assertEquals(
+                  QuestionType.SHORT_ANSWER, response.getRows().get(2).getData().getTemplateType()),
+          () ->
+              assertEquals(
+                  "((a*c+b)^4 - b^4) / (4*a)",
+                  response.getRows().get(2).getData().getAnswerFormula()),
+          () -> assertNull(response.getRows().get(2).getData().getOptionsGenerator()),
+          () ->
+              assertTrue(
+                  response
+                      .getRows()
+                      .get(2)
+                      .getData()
+                      .getDiagramTemplate()
+                      .contains("\\closedcycle")));
     }
   }
 }

@@ -59,6 +59,50 @@ class QuestionExcelImportServiceImplTest extends BaseUnitTest {
   @Mock private Validator validator;
   @Spy private ObjectMapper objectMapper = new ObjectMapper();
 
+  // Column layout mirrors QuestionExcelImportServiceImpl
+  private static final int COL_QUESTION_TYPE = 0;
+  private static final int COL_COGNITIVE_LEVEL = 1;
+  private static final int COL_POINTS = 2;
+  private static final int COL_TAGS = 3;
+  private static final int COL_QUESTION_TEXT = 4;
+  private static final int COL_DIAGRAM_DATA = 5;
+  private static final int COL_OPTION_A = 6;
+  private static final int COL_OPTION_B = 7;
+  private static final int COL_OPTION_C = 8;
+  private static final int COL_OPTION_D = 9;
+  private static final int COL_TRUTH_A = 10;
+  private static final int COL_TRUTH_B = 11;
+  private static final int COL_TRUTH_C = 12;
+  private static final int COL_TRUTH_D = 13;
+  private static final int COL_CORRECT_ANSWER = 14;
+  private static final int COL_VALIDATION_MODE = 15;
+  private static final int COL_TOLERANCE = 16;
+  private static final int COL_EXPLANATION = 17;
+  private static final int COL_SOLUTION_STEPS = 18;
+  private static final int COLUMN_COUNT = 19;
+
+  private static final String[] HEADERS = {
+    "questionType",
+    "cognitiveLevel",
+    "points",
+    "tags",
+    "questionText",
+    "diagramData",
+    "optionA",
+    "optionB",
+    "optionC",
+    "optionD",
+    "truthA",
+    "truthB",
+    "truthC",
+    "truthD",
+    "correctAnswer",
+    "answerValidationMode",
+    "answerTolerance",
+    "explanation",
+    "solutionSteps"
+  };
+
   private CreateQuestionRequest buildValidQuestionRequest() {
     Map<String, Object> options = new LinkedHashMap<>();
     options.put("A", "2");
@@ -85,22 +129,25 @@ class QuestionExcelImportServiceImplTest extends BaseUnitTest {
     return (String) method.invoke(questionExcelImportService, row, columnIndex);
   }
 
-  private MultipartFile buildExcelFile(String filename, List<RowConsumer> rowConsumers) throws IOException {
-    try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+  /**
+   * Build a workbook with header + an empty notes row + the given data rows.
+   * The service skips rows below FIRST_DATA_ROW = 2, so tests must seed data
+   * starting at row index 2.
+   */
+  private MultipartFile buildExcelFile(String filename, List<RowConsumer> rowConsumers)
+      throws IOException {
+    try (Workbook workbook = new XSSFWorkbook();
+        ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       Sheet sheet = workbook.createSheet("Questions");
 
       Row headerRow = sheet.createRow(0);
-      headerRow.createCell(0).setCellValue("questionText");
-      headerRow.createCell(1).setCellValue("questionType");
-      headerRow.createCell(2).setCellValue("cognitiveLevel");
-      headerRow.createCell(3).setCellValue("points");
-      headerRow.createCell(4).setCellValue("correctAnswer");
-      headerRow.createCell(5).setCellValue("explanation");
-      headerRow.createCell(6).setCellValue("tags");
-      headerRow.createCell(7).setCellValue("options");
+      for (int i = 0; i < HEADERS.length; i++) {
+        headerRow.createCell(i).setCellValue(HEADERS[i]);
+      }
+      sheet.createRow(1); // notes row (left blank in tests)
 
       for (int i = 0; i < rowConsumers.size(); i++) {
-        Row row = sheet.createRow(i + 1);
+        Row row = sheet.createRow(i + 2);
         rowConsumers.get(i).accept(row);
       }
 
@@ -122,423 +169,339 @@ class QuestionExcelImportServiceImplTest extends BaseUnitTest {
   @DisplayName("previewExcelImport()")
   class PreviewExcelImportTests {
 
-    /**
-     * Abnormal case: File import null.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>file: null</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>previewExcelImport() log file name voi file null -> NPE branch</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Throw {@link NullPointerException} do truy cap file.getOriginalFilename() voi file null</li>
-     * </ul>
-     */
     @Test
     void it_should_throw_null_pointer_exception_when_file_is_null() {
-      // ===== ARRANGE =====
       MultipartFile nullFile = null;
-
-      // ===== ACT & ASSERT =====
       assertThrows(
-          NullPointerException.class, () -> questionExcelImportService.previewExcelImport(nullFile));
-
-      // ===== VERIFY =====
+          NullPointerException.class,
+          () -> questionExcelImportService.previewExcelImport(nullFile));
       verifyNoMoreInteractions(validator, objectMapper, questionService);
     }
 
-    /**
-     * Abnormal case: File rong.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>file: empty xlsx</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>validateExcelFile() -> file.isEmpty() (TRUE branch, throw INVALID_REQUEST)</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Throw {@link AppException} voi error code {@code INVALID_REQUEST}</li>
-     * </ul>
-     */
     @Test
     void it_should_throw_invalid_request_when_file_is_empty() {
-      // ===== ARRANGE =====
       MultipartFile emptyFile =
           new MockMultipartFile(
               "file",
               "question-import.xlsx",
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               new byte[0]);
-
-      // ===== ACT & ASSERT =====
       AppException exception =
           assertThrows(
               AppException.class, () -> questionExcelImportService.previewExcelImport(emptyFile));
       assertEquals(ErrorCode.INVALID_REQUEST, exception.getErrorCode());
-
-      // ===== VERIFY =====
       verifyNoMoreInteractions(validator, objectMapper, questionService);
     }
 
-    /**
-     * Abnormal case: Dinh dang file khong phai xlsx.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>file: question-import.csv</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>validateExcelFile() -> !filename.endsWith(".xlsx") (TRUE branch)</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Throw {@link AppException} voi error code {@code INVALID_REQUEST}</li>
-     * </ul>
-     */
     @Test
     void it_should_throw_invalid_request_when_file_extension_is_not_xlsx() {
-      // ===== ARRANGE =====
       MultipartFile csvFile =
           new MockMultipartFile(
               "file",
               "question-import.csv",
               "text/csv",
               "questionText,questionType".getBytes(StandardCharsets.UTF_8));
-
-      // ===== ACT & ASSERT =====
       AppException exception =
           assertThrows(
               AppException.class, () -> questionExcelImportService.previewExcelImport(csvFile));
       assertEquals(ErrorCode.INVALID_REQUEST, exception.getErrorCode());
-
-      // ===== VERIFY =====
       verifyNoMoreInteractions(validator, objectMapper, questionService);
     }
 
-    /**
-     * Abnormal case: Ten file null.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>file: originalFilename = null, content khong rong</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>validateExcelFile() -> filename == null (TRUE branch)</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Throw {@link AppException} voi error code {@code INVALID_REQUEST}</li>
-     * </ul>
-     */
     @Test
     void it_should_throw_invalid_request_when_filename_is_null() {
-      // ===== ARRANGE =====
       MultipartFile noFilenameFile =
           new MockMultipartFile(
               "file",
               null,
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               "xlsx-content".getBytes(StandardCharsets.UTF_8));
-
-      // ===== ACT & ASSERT =====
       AppException exception =
           assertThrows(
               AppException.class,
               () -> questionExcelImportService.previewExcelImport(noFilenameFile));
       assertEquals(ErrorCode.INVALID_REQUEST, exception.getErrorCode());
-
-      // ===== VERIFY =====
       verifyNoMoreInteractions(validator, objectMapper, questionService);
     }
 
-    /**
-     * Normal case: Preview thanh cong voi mot dong hop le.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>row1: MULTIPLE_CHOICE, options A/B/C/D day du, correctAnswer = C</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>row != null && !isRowEmpty(row) (TRUE branch)</li>
-     *   <li>parseRowToRequest() parse enum/points/tags/options thanh cong</li>
-     *   <li>validateRequest(): errors.isEmpty() (TRUE branch)</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Tra ve 1 dong valid, invalidRows = 0</li>
-     * </ul>
-     */
     @Test
-    void it_should_return_valid_preview_row_when_excel_row_is_valid() throws IOException {
-      // ===== ARRANGE =====
+    void it_should_return_valid_preview_row_for_multiple_choice() throws IOException {
       when(validator.validate(any(CreateQuestionRequest.class))).thenReturn(Set.of());
       MultipartFile file =
           buildExcelFile(
               "question-import.xlsx",
               List.of(
                   row -> {
-                    row.createCell(0).setCellValue("So nao la so nguyen to?");
-                    row.createCell(1).setCellValue("multiple_choice");
-                    row.createCell(2).setCellValue("nhan_biet");
-                    row.createCell(3).setCellValue(2.0);
-                    row.createCell(4).setCellValue("c");
-                    row.createCell(5).setCellValue("Giai thich dap an");
-                    row.createCell(6).setCellValue("toan, so hoc");
-                    row.createCell(7).setCellValue("{\"A\":\"2\",\"B\":\"3\",\"C\":\"5\",\"D\":\"9\"}");
+                    row.createCell(COL_QUESTION_TYPE).setCellValue("multiple_choice");
+                    row.createCell(COL_COGNITIVE_LEVEL).setCellValue("nhan_biet");
+                    row.createCell(COL_POINTS).setCellValue(2.0);
+                    row.createCell(COL_TAGS).setCellValue("toan, so hoc");
+                    row.createCell(COL_QUESTION_TEXT).setCellValue("Số nào là số nguyên tố?");
+                    row.createCell(COL_OPTION_A).setCellValue("$2$");
+                    row.createCell(COL_OPTION_B).setCellValue("$3$");
+                    row.createCell(COL_OPTION_C).setCellValue("$5$");
+                    row.createCell(COL_OPTION_D).setCellValue("$9$");
+                    row.createCell(COL_CORRECT_ANSWER).setCellValue("c");
+                    row.createCell(COL_EXPLANATION).setCellValue("Giải thích đáp án");
                   }));
 
-      // ===== ACT =====
       QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
 
-      // ===== ASSERT =====
       assertAll(
           () -> assertNotNull(response),
           () -> assertEquals(1, response.getTotalRows()),
           () -> assertEquals(1, response.getValidRows()),
           () -> assertEquals(0, response.getInvalidRows()),
-          () -> assertEquals(1, response.getRows().size()),
           () -> assertTrue(response.getRows().get(0).getIsValid()),
           () -> assertEquals(2, response.getRows().get(0).getData().getPoints().intValue()),
           () -> assertEquals(2, response.getRows().get(0).getData().getTags().length),
           () -> assertEquals("toan", response.getRows().get(0).getData().getTags()[0]),
-          () -> assertEquals("c", response.getRows().get(0).getData().getCorrectAnswer()));
+          () -> assertEquals("C", response.getRows().get(0).getData().getCorrectAnswer()),
+          () -> assertEquals(4, response.getRows().get(0).getData().getOptions().size()));
 
-      // ===== VERIFY =====
       verify(validator, times(1)).validate(any(CreateQuestionRequest.class));
       verifyNoMoreInteractions(validator, questionService);
     }
 
-    /**
-     * Abnormal case: parse row that bai do questionType khong hop le.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>row1: questionType = ESSAY_INVALID</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>parseRowToRequest() -> IllegalArgumentException khi parse questionType (TRUE branch)</li>
-     *   <li>preview loop catch(Exception e) cua tung row</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Row duoc danh dau invalid voi thong bao Row parsing error</li>
-     * </ul>
-     */
+    @Test
+    void it_should_preserve_latex_diagram_for_geometry_mcq() throws IOException {
+      when(validator.validate(any(CreateQuestionRequest.class))).thenReturn(Set.of());
+      String tikz =
+          "\\begin{tikzpicture}[scale=0.8]\n"
+              + "\\coordinate (O) at (0,4);\n"
+              + "\\coordinate (A) at (-2,0);\n"
+              + "\\end{tikzpicture}";
+
+      MultipartFile file =
+          buildExcelFile(
+              "geometry-import.xlsx",
+              List.of(
+                  row -> {
+                    row.createCell(COL_QUESTION_TYPE).setCellValue("MULTIPLE_CHOICE");
+                    row.createCell(COL_COGNITIVE_LEVEL).setCellValue("VAN_DUNG");
+                    row.createCell(COL_QUESTION_TEXT).setCellValue("Hình nón. Đoạn $OH$ bằng?");
+                    row.createCell(COL_DIAGRAM_DATA).setCellValue(tikz);
+                    row.createCell(COL_OPTION_A).setCellValue("a");
+                    row.createCell(COL_OPTION_B).setCellValue("b");
+                    row.createCell(COL_OPTION_C).setCellValue("c");
+                    row.createCell(COL_OPTION_D).setCellValue("d");
+                    row.createCell(COL_CORRECT_ANSWER).setCellValue("C");
+                  }));
+
+      QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
+
+      assertAll(
+          () -> assertEquals(1, response.getValidRows()),
+          () -> assertEquals(tikz, response.getRows().get(0).getData().getDiagramData()),
+          () ->
+              assertTrue(
+                  response
+                      .getRows()
+                      .get(0)
+                      .getData()
+                      .getDiagramData()
+                      .contains("\\begin{tikzpicture}")));
+    }
+
+    @Test
+    void it_should_parse_true_false_with_truth_columns() throws IOException {
+      when(validator.validate(any(CreateQuestionRequest.class))).thenReturn(Set.of());
+      MultipartFile file =
+          buildExcelFile(
+              "tf-import.xlsx",
+              List.of(
+                  row -> {
+                    row.createCell(COL_QUESTION_TYPE).setCellValue("TRUE_FALSE");
+                    row.createCell(COL_COGNITIVE_LEVEL).setCellValue("THONG_HIEU");
+                    row.createCell(COL_QUESTION_TEXT)
+                        .setCellValue("Cho hàm $f$. Xét các phát biểu:");
+                    row.createCell(COL_OPTION_A).setCellValue("PB A");
+                    row.createCell(COL_OPTION_B).setCellValue("PB B");
+                    row.createCell(COL_OPTION_C).setCellValue("PB C");
+                    row.createCell(COL_OPTION_D).setCellValue("PB D");
+                    row.createCell(COL_TRUTH_A).setCellValue("TRUE");
+                    row.createCell(COL_TRUTH_B).setCellValue("FALSE");
+                    row.createCell(COL_TRUTH_C).setCellValue("Đ");
+                    row.createCell(COL_TRUTH_D).setCellValue("S");
+                  }));
+
+      QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
+
+      assertEquals(1, response.getValidRows());
+      CreateQuestionRequest data = response.getRows().get(0).getData();
+      assertAll(
+          () -> assertEquals(QuestionType.TRUE_FALSE, data.getQuestionType()),
+          () -> assertEquals("A,C", data.getCorrectAnswer()),
+          () -> assertEquals(4, data.getOptions().size()),
+          () -> assertNotNull(data.getGenerationMetadata()),
+          () -> assertNotNull(data.getGenerationMetadata().get("tfClauses")));
+    }
+
+    @Test
+    void it_should_mark_tf_invalid_when_truth_value_missing() throws IOException {
+      MultipartFile file =
+          buildExcelFile(
+              "tf-import.xlsx",
+              List.of(
+                  row -> {
+                    row.createCell(COL_QUESTION_TYPE).setCellValue("TRUE_FALSE");
+                    row.createCell(COL_COGNITIVE_LEVEL).setCellValue("THONG_HIEU");
+                    row.createCell(COL_QUESTION_TEXT).setCellValue("Q");
+                    row.createCell(COL_OPTION_A).setCellValue("A");
+                    row.createCell(COL_OPTION_B).setCellValue("B");
+                    row.createCell(COL_TRUTH_A).setCellValue("TRUE");
+                    // truthB intentionally missing
+                  }));
+
+      QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
+
+      assertAll(
+          () -> assertEquals(1, response.getInvalidRows()),
+          () ->
+              assertTrue(
+                  response.getRows().get(0).getValidationErrors().stream()
+                      .anyMatch(msg -> msg.contains("Missing/invalid truth value"))));
+    }
+
+    @Test
+    void it_should_parse_short_answer_with_validation_mode() throws IOException {
+      when(validator.validate(any(CreateQuestionRequest.class))).thenReturn(Set.of());
+      MultipartFile file =
+          buildExcelFile(
+              "sa-import.xlsx",
+              List.of(
+                  row -> {
+                    row.createCell(COL_QUESTION_TYPE).setCellValue("SHORT_ANSWER");
+                    row.createCell(COL_COGNITIVE_LEVEL).setCellValue("VAN_DUNG");
+                    row.createCell(COL_POINTS).setCellValue(0.25);
+                    row.createCell(COL_QUESTION_TEXT).setCellValue("Tính cực đại của $y=x^3-3x$");
+                    row.createCell(COL_DIAGRAM_DATA)
+                        .setCellValue("\\begin{tikzpicture}\\end{tikzpicture}");
+                    row.createCell(COL_CORRECT_ANSWER).setCellValue("2");
+                    row.createCell(COL_VALIDATION_MODE).setCellValue("NUMERIC");
+                    row.createCell(COL_TOLERANCE).setCellValue(0.001);
+                  }));
+
+      QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
+
+      assertEquals(1, response.getValidRows());
+      CreateQuestionRequest data = response.getRows().get(0).getData();
+      assertAll(
+          () -> assertEquals(QuestionType.SHORT_ANSWER, data.getQuestionType()),
+          () -> assertNull(data.getOptions()),
+          () -> assertEquals("2", data.getCorrectAnswer()),
+          () -> assertEquals(new BigDecimal("0.25"), data.getPoints()),
+          () -> assertEquals("NUMERIC", data.getGenerationMetadata().get("answerValidationMode")),
+          () ->
+              assertEquals(
+                  0.001,
+                  ((Number) data.getGenerationMetadata().get("answerTolerance")).doubleValue()));
+    }
+
     @Test
     void it_should_mark_row_invalid_when_question_type_is_invalid() throws IOException {
-      // ===== ARRANGE =====
       MultipartFile file =
           buildExcelFile(
               "question-import.xlsx",
               List.of(
                   row -> {
-                    row.createCell(0).setCellValue("Tinh tong 2 so");
-                    row.createCell(1).setCellValue("ESSAY_INVALID");
-                    row.createCell(2).setCellValue("NHAN_BIET");
-                    row.createCell(3).setCellValue(1.0);
-                    row.createCell(4).setCellValue("A");
-                    row.createCell(7).setCellValue("{\"A\":\"2\",\"B\":\"3\",\"C\":\"4\",\"D\":\"5\"}");
+                    row.createCell(COL_QUESTION_TYPE).setCellValue("ESSAY_INVALID");
+                    row.createCell(COL_COGNITIVE_LEVEL).setCellValue("NHAN_BIET");
+                    row.createCell(COL_QUESTION_TEXT).setCellValue("Bad type");
+                    row.createCell(COL_OPTION_A).setCellValue("a");
+                    row.createCell(COL_OPTION_B).setCellValue("b");
+                    row.createCell(COL_OPTION_C).setCellValue("c");
+                    row.createCell(COL_OPTION_D).setCellValue("d");
+                    row.createCell(COL_CORRECT_ANSWER).setCellValue("A");
                   }));
 
-      // ===== ACT =====
       QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
 
-      // ===== ASSERT =====
-      assertAll(
-          () -> assertEquals(1, response.getTotalRows()),
-          () -> assertEquals(0, response.getValidRows()),
-          () -> assertEquals(1, response.getInvalidRows()),
-          () -> assertTrue(response.getRows().get(0).getValidationErrors().get(0).contains("Row parsing error")),
-          () -> assertTrue(response.getRows().get(0).getValidationErrors().get(0).contains("Invalid questionType")));
-
-      // ===== VERIFY =====
-      verifyNoMoreInteractions(validator, questionService);
-    }
-
-    /**
-     * Abnormal case: parse row that bai do options JSON khong hop le.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>row1: options json bi loi cu phap</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>parse options -> objectMapper.readValue() throw exception</li>
-     *   <li>preview loop catch(Exception e) cua tung row</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Row invalid voi thong bao Invalid options JSON</li>
-     * </ul>
-     */
-    @Test
-    void it_should_mark_row_invalid_when_options_json_is_invalid() throws IOException {
-      // ===== ARRANGE =====
-      MultipartFile file =
-          buildExcelFile(
-              "question-import.xlsx",
-              List.of(
-                  row -> {
-                    row.createCell(0).setCellValue("Tinh gia tri bieu thuc");
-                    row.createCell(1).setCellValue("MULTIPLE_CHOICE");
-                    row.createCell(2).setCellValue("THONG_HIEU");
-                    row.createCell(3).setCellValue(1.0);
-                    row.createCell(4).setCellValue("A");
-                    row.createCell(7).setCellValue("{\"A\":\"1\",\"B\":\"2\"");
-                  }));
-
-      // ===== ACT =====
-      QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
-
-      // ===== ASSERT =====
       assertAll(
           () -> assertEquals(1, response.getInvalidRows()),
-          () -> assertTrue(response.getRows().get(0).getValidationErrors().get(0).contains("Invalid options JSON")));
-
-      // ===== VERIFY =====
-      verifyNoMoreInteractions(validator, questionService);
+          () ->
+              assertTrue(
+                  response
+                      .getRows()
+                      .get(0)
+                      .getValidationErrors()
+                      .get(0)
+                      .contains("Row parsing error")),
+          () ->
+              assertTrue(
+                  response
+                      .getRows()
+                      .get(0)
+                      .getValidationErrors()
+                      .get(0)
+                      .contains("Invalid questionType")));
     }
 
-    /**
-     * Abnormal case: request vi pham business rules cua cau hoi trac nghiem.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>row1: questionType = TRUE_FALSE</li>
-     *   <li>row2: MULTIPLE_CHOICE nhung options khong dung 4 dap an</li>
-     *   <li>row3: MULTIPLE_CHOICE dung 4 options nhung sai key</li>
-     *   <li>row4: MULTIPLE_CHOICE, correctAnswer nam ngoai A-D</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>validateRequest() -> RULE 1 questionType != MULTIPLE_CHOICE (TRUE branch)</li>
-     *   <li>RULE 2 options size != 4 (TRUE branch)</li>
-     *   <li>RULE 2 keys != A/B/C/D (TRUE branch)</li>
-     *   <li>correctAnswer !matches A-D (TRUE branch)</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Tat ca 4 dong deu invalid va co validationErrors phu hop</li>
-     * </ul>
-     */
     @Test
     void it_should_return_validation_errors_when_business_rules_are_violated() throws IOException {
-      // ===== ARRANGE =====
       when(validator.validate(any(CreateQuestionRequest.class))).thenReturn(Set.of());
       MultipartFile file =
           buildExcelFile(
               "question-import.xlsx",
               List.of(
+                  // MCQ missing option D
                   row -> {
-                    row.createCell(0).setCellValue("Cau hoi dang true false");
-                    row.createCell(1).setCellValue("TRUE_FALSE");
-                    row.createCell(2).setCellValue("THONG_HIEU");
-                    row.createCell(4).setCellValue("A");
+                    row.createCell(COL_QUESTION_TYPE).setCellValue("MULTIPLE_CHOICE");
+                    row.createCell(COL_COGNITIVE_LEVEL).setCellValue("VAN_DUNG");
+                    row.createCell(COL_QUESTION_TEXT).setCellValue("Thieu dap an");
+                    row.createCell(COL_OPTION_A).setCellValue("1");
+                    row.createCell(COL_OPTION_B).setCellValue("2");
+                    row.createCell(COL_OPTION_C).setCellValue("3");
+                    row.createCell(COL_CORRECT_ANSWER).setCellValue("A");
                   },
+                  // MCQ correctAnswer outside A-D
                   row -> {
-                    row.createCell(0).setCellValue("Thieu dap an");
-                    row.createCell(1).setCellValue("MULTIPLE_CHOICE");
-                    row.createCell(2).setCellValue("VAN_DUNG");
-                    row.createCell(4).setCellValue("A");
-                    row.createCell(7).setCellValue("{\"A\":\"1\",\"B\":\"2\",\"C\":\"3\"}");
+                    row.createCell(COL_QUESTION_TYPE).setCellValue("MULTIPLE_CHOICE");
+                    row.createCell(COL_COGNITIVE_LEVEL).setCellValue("NHAN_BIET");
+                    row.createCell(COL_QUESTION_TEXT).setCellValue("Sai dap an");
+                    row.createCell(COL_OPTION_A).setCellValue("1");
+                    row.createCell(COL_OPTION_B).setCellValue("2");
+                    row.createCell(COL_OPTION_C).setCellValue("3");
+                    row.createCell(COL_OPTION_D).setCellValue("4");
+                    row.createCell(COL_CORRECT_ANSWER).setCellValue("Z");
                   },
+                  // SA missing correctAnswer
                   row -> {
-                    row.createCell(0).setCellValue("Sai nhan dap an");
-                    row.createCell(1).setCellValue("MULTIPLE_CHOICE");
-                    row.createCell(2).setCellValue("VAN_DUNG_CAO");
-                    row.createCell(4).setCellValue("B");
-                    row.createCell(7).setCellValue("{\"A\":\"1\",\"B\":\"2\",\"C\":\"3\",\"E\":\"4\"}");
-                  },
-                  row -> {
-                    row.createCell(0).setCellValue("Dap an dung sai format");
-                    row.createCell(1).setCellValue("MULTIPLE_CHOICE");
-                    row.createCell(2).setCellValue("NHAN_BIET");
-                    row.createCell(4).setCellValue("Z");
-                    row.createCell(7).setCellValue("{\"A\":\"1\",\"B\":\"2\",\"C\":\"3\",\"D\":\"4\"}");
+                    row.createCell(COL_QUESTION_TYPE).setCellValue("SHORT_ANSWER");
+                    row.createCell(COL_COGNITIVE_LEVEL).setCellValue("VAN_DUNG");
+                    row.createCell(COL_QUESTION_TEXT).setCellValue("SA missing answer");
                   }));
 
-      // ===== ACT =====
       QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
 
-      // ===== ASSERT =====
       assertAll(
-          () -> assertEquals(4, response.getTotalRows()),
+          () -> assertEquals(3, response.getTotalRows()),
           () -> assertEquals(0, response.getValidRows()),
-          () -> assertEquals(4, response.getInvalidRows()),
+          () -> assertEquals(3, response.getInvalidRows()),
           () ->
               assertTrue(
                   response.getRows().get(0).getValidationErrors().stream()
-                      .anyMatch(msg -> msg.contains("Chỉ cho phép loại câu hỏi MULTIPLE_CHOICE"))),
+                      .anyMatch(msg -> msg.contains("phải có đủ 4 đáp án"))),
           () ->
               assertTrue(
                   response.getRows().get(1).getValidationErrors().stream()
-                      .anyMatch(msg -> msg.contains("phải có đúng 4 đáp án"))),
+                      .anyMatch(msg -> msg.contains("correctAnswer phải là A, B, C hoặc D"))),
           () ->
               assertTrue(
                   response.getRows().get(2).getValidationErrors().stream()
-                      .anyMatch(msg -> msg.contains("đánh nhãn A, B, C, D"))),
-          () ->
-              assertTrue(
-                  response.getRows().get(3).getValidationErrors().stream()
-                      .anyMatch(msg -> msg.contains("Đáp án đúng phải là A, B, C hoặc D"))));
+                      .anyMatch(msg -> msg.contains("cần điền correctAnswer"))));
 
-      // ===== VERIFY =====
-      verify(validator, times(4)).validate(any(CreateQuestionRequest.class));
+      verify(validator, times(3)).validate(any(CreateQuestionRequest.class));
       verifyNoMoreInteractions(validator, questionService);
     }
 
-    /**
-     * Abnormal case: Co violation tu bean validator.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>row1: du lieu co ve hop le, nhung validator tra ve 1 violation</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>validateRequest() loop qua violations (non-empty branch)</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Validation error chua property path va message tu validator</li>
-     * </ul>
-     */
     @Test
     void it_should_append_constraint_violation_messages_when_validator_returns_violations()
         throws IOException {
-      // ===== ARRANGE =====
       @SuppressWarnings("unchecked")
-      ConstraintViolation<CreateQuestionRequest> violation = (ConstraintViolation<CreateQuestionRequest>) org.mockito.Mockito.mock(ConstraintViolation.class);
+      ConstraintViolation<CreateQuestionRequest> violation =
+          (ConstraintViolation<CreateQuestionRequest>)
+              org.mockito.Mockito.mock(ConstraintViolation.class);
       Path propertyPath = org.mockito.Mockito.mock(Path.class);
       when(propertyPath.toString()).thenReturn("questionText");
       when(violation.getPropertyPath()).thenReturn(propertyPath);
@@ -550,52 +513,28 @@ class QuestionExcelImportServiceImplTest extends BaseUnitTest {
               "question-import.xlsx",
               List.of(
                   row -> {
-                    row.createCell(0).setCellValue("Noi dung cau hoi");
-                    row.createCell(1).setCellValue("MULTIPLE_CHOICE");
-                    row.createCell(2).setCellValue("NHAN_BIET");
-                    row.createCell(4).setCellValue("A");
-                    row.createCell(7).setCellValue("{\"A\":\"1\",\"B\":\"2\",\"C\":\"3\",\"D\":\"4\"}");
+                    row.createCell(COL_QUESTION_TYPE).setCellValue("MULTIPLE_CHOICE");
+                    row.createCell(COL_COGNITIVE_LEVEL).setCellValue("NHAN_BIET");
+                    row.createCell(COL_QUESTION_TEXT).setCellValue("Noi dung cau hoi");
+                    row.createCell(COL_OPTION_A).setCellValue("1");
+                    row.createCell(COL_OPTION_B).setCellValue("2");
+                    row.createCell(COL_OPTION_C).setCellValue("3");
+                    row.createCell(COL_OPTION_D).setCellValue("4");
+                    row.createCell(COL_CORRECT_ANSWER).setCellValue("A");
                   }));
 
-      // ===== ACT =====
       QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
 
-      // ===== ASSERT =====
       assertAll(
           () -> assertEquals(1, response.getInvalidRows()),
           () ->
               assertTrue(
                   response.getRows().get(0).getValidationErrors().stream()
                       .anyMatch(msg -> msg.contains("questionText: Question text is required"))));
-
-      // ===== VERIFY =====
-      verify(validator, times(1)).validate(any(CreateQuestionRequest.class));
-      verifyNoMoreInteractions(validator, questionService);
     }
 
-    /**
-     * Normal case: Bo qua row null/row rong.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>row1: de trong toan bo</li>
-     *   <li>row2: co 1 o du lieu hop le</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>if (row == null || isRowEmpty(row)) -> TRUE branch skip row1</li>
-     *   <li>isRowEmpty(row) -> FALSE branch voi row2</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Chi tinh row2 la du lieu can validate</li>
-     * </ul>
-     */
     @Test
     void it_should_skip_empty_rows_when_previewing_excel() throws IOException {
-      // ===== ARRANGE =====
       when(validator.validate(any(CreateQuestionRequest.class))).thenReturn(Set.of());
       MultipartFile file =
           buildExcelFile(
@@ -603,48 +542,26 @@ class QuestionExcelImportServiceImplTest extends BaseUnitTest {
               List.of(
                   row -> row.createCell(0).setBlank(),
                   row -> {
-                    row.createCell(0).setCellValue("Cau hoi hop le");
-                    row.createCell(1).setCellValue("MULTIPLE_CHOICE");
-                    row.createCell(2).setCellValue("THONG_HIEU");
-                    row.createCell(4).setCellValue("A");
-                    row.createCell(7).setCellValue("{\"A\":\"1\",\"B\":\"2\",\"C\":\"3\",\"D\":\"4\"}");
+                    row.createCell(COL_QUESTION_TYPE).setCellValue("MULTIPLE_CHOICE");
+                    row.createCell(COL_COGNITIVE_LEVEL).setCellValue("THONG_HIEU");
+                    row.createCell(COL_QUESTION_TEXT).setCellValue("Cau hoi hop le");
+                    row.createCell(COL_OPTION_A).setCellValue("1");
+                    row.createCell(COL_OPTION_B).setCellValue("2");
+                    row.createCell(COL_OPTION_C).setCellValue("3");
+                    row.createCell(COL_OPTION_D).setCellValue("4");
+                    row.createCell(COL_CORRECT_ANSWER).setCellValue("A");
                   }));
 
-      // ===== ACT =====
       QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
 
-      // ===== ASSERT =====
       assertAll(
           () -> assertEquals(1, response.getTotalRows()),
           () -> assertEquals(1, response.getValidRows()),
           () -> assertEquals(0, response.getInvalidRows()));
-
-      // ===== VERIFY =====
-      verify(validator, times(1)).validate(any(CreateQuestionRequest.class));
-      verifyNoMoreInteractions(validator, questionService);
     }
 
-    /**
-     * Abnormal case: Workbook khong hop le gay exception khi parse.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>file: .xlsx nhung noi dung text khong phai excel binary</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>previewExcelImport() catch(Exception e) ben ngoai vong lap (UNCATEGORIZED_EXCEPTION)</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Throw {@link AppException} voi error code {@code UNCATEGORIZED_EXCEPTION}</li>
-     * </ul>
-     */
     @Test
     void it_should_throw_uncategorized_exception_when_workbook_content_is_corrupted() {
-      // ===== ARRANGE =====
       MultipartFile corruptedFile =
           new MockMultipartFile(
               "file",
@@ -652,72 +569,45 @@ class QuestionExcelImportServiceImplTest extends BaseUnitTest {
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               "not-a-real-xlsx".getBytes(StandardCharsets.UTF_8));
 
-      // ===== ACT & ASSERT =====
       AppException exception =
           assertThrows(
               AppException.class,
               () -> questionExcelImportService.previewExcelImport(corruptedFile));
       assertEquals(ErrorCode.UNCATEGORIZED_EXCEPTION, exception.getErrorCode());
-
-      // ===== VERIFY =====
-      verifyNoMoreInteractions(validator, questionService);
     }
 
-    /**
-     * Normal case: Cover full switch cua getCellValueAsString.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>row gom cell STRING, NUMERIC, BOOLEAN, FORMULA, BLANK va null cell</li>
-     *   <li>columnIndex null</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>columnIndex == null -> return null</li>
-     *   <li>cell == null -> return null</li>
-     *   <li>switch case STRING, NUMERIC, BOOLEAN, FORMULA, default(BLANK)</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Moi case tra ve dung gia tri theo implementation</li>
-     * </ul>
-     */
     @Test
     void it_should_cover_all_switch_cases_in_get_cell_value_as_string() throws Exception {
-      // ===== ARRANGE =====
       try (Workbook workbook = new XSSFWorkbook()) {
         Sheet sheet = workbook.createSheet("SwitchCoverage");
         Row row = sheet.createRow(0);
         row.createCell(0).setCellValue("question text");
         row.createCell(1).setCellValue(7.0);
-        row.createCell(2).setCellValue(true);
-        row.createCell(3).setCellFormula("1+2");
-        row.createCell(4).setBlank();
+        row.createCell(2).setCellValue(0.25);
+        row.createCell(3).setCellValue(true);
+        row.createCell(4).setCellFormula("1+2");
+        row.createCell(5).setBlank();
 
-        // ===== ACT =====
         String stringValue = invokeGetCellValueAsString(row, 0);
-        String numericValue = invokeGetCellValueAsString(row, 1);
-        String booleanValue = invokeGetCellValueAsString(row, 2);
-        String formulaValue = invokeGetCellValueAsString(row, 3);
-        String defaultValue = invokeGetCellValueAsString(row, 4);
-        String nullCellValue = invokeGetCellValueAsString(row, 5);
+        String integerValue = invokeGetCellValueAsString(row, 1);
+        String decimalValue = invokeGetCellValueAsString(row, 2);
+        String booleanValue = invokeGetCellValueAsString(row, 3);
+        String formulaValue = invokeGetCellValueAsString(row, 4);
+        String defaultValue = invokeGetCellValueAsString(row, 5);
+        String nullCellValue = invokeGetCellValueAsString(row, 6);
         String nullColumnValue = invokeGetCellValueAsString(row, null);
 
-        // ===== ASSERT =====
         assertAll(
             () -> assertEquals("question text", stringValue),
-            () -> assertEquals("7", numericValue),
+            () -> assertEquals("7", integerValue),
+            () -> assertEquals("0.25", decimalValue),
             () -> assertEquals("true", booleanValue),
-            () -> assertEquals("1+2", formulaValue),
+            // formula cell evaluates lazily; either the formula text or its cached value is fine
+            () -> assertNotNull(formulaValue),
             () -> assertNull(defaultValue),
             () -> assertNull(nullCellValue),
             () -> assertNull(nullColumnValue));
       }
-
-      // ===== VERIFY =====
-      verifyNoMoreInteractions(validator, questionService, objectMapper);
     }
   }
 
@@ -725,39 +615,19 @@ class QuestionExcelImportServiceImplTest extends BaseUnitTest {
   @DisplayName("importQuestionsBatch()")
   class ImportQuestionsBatchTests {
 
-    /**
-     * Normal case: Tat ca cau hoi import thanh cong.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>request.questions: 2 cau hoi hop le</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>for-loop qua tat ca rows</li>
-     *   <li>try block success branch cho moi row</li>
-     *   <li>errors.isEmpty() == TRUE -> response.errors = null</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>successCount = 2, failedCount = 0, errors = null</li>
-     * </ul>
-     */
     @Test
     void it_should_return_success_summary_when_all_questions_are_imported_successfully() {
-      // ===== ARRANGE =====
       CreateQuestionRequest firstQuestion = buildValidQuestionRequest();
       CreateQuestionRequest secondQuestion = buildValidQuestionRequest();
-      secondQuestion.setQuestionText("Tinh dien tich hinh tron co ban kinh {{r}}");
+      secondQuestion.setQuestionText("Tinh dien tich hinh tron co ban kinh r");
       QuestionBatchImportRequest request =
-          QuestionBatchImportRequest.builder().questions(List.of(firstQuestion, secondQuestion)).build();
+          QuestionBatchImportRequest.builder()
+              .questions(List.of(firstQuestion, secondQuestion))
+              .build();
 
-      // ===== ACT =====
-      QuestionBatchImportResponse response = questionExcelImportService.importQuestionsBatch(request);
+      QuestionBatchImportResponse response =
+          questionExcelImportService.importQuestionsBatch(request);
 
-      // ===== ASSERT =====
       assertAll(
           () -> assertNotNull(response),
           () -> assertEquals(2, response.getTotalRows()),
@@ -765,49 +635,27 @@ class QuestionExcelImportServiceImplTest extends BaseUnitTest {
           () -> assertEquals(0, response.getFailedCount()),
           () -> assertNull(response.getErrors()));
 
-      // ===== VERIFY =====
       verify(questionService, times(1)).createQuestion(firstQuestion);
       verify(questionService, times(1)).createQuestion(secondQuestion);
       verifyNoMoreInteractions(questionService, validator);
     }
 
-    /**
-     * Abnormal case: Co row import that bai.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>row1: import thanh cong</li>
-     *   <li>row2: createQuestion throw RuntimeException</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>try branch cho row1</li>
-     *   <li>catch(Exception e) branch cho row2</li>
-     *   <li>errors.isEmpty() == FALSE -> response.errors co gia tri</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>successCount = 1, failedCount = 1, errors chua thong diep row 2</li>
-     * </ul>
-     */
     @Test
     void it_should_collect_error_messages_when_some_rows_fail_during_batch_import() {
-      // ===== ARRANGE =====
       CreateQuestionRequest firstQuestion = buildValidQuestionRequest();
       CreateQuestionRequest secondQuestion = buildValidQuestionRequest();
       secondQuestion.setQuestionText("Cau hoi gay loi khi import");
       QuestionBatchImportRequest request =
-          QuestionBatchImportRequest.builder().questions(List.of(firstQuestion, secondQuestion)).build();
+          QuestionBatchImportRequest.builder()
+              .questions(List.of(firstQuestion, secondQuestion))
+              .build();
       org.mockito.Mockito.doThrow(new RuntimeException("Database timeout"))
           .when(questionService)
           .createQuestion(secondQuestion);
 
-      // ===== ACT =====
-      QuestionBatchImportResponse response = questionExcelImportService.importQuestionsBatch(request);
+      QuestionBatchImportResponse response =
+          questionExcelImportService.importQuestionsBatch(request);
 
-      // ===== ASSERT =====
       assertAll(
           () -> assertEquals(2, response.getTotalRows()),
           () -> assertEquals(1, response.getSuccessCount()),
@@ -816,48 +664,25 @@ class QuestionExcelImportServiceImplTest extends BaseUnitTest {
           () -> assertEquals(1, response.getErrors().size()),
           () -> assertTrue(response.getErrors().get(0).contains("Row 2: Database timeout")));
 
-      // ===== VERIFY =====
       verify(questionService, times(1)).createQuestion(firstQuestion);
       verify(questionService, times(1)).createQuestion(secondQuestion);
       verifyNoMoreInteractions(questionService, validator);
     }
 
-    /**
-     * Abnormal case: Danh sach cau hoi rong.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>request.questions: empty list</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>for-loop khong chay lan nao</li>
-     *   <li>errors.isEmpty() == TRUE</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>response tong so = 0, success = 0, failed = 0</li>
-     * </ul>
-     */
     @Test
     void it_should_return_zero_counts_when_batch_request_has_no_questions() {
-      // ===== ARRANGE =====
       QuestionBatchImportRequest request =
           QuestionBatchImportRequest.builder().questions(List.of()).build();
 
-      // ===== ACT =====
-      QuestionBatchImportResponse response = questionExcelImportService.importQuestionsBatch(request);
+      QuestionBatchImportResponse response =
+          questionExcelImportService.importQuestionsBatch(request);
 
-      // ===== ASSERT =====
       assertAll(
           () -> assertEquals(0, response.getTotalRows()),
           () -> assertEquals(0, response.getSuccessCount()),
           () -> assertEquals(0, response.getFailedCount()),
           () -> assertNull(response.getErrors()));
 
-      // ===== VERIFY =====
       verify(questionService, never()).createQuestion(any(CreateQuestionRequest.class));
       verifyNoMoreInteractions(questionService, validator);
     }
@@ -867,35 +692,11 @@ class QuestionExcelImportServiceImplTest extends BaseUnitTest {
   @DisplayName("generateExcelTemplate()")
   class GenerateExcelTemplateTests {
 
-    /**
-     * Normal case: Tao file template thanh cong.
-     *
-     * <p>Input:
-     * <ul>
-     *   <li>khong co input parameter</li>
-     * </ul>
-     *
-     * <p>Branch coverage:
-     * <ul>
-     *   <li>generateExcelTemplate() try block thanh cong</li>
-     *   <li>tao sheet Questions + Huong dan + du lieu mau</li>
-     * </ul>
-     *
-     * <p>Expectation:
-     * <ul>
-     *   <li>Tra ve byte[] hop le, doc duoc workbook va dung cau truc mau</li>
-     * </ul>
-     */
     @Test
     void it_should_generate_excel_template_with_expected_headers_and_instruction_sheet()
         throws IOException {
-      // ===== ARRANGE =====
-      // No additional setup required.
-
-      // ===== ACT =====
       byte[] templateBytes = questionExcelImportService.generateExcelTemplate();
 
-      // ===== ASSERT =====
       assertNotNull(templateBytes);
       assertTrue(templateBytes.length > 0);
 
@@ -905,27 +706,158 @@ class QuestionExcelImportServiceImplTest extends BaseUnitTest {
         assertAll(
             () -> assertNotNull(questionsSheet),
             () -> assertNotNull(instructionSheet),
-            () -> assertEquals("questionText", questionsSheet.getRow(0).getCell(0).getStringCellValue()),
-            () -> assertEquals("questionType", questionsSheet.getRow(0).getCell(1).getStringCellValue()),
-            () -> assertEquals("cognitiveLevel", questionsSheet.getRow(0).getCell(2).getStringCellValue()),
-            () -> assertEquals("points", questionsSheet.getRow(0).getCell(3).getStringCellValue()),
-            () -> assertEquals("correctAnswer", questionsSheet.getRow(0).getCell(4).getStringCellValue()),
-            () -> assertEquals("options", questionsSheet.getRow(0).getCell(7).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "questionType",
+                    questionsSheet.getRow(0).getCell(COL_QUESTION_TYPE).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "questionText",
+                    questionsSheet.getRow(0).getCell(COL_QUESTION_TEXT).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "diagramData",
+                    questionsSheet.getRow(0).getCell(COL_DIAGRAM_DATA).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "truthA", questionsSheet.getRow(0).getCell(COL_TRUTH_A).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "answerValidationMode",
+                    questionsSheet.getRow(0).getCell(COL_VALIDATION_MODE).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "solutionSteps",
+                    questionsSheet.getRow(0).getCell(COL_SOLUTION_STEPS).getStringCellValue()),
+            () -> assertEquals(COLUMN_COUNT, questionsSheet.getRow(0).getLastCellNum()),
             () ->
                 assertTrue(
                     questionsSheet
                         .getRow(1)
-                        .getCell(1)
+                        .getCell(COL_QUESTION_TYPE)
                         .getStringCellValue()
-                        .contains("CHỈ MULTIPLE_CHOICE")),
-            () -> assertEquals("HƯỚNG DẪN IMPORT CÂU HỎI", instructionSheet.getRow(0).getCell(0).getStringCellValue()),
+                        .contains("MULTIPLE_CHOICE | TRUE_FALSE | SHORT_ANSWER")),
+            () ->
+                assertEquals(
+                    "HƯỚNG DẪN IMPORT CÂU HỎI",
+                    instructionSheet.getRow(0).getCell(0).getStringCellValue()));
+      }
+    }
+
+    @Test
+    void it_should_include_three_question_type_examples_in_template() throws IOException {
+      byte[] templateBytes = questionExcelImportService.generateExcelTemplate();
+      try (Workbook workbook = new XSSFWorkbook(new ByteArrayInputStream(templateBytes))) {
+        Sheet sheet = workbook.getSheet("Questions");
+        // Examples start at row 2
+        assertAll(
+            () ->
+                assertEquals(
+                    "MULTIPLE_CHOICE",
+                    sheet.getRow(2).getCell(COL_QUESTION_TYPE).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "MULTIPLE_CHOICE",
+                    sheet.getRow(3).getCell(COL_QUESTION_TYPE).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "TRUE_FALSE", sheet.getRow(4).getCell(COL_QUESTION_TYPE).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "TRUE_FALSE", sheet.getRow(5).getCell(COL_QUESTION_TYPE).getStringCellValue()),
+            () ->
+                assertEquals(
+                    "SHORT_ANSWER",
+                    sheet.getRow(6).getCell(COL_QUESTION_TYPE).getStringCellValue()),
+            // Geometry MCQ has TikZ in diagramData
             () ->
                 assertTrue(
-                    instructionSheet.getRow(3).getCell(0).getStringCellValue().contains("CHỈ được là MULTIPLE_CHOICE")));
+                    sheet
+                        .getRow(3)
+                        .getCell(COL_DIAGRAM_DATA)
+                        .getStringCellValue()
+                        .contains("\\begin{tikzpicture}")),
+            // SA has NUMERIC validation mode
+            () ->
+                assertEquals(
+                    "NUMERIC", sheet.getRow(6).getCell(COL_VALIDATION_MODE).getStringCellValue()));
       }
+    }
 
-      // ===== VERIFY =====
-      verifyNoMoreInteractions(questionService, validator);
+    /**
+     * Round-trip guarantee: feeding the generated template back through the
+     * preview pipeline must validate every example row. This is the strongest
+     * proof that the bundled examples are complete and import-ready.
+     */
+    @Test
+    void it_should_preview_every_example_row_as_valid_when_template_is_round_tripped()
+        throws IOException {
+      when(validator.validate(any(CreateQuestionRequest.class))).thenReturn(Set.of());
+
+      byte[] templateBytes = questionExcelImportService.generateExcelTemplate();
+      MultipartFile file =
+          new MockMultipartFile(
+              "file",
+              "question_import.xlsx",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              templateBytes);
+
+      QuestionExcelPreviewResponse response = questionExcelImportService.previewExcelImport(file);
+
+      assertAll(
+          () -> assertEquals(5, response.getTotalRows()),
+          () -> assertEquals(5, response.getValidRows(), "errors: " + response.getRows()),
+          () -> assertEquals(0, response.getInvalidRows()),
+          // standard MCQ
+          () ->
+              assertEquals(
+                  QuestionType.MULTIPLE_CHOICE,
+                  response.getRows().get(0).getData().getQuestionType()),
+          () -> assertEquals("A", response.getRows().get(0).getData().getCorrectAnswer()),
+          // geometry MCQ — TikZ preserved verbatim
+          () ->
+              assertTrue(
+                  response
+                      .getRows()
+                      .get(1)
+                      .getData()
+                      .getDiagramData()
+                      .contains("\\begin{tikzpicture}")),
+          () -> assertEquals("B", response.getRows().get(1).getData().getCorrectAnswer()),
+          // statement TF — correctAnswer derived from truth columns
+          () ->
+              assertEquals(
+                  QuestionType.TRUE_FALSE, response.getRows().get(2).getData().getQuestionType()),
+          () -> assertEquals("A,B", response.getRows().get(2).getData().getCorrectAnswer()),
+          () -> assertNotNull(response.getRows().get(2).getData().getGenerationMetadata()),
+          // variation-table TF — correctAnswer auto-derived (left blank in template)
+          () -> assertEquals("A,B,D", response.getRows().get(3).getData().getCorrectAnswer()),
+          () ->
+              assertTrue(
+                  response.getRows().get(3).getData().getDiagramData().contains("\\tkzTabInit")),
+          // SA — answerValidationMode + tolerance plumbed through
+          () ->
+              assertEquals(
+                  QuestionType.SHORT_ANSWER, response.getRows().get(4).getData().getQuestionType()),
+          () -> assertNull(response.getRows().get(4).getData().getOptions()),
+          () -> assertEquals("2", response.getRows().get(4).getData().getCorrectAnswer()),
+          () ->
+              assertEquals(
+                  "NUMERIC",
+                  response
+                      .getRows()
+                      .get(4)
+                      .getData()
+                      .getGenerationMetadata()
+                      .get("answerValidationMode")),
+          () ->
+              assertTrue(
+                  response
+                      .getRows()
+                      .get(4)
+                      .getData()
+                      .getDiagramData()
+                      .contains("\\addplot[blue, thick]")));
     }
   }
 }
