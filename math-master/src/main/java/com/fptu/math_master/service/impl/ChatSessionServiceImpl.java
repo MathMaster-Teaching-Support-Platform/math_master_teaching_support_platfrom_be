@@ -15,6 +15,7 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ChatMessageRepository;
 import com.fptu.math_master.repository.ChatSessionRepository;
+import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.ChatSessionService;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.TokenCostConfigService;
@@ -56,6 +57,7 @@ public class ChatSessionServiceImpl implements ChatSessionService {
 
   ChatSessionRepository chatSessionRepository;
   ChatMessageRepository chatMessageRepository;
+  UserRepository userRepository;
   GeminiService geminiService;
   UserSubscriptionService userSubscriptionService;
   TokenCostConfigService tokenCostConfigService;
@@ -65,6 +67,15 @@ public class ChatSessionServiceImpl implements ChatSessionService {
   @Transactional
   public ChatSessionResponse createSession(CreateChatSessionRequest request) {
     UUID userId = SecurityUtils.getCurrentUserId();
+
+    // Validate user exists in database
+    userRepository
+        .findById(userId)
+        .orElseThrow(
+            () -> {
+              log.warn("User not found: {}", userId);
+              return new AppException(ErrorCode.USER_NOT_EXISTED);
+            });
 
     String title = normalizeTitle(request.getTitle());
     String model = normalizeModel(request.getModel());
