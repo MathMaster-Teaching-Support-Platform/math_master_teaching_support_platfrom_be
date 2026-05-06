@@ -388,7 +388,7 @@ public class GeminiOcrServiceImpl implements OcrService {
                 }
             }
 
-            summary = String.format("❌ XÁC MINH THẤT BẠI: %s. Họ tên: %s, Chức danh+Toán: %s, Tên trường: %s",
+            summary = String.format("❌ XÁC MINH THẤT BẠI: %s. Họ và tên: %s, Chức danh + Chuyên môn: %s, Tên trường: %s",
                     failureReason,
                     nameComparison.getMatches() ? "✓" : "✗",
                     positionComparison.getMatches() ? "✓" : "✗",
