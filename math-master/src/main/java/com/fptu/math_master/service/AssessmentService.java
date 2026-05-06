@@ -33,6 +33,15 @@ public interface AssessmentService {
 
   AssessmentResponse getAssessmentPreview(UUID id);
 
+  /**
+   * Stateless teacher preview submission. Grades the supplied answers in
+   * memory using the same rules as student submissions, but does not persist
+   * a Submission / Answer / QuizAttempt row and does not change the
+   * assessment status.
+   */
+  com.fptu.math_master.dto.response.PreviewSubmitResponse previewSubmit(
+      UUID assessmentId, com.fptu.math_master.dto.request.PreviewSubmitRequest request);
+
   AssessmentSummary getPublishSummary(UUID id);
 
   AssessmentResponse publishAssessment(UUID id);

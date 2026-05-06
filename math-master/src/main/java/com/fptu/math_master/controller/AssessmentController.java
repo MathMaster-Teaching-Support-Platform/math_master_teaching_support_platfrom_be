@@ -139,6 +139,25 @@ public class AssessmentController {
         .build();
   }
 
+  @PostMapping("/{id}/preview-submit")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Grade a teacher preview submission (stateless)",
+      description =
+          "Runs the full grading pipeline on the supplied answers in memory. "
+              + "Does not create a Submission / Answer / QuizAttempt row, does not "
+              + "count toward student stats or attempt limits, and does not change "
+              + "the assessment status. Idempotent — teacher can call repeatedly to "
+              + "test different answer sets.")
+  public ApiResponse<com.fptu.math_master.dto.response.PreviewSubmitResponse> previewSubmit(
+      @PathVariable UUID id,
+      @Valid @RequestBody com.fptu.math_master.dto.request.PreviewSubmitRequest request) {
+    log.info("REST request to grade preview submission for assessment: {}", id);
+    return ApiResponse.<com.fptu.math_master.dto.response.PreviewSubmitResponse>builder()
+        .result(assessmentService.previewSubmit(id, request))
+        .build();
+  }
+
   @GetMapping("/{id}/publish-summary")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(

@@ -19,6 +19,7 @@ import com.fptu.math_master.dto.response.DistributeAssessmentPointsResponse;
 import com.fptu.math_master.dto.response.PagedDataResponse;
 import com.fptu.math_master.dto.response.PercentageBasedGenerationResponse;
 import com.fptu.math_master.dto.response.QuestionResponse;
+import com.fptu.math_master.entity.Answer;
 import com.fptu.math_master.entity.Assessment;
 import com.fptu.math_master.entity.AssessmentLesson;
 import com.fptu.math_master.entity.AssessmentQuestion;
@@ -85,6 +86,7 @@ public class AssessmentServiceImpl implements AssessmentService {
   QuestionBankRepository questionBankRepository;
   QuestionSelectionService questionSelectionService;
   QuestionRepository questionRepository;
+  com.fptu.math_master.service.GradingService gradingService;
 
   @Override
   @Transactional
@@ -259,6 +261,123 @@ public class AssessmentServiceImpl implements AssessmentService {
     Assessment assessment = loadAssessmentOrThrow(id);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
     return mapToResponse(assessment);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public com.fptu.math_master.dto.response.PreviewSubmitResponse previewSubmit(
+      UUID assessmentId, com.fptu.math_master.dto.request.PreviewSubmitRequest request) {
+    log.info("Preview-submit assessment: {}", assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    List<AssessmentQuestion> assessmentQuestions =
+        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessmentId);
+    if (assessmentQuestions.isEmpty()) {
+      throw new AppException(ErrorCode.ASSESSMENT_NO_QUESTIONS);
+    }
+
+    Set<UUID> questionIds = new HashSet<>();
+    for (AssessmentQuestion aq : assessmentQuestions) questionIds.add(aq.getQuestionId());
+    Map<UUID, Question> questionById = new HashMap<>();
+    for (Question q : questionRepository.findAllById(questionIds)) questionById.put(q.getId(), q);
+
+    Map<UUID, Object> submittedAnswers =
+        request.getAnswers() != null ? request.getAnswers() : java.util.Collections.emptyMap();
+
+    java.math.BigDecimal totalScore = java.math.BigDecimal.ZERO;
+    java.math.BigDecimal maxScore = java.math.BigDecimal.ZERO;
+    int correctCount = 0;
+    List<com.fptu.math_master.dto.response.PreviewAnswerResult> answerResults =
+        new ArrayList<>(assessmentQuestions.size());
+
+    for (AssessmentQuestion aq : assessmentQuestions) {
+      Question question = questionById.get(aq.getQuestionId());
+      if (question == null) continue;
+
+      java.math.BigDecimal effectivePoints =
+          aq.getPointsOverride() != null
+              ? aq.getPointsOverride()
+              : (question.getPoints() != null ? question.getPoints() : java.math.BigDecimal.ONE);
+      maxScore = maxScore.add(effectivePoints);
+
+      Object rawAnswer = submittedAnswers.get(question.getId());
+      Answer transientAnswer = buildTransientAnswerForPreview(rawAnswer);
+
+      gradingService.gradeAnswerInMemory(transientAnswer, question, effectivePoints);
+
+      java.math.BigDecimal earned =
+          transientAnswer.getPointsEarned() != null
+              ? transientAnswer.getPointsEarned()
+              : java.math.BigDecimal.ZERO;
+      totalScore = totalScore.add(earned);
+      boolean isCorrect = Boolean.TRUE.equals(transientAnswer.getIsCorrect());
+      if (isCorrect) correctCount++;
+
+      answerResults.add(
+          com.fptu.math_master.dto.response.PreviewAnswerResult.builder()
+              .questionId(question.getId())
+              .orderIndex(aq.getOrderIndex() != null ? aq.getOrderIndex() : 0)
+              .questionType(
+                  question.getQuestionType() != null ? question.getQuestionType().name() : null)
+              .questionText(question.getQuestionText())
+              .options(question.getOptions())
+              .explanation(question.getExplanation())
+              .tags(question.getTags())
+              .studentAnswer(rawAnswerToString(rawAnswer))
+              .correctAnswer(question.getCorrectAnswer())
+              .isCorrect(isCorrect)
+              .pointsEarned(earned)
+              .maxPoints(effectivePoints)
+              .scoringDetail(transientAnswer.getScoringDetail())
+              .build());
+    }
+
+    return com.fptu.math_master.dto.response.PreviewSubmitResponse.builder()
+        .totalScore(totalScore)
+        .maxScore(maxScore)
+        .totalQuestions(assessmentQuestions.size())
+        .correctCount(correctCount)
+        .answers(answerResults)
+        .build();
+  }
+
+  /**
+   * Build a transient {@link Answer} to feed into the in-memory grader. The
+   * shape of {@code raw} mirrors what the FE TakeAssessment flow stores in
+   * Redis: a string (MCQ key, TF csv, SA text) or a list/object whose
+   * {@code value}/{@code selected} field carries the same.
+   */
+  private Answer buildTransientAnswerForPreview(Object raw) {
+    Answer answer = new Answer();
+    Map<String, Object> data = new HashMap<>();
+    if (raw == null) {
+      // leave data empty — grader treats as not answered → 0 points
+    } else if (raw instanceof Map<?, ?> map) {
+      for (Map.Entry<?, ?> e : map.entrySet()) {
+        if (e.getKey() != null) data.put(e.getKey().toString(), e.getValue());
+      }
+    } else {
+      data.put("value", raw);
+      data.put("selected", raw);
+    }
+    answer.setAnswerData(data);
+    if (raw != null && !(raw instanceof Map<?, ?>) && !(raw instanceof java.util.Collection<?>)) {
+      answer.setAnswerText(raw.toString());
+    }
+    return answer;
+  }
+
+  private String rawAnswerToString(Object raw) {
+    if (raw == null) return null;
+    if (raw instanceof String s) return s;
+    if (raw instanceof java.util.Collection<?> coll) {
+      List<String> parts = new ArrayList<>();
+      for (Object o : coll) if (o != null) parts.add(o.toString());
+      return String.join(",", parts);
+    }
+    return raw.toString();
   }
 
   @Override

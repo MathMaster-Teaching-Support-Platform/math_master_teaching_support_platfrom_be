@@ -173,6 +173,13 @@ public class GradingServiceImpl implements GradingService {
     }
   }
 
+
+  @Override
+  public boolean gradeAnswerInMemory(
+      Answer answer, Question question, BigDecimal effectiveMaxPoints) {
+    return autoGradeAnswer(answer, question, effectiveMaxPoints);
+  }
+
   private boolean gradeMultipleChoice(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
     if (question.getCorrectAnswer() == null) {
       return false;
@@ -1396,9 +1403,9 @@ public class GradingServiceImpl implements GradingService {
     if (question == null || question.getGenerationMetadata() == null) {
       return null;
     }
-    
+
     java.util.Map<String, Object> metadata = question.getGenerationMetadata();
-    
+
     if (question.getQuestionType() == com.fptu.math_master.enums.QuestionType.TRUE_FALSE) {
       // For TF questions, clauses are under "tfClauses". The frontend expects just the text in options.
       if (metadata.containsKey("tfClauses")) {
@@ -1419,7 +1426,7 @@ public class GradingServiceImpl implements GradingService {
         return (java.util.Map<String, Object>) metadata.get("options");
       }
     }
-    
+
     return null;
   }
 }
