@@ -25,6 +25,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
   Optional<Transaction> findByOrderCode(Long orderCode);
 
+  @Query("SELECT t FROM Transaction t LEFT JOIN FETCH t.wallet w LEFT JOIN FETCH w.user WHERE t.orderCode = :orderCode")
+  Optional<Transaction> findByOrderCodeWithUser(@Param("orderCode") Long orderCode);
+
   Page<Transaction> findByWalletIdAndStatus(
       UUID walletId, TransactionStatus status, Pageable pageable);
 
