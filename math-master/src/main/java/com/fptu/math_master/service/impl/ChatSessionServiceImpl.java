@@ -1,5 +1,21 @@
 package com.fptu.math_master.service.impl;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fptu.math_master.dto.request.CreateChatSessionRequest;
 import com.fptu.math_master.dto.request.SendChatMessageRequest;
 import com.fptu.math_master.dto.request.UpdateChatSessionRequest;
@@ -15,18 +31,13 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.ChatMessageRepository;
 import com.fptu.math_master.repository.ChatSessionRepository;
+import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.ChatSessionService;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.TokenCostConfigService;
 import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.SecurityUtils;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.UUID;
+
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -35,13 +46,6 @@ import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -56,6 +60,7 @@ public class ChatSessionServiceImpl implements ChatSessionService {
 
   ChatSessionRepository chatSessionRepository;
   ChatMessageRepository chatMessageRepository;
+  UserRepository userRepository;
   GeminiService geminiService;
   UserSubscriptionService userSubscriptionService;
   TokenCostConfigService tokenCostConfigService;
@@ -65,6 +70,15 @@ public class ChatSessionServiceImpl implements ChatSessionService {
   @Transactional
   public ChatSessionResponse createSession(CreateChatSessionRequest request) {
     UUID userId = SecurityUtils.getCurrentUserId();
+
+    // Validate user exists in database
+    userRepository
+        .findById(userId)
+        .orElseThrow(
+            () -> {
+              log.warn("User not found: {}", userId);
+              return new AppException(ErrorCode.USER_NOT_EXISTED);
+            });
 
     String title = normalizeTitle(request.getTitle());
     String model = normalizeModel(request.getModel());

@@ -389,7 +389,7 @@ public class PaymentService {
 
     Transaction transaction =
         transactionRepository
-            .findByOrderCode(orderCode)
+            .findByOrderCodeWithUser(orderCode)
             .orElseThrow(() -> new AppException(ErrorCode.TRANSACTION_NOT_FOUND));
 
     // Ensure the transaction belongs to the requesting user
