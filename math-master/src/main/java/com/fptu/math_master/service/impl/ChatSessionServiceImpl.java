@@ -131,8 +131,10 @@ public class ChatSessionServiceImpl implements ChatSessionService {
   @Transactional
   public ChatExchangeResponse sendMessage(UUID sessionId, SendChatMessageRequest request) {
     ChatSession session = getOwnedSession(sessionId);
-    int cost = tokenCostConfigService.getCostPerUse("chat");
-    userSubscriptionService.consumeMyTokens(cost, "CHAT");
+    if (!SecurityUtils.hasRole("ADMIN")) {
+      int cost = tokenCostConfigService.getCostPerUse("chat");
+      userSubscriptionService.consumeMyTokens(cost, "CHAT");
+    }
 
     if (session.getStatus() == ChatSessionStatus.ARCHIVED) {
       throw new AppException(ErrorCode.CHAT_SESSION_ARCHIVED);
