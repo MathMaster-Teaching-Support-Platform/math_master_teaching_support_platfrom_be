@@ -215,25 +215,31 @@ function Invoke-CleanBuildStart {
     $root = Get-ProjectRoot
     if (-Not (Test-Path (Join-Path $root "mvnw.cmd"))) { Write-Err "mvnw.cmd not found."; return }
 
-    # Step 0a: Kill any existing processes on port 5432 FIRST (before checking tunnel)
+    # Step 0a: Kill non-SSH processes on port 5432 FIRST (before checking tunnel)
+    # Skip ssh processes — they are the SSH tunnel we want to keep!
     Write-Step "Cleaning up port 5432..."
     $procs = Get-NetTCPConnection -LocalPort 5432 -ErrorAction SilentlyContinue |
              Where-Object { $_.State -eq 'Listen' }
 
     if ($procs) {
-        Write-Host "  Found existing process(es) on port 5432. Cleaning up..." -ForegroundColor Yellow
         $processList = $procs | Select-Object -ExpandProperty OwningProcess -Unique
+        $killed = $false
         foreach ($processId in $processList) {
             $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
             if ($proc) {
                 $name = $proc.Name
+                if ($name -match "^ssh$|^plink$") {
+                    Write-Host "  Keeping SSH tunnel process: $name (PID $processId)" -ForegroundColor Cyan
+                    continue
+                }
                 Write-Host "  Stopping process: $name (PID $processId)" -ForegroundColor Gray
                 Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+                $killed = $true
             }
         }
-
-        # Wait for port to be freed
-        Start-Sleep -Seconds 2
+        if ($killed) {
+            Start-Sleep -Seconds 2
+        }
         Write-OK "Port 5432 is now free."
     } else {
         Write-OK "Port 5432 is already free."
