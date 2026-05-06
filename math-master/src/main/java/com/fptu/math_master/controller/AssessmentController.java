@@ -5,7 +5,6 @@ import com.fptu.math_master.dto.request.AutoDistributePointsRequest;
 import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
 import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
-import com.fptu.math_master.dto.request.CloneAssessmentRequest;
 import com.fptu.math_master.dto.request.DistributeAssessmentPointsRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
@@ -46,6 +45,7 @@ import org.springframework.web.bind.annotation.*;
 public class AssessmentController {
 
   AssessmentService assessmentService;
+  com.fptu.math_master.service.QuestionSelectionService questionSelectionService;
 
   @PostMapping
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
@@ -71,16 +71,34 @@ public class AssessmentController {
   @PutMapping("/{id}")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
-      summary = "Update assessment",
+      summary = "Update assessment (full)",
       description =
-          "Update assessment details. Only DRAFT assessments can be edited. "
-              + "When updating matrix/lessons, selected lessonIds must remain valid for examMatrixId. "
-              + "Published assessments cannot be modified unless unpublished first.")
+          "Update assessment details. Same null-safe field handling as PATCH — "
+              + "kept for backward compatibility. Prefer PATCH for partial edits.")
   public ApiResponse<AssessmentResponse> updateAssessment(
       @PathVariable UUID id, @Valid @RequestBody com.fptu.math_master.dto.request.UpdateAssessmentRequest request) {
-    log.info("REST request to update assessment: {}", id);
+    log.info("REST request to update assessment (PUT): {}", id);
     return ApiResponse.<AssessmentResponse>builder()
         .message("Assessment updated successfully")
+        .result(assessmentService.updateAssessment(id, request))
+        .build();
+  }
+
+  @PatchMapping("/{id}")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Patch assessment (partial)",
+      description =
+          "Patch a subset of fields on an existing assessment. Any field omitted "
+              + "(or sent as null) is left untouched, so callers can update e.g. "
+              + "timeLimitMinutes or maxAttempts without re-sending the entire "
+              + "settings object. Reuses the same null-safe service path as PUT.")
+  public ApiResponse<AssessmentResponse> patchAssessment(
+      @PathVariable UUID id,
+      @Valid @RequestBody com.fptu.math_master.dto.request.UpdateAssessmentRequest request) {
+    log.info("REST request to patch assessment: {}", id);
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Assessment patched successfully")
         .result(assessmentService.updateAssessment(id, request))
         .build();
   }
@@ -311,20 +329,6 @@ public class AssessmentController {
         .build();
   }
 
-  @PostMapping("/{id}/clone")
-  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-  @Operation(
-      summary = "Clone assessment",
-      description = "Create a DRAFT copy of an existing assessment. Matrix is NOT cloned.")
-  public ApiResponse<AssessmentResponse> cloneAssessment(
-      @PathVariable UUID id, @Valid @RequestBody CloneAssessmentRequest request) {
-    log.info("REST request to clone assessment: {}", id);
-    return ApiResponse.<AssessmentResponse>builder()
-        .message("Assessment cloned successfully.")
-        .result(assessmentService.cloneAssessment(id, request))
-        .build();
-  }
-
   @PostMapping("/{assessmentId}/questions")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
@@ -391,6 +395,56 @@ public class AssessmentController {
     return ApiResponse.<AssessmentResponse>builder()
         .message("Question removed from assessment.")
         .result(assessmentService.removeQuestion(assessmentId, questionId))
+        .build();
+  }
+
+  @PostMapping("/validate-bank-coverage")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Validate that the chosen banks cover the matrix's per-cell requirements",
+      description =
+          "Pre-flight check before assessment generation. Returns one entry per matrix cell "
+              + "(chapter × cognitive level × question type) with the required count vs the "
+              + "approved-question count available across the chosen bank set. The FE renders "
+              + "shortage rows directly (e.g. \"Bank thiếu Chương 2 – Vận dụng cao: cần 3, có 0\").")
+  public com.fptu.math_master.dto.response.ApiResponse<
+          com.fptu.math_master.dto.response.BankCoverageResponse>
+      validateBankCoverage(
+          @Valid @RequestBody
+              com.fptu.math_master.dto.request.ValidateBankCoverageRequest request) {
+    log.info(
+        "REST request to validate bank coverage for matrix={} banks={}",
+        request.getExamMatrixId(),
+        request.getQuestionBankIds());
+    com.fptu.math_master.service.QuestionSelectionService.CoverageReport report =
+        questionSelectionService.computeCoverage(
+            request.getExamMatrixId(), request.getQuestionBankIds());
+
+    java.util.List<com.fptu.math_master.dto.response.BankCoverageResponse.CoverageCell> cells =
+        new java.util.ArrayList<>();
+    for (com.fptu.math_master.service.QuestionSelectionService.Gap gap : report.gaps()) {
+      cells.add(
+          com.fptu.math_master.dto.response.BankCoverageResponse.CoverageCell.builder()
+              .chapterId(gap.chapterId())
+              .chapterTitle(gap.chapterTitle())
+              .cognitiveLevel(gap.cognitiveLevel())
+              .questionType(gap.questionType())
+              .required(gap.required())
+              .available(gap.available())
+              .build());
+    }
+
+    return com.fptu.math_master.dto.response.ApiResponse
+        .<com.fptu.math_master.dto.response.BankCoverageResponse>builder()
+        .message(
+            report.ok()
+                ? "Banks satisfy the matrix requirements."
+                : "Selected banks do not cover all matrix cells; see gaps in response.")
+        .result(
+            com.fptu.math_master.dto.response.BankCoverageResponse.builder()
+                .ok(report.ok())
+                .cells(cells)
+                .build())
         .build();
   }
 

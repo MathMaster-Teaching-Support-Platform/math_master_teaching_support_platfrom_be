@@ -550,7 +550,11 @@ public class QuestionServiceImpl implements QuestionService {
 
   @Override
   public Page<QuestionResponse> searchByKeywordAndTags(
-      String keyword, List<String> tags, Pageable pageable) {
+      String keyword,
+      List<String> tags,
+      UUID chapterId,
+      String cognitiveLevel,
+      Pageable pageable) {
     UUID currentUserId = getCurrentUserId();
     String keywordPattern =
         (keyword != null && !keyword.isBlank()) ? "%" + keyword.trim() + "%" : null;
@@ -563,9 +567,15 @@ public class QuestionServiceImpl implements QuestionService {
             : null;
     if (tagsParam != null && tagsParam.isBlank()) tagsParam = null;
 
+    String normalizedLevel =
+        (cognitiveLevel != null && !cognitiveLevel.isBlank())
+            ? cognitiveLevel.trim().toUpperCase()
+            : null;
+
     Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
     return questionRepository
-        .searchByKeywordAndTags(currentUserId, keywordPattern, tagsParam, unsorted)
+        .searchByKeywordAndTags(
+            currentUserId, keywordPattern, tagsParam, chapterId, normalizedLevel, unsorted)
         .map(this::mapToResponse);
   }
 

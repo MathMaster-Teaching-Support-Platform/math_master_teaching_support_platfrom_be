@@ -3,6 +3,7 @@ package com.fptu.math_master.service;
 import com.fptu.math_master.dto.request.QuestionBankRequest;
 import com.fptu.math_master.dto.response.QuestionBankMatrixStatsResponse;
 import com.fptu.math_master.dto.response.QuestionBankResponse;
+import com.fptu.math_master.dto.response.QuestionBankTreeResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import java.util.List;
 import java.util.UUID;
@@ -37,4 +38,10 @@ public interface QuestionBankService {
   boolean canDeleteQuestionBank(UUID id);
 
   List<QuestionBankMatrixStatsResponse> getMatrixStats(UUID bankId);
+
+  /**
+   * Happy-case tree view: Lớp → Chương → 4 cognitive buckets (NB/TH/VD/VDC).
+   * Every chapter of the bank's school grade is returned, even when empty.
+   */
+  QuestionBankTreeResponse getBankTree(UUID bankId);
 }

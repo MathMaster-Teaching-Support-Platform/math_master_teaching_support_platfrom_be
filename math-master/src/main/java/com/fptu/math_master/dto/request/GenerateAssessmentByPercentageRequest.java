@@ -40,6 +40,18 @@ public class GenerateAssessmentByPercentageRequest {
   @NotNull(message = "Exam matrix ID is required")
   private UUID examMatrixId;
 
+  /**
+   * Single source bank — kept for backward compatibility. New callers should
+   * use {@link #questionBankIds} which supports multi-bank pools.
+   */
+  private UUID questionBankId;
+
+  /**
+   * Multi-bank source pool. When provided, takes precedence over
+   * {@link #questionBankId} and over the matrix's stored default.
+   */
+  private java.util.List<UUID> questionBankIds;
+
   @NotNull(message = "Total questions is required")
   @Min(value = 1, message = "Total questions must be at least 1")
   @Max(value = 200, message = "Total questions cannot exceed 200")

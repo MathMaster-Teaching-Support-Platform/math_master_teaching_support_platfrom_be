@@ -1,5 +1,14 @@
 package com.fptu.math_master.component;
 
+import java.time.Duration;
+import java.util.UUID;
+
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.stream.StreamListener;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.entity.Notification;
@@ -7,16 +16,9 @@ import com.fptu.math_master.entity.User;
 import com.fptu.math_master.repository.NotificationRepository;
 import com.fptu.math_master.service.NotificationPreferenceService;
 import com.fptu.math_master.service.PushNotificationService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.connection.stream.MapRecord;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.stream.StreamListener;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Duration;
-import java.util.UUID;
 
 @Component
 @Slf4j
@@ -66,6 +68,7 @@ public class StreamConsumerListener implements StreamListener<String, MapRecord<
                             .title(notificationMessage.getTitle())
                             .content(notificationMessage.getContent())
                             .metadata(notificationMessage.getMetadata())
+                            .actionUrl(notificationMessage.getActionUrl())
                             .isRead(false)
                             .build();
 

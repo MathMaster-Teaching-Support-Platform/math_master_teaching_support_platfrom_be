@@ -1388,7 +1388,8 @@ class QuestionServiceImplTest extends BaseUnitTest {
       mockJwtTeacher(OWNER_ID);
       Pageable pageable = PageRequest.of(0, 5);
       Question question = buildQuestion(QUESTION_ID, OWNER_ID, QuestionStatus.AI_DRAFT);
-      when(questionRepository.searchByKeywordAndTags(eq(OWNER_ID), eq("%hàm số%"), eq(null), any(Pageable.class)))
+      when(questionRepository.searchByKeywordAndTags(
+              eq(OWNER_ID), eq("%hàm số%"), eq(null), eq(null), eq(null), any(Pageable.class)))
           .thenReturn(new PageImpl<>(List.of(question), pageable, 1));
       when(userRepository.findById(OWNER_ID))
           .thenReturn(Optional.of(buildUser(OWNER_ID, "Tran Gia Han")));
@@ -1400,14 +1401,15 @@ class QuestionServiceImplTest extends BaseUnitTest {
       rawTags.add("  ");
       rawTags.add(null);
       Page<QuestionResponse> result =
-          questionService.searchByKeywordAndTags(" hàm số ", rawTags, pageable);
+          questionService.searchByKeywordAndTags(" hàm số ", rawTags, null, null, pageable);
 
       // ===== ASSERT =====
       assertEquals(1, result.getTotalElements());
 
       // ===== VERIFY =====
       verify(questionRepository, times(1))
-          .searchByKeywordAndTags(eq(OWNER_ID), eq("%hàm số%"), eq(null), any(Pageable.class));
+          .searchByKeywordAndTags(
+              eq(OWNER_ID), eq("%hàm số%"), eq(null), eq(null), eq(null), any(Pageable.class));
       verify(userRepository, times(1)).findById(OWNER_ID);
       verify(questionBankRepository, times(1)).findById(BANK_ID);
       verifyNoMoreInteractions(questionRepository, userRepository, questionBankRepository);
@@ -1420,7 +1422,12 @@ class QuestionServiceImplTest extends BaseUnitTest {
       Pageable pageable = PageRequest.of(0, 5);
       Question question = buildQuestion(QUESTION_ID, OWNER_ID, QuestionStatus.AI_DRAFT);
       when(questionRepository.searchByKeywordAndTags(
-              eq(OWNER_ID), eq(null), eq("algebra,trigonometry"), any(Pageable.class)))
+              eq(OWNER_ID),
+              eq(null),
+              eq("algebra,trigonometry"),
+              eq(null),
+              eq(null),
+              any(Pageable.class)))
           .thenReturn(new PageImpl<>(List.of(question), pageable, 1));
       when(userRepository.findById(OWNER_ID))
           .thenReturn(Optional.of(buildUser(OWNER_ID, "Hoang Minh Dat")));
@@ -1430,14 +1437,20 @@ class QuestionServiceImplTest extends BaseUnitTest {
       // ===== ACT =====
       Page<QuestionResponse> result =
           questionService.searchByKeywordAndTags(
-              null, List.of("algebra", "TRIGONOMETRY"), pageable);
+              null, List.of("algebra", "TRIGONOMETRY"), null, null, pageable);
 
       // ===== ASSERT =====
       assertEquals(1, result.getContent().size());
 
       // ===== VERIFY =====
       verify(questionRepository, times(1))
-          .searchByKeywordAndTags(eq(OWNER_ID), eq(null), eq("algebra,trigonometry"), any(Pageable.class));
+          .searchByKeywordAndTags(
+              eq(OWNER_ID),
+              eq(null),
+              eq("algebra,trigonometry"),
+              eq(null),
+              eq(null),
+              any(Pageable.class));
       verify(userRepository, times(1)).findById(OWNER_ID);
       verify(questionBankRepository, times(1)).findById(BANK_ID);
       verifyNoMoreInteractions(questionRepository, userRepository, questionBankRepository);

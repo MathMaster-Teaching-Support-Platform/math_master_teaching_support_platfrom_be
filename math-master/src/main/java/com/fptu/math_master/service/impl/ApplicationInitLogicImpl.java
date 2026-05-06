@@ -18,7 +18,9 @@ import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.Status;
 import com.fptu.math_master.repository.PermissionRepository;
 import com.fptu.math_master.repository.RoleRepository;
+import com.fptu.math_master.repository.TokenCostConfigRepository;
 import com.fptu.math_master.repository.UserRepository;
+import com.fptu.math_master.entity.TokenCostConfig;
 import com.fptu.math_master.service.ApplicationInitLogic;
 
 import lombok.RequiredArgsConstructor;
@@ -60,12 +62,14 @@ public class ApplicationInitLogicImpl implements ApplicationInitLogic {
   private final PermissionRepository permissionRepository;
   private final RoleRepository roleRepository;
   private final UserRepository userRepository;
+  private final TokenCostConfigRepository tokenCostConfigRepository;
   private final PasswordEncoder passwordEncoder;
 
   /** {@inheritDoc} */
   @Override
   @Transactional
   public void initialize(InitProperties properties) {
+    log.info("Starting ApplicationInitLogic.initialize...");
     log.debug(LOG_CREATING_PERMISSIONS);
     Set<Permission> allPermissions = createAllPermissions();
 
@@ -82,6 +86,9 @@ public class ApplicationInitLogicImpl implements ApplicationInitLogic {
     createUserIfNotExists(properties.getAdmin(), adminRole);
     createUserIfNotExists(properties.getTeacher(), teacherRole);
     createUserIfNotExists(properties.getStudent(), studentRole);
+
+    log.info("Initializing token costs...");
+    initializeTokenCosts();
 
     log.info(LOG_DATA_COMPLETED, allPermissions.size());
   }
@@ -371,6 +378,25 @@ public class ApplicationInitLogicImpl implements ApplicationInitLogic {
         .status(Status.ACTIVE)
         .roles(roles)
         .build();
+  }
+
+  private void initializeTokenCosts() {
+    createTokenCostIfNotExists("slide", "Gen Slide", 10);
+    createTokenCostIfNotExists("mindmap", "Gen Mindmap", 5);
+    createTokenCostIfNotExists("chat", "AI Chat", 1);
+  }
+
+  private void createTokenCostIfNotExists(String key, String label, int cost) {
+    if (tokenCostConfigRepository.findByFeatureKey(key).isEmpty()) {
+      tokenCostConfigRepository.save(
+          TokenCostConfig.builder()
+              .featureKey(key)
+              .featureLabel(label)
+              .costPerUse(cost)
+              .isActive(true)
+              .build());
+      log.info("Created default token cost config for: {}", key);
+    }
   }
 
   /**

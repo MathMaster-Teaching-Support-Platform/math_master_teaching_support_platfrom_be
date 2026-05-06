@@ -103,6 +103,13 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
               + "    SELECT 1 FROM unnest(COALESCE(q.tags, ARRAY[]::text[])) t "
               + "    WHERE LOWER(t) = ANY(string_to_array(LOWER(CAST(:tagsParam AS text)), ',')) "
               + "  )) "
+              + "AND (CAST(:chapterId AS uuid) IS NULL OR q.chapter_id = CAST(:chapterId AS uuid)) "
+              + "AND (CAST(:cognitiveLevel AS text) IS NULL "
+              + "  OR q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'NHAN_BIET' AND q.cognitive_level = 'REMEMBER') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'THONG_HIEU' AND q.cognitive_level = 'UNDERSTAND') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG' AND q.cognitive_level IN ('APPLY','ANALYZE')) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG_CAO' AND q.cognitive_level IN ('EVALUATE','CREATE'))) "
               + "ORDER BY q.created_at DESC",
       countQuery =
           "SELECT COUNT(*) FROM questions q "
@@ -113,11 +120,20 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
               + "  OR EXISTS ( "
               + "    SELECT 1 FROM unnest(COALESCE(q.tags, ARRAY[]::text[])) t "
               + "    WHERE LOWER(t) = ANY(string_to_array(LOWER(CAST(:tagsParam AS text)), ',')) "
-              + "  ))")
+              + "  )) "
+              + "AND (CAST(:chapterId AS uuid) IS NULL OR q.chapter_id = CAST(:chapterId AS uuid)) "
+              + "AND (CAST(:cognitiveLevel AS text) IS NULL "
+              + "  OR q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'NHAN_BIET' AND q.cognitive_level = 'REMEMBER') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'THONG_HIEU' AND q.cognitive_level = 'UNDERSTAND') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG' AND q.cognitive_level IN ('APPLY','ANALYZE')) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG_CAO' AND q.cognitive_level IN ('EVALUATE','CREATE')))")
   Page<Question> searchByKeywordAndTags(
       @Param("createdBy") UUID createdBy,
       @Param("keyword") String keyword,
       @Param("tagsParam") String tagsParam,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel,
       Pageable pageable);
 
   @Query(
@@ -164,6 +180,20 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
           + "WHERE q.questionBankId = :bankId AND q.deletedAt IS NULL "
           + "GROUP BY q.cognitiveLevel")
   List<Object[]> countByCognitiveLevelForBank(@Param("bankId") UUID bankId);
+
+  /**
+   * Bank-tree query: load every non-deleted question in the bank for the given chapters,
+   * ordered for stable display. Used by {@code GET /question-banks/{id}/tree} to fan
+   * questions out into Chương → NB/TH/VD/VDC buckets in-memory.
+   */
+  @Query(
+      "SELECT q FROM Question q "
+          + "WHERE q.questionBankId = :bankId "
+          + "AND q.chapterId IN :chapterIds "
+          + "AND q.deletedAt IS NULL "
+          + "ORDER BY q.chapterId, q.cognitiveLevel, q.createdAt DESC")
+  List<Question> findByBankAndChaptersForTree(
+      @Param("bankId") UUID bankId, @Param("chapterIds") List<UUID> chapterIds);
 
   @Query(
       "SELECT q FROM Question q WHERE q.templateId = :templateId AND q.deletedAt IS NULL ORDER BY q.createdAt DESC")
@@ -405,15 +435,29 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
 
   /**
    * Count approved questions by bank, chapter, cognitive level, and question type.
-   * This is the core query for type-aware generation engine.
-   * Supports MCQ, TRUE_FALSE, and SHORT_ANSWER question types.
+   *
+   * <p><b>Cognitive level folding:</b> {@code questions.cognitive_level} can be
+   * stored either with the Vietnamese bucket names (NHAN_BIET / THONG_HIEU /
+   * VAN_DUNG / VAN_DUNG_CAO) used by matrix mappings, or with the Bloom's
+   * English names (REMEMBER / UNDERSTAND / APPLY / ANALYZE / EVALUATE / CREATE)
+   * still emitted by some AI generators. The WHERE clause folds English →
+   * Vietnamese so a matrix asking "VAN_DUNG" still finds questions saved as
+   * "APPLY" / "ANALYZE", etc. Without this fold the matrix-vs-bank coverage
+   * report falsely claimed "no questions of that level" even though the bank
+   * had matching questions stored under the English label.
    */
   @Query(
       value =
           "SELECT COUNT(*) FROM questions q "
               + "WHERE q.question_bank_id = :bankId "
               + "AND q.chapter_id = :chapterId "
-              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "AND ( "
+              + "  q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'NHAN_BIET' AND q.cognitive_level = 'REMEMBER') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'THONG_HIEU' AND q.cognitive_level = 'UNDERSTAND') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG' AND q.cognitive_level IN ('APPLY','ANALYZE')) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG_CAO' AND q.cognitive_level IN ('EVALUATE','CREATE')) "
+              + ") "
               + "AND q.question_type = CAST(:questionType AS text) "
               + "AND q.question_status = 'APPROVED' "
               + "AND q.deleted_at IS NULL",
@@ -428,13 +472,22 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
    * Find approved question IDs by bank, chapter, cognitive level, and question type.
    * Returns IDs in deterministic order for reproducible selection.
    * Used by generation engine to select specific question types.
+   *
+   * <p>Mirrors the cognitive-level folding documented on
+   * {@link #countApprovedByBankAndChapterAndCognitiveAndType}.
    */
   @Query(
       value =
           "SELECT q.id FROM questions q "
               + "WHERE q.question_bank_id = :bankId "
               + "AND q.chapter_id = :chapterId "
-              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "AND ( "
+              + "  q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'NHAN_BIET' AND q.cognitive_level = 'REMEMBER') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'THONG_HIEU' AND q.cognitive_level = 'UNDERSTAND') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG' AND q.cognitive_level IN ('APPLY','ANALYZE')) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG_CAO' AND q.cognitive_level IN ('EVALUATE','CREATE')) "
+              + ") "
               + "AND q.question_type = CAST(:questionType AS text) "
               + "AND q.question_status = 'APPROVED' "
               + "AND q.deleted_at IS NULL "
@@ -449,14 +502,22 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
   /**
    * Find random approved questions by bank, chapter, cognitive level, and question type.
    * Used for quick random selection without pre-loading all IDs.
-   * Supports type-specific question selection for MCQ, TF, and SA.
+   *
+   * <p>Mirrors the cognitive-level folding documented on
+   * {@link #countApprovedByBankAndChapterAndCognitiveAndType}.
    */
   @Query(
       value =
           "SELECT * FROM questions q "
               + "WHERE q.question_bank_id = :bankId "
               + "AND q.chapter_id = :chapterId "
-              + "AND q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "AND ( "
+              + "  q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'NHAN_BIET' AND q.cognitive_level = 'REMEMBER') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'THONG_HIEU' AND q.cognitive_level = 'UNDERSTAND') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG' AND q.cognitive_level IN ('APPLY','ANALYZE')) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG_CAO' AND q.cognitive_level IN ('EVALUATE','CREATE')) "
+              + ") "
               + "AND q.question_type = CAST(:questionType AS text) "
               + "AND q.question_status = 'APPROVED' "
               + "AND q.deleted_at IS NULL "
@@ -601,8 +662,22 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
   List<Object[]> findTFClauseStatsByBankId(@Param("bankId") UUID bankId);
 
   /**
-   * Count TF questions that have at least one clause matching the given cognitive level.
-   * Used by QuestionSelectionService for TF-aware matrix validation.
+   * Count TF questions matching a chapter + cognitive bucket.
+   *
+   * <p>Two paths are folded together:
+   * <ol>
+   *   <li><b>Clause-level (modern)</b> — AI-generated TF questions store per-clause
+   *       chapter + cognitive metadata in {@code generation_metadata->'tfClauses'};
+   *       any clause matching the requested cognitive level wins.</li>
+   *   <li><b>Question-level fallback</b> — legacy / hand-imported TF questions
+   *       have no {@code tfClauses} metadata. They match when the question's
+   *       own {@code chapter_id} and {@code cognitive_level} columns line up
+   *       (with Bloom's English → Vietnamese folding).</li>
+   * </ol>
+   *
+   * <p>Without the fallback the matrix-vs-bank coverage report falsely
+   * reported "0 available" for TF questions that the teacher could clearly
+   * see in the bank.
    */
   @Query(
       value =
@@ -612,10 +687,21 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
               + "AND q.question_type = 'TRUE_FALSE' "
               + "AND q.question_status = 'APPROVED' "
               + "AND q.deleted_at IS NULL "
-              + "AND q.generation_metadata IS NOT NULL "
-              + "AND EXISTS ( "
-              + "  SELECT 1 FROM jsonb_each(q.generation_metadata->'tfClauses') "
-              + "  WHERE value->>'cognitiveLevel' = CAST(:cognitiveLevel AS text) "
+              + "AND ( "
+              + "  ( "
+              + "    q.generation_metadata IS NOT NULL "
+              + "    AND EXISTS ( "
+              + "      SELECT 1 FROM jsonb_each(q.generation_metadata->'tfClauses') "
+              + "      WHERE value->>'cognitiveLevel' = CAST(:cognitiveLevel AS text) "
+              + "    ) "
+              + "  ) "
+              + "  OR ( "
+              + "    q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "    OR (CAST(:cognitiveLevel AS text) = 'NHAN_BIET' AND q.cognitive_level = 'REMEMBER') "
+              + "    OR (CAST(:cognitiveLevel AS text) = 'THONG_HIEU' AND q.cognitive_level = 'UNDERSTAND') "
+              + "    OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG' AND q.cognitive_level IN ('APPLY','ANALYZE')) "
+              + "    OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG_CAO' AND q.cognitive_level IN ('EVALUATE','CREATE')) "
+              + "  ) "
               + ")",
       nativeQuery = true)
   long countTFByBankAndChapterAndClauseCognitive(
@@ -624,10 +710,14 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       @Param("cognitiveLevel") String cognitiveLevel);
 
   /**
-   * Find TF question IDs that have at least one clause matching BOTH the given chapter AND
-   * cognitive level inside tfClauses JSON.
-   * A TF question can have clauses from multiple chapters, so we filter at clause level.
-   * tfClauses structure: {"A": {"cognitiveLevel": "NHAN_BIET", "chapterId": "uuid", ...}, ...}
+   * Find TF question IDs matching a chapter + cognitive bucket.
+   *
+   * <p>Mirrors the dual-path logic of
+   * {@link #countTFByBankAndChapterAndClauseCognitive}:
+   * <ol>
+   *   <li>clause-level (tfClauses[*] with matching chapterId AND cognitiveLevel)</li>
+   *   <li>question-level fallback (q.chapter_id + folded q.cognitive_level)</li>
+   * </ol>
    */
   @Query(
       value =
@@ -636,16 +726,172 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
               + "AND q.question_type = 'TRUE_FALSE' "
               + "AND q.question_status = 'APPROVED' "
               + "AND q.deleted_at IS NULL "
-              + "AND q.generation_metadata IS NOT NULL "
-              + "AND EXISTS ( "
-              + "  SELECT 1 FROM jsonb_each(q.generation_metadata->'tfClauses') "
-              + "  WHERE value->>'cognitiveLevel' = CAST(:cognitiveLevel AS text) "
-              + "  AND value->>'chapterId' = CAST(:chapterId AS text) "
+              + "AND ( "
+              + "  ( "
+              + "    q.generation_metadata IS NOT NULL "
+              + "    AND EXISTS ( "
+              + "      SELECT 1 FROM jsonb_each(q.generation_metadata->'tfClauses') "
+              + "      WHERE value->>'cognitiveLevel' = CAST(:cognitiveLevel AS text) "
+              + "      AND value->>'chapterId' = CAST(:chapterId AS text) "
+              + "    ) "
+              + "  ) "
+              + "  OR ( "
+              + "    q.chapter_id = :chapterId "
+              + "    AND ( "
+              + "      q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "      OR (CAST(:cognitiveLevel AS text) = 'NHAN_BIET' AND q.cognitive_level = 'REMEMBER') "
+              + "      OR (CAST(:cognitiveLevel AS text) = 'THONG_HIEU' AND q.cognitive_level = 'UNDERSTAND') "
+              + "      OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG' AND q.cognitive_level IN ('APPLY','ANALYZE')) "
+              + "      OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG_CAO' AND q.cognitive_level IN ('EVALUATE','CREATE')) "
+              + "    ) "
+              + "  ) "
               + ") "
               + "ORDER BY q.id",
       nativeQuery = true)
   List<UUID> findTFIdsByBankAndChapterAndClauseCognitive(
       @Param("bankId") UUID bankId,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel);
+
+  // ========================================================================
+  // Multi-bank variants (matrix can now source questions from a SET of banks
+  // chosen at assessment-generation time). Implementations mirror the single-
+  // bank queries above with `question_bank_id IN (:bankIds)`.
+  // ========================================================================
+
+  /**
+   * Multi-bank count for non-TF question types.
+   *
+   * <p>Folds Bloom's English cognitive levels onto Vietnamese buckets — see
+   * {@link #countApprovedByBankAndChapterAndCognitiveAndType}.
+   */
+  @Query(
+      value =
+          "SELECT COUNT(*) FROM questions q "
+              + "WHERE q.question_bank_id IN (:bankIds) "
+              + "AND q.chapter_id = :chapterId "
+              + "AND ( "
+              + "  q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'NHAN_BIET' AND q.cognitive_level = 'REMEMBER') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'THONG_HIEU' AND q.cognitive_level = 'UNDERSTAND') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG' AND q.cognitive_level IN ('APPLY','ANALYZE')) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG_CAO' AND q.cognitive_level IN ('EVALUATE','CREATE')) "
+              + ") "
+              + "AND q.question_type = CAST(:questionType AS text) "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL",
+      nativeQuery = true)
+  long countApprovedByBanksAndChapterAndCognitiveAndType(
+      @Param("bankIds") java.util.Collection<UUID> bankIds,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("questionType") String questionType);
+
+  /**
+   * Multi-bank candidate-id lookup for non-TF question types.
+   * Order is deterministic so the seeded shuffle in QuestionSelectionService
+   * still produces reproducible picks.
+   *
+   * <p>Folds Bloom's English cognitive levels onto Vietnamese buckets — see
+   * {@link #countApprovedByBankAndChapterAndCognitiveAndType}.
+   */
+  @Query(
+      value =
+          "SELECT q.id FROM questions q "
+              + "WHERE q.question_bank_id IN (:bankIds) "
+              + "AND q.chapter_id = :chapterId "
+              + "AND ( "
+              + "  q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'NHAN_BIET' AND q.cognitive_level = 'REMEMBER') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'THONG_HIEU' AND q.cognitive_level = 'UNDERSTAND') "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG' AND q.cognitive_level IN ('APPLY','ANALYZE')) "
+              + "  OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG_CAO' AND q.cognitive_level IN ('EVALUATE','CREATE')) "
+              + ") "
+              + "AND q.question_type = CAST(:questionType AS text) "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "ORDER BY q.id",
+      nativeQuery = true)
+  List<UUID> findApprovedIdsByBanksAndChapterAndCognitiveAndType(
+      @Param("bankIds") java.util.Collection<UUID> bankIds,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel,
+      @Param("questionType") String questionType);
+
+  /**
+   * Multi-bank TF count.
+   *
+   * <p>Mirrors the dual-path logic of
+   * {@link #countTFByBankAndChapterAndClauseCognitive}: clause-level metadata
+   * if present, question-level fallback otherwise (with Bloom's folding).
+   */
+  @Query(
+      value =
+          "SELECT COUNT(DISTINCT q.id) FROM questions q "
+              + "WHERE q.question_bank_id IN (:bankIds) "
+              + "AND q.chapter_id = :chapterId "
+              + "AND q.question_type = 'TRUE_FALSE' "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND ( "
+              + "  ( "
+              + "    q.generation_metadata IS NOT NULL "
+              + "    AND EXISTS ( "
+              + "      SELECT 1 FROM jsonb_each(q.generation_metadata->'tfClauses') "
+              + "      WHERE value->>'cognitiveLevel' = CAST(:cognitiveLevel AS text) "
+              + "    ) "
+              + "  ) "
+              + "  OR ( "
+              + "    q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "    OR (CAST(:cognitiveLevel AS text) = 'NHAN_BIET' AND q.cognitive_level = 'REMEMBER') "
+              + "    OR (CAST(:cognitiveLevel AS text) = 'THONG_HIEU' AND q.cognitive_level = 'UNDERSTAND') "
+              + "    OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG' AND q.cognitive_level IN ('APPLY','ANALYZE')) "
+              + "    OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG_CAO' AND q.cognitive_level IN ('EVALUATE','CREATE')) "
+              + "  ) "
+              + ")",
+      nativeQuery = true)
+  long countTFByBanksAndChapterAndClauseCognitive(
+      @Param("bankIds") java.util.Collection<UUID> bankIds,
+      @Param("chapterId") UUID chapterId,
+      @Param("cognitiveLevel") String cognitiveLevel);
+
+  /**
+   * Multi-bank TF candidate-id lookup.
+   *
+   * <p>Mirrors the dual-path logic of
+   * {@link #findTFIdsByBankAndChapterAndClauseCognitive}.
+   */
+  @Query(
+      value =
+          "SELECT DISTINCT q.id FROM questions q "
+              + "WHERE q.question_bank_id IN (:bankIds) "
+              + "AND q.question_type = 'TRUE_FALSE' "
+              + "AND q.question_status = 'APPROVED' "
+              + "AND q.deleted_at IS NULL "
+              + "AND ( "
+              + "  ( "
+              + "    q.generation_metadata IS NOT NULL "
+              + "    AND EXISTS ( "
+              + "      SELECT 1 FROM jsonb_each(q.generation_metadata->'tfClauses') "
+              + "      WHERE value->>'cognitiveLevel' = CAST(:cognitiveLevel AS text) "
+              + "      AND value->>'chapterId' = CAST(:chapterId AS text) "
+              + "    ) "
+              + "  ) "
+              + "  OR ( "
+              + "    q.chapter_id = :chapterId "
+              + "    AND ( "
+              + "      q.cognitive_level = CAST(:cognitiveLevel AS text) "
+              + "      OR (CAST(:cognitiveLevel AS text) = 'NHAN_BIET' AND q.cognitive_level = 'REMEMBER') "
+              + "      OR (CAST(:cognitiveLevel AS text) = 'THONG_HIEU' AND q.cognitive_level = 'UNDERSTAND') "
+              + "      OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG' AND q.cognitive_level IN ('APPLY','ANALYZE')) "
+              + "      OR (CAST(:cognitiveLevel AS text) = 'VAN_DUNG_CAO' AND q.cognitive_level IN ('EVALUATE','CREATE')) "
+              + "    ) "
+              + "  ) "
+              + ") "
+              + "ORDER BY q.id",
+      nativeQuery = true)
+  List<UUID> findTFIdsByBanksAndChapterAndClauseCognitive(
+      @Param("bankIds") java.util.Collection<UUID> bankIds,
       @Param("chapterId") UUID chapterId,
       @Param("cognitiveLevel") String cognitiveLevel);
 }

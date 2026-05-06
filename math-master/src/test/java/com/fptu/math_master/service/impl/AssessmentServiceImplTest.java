@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -20,7 +22,6 @@ import com.fptu.math_master.BaseUnitTest;
 import com.fptu.math_master.constant.PredefinedRole;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
-import com.fptu.math_master.dto.request.CloneAssessmentRequest;
 import com.fptu.math_master.dto.request.DistributeAssessmentPointsRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
@@ -98,6 +99,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
   @Mock private UserRepository userRepository;
   @Mock private ExamMatrixRepository examMatrixRepository;
   @Mock private ExamMatrixBankMappingRepository examMatrixBankMappingRepository;
+  @Mock private com.fptu.math_master.repository.ExamMatrixPartRepository examMatrixPartRepository;
   @Mock private ExamMatrixRowRepository examMatrixRowRepository;
   @Mock private LessonRepository lessonRepository;
   @Mock private ChapterRepository chapterRepository;
@@ -170,7 +172,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
             .attemptScoringPolicy(null)
             .showScoreImmediately(null)
             .build();
-            
+
     validUpdateRequest =
         com.fptu.math_master.dto.request.UpdateAssessmentRequest.builder()
             .title("Đánh giá năng lực Đại số")
@@ -1036,7 +1038,13 @@ class AssessmentServiceImplTest extends BaseUnitTest {
       when(examMatrixRowRepository.findByExamMatrixId(matrixId)).thenReturn(Collections.emptyList());
       when(questionBankRepository.findAllById(Collections.emptyList())).thenReturn(Collections.emptyList());
       when(lessonRepository.findByChapterIdIn(Collections.emptyList())).thenReturn(Collections.emptyList());
-      when(questionSelectionService.buildSelectionPlan(assessmentId, matrixId, 1)).thenReturn(selectionPlan);
+      // Matrix is now a pure blueprint: bank flows in via the request (here null
+      // because the request DTO doesn't set questionBankId).
+      // PhaseA: impl now calls the Collection<UUID>-overload of buildSelectionPlan;
+      // request has no banks so the override collection passes through as null.
+      when(questionSelectionService.buildSelectionPlan(
+              eq(assessmentId), eq(matrixId), (java.util.Collection<UUID>) isNull(), eq(1)))
+          .thenReturn(selectionPlan);
 
       // ===== ACT =====
       AssessmentGenerationResponse result =
@@ -1082,7 +1090,10 @@ class AssessmentServiceImplTest extends BaseUnitTest {
       when(examMatrixRowRepository.findByExamMatrixId(matrixId)).thenReturn(Collections.emptyList());
       when(questionBankRepository.findAllById(Collections.emptyList())).thenReturn(Collections.emptyList());
       when(lessonRepository.findByChapterIdIn(Collections.emptyList())).thenReturn(Collections.emptyList());
-      when(questionSelectionService.buildSelectionPlan(assessmentId, matrixId, 1))
+      // PhaseA: impl now calls the Collection<UUID>-overload of buildSelectionPlan;
+      // request has no banks so the override collection passes through as null.
+      when(questionSelectionService.buildSelectionPlan(
+              eq(assessmentId), eq(matrixId), (java.util.Collection<UUID>) isNull(), eq(1)))
           .thenReturn(new QuestionSelectionService.SelectionPlan(Collections.emptyList(), 0));
       when(assessmentRepository.countQuestionsByAssessmentId(assessmentId)).thenReturn(0L);
       when(assessmentRepository.calculateTotalPoints(assessmentId)).thenReturn(0.0);
@@ -1106,9 +1117,12 @@ class AssessmentServiceImplTest extends BaseUnitTest {
     void it_should_generate_assessment_by_percentage_when_distribution_is_valid() {
       // ===== ARRANGE =====
       authenticateAsTeacher(teacherId);
+      // Matrix is now a pure blueprint — bank is picked at generation time.
+      UUID generationBankId = UUID.fromString("aa11bb22-cc33-dd44-ee55-ff6677889900");
       GenerateAssessmentByPercentageRequest request =
           GenerateAssessmentByPercentageRequest.builder()
               .examMatrixId(matrixId)
+              .questionBankId(generationBankId)
               .totalQuestions(4)
               .assessmentTitle("Đề ôn tập chương trình lớp 10")
               .assessmentDescription("Phân bổ theo mức độ nhận thức")
@@ -1153,6 +1167,14 @@ class AssessmentServiceImplTest extends BaseUnitTest {
       q4.setId(UUID.randomUUID());
 
       when(examMatrixRepository.findByIdAndNotDeleted(matrixId)).thenReturn(Optional.of(approvedMatrix));
+      when(examMatrixPartRepository.findByExamMatrixIdOrderByPartNumber(matrixId))
+          .thenReturn(
+              List.of(
+                  com.fptu.math_master.entity.ExamMatrixPart.builder()
+                      .examMatrixId(matrixId)
+                      .partNumber(1)
+                      .questionType(QuestionType.MULTIPLE_CHOICE)
+                      .build()));
       when(examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId))
           .thenReturn(
               List.of(
@@ -1192,56 +1214,8 @@ class AssessmentServiceImplTest extends BaseUnitTest {
           () -> assertEquals(4, result.getTotalPoints()));
     }
 
-    @Test
-    void it_should_clone_assessment_and_questions_when_requested_for_non_matrix_source() {
-      // ===== ARRANGE =====
-      authenticateAsTeacher(teacherId);
-      UUID sourceId = UUID.fromString("c75eb5a5-1b95-4649-8e66-6ea68b6e3569");
-      Assessment source = buildAssessmentWithStatus(AssessmentStatus.DRAFT);
-      source.setId(sourceId);
-      source.setExamMatrixId(null);
-      source.setTitle("Đề gốc học kỳ 1");
-      CloneAssessmentRequest request =
-          CloneAssessmentRequest.builder().newTitle("Đề sao chép học kỳ 1").cloneQuestions(true).build();
-
-      AssessmentQuestion sourceQuestion =
-          AssessmentQuestion.builder()
-              .assessmentId(sourceId)
-              .questionId(questionId)
-              .orderIndex(1)
-              .pointsOverride(new BigDecimal("2.00"))
-              .build();
-
-      when(assessmentRepository.findByIdAndNotDeleted(sourceId)).thenReturn(Optional.of(source));
-      when(assessmentRepository.save(any(Assessment.class)))
-          .thenAnswer(
-              invocation -> {
-                Assessment saved = invocation.getArgument(0);
-                if (saved.getId() == null) {
-                  saved.setId(assessmentId);
-                }
-                return saved;
-              });
-      when(assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(sourceId))
-          .thenReturn(List.of(sourceQuestion));
-      when(assessmentRepository.countQuestionsByAssessmentId(assessmentId)).thenReturn(1L);
-      when(assessmentRepository.calculateTotalPoints(assessmentId)).thenReturn(2.0);
-      when(assessmentRepository.countSubmissionsByAssessmentId(assessmentId)).thenReturn(0L);
-      when(userRepository.findById(teacherId))
-          .thenReturn(Optional.of(buildTeacher(teacherId, "Hoang Bao Vy")));
-      when(assessmentLessonRepository.findLessonIdsByAssessmentId(assessmentId))
-          .thenReturn(Collections.emptyList());
-      when(lessonRepository.findByIdInAndNotDeleted(Collections.emptyList()))
-          .thenReturn(Collections.emptyList());
-
-      // ===== ACT =====
-      AssessmentResponse result = assessmentService.cloneAssessment(sourceId, request);
-
-      // ===== ASSERT =====
-      assertEquals(assessmentId, result.getId());
-      assertEquals(1L, result.getTotalQuestions());
-      verify(assessmentQuestionRepository, times(1)).save(any(AssessmentQuestion.class));
-    }
+    // Clone-assessment flow was deleted entirely; the corresponding tests
+    // are removed alongside the endpoint, service method, and DTO.
   }
 
   @Nested
@@ -1889,36 +1863,7 @@ class AssessmentServiceImplTest extends BaseUnitTest {
               AssessmentStatus.DRAFT, "   ", PageRequest.of(0, 5)).getTotalElements());
     }
 
-    @Test
-    void it_should_clone_with_default_title_when_new_title_blank() {
-      authenticateAsTeacher(teacherId);
-      UUID sourceId = UUID.fromString("c3a31f88-fa0d-412d-9f83-fde5f54a1f44");
-      Assessment source = buildAssessmentWithStatus(AssessmentStatus.DRAFT);
-      source.setId(sourceId);
-      source.setTitle("Đề nguồn chương 2");
-      source.setExamMatrixId(UUID.randomUUID());
-      when(assessmentRepository.findByIdAndNotDeleted(sourceId)).thenReturn(Optional.of(source));
-      when(assessmentRepository.save(any(Assessment.class)))
-          .thenAnswer(
-              inv -> {
-                Assessment a = inv.getArgument(0);
-                a.setId(assessmentId);
-                return a;
-              });
-      when(assessmentRepository.countQuestionsByAssessmentId(assessmentId)).thenReturn(0L);
-      when(assessmentRepository.calculateTotalPoints(assessmentId)).thenReturn(0.0);
-      when(assessmentRepository.countSubmissionsByAssessmentId(assessmentId)).thenReturn(0L);
-      when(userRepository.findById(teacherId))
-          .thenReturn(Optional.of(buildTeacher(teacherId, "Clone Owner")));
-      when(assessmentLessonRepository.findLessonIdsByAssessmentId(assessmentId))
-          .thenReturn(Collections.emptyList());
-      when(lessonRepository.findByIdInAndNotDeleted(Collections.emptyList()))
-          .thenReturn(Collections.emptyList());
-      AssessmentResponse response =
-          assessmentService.cloneAssessment(
-              sourceId, CloneAssessmentRequest.builder().newTitle(" ").cloneQuestions(true).build());
-      assertTrue(response.getTitle().startsWith("Copy of "));
-    }
+    // Clone-with-default-title test was removed alongside the cloneAssessment flow.
 
     @Test
     void it_should_throw_exception_when_generate_assessment_from_non_reusable_matrix() {
@@ -2645,9 +2590,13 @@ class AssessmentServiceImplTest extends BaseUnitTest {
       when(examMatrixRepository.findByIdAndNotDeleted(matrixId)).thenReturn(Optional.of(approvedMatrix));
       when(examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId))
           .thenReturn(Collections.emptyList());
+      // After PR-1 (matrix-as-blueprint) the bank flows in via the request; the
+      // test now exercises the structural-validation path explicitly.
+      UUID generationBankId = UUID.fromString("cc33dd44-ee55-ff66-7788-99aabbccddee");
       GenerateAssessmentByPercentageRequest req =
           GenerateAssessmentByPercentageRequest.builder()
               .examMatrixId(matrixId)
+              .questionBankId(generationBankId)
               .totalQuestions(5)
               .cognitiveLevelPercentages(Map.of(CognitiveLevel.NHAN_BIET, 100.0))
               .build();
@@ -2660,6 +2609,14 @@ class AssessmentServiceImplTest extends BaseUnitTest {
     void it_should_generate_assessment_by_percentage_with_insufficient_warnings() {
       authenticateAsTeacher(teacherId);
       when(examMatrixRepository.findByIdAndNotDeleted(matrixId)).thenReturn(Optional.of(approvedMatrix));
+      when(examMatrixPartRepository.findByExamMatrixIdOrderByPartNumber(matrixId))
+          .thenReturn(
+              List.of(
+                  com.fptu.math_master.entity.ExamMatrixPart.builder()
+                      .examMatrixId(matrixId)
+                      .partNumber(1)
+                      .questionType(QuestionType.MULTIPLE_CHOICE)
+                      .build()));
       when(examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrixId))
           .thenReturn(
               List.of(
@@ -2678,10 +2635,13 @@ class AssessmentServiceImplTest extends BaseUnitTest {
               });
       when(questionRepository.findRandomApprovedByBanksAndCognitiveLevel(any(), anyString(), anyInt()))
           .thenReturn(Collections.emptyList());
+      // Matrix is a pure blueprint — bank is picked at generation time.
+      UUID generationBankId = UUID.fromString("bb22cc33-dd44-ee55-ff66-778899aabbcc");
       PercentageBasedGenerationResponse res =
           assessmentService.generateAssessmentByPercentage(
               GenerateAssessmentByPercentageRequest.builder()
                   .examMatrixId(matrixId)
+                  .questionBankId(generationBankId)
                   .totalQuestions(10)
                   .assessmentTitle("Đề cảnh báo thiếu câu")
                   .cognitiveLevelPercentages(Map.of(CognitiveLevel.NHAN_BIET, 100.0))

@@ -154,6 +154,7 @@ public class CashFlowService {
         log.info("Getting chart data groupBy={} from={} to={}", groupBy, from, to);
 
         List<Object[]> raw = switch (groupBy.toLowerCase()) {
+            case "hour"  -> transactionRepository.findCashFlowHourlyAggregates(from, to);
             case "week"  -> transactionRepository.findCashFlowWeeklyAggregates(from, to);
             case "month" -> transactionRepository.findCashFlowMonthlyAggregates(from, to);
             default      -> transactionRepository.findCashFlowDailyAggregates(from, to);

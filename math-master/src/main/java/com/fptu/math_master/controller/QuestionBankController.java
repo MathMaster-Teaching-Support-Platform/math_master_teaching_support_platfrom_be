@@ -3,6 +3,7 @@ package com.fptu.math_master.controller;
 import com.fptu.math_master.dto.request.QuestionBankRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.QuestionBankResponse;
+import com.fptu.math_master.dto.response.QuestionBankTreeResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.service.QuestionBankService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -238,6 +239,22 @@ public class QuestionBankController {
         log.info("REST request to list mapped templates for question bank {}", id);
         return ApiResponse.<List<QuestionTemplateResponse>>builder()
                 .result(questionBankService.getMappedTemplates(id))
+                .build();
+    }
+
+    @GetMapping("/{id}/tree")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @Operation(
+            summary = "Happy-case bank tree (Lớp → Chương → NB/TH/VD/VDC)",
+            description =
+                    "Returns the hierarchical view used by the new question-bank UI: "
+                            + "the bank's school grade, every chapter under that grade (or subject if scoped), "
+                            + "and the four cognitive buckets per chapter — each bucket carries its question list. "
+                            + "Empty buckets return count=0 and an empty array so FE can always render the four tabs.")
+    public ApiResponse<QuestionBankTreeResponse> getBankTree(@PathVariable UUID id) {
+        log.info("REST request to get bank tree: {}", id);
+        return ApiResponse.<QuestionBankTreeResponse>builder()
+                .result(questionBankService.getBankTree(id))
                 .build();
     }
 

@@ -376,6 +376,7 @@ AuthenticationRequest.java
 BatchAddTemplateMappingsRequest.java
 BatchUpsertMatrixRowCellsRequest.java
 BuildExamMatrixRequest.java
+BuildSimpleExamMatrixRequest.java
 BulkApproveQuestionsRequest.java
 BulkAssignQuestionsToBankRequest.java
 CanonicalQuestionRequest.java
@@ -557,6 +558,7 @@ PercentageBasedGenerationResponse.java
 PermissionResponse.java
 PreviewCandidatesResponse.java
 QuestionBankResponse.java
+QuestionBankTreeResponse.java
 QuestionResponse.java
 QuestionTemplateResponse.java
 RegradeRequestResponse.java

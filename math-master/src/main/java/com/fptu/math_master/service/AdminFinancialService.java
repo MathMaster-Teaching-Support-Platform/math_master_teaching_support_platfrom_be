@@ -136,51 +136,65 @@ public class AdminFinancialService {
                 .build();
     }
 
-    @Transactional(readOnly = true)
-    public RevenueBreakdownResponse getRevenueBreakdown(String period) {
-        log.info("Getting revenue breakdown for period: {}", period);
-
-        int days = parsePeriod(period);
-        LocalDate endDate = LocalDate.now();
-        LocalDate startDate = endDate.minusDays(days - 1);
-
-        List<RevenueBreakdownResponse.DailyRevenue> data = new ArrayList<>();
-
-        for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
-            Instant dayStart = date.atStartOfDay(ZoneOffset.UTC).toInstant();
-            Instant dayEnd = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-
-            // Deposits (wallet top-ups)
-            BigDecimal deposits = transactionRepository.sumByTypeAndStatusAndDateRange(
-                    TransactionType.DEPOSIT, TransactionStatus.SUCCESS, dayStart, dayEnd);
-            if (deposits == null) deposits = BigDecimal.ZERO;
-
-            // Subscription revenue
-            BigDecimal subscriptions = transactionRepository.sumByTypeAndStatusAndDateRange(
-                    TransactionType.PAYMENT, TransactionStatus.SUCCESS, dayStart, dayEnd);
-            if (subscriptions == null) subscriptions = BigDecimal.ZERO;
-
-            // Course sales (platform commission)
-            BigDecimal courseSales = transactionRepository.sumByTypeAndStatusAndDateRange(
-                    TransactionType.PLATFORM_COMMISSION, TransactionStatus.SUCCESS, dayStart, dayEnd);
-            if (courseSales == null) courseSales = BigDecimal.ZERO;
-
-            BigDecimal total = subscriptions.add(courseSales);
-
-            data.add(RevenueBreakdownResponse.DailyRevenue.builder()
-                    .date(date.toString())
-                    .deposits(deposits)
-                    .subscriptions(subscriptions)
-                    .courseSales(courseSales)
-                    .total(total)
-                    .build());
+        @Transactional(readOnly = true)
+        public RevenueBreakdownResponse getRevenueBreakdown(String period) {
+                return getRevenueBreakdown(period, null, null, null);
         }
 
-        return RevenueBreakdownResponse.builder()
-                .period(period)
-                .data(data)
-                .build();
-    }
+        @Transactional(readOnly = true)
+        public RevenueBreakdownResponse getRevenueBreakdown(String period, String groupBy, LocalDate from, LocalDate to) {
+                log.info("Getting revenue breakdown period={} groupBy={} from={} to={}", period, groupBy, from, to);
+
+                LocalDate endDate;
+                LocalDate startDate;
+
+                if (from != null && to != null) {
+                        startDate = from;
+                        endDate = to;
+                } else {
+                        int days = parsePeriod(period);
+                        endDate = LocalDate.now();
+                        startDate = endDate.minusDays(days - 1);
+                }
+
+                String safeGroupBy = groupBy != null ? groupBy.trim().toLowerCase() : "";
+                if (safeGroupBy.isEmpty()) {
+                        long days = ChronoUnit.DAYS.between(startDate, endDate) + 1;
+                        safeGroupBy = days <= 1 ? "hour" : days <= 31 ? "day" : "month";
+                }
+
+                Instant instantFrom = startDate.atStartOfDay(ZoneOffset.UTC).toInstant();
+                Instant instantTo = endDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+
+                List<Object[]> raw = switch (safeGroupBy) {
+                        case "hour"  -> transactionRepository.findRevenueBreakdownHourlyAggregates(instantFrom, instantTo);
+                        case "month" -> transactionRepository.findRevenueBreakdownMonthlyAggregates(instantFrom, instantTo);
+                        default      -> transactionRepository.findRevenueBreakdownDailyAggregates(instantFrom, instantTo);
+                };
+
+                List<RevenueBreakdownResponse.DailyRevenue> data = raw.stream().map(row -> {
+                        String label = row[0] != null ? row[0].toString() : "";
+                        BigDecimal deposits = new BigDecimal(row[1] != null ? row[1].toString() : "0");
+                        BigDecimal subscriptions = new BigDecimal(row[2] != null ? row[2].toString() : "0");
+                        BigDecimal courseSales = new BigDecimal(row[3] != null ? row[3].toString() : "0");
+                        BigDecimal total = subscriptions.add(courseSales);
+
+                        return RevenueBreakdownResponse.DailyRevenue.builder()
+                                .date(label)
+                                .deposits(deposits)
+                                .subscriptions(subscriptions)
+                                .courseSales(courseSales)
+                                .total(total)
+                                .build();
+                }).collect(Collectors.toList());
+
+                String safePeriod = period != null ? period : safeGroupBy;
+
+                return RevenueBreakdownResponse.builder()
+                        .period(safePeriod)
+                        .data(data)
+                        .build();
+        }
 
     @Transactional(readOnly = true)
     public List<MarketplaceTopCourseResponse> getTopCourses(int limit) {

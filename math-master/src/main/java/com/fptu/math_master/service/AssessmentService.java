@@ -5,7 +5,6 @@ import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
 import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AddQuestionToAssessmentRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
-import com.fptu.math_master.dto.request.CloneAssessmentRequest;
 import com.fptu.math_master.dto.request.DistributeAssessmentPointsRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
@@ -55,8 +54,6 @@ public interface AssessmentService {
   boolean canPublishAssessment(UUID id);
 
   AssessmentResponse closeAssessment(UUID id);
-
-  AssessmentResponse cloneAssessment(UUID id, CloneAssessmentRequest request);
 
   AssessmentResponse addQuestion(UUID assessmentId, AddQuestionToAssessmentRequest request);
 

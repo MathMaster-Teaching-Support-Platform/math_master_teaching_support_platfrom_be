@@ -10,6 +10,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -52,14 +53,18 @@ public class AdminFinancialController {
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(
         summary = "Get revenue breakdown",
-        description = "Get daily revenue breakdown by source (deposits, subscriptions, course sales)"
+        description = "Get revenue breakdown by source (deposits, subscriptions, course sales)"
     )
     public ResponseEntity<ApiResponse<RevenueBreakdownResponse>> getRevenueBreakdown(
             @Parameter(description = "Period: 7d, 30d, 90d, 1y (default: 30d)")
-            @RequestParam(required = false, defaultValue = "30d") String period) {
-        log.info("Admin requesting revenue breakdown for period: {}", period);
+            @RequestParam(required = false, defaultValue = "30d") String period,
+            @Parameter(description = "Grouping: hour | day | month")
+            @RequestParam(required = false) String groupBy,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        log.info("Admin requesting revenue breakdown period={} groupBy={} from={} to={}", period, groupBy, from, to);
         
-        RevenueBreakdownResponse breakdown = adminFinancialService.getRevenueBreakdown(period);
+        RevenueBreakdownResponse breakdown = adminFinancialService.getRevenueBreakdown(period, groupBy, from, to);
         
         return ResponseEntity.ok(ApiResponse.<RevenueBreakdownResponse>builder()
                 .code(200)

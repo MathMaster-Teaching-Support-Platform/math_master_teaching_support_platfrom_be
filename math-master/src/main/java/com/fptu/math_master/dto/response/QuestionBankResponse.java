@@ -23,6 +23,17 @@ public class QuestionBankResponse {
   private Long questionCount;
   /** Counts per CognitiveLevel enum name, e.g. {"NHAN_BIET": 6, "THONG_HIEU": 4} */
   private Map<String, Long> cognitiveStats;
+
+  /** School grade (lớp) this bank serves; null for legacy banks. */
+  private UUID schoolGradeId;
+
+  private Integer gradeLevel;
+  private String schoolGradeName;
+
+  /** Optional subject scope; null = covers all subjects for the grade. */
+  private UUID subjectId;
+  private String subjectName;
+
   private Instant createdAt;
   private Instant updatedAt;
 }

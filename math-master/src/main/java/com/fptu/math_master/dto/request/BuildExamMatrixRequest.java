@@ -6,7 +6,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -40,12 +39,14 @@ public class BuildExamMatrixRequest {
   private String description;
 
   /**
-   * The single question bank used as the source for all questions in this matrix.
-   * In the chapter-based architecture, one matrix maps to exactly one bank.
-   * Questions are filtered by chapter within that bank.
-   * REQUIRED in Phase 3.
+   * Optional default bank stored on the matrix as a hint for "tạo đề thi từ ma trận".
+   * <p>
+   * The matrix is now a pure blueprint: the bank used for question selection is
+   * picked at assessment-generation time via
+   * {@link GenerateAssessmentQuestionsRequest#questionBankId}. Setting this here
+   * only pre-fills the picker on the FE; it never restricts which bank can be
+   * used to generate an assessment from this matrix.
    */
-  @NotNull(message = "questionBankId is required")
   private UUID questionBankId;
 
   /**

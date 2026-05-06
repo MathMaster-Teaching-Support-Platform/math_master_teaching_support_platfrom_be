@@ -80,10 +80,18 @@ public interface QuestionService {
   Page<QuestionResponse> searchQuestions(String searchTerm, String type, Pageable pageable);
 
   /**
-   * Search questions by keyword (full-text) and/or multiple tags (IN filter).
-   * Supports pagination. Used by the new GET /questions/search endpoint.
+   * Search questions by keyword (full-text) and/or multiple tags (IN filter),
+   * optionally narrowed to a chapter and/or one of the four Vietnamese
+   * cognitive levels (NHAN_BIET / THONG_HIEU / VAN_DUNG / VAN_DUNG_CAO).
+   * Bloom-style English levels are folded onto the matching Vietnamese bucket
+   * server-side so callers can pass either family.
    */
-  Page<QuestionResponse> searchByKeywordAndTags(String keyword, List<String> tags, Pageable pageable);
+  Page<QuestionResponse> searchByKeywordAndTags(
+      String keyword,
+      List<String> tags,
+      UUID chapterId,
+      String cognitiveLevel,
+      Pageable pageable);
 
   /**
    * Assign multiple existing questions into one question bank
