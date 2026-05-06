@@ -1,17 +1,19 @@
 package com.fptu.math_master.service.async;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Optional;
+
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
+
 import com.fptu.math_master.configuration.properties.OcrAsyncProperties;
 import com.fptu.math_master.dto.ocr.OcrJobResult;
 import com.fptu.math_master.dto.response.OcrComparisonResult;
 import com.fptu.math_master.enums.OcrJobStatus;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.stereotype.Service;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Optional;
 
 /**
  * Service for managing OCR job status in Redis.
@@ -46,7 +48,7 @@ public class OcrJobStatusService {
             log.debug("Found result in Redis: type={}", result.getClass().getName());
             
             if (result instanceof OcrJobResult) {
-                log.info("Successfully retrieved job result for jobId: {}", jobId);
+                log.debug("Successfully retrieved job result for jobId: {}", jobId);
                 return Optional.of((OcrJobResult) result);
             }
             
@@ -60,7 +62,7 @@ public class OcrJobStatusService {
                     mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
                     
                     OcrJobResult converted = mapper.convertValue(result, OcrJobResult.class);
-                    log.info("Successfully converted Map to OcrJobResult for jobId: {}", jobId);
+                    log.debug("Successfully converted Map to OcrJobResult for jobId: {}", jobId);
                     
                     // Re-save with correct type
                     saveJobResult(converted);
@@ -218,7 +220,7 @@ public class OcrJobStatusService {
             // Verify save
             Object saved = ocrRedisTemplate.opsForValue().get(key);
             if (saved != null) {
-                log.info("Job result saved successfully to Redis: jobId={}, key={}", result.getJobId(), key);
+                log.debug("Job result saved successfully to Redis: jobId={}, key={}", result.getJobId(), key);
             } else {
                 log.error("Job result save verification failed: jobId={}, key={}", result.getJobId(), key);
             }

@@ -1,11 +1,23 @@
 package com.fptu.math_master.entity;
 
-import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
-import jakarta.persistence.*;
 import java.util.Map;
-import java.util.UUID;
-import lombok.*;
+
 import org.hibernate.annotations.Type;
+
+import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Builder
 @AllArgsConstructor
@@ -41,4 +53,7 @@ public class Notification extends BaseEntity {
 
   @Column(name = "is_read")
   private boolean isRead = false;
+
+  @Column(name = "action_url")
+  private String actionUrl;
 }

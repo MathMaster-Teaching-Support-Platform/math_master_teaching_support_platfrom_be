@@ -33,6 +33,7 @@ import com.fptu.math_master.dto.request.LatexRenderRequest;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.LatexRenderService;
 import com.fptu.math_master.service.LessonSlideService;
+import com.fptu.math_master.service.TokenCostConfigService;
 import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.SecurityUtils;
@@ -159,6 +160,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   GeminiService geminiService;
   LatexRenderService latexRenderService;
   UserSubscriptionService userSubscriptionService;
+  TokenCostConfigService tokenCostConfigService;
   UploadService uploadService;
   ObjectMapper objectMapper;
 
@@ -167,7 +169,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   public LessonSlideGeneratedContentResponse generateLessonContentDraft(
       LessonSlideGenerateContentRequest request) {
     validateTeacherRole();
-    userSubscriptionService.consumeMyTokens(3, "SLIDE");
+    int cost = tokenCostConfigService.getCostPerUse("slide");
+    userSubscriptionService.consumeMyTokens(cost, "SLIDE");
 
     SchoolGrade requestedGrade = resolveRequestedGrade(request);
 

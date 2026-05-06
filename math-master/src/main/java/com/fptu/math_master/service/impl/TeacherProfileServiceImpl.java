@@ -1,12 +1,26 @@
 package com.fptu.math_master.service.impl;
 
+import java.net.URI;
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.fptu.math_master.component.StreamPublisher;
 import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.constant.PredefinedRole;
+import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.dto.request.ProfileReviewRequest;
 import com.fptu.math_master.dto.request.TeacherProfileRequest;
-import com.fptu.math_master.dto.request.NotificationRequest;
 import com.fptu.math_master.dto.response.TeacherProfileResponse;
-import com.fptu.math_master.component.StreamPublisher;
 import com.fptu.math_master.entity.Role;
 import com.fptu.math_master.entity.TeacherProfile;
 import com.fptu.math_master.entity.User;
@@ -18,21 +32,11 @@ import com.fptu.math_master.repository.TeacherProfileRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.TeacherProfileService;
 import com.fptu.math_master.service.UploadService;
-import java.net.URI;
-import java.time.LocalDateTime;
-import java.util.LinkedHashSet;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -85,6 +89,9 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
 
     profile = teacherProfileRepository.save(profile);
     log.info("Teacher profile submitted successfully for user {} with document: {}", userId, documentUrl);
+
+    // Notify all admins about new pending profile
+    notifyAdminsProfilePendingReview(profile, user);
 
     // AUTO-TRIGGER OCR verification job
     try {
@@ -252,7 +259,7 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
       streamNotif.setType("PROFILE_VERIFICATION");
       streamNotif.setTitle("Hồ sơ Giáo viên bị từ chối");
       streamNotif.setContent("Hồ sơ Giáo viên của bạn đã bị từ chối với lý do: " + request.getAdminComment());
-      streamNotif.setActionUrl("/profile");
+      streamNotif.setActionUrl("/submit-teacher-profile");
     }
 
     try {
@@ -373,6 +380,30 @@ public class TeacherProfileServiceImpl implements TeacherProfileService {
     }
 
     return value;
+  }
+
+  private void notifyAdminsProfilePendingReview(TeacherProfile profile, User submitter) {
+    List<UUID> adminIds = userRepository.findUserIdsByRoleName(PredefinedRole.ADMIN_ROLE);
+    if (adminIds.isEmpty()) {
+      return;
+    }
+    for (UUID adminId : adminIds) {
+      NotificationRequest notif = NotificationRequest.builder()
+          .id(UUID.randomUUID().toString())
+          .type("PROFILE_VERIFICATION")
+          .title("Hồ sơ Giáo viên mới cần xét duyệt")
+          .content("Giáo viên " + submitter.getFullName() + " vừa gửi hồ sơ đăng ký và đang chờ xét duyệt.")
+          .recipientId(adminId.toString())
+          .senderId(submitter.getId().toString())
+          .actionUrl("/admin/review-profiles?profileId=" + profile.getId())
+          .timestamp(LocalDateTime.now())
+          .build();
+      try {
+        streamPublisher.publish(notif);
+      } catch (Exception e) {
+        log.error("Failed to notify admin {} about pending profile {}", adminId, profile.getId(), e);
+      }
+    }
   }
 
   private TeacherProfileResponse mapToResponse(TeacherProfile profile) {

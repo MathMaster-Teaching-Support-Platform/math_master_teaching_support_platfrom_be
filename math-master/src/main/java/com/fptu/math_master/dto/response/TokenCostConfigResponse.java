@@ -1,9 +1,7 @@
 package com.fptu.math_master.dto.response;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,16 +11,12 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class NotificationResponse {
-
+public class TokenCostConfigResponse {
   private UUID id;
-  private UUID recipientId;
-  private String type;
-  private String title;
-  private String content;
-  private Map<String, Object> metadata;
-  private Boolean read;
-  private String actionUrl;
-  private Instant createdAt;
+  private String featureKey;
+  private String featureLabel;
+  private Integer costPerUse;
+  private Boolean isActive;
   private Instant updatedAt;
+  private UUID updatedBy;
 }

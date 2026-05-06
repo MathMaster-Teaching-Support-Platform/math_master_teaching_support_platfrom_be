@@ -17,6 +17,7 @@ import com.fptu.math_master.repository.ChatMessageRepository;
 import com.fptu.math_master.repository.ChatSessionRepository;
 import com.fptu.math_master.service.ChatSessionService;
 import com.fptu.math_master.service.GeminiService;
+import com.fptu.math_master.service.TokenCostConfigService;
 import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.time.Duration;
@@ -57,6 +58,7 @@ public class ChatSessionServiceImpl implements ChatSessionService {
   ChatMessageRepository chatMessageRepository;
   GeminiService geminiService;
   UserSubscriptionService userSubscriptionService;
+  TokenCostConfigService tokenCostConfigService;
   RedisTemplate<String, Object> redisTemplate;
 
   @Override
@@ -115,7 +117,8 @@ public class ChatSessionServiceImpl implements ChatSessionService {
   @Transactional
   public ChatExchangeResponse sendMessage(UUID sessionId, SendChatMessageRequest request) {
     ChatSession session = getOwnedSession(sessionId);
-    userSubscriptionService.consumeMyTokens(1, "CHAT");
+    int cost = tokenCostConfigService.getCostPerUse("chat");
+    userSubscriptionService.consumeMyTokens(cost, "CHAT");
 
     if (session.getStatus() == ChatSessionStatus.ARCHIVED) {
       throw new AppException(ErrorCode.CHAT_SESSION_ARCHIVED);
