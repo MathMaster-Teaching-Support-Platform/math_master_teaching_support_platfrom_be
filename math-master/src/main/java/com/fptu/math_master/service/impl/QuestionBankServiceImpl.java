@@ -3,10 +3,14 @@ package com.fptu.math_master.service.impl;
 import com.fptu.math_master.dto.request.QuestionBankRequest;
 import com.fptu.math_master.dto.response.QuestionBankMatrixStatsResponse;
 import com.fptu.math_master.dto.response.QuestionBankResponse;
+import com.fptu.math_master.dto.response.QuestionBankTreeResponse;
 import com.fptu.math_master.dto.response.QuestionTemplateResponse;
 import com.fptu.math_master.entity.Chapter;
+import com.fptu.math_master.entity.Question;
 import com.fptu.math_master.entity.QuestionBank;
 import com.fptu.math_master.entity.QuestionTemplate;
+import com.fptu.math_master.entity.SchoolGrade;
+import com.fptu.math_master.entity.Subject;
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.enums.CognitiveLevel;
 import com.fptu.math_master.exception.AppException;
@@ -15,10 +19,15 @@ import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
+import com.fptu.math_master.repository.SchoolGradeRepository;
+import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.repository.UserRepository;
 import com.fptu.math_master.service.QuestionBankService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +52,8 @@ public class QuestionBankServiceImpl implements QuestionBankService {
   QuestionTemplateRepository questionTemplateRepository;
   ChapterRepository chapterRepository;
   UserRepository userRepository;
+  SchoolGradeRepository schoolGradeRepository;
+  SubjectRepository subjectRepository;
 
   @Override
   @Transactional
@@ -50,12 +61,33 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     log.info("Creating question bank: {}", request.getName());
     UUID currentUserId = SecurityUtils.getCurrentUserId();
 
+    UUID schoolGradeId = request.getSchoolGradeId();
+    UUID subjectId = request.getSubjectId();
+    if (schoolGradeId != null) {
+      schoolGradeRepository
+          .findByIdAndNotDeleted(schoolGradeId)
+          .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+    }
+    if (subjectId != null) {
+      Subject subject =
+          subjectRepository
+              .findById(subjectId)
+              .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
+      if (schoolGradeId != null
+          && subject.getSchoolGradeId() != null
+          && !schoolGradeId.equals(subject.getSchoolGradeId())) {
+        throw new AppException(ErrorCode.BANK_GRADE_MISMATCH);
+      }
+    }
+
     QuestionBank questionBank =
         QuestionBank.builder()
             .teacherId(currentUserId)
             .name(request.getName())
             .description(request.getDescription())
             .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
+            .schoolGradeId(schoolGradeId)
+            .subjectId(subjectId)
             .build();
 
     questionBank = questionBankRepository.save(questionBank);
@@ -77,15 +109,55 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     UUID currentUserId = SecurityUtils.getCurrentUserId();
     validateOwnerOrAdmin(questionBank.getTeacherId(), currentUserId);
 
-    boolean inUse = questionBankRepository.hasQuestionsInUse(id);
-    if (inUse) {
-      throw new AppException(ErrorCode.QUESTION_BANK_HAS_QUESTIONS_IN_USE);
-    }
-
+    // Cosmetic fields (name/description/isPublic) are always editable, even
+    // when questions of this bank are referenced by published assessments.
+    // Scope-changing fields (schoolGradeId/subjectId) are gated below: once a
+    // question of this bank has been frozen into an assessment we no longer
+    // allow re-anchoring the bank to a different grade or subject — that
+    // would silently shift which questions land in the matrix tree.
     questionBank.setName(request.getName());
     questionBank.setDescription(request.getDescription());
     if (request.getIsPublic() != null) {
       questionBank.setIsPublic(request.getIsPublic());
+    }
+
+    UUID requestedGradeId = request.getSchoolGradeId();
+    UUID requestedSubjectId = request.getSubjectId();
+    boolean changingGrade =
+        requestedGradeId != null && questionBank.getSchoolGradeId() == null;
+    boolean changingSubject =
+        !java.util.Objects.equals(requestedSubjectId, questionBank.getSubjectId());
+
+    if ((changingGrade || changingSubject) && questionBankRepository.hasQuestionsInUse(id)) {
+      throw new AppException(ErrorCode.QUESTION_BANK_HAS_QUESTIONS_IN_USE);
+    }
+
+    // school_grade_id is a one-time backfill: legacy banks (NULL grade) can be
+    // upgraded to the new flow, but once anchored to a grade the bank is
+    // locked there to keep the chapter tree stable for downstream matrices.
+    if (changingGrade) {
+      schoolGradeRepository
+          .findByIdAndNotDeleted(requestedGradeId)
+          .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+      questionBank.setSchoolGradeId(requestedGradeId);
+    }
+
+    // subject_id is freely changeable within the bank's grade — useful when a
+    // teacher narrows or widens the bank scope without recreating it.
+    UUID effectiveGradeId = questionBank.getSchoolGradeId();
+    if (requestedSubjectId == null) {
+      questionBank.setSubjectId(null);
+    } else if (changingSubject) {
+      Subject subject =
+          subjectRepository
+              .findById(requestedSubjectId)
+              .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
+      if (effectiveGradeId != null
+          && subject.getSchoolGradeId() != null
+          && !effectiveGradeId.equals(subject.getSchoolGradeId())) {
+        throw new AppException(ErrorCode.BANK_GRADE_MISMATCH);
+      }
+      questionBank.setSubjectId(requestedSubjectId);
     }
 
     questionBank = questionBankRepository.save(questionBank);
@@ -310,11 +382,38 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
     List<Object[]> cognitiveRows =
         questionRepository.countByCognitiveLevelForBank(questionBank.getId());
+    // Always render all four Vietnamese buckets (even when empty) so the FE
+    // can show a stable layout, and fold Bloom-style English levels onto the
+    // matching bucket — mirrors the tree-view grouping in getBankTree().
     Map<String, Long> cognitiveStats = new LinkedHashMap<>();
+    for (CognitiveLevel lvl : TREE_LEVELS) {
+      cognitiveStats.put(lvl.name(), 0L);
+    }
     for (Object[] row : cognitiveRows) {
-      CognitiveLevel level = (CognitiveLevel) row[0];
+      CognitiveLevel raw = (CognitiveLevel) row[0];
       Long count = (Long) row[1];
-      cognitiveStats.put(level.name(), count);
+      CognitiveLevel mapped = mapToVietnameseLevel(raw);
+      if (mapped == null) continue;
+      cognitiveStats.merge(mapped.name(), count, Long::sum);
+    }
+
+    Integer gradeLevel = null;
+    String schoolGradeName = null;
+    if (questionBank.getSchoolGradeId() != null) {
+      SchoolGrade sg =
+          schoolGradeRepository.findById(questionBank.getSchoolGradeId()).orElse(null);
+      if (sg != null) {
+        gradeLevel = sg.getGradeLevel();
+        schoolGradeName = sg.getName();
+      }
+    }
+
+    String subjectName = null;
+    if (questionBank.getSubjectId() != null) {
+      Subject subj = subjectRepository.findById(questionBank.getSubjectId()).orElse(null);
+      if (subj != null) {
+        subjectName = subj.getName();
+      }
     }
 
     return QuestionBankResponse.builder()
@@ -326,6 +425,11 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         .isPublic(questionBank.getIsPublic())
         .questionCount(questionCount)
         .cognitiveStats(cognitiveStats)
+        .schoolGradeId(questionBank.getSchoolGradeId())
+        .gradeLevel(gradeLevel)
+        .schoolGradeName(schoolGradeName)
+        .subjectId(questionBank.getSubjectId())
+        .subjectName(subjectName)
         .createdAt(questionBank.getCreatedAt())
         .updatedAt(questionBank.getUpdatedAt())
         .build();
@@ -477,5 +581,162 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
     log.info("Matrix stats retrieved for bank {}: {} grade levels", bankId, result.size());
     return result;
+  }
+
+  // ── Bank tree (happy-case view) ────────────────────────────────────────────
+
+  /**
+   * Vietnamese cognitive levels populated for every chapter, even when empty.
+   * Keeps the response shape stable so FE can always render NB / TH / VD / VDC tabs.
+   */
+  private static final List<CognitiveLevel> TREE_LEVELS =
+      List.of(
+          CognitiveLevel.NHAN_BIET,
+          CognitiveLevel.THONG_HIEU,
+          CognitiveLevel.VAN_DUNG,
+          CognitiveLevel.VAN_DUNG_CAO);
+
+  @Override
+  @Transactional(readOnly = true)
+  public QuestionBankTreeResponse getBankTree(UUID bankId) {
+    log.info("Building bank tree: {}", bankId);
+
+    QuestionBank bank =
+        questionBankRepository
+            .findByIdAndNotDeleted(bankId)
+            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+
+    UUID currentUserId = SecurityUtils.getCurrentUserId();
+    if (!bank.getTeacherId().equals(currentUserId)
+        && !Boolean.TRUE.equals(bank.getIsPublic())
+        && !SecurityUtils.hasRole("ADMIN")) {
+      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
+    }
+
+    SchoolGrade schoolGrade =
+        bank.getSchoolGradeId() != null
+            ? schoolGradeRepository.findById(bank.getSchoolGradeId()).orElse(null)
+            : null;
+    Subject subject =
+        bank.getSubjectId() != null
+            ? subjectRepository.findById(bank.getSubjectId()).orElse(null)
+            : null;
+
+    List<Chapter> chapters = loadChaptersForBank(bank);
+
+    Map<UUID, List<Question>> questionsByChapter = new LinkedHashMap<>();
+    if (!chapters.isEmpty()) {
+      List<UUID> chapterIds = chapters.stream().map(Chapter::getId).toList();
+      List<Question> questions =
+          questionRepository.findByBankAndChaptersForTree(bankId, chapterIds);
+      for (Question q : questions) {
+        questionsByChapter
+            .computeIfAbsent(q.getChapterId(), k -> new ArrayList<>())
+            .add(q);
+      }
+    }
+
+    List<QuestionBankTreeResponse.ChapterNode> chapterNodes = new ArrayList<>();
+    for (Chapter chapter : chapters) {
+      List<Question> chapterQuestions =
+          questionsByChapter.getOrDefault(chapter.getId(), List.of());
+      chapterNodes.add(buildChapterNode(chapter, chapterQuestions));
+    }
+
+    return QuestionBankTreeResponse.builder()
+        .bankId(bank.getId())
+        .bankName(bank.getName())
+        .schoolGradeId(bank.getSchoolGradeId())
+        .gradeLevel(schoolGrade != null ? schoolGrade.getGradeLevel() : null)
+        .schoolGradeName(schoolGrade != null ? schoolGrade.getName() : null)
+        .subjectId(bank.getSubjectId())
+        .subjectName(subject != null ? subject.getName() : null)
+        .chapters(chapterNodes)
+        .build();
+  }
+
+  private List<Chapter> loadChaptersForBank(QuestionBank bank) {
+    if (bank.getSubjectId() != null) {
+      return chapterRepository.findBySubjectIdAndNotDeleted(bank.getSubjectId());
+    }
+    if (bank.getSchoolGradeId() == null) {
+      return List.of();
+    }
+    List<Subject> subjects =
+        subjectRepository.findBySchoolGradeIdAndIsActiveTrueOrderByName(bank.getSchoolGradeId());
+    List<Chapter> all = new ArrayList<>();
+    for (Subject s : subjects) {
+      all.addAll(chapterRepository.findBySubjectIdAndNotDeleted(s.getId()));
+    }
+    all.sort(
+        Comparator.comparing(
+                Chapter::getOrderIndex, Comparator.nullsLast(Comparator.naturalOrder()))
+            .thenComparing(Chapter::getTitle, Comparator.nullsLast(Comparator.naturalOrder())));
+    return all;
+  }
+
+  private QuestionBankTreeResponse.ChapterNode buildChapterNode(
+      Chapter chapter, List<Question> chapterQuestions) {
+    Map<CognitiveLevel, List<Question>> grouped = new LinkedHashMap<>();
+    for (CognitiveLevel level : TREE_LEVELS) {
+      grouped.put(level, new ArrayList<>());
+    }
+    for (Question q : chapterQuestions) {
+      CognitiveLevel mapped = mapToVietnameseLevel(q.getCognitiveLevel());
+      if (mapped != null) {
+        grouped.get(mapped).add(q);
+      }
+    }
+
+    Map<String, QuestionBankTreeResponse.CognitiveBucket> buckets = new LinkedHashMap<>();
+    long total = 0;
+    for (CognitiveLevel level : TREE_LEVELS) {
+      List<Question> qs = grouped.get(level);
+      total += qs.size();
+      buckets.put(
+          level.name(),
+          QuestionBankTreeResponse.CognitiveBucket.builder()
+              .level(level)
+              .count(qs.size())
+              .questions(qs.stream().map(this::toSummary).toList())
+              .build());
+    }
+
+    return QuestionBankTreeResponse.ChapterNode.builder()
+        .chapterId(chapter.getId())
+        .title(chapter.getTitle())
+        .orderIndex(chapter.getOrderIndex())
+        .totalQuestions(total)
+        .buckets(buckets)
+        .build();
+  }
+
+  /** Map Bloom-style English levels onto the four Vietnamese buckets used in the matrix. */
+  private CognitiveLevel mapToVietnameseLevel(CognitiveLevel raw) {
+    if (raw == null) return null;
+    if (EnumSet.of(
+            CognitiveLevel.NHAN_BIET,
+            CognitiveLevel.THONG_HIEU,
+            CognitiveLevel.VAN_DUNG,
+            CognitiveLevel.VAN_DUNG_CAO)
+        .contains(raw)) {
+      return raw;
+    }
+    return switch (raw) {
+      case REMEMBER -> CognitiveLevel.NHAN_BIET;
+      case UNDERSTAND -> CognitiveLevel.THONG_HIEU;
+      case APPLY, ANALYZE -> CognitiveLevel.VAN_DUNG;
+      case EVALUATE, CREATE -> CognitiveLevel.VAN_DUNG_CAO;
+      default -> null;
+    };
+  }
+
+  private QuestionBankTreeResponse.QuestionSummary toSummary(Question q) {
+    return QuestionBankTreeResponse.QuestionSummary.builder()
+        .id(q.getId())
+        .questionText(q.getQuestionText())
+        .questionType(q.getQuestionType() != null ? q.getQuestionType().name() : null)
+        .questionStatus(q.getQuestionStatus() != null ? q.getQuestionStatus().name() : null)
+        .build();
   }
 }

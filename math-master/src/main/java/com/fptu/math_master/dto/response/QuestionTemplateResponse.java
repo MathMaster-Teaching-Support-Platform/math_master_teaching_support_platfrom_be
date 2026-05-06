@@ -26,8 +26,19 @@ public class QuestionTemplateResponse {
   private String description;
   private UUID chapterId;
   private String chapterName;
+  /**
+   * Subject id of the chapter (derived from chapter -> subject). Returned so
+   * the FE can hydrate the academic cascade (lớp / môn / chương) when
+   * reopening an existing template for edit. Null when no chapter anchor.
+   */
+  private UUID subjectId;
   private String subjectName;
   private String gradeLevel;
+  /**
+   * Optional lesson the template was imported under. Surfaced so the FE can
+   * round-trip the value on update without losing it.
+   */
+  private UUID lessonId;
   private QuestionType templateType;
   private TemplateVariant templateVariant;
   private Map<String, Object> templateText;

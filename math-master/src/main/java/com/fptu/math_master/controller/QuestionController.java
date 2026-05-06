@@ -254,19 +254,32 @@ public class QuestionController {
   @Operation(
       summary = "Search questions by keyword and tags",
       description =
-          "Full-text search on question content (keyword) with optional multi-tag filter. "
-              + "tags param accepts multiple values (e.g. ?tags=TH&tags=VD). Supports pagination.")
+          "Full-text search on question content (keyword) with optional multi-tag filter, "
+              + "and optional narrowing by chapter + cognitive level. "
+              + "tags param accepts multiple values (e.g. ?tags=TH&tags=VD). "
+              + "cognitiveLevel accepts the Vietnamese bucket name (NHAN_BIET / THONG_HIEU / "
+              + "VAN_DUNG / VAN_DUNG_CAO); Bloom-style English levels stored on questions are "
+              + "folded onto the matching bucket server-side. Supports pagination.")
   public ApiResponse<Page<QuestionResponse>> searchByKeywordAndTags(
       @Parameter(description = "Keyword to search in question text") @RequestParam(required = false) String keyword,
       @Parameter(description = "Tag filter (multi-value)") @RequestParam(required = false) List<String> tags,
+      @Parameter(description = "Narrow to a single chapter") @RequestParam(required = false) UUID chapterId,
+      @Parameter(description = "Narrow to a Vietnamese cognitive bucket (NHAN_BIET/THONG_HIEU/VAN_DUNG/VAN_DUNG_CAO)")
+          @RequestParam(required = false)
+          String cognitiveLevel,
       @Parameter(description = "Page number (0-indexed)") @RequestParam(defaultValue = "0") int page,
       @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
 
-    log.info("REST request to search questions by keyword={} tags={}", keyword, tags);
+    log.info(
+        "REST request to search questions by keyword={} tags={} chapterId={} cognitiveLevel={}",
+        keyword,
+        tags,
+        chapterId,
+        cognitiveLevel);
     Pageable pageable = PageRequest.of(page, size);
     return ApiResponse.<Page<QuestionResponse>>builder()
         .message("Questions found successfully")
-        .result(questionService.searchByKeywordAndTags(keyword, tags, pageable))
+        .result(questionService.searchByKeywordAndTags(keyword, tags, chapterId, cognitiveLevel, pageable))
         .build();
   }
 

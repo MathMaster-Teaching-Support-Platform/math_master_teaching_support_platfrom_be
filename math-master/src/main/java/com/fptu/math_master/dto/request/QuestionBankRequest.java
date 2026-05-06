@@ -23,4 +23,15 @@ public class QuestionBankRequest {
   private Boolean isPublic;
 
   private UUID chapterId;
+
+  /**
+   * Required for the new "create bank by grade" happy-case flow.
+   * Once set, the bank's chapter tree is fully derived from this grade.
+   */
+  private UUID schoolGradeId;
+
+  /**
+   * Optional: narrow the bank to a single subject (môn) within the grade.
+   */
+  private UUID subjectId;
 }

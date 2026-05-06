@@ -196,6 +196,30 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       template.setIsPublic(request.getIsPublic());
     }
 
+    // Persist chapter/lesson on update — without this branch the
+    // existing chapterId/lessonId would silently survive every edit, so
+    // teachers couldn't fix templates imported from Excel that came in
+    // without an academic anchor. Mirrors the create-time logic so an
+    // update with only lessonId still resolves chapterId from the lesson.
+    UUID requestedChapterId = request.getChapterId();
+    UUID requestedLessonId = request.getLessonId();
+    if (requestedLessonId != null) {
+      template.setLessonId(requestedLessonId);
+      if (requestedChapterId == null) {
+        requestedChapterId =
+            lessonRepository
+                .findById(requestedLessonId)
+                .map(Lesson::getChapterId)
+                .orElse(null);
+      }
+      template.setChapterId(requestedChapterId);
+    } else {
+      // No lesson supplied → write chapter as-is (incl. explicit null to
+      // clear the academic anchor) and detach any previous lesson link.
+      template.setLessonId(null);
+      template.setChapterId(requestedChapterId);
+    }
+
     template = questionTemplateRepository.save(template);
 
     log.info("Question template updated: {}", id);
@@ -1061,6 +1085,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .name(template.getName())
             .description(template.getDescription())
             .chapterId(template.getChapterId())
+            .lessonId(template.getLessonId())
             .templateType(template.getTemplateType())
             .templateText(template.getTemplateText())
             .parameters(template.getParameters())
@@ -1087,11 +1112,14 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
             .questionBankId(template.getQuestionBankId())
             .canonicalQuestionId(template.getCanonicalQuestionId());
 
-    // Populate chapter, subject, and grade info if chapterId exists
+    // Populate chapter, subject, and grade info if chapterId exists. The FE
+    // edit-mode cascade needs subjectId (not just subjectName) to drive the
+    // grade/subject/chapter dropdowns when reopening an existing template.
     if (template.getChapterId() != null) {
       chapterRepository.findById(template.getChapterId()).ifPresent(chapter -> {
         builder.chapterName(chapter.getTitle());
         if (chapter.getSubject() != null) {
+          builder.subjectId(chapter.getSubject().getId());
           builder.subjectName(chapter.getSubject().getName());
           if (chapter.getSubject().getSchoolGrade() != null) {
             builder.gradeLevel(String.valueOf(chapter.getSubject().getSchoolGrade().getGradeLevel()));

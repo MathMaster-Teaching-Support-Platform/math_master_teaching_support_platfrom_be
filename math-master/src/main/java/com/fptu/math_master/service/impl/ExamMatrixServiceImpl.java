@@ -30,6 +30,7 @@ import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
 import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
 import com.fptu.math_master.dto.request.BatchUpsertMatrixRowCellsRequest;
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
+import com.fptu.math_master.dto.request.BuildSimpleExamMatrixRequest;
 import com.fptu.math_master.dto.request.ExamMatrixPartRequest;
 import com.fptu.math_master.dto.request.ExamMatrixRequest;
 import com.fptu.math_master.dto.request.FinalizePreviewRequest;
@@ -471,10 +472,21 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     Map<UUID, ExamMatrixRow> rowById = examMatrixRowRepository
         .findByExamMatrixIdOrderByOrderIndex(matrixId).stream()
         .collect(Collectors.toMap(ExamMatrixRow::getId, r -> r));
-    
+
     Map<Integer, ExamMatrixPart> partsCache = examMatrixPartRepository
         .findByExamMatrixIdOrderByPartNumber(matrixId).stream()
         .collect(Collectors.toMap(ExamMatrixPart::getPartNumber, p -> p));
+
+    // The matrix is now a pure blueprint — bank is picked at generation time.
+    // If the matrix carries a default bank we still sanity-check coverage
+    // against it; otherwise we only validate the blueprint structure and
+    // leave per-bank coverage to the generation step.
+    UUID matrixDefaultBankId = matrix.getQuestionBankId();
+    if (matrixDefaultBankId == null && !bankMappings.isEmpty()) {
+      warnings.add(
+          "Ngân hàng câu hỏi sẽ được chọn ở bước tạo đề. Việc kiểm tra số lượng "
+              + "câu sẵn có sẽ chạy lại sau khi bạn chọn ngân hàng.");
+    }
 
     for (ExamMatrixBankMapping bankMapping : bankMappings) {
       int required = getQuestionCountFromBankMapping(bankMapping);
@@ -516,9 +528,15 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         continue;
       }
 
+      // Skip per-bank availability check when no default bank is set on the
+      // matrix — the FE/BE will recompute it once the user picks a bank.
+      if (matrixDefaultBankId == null) {
+        continue;
+      }
+
       long approvedAvailable =
           questionRepository.countApprovedByBankAndChapterAndCognitiveAndType(
-              matrix.getQuestionBankId(),
+              matrixDefaultBankId,
               row.getChapterId(),
               bankMapping.getCognitiveLevel().name(),
               part.getQuestionType().name());
@@ -1166,21 +1184,19 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
     UUID currentUserId = getCurrentUserId();
     validateTeacherRole(currentUserId);
 
-    // Phase 3: Validate questionBankId is provided and accessible
-    if (request.getQuestionBankId() == null) {
-      throw new AppException(ErrorCode.QUESTION_BANK_REQUIRED);
-    }
-
-    QuestionBank bank =
-        questionBankRepository
-            .findByIdAndNotDeleted(request.getQuestionBankId())
-            .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
-
-    // Validate bank access
-    if (!bank.getTeacherId().equals(currentUserId)
-        && !Boolean.TRUE.equals(bank.getIsPublic())
-        && !hasRole(PredefinedRole.ADMIN_ROLE)) {
-      throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
+    // Matrix is now a pure blueprint — bank is picked at generation time.
+    // If the caller still provides a default bank we validate accessibility,
+    // but it is no longer required at build time.
+    if (request.getQuestionBankId() != null) {
+      QuestionBank bank =
+          questionBankRepository
+              .findByIdAndNotDeleted(request.getQuestionBankId())
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+      if (!bank.getTeacherId().equals(currentUserId)
+          && !Boolean.TRUE.equals(bank.getIsPublic())
+          && !hasRole(PredefinedRole.ADMIN_ROLE)) {
+        throw new AppException(ErrorCode.QUESTION_BANK_ACCESS_DENIED);
+      }
     }
 
     ExamMatrix matrix =
@@ -1208,6 +1224,111 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
 
     log.info("Structured matrix built: id={}", matrixId);
     return buildTableResponse(matrix);
+  }
+
+  @Override
+  @Transactional
+  public ExamMatrixTableResponse buildSimpleMatrix(BuildSimpleExamMatrixRequest request) {
+    log.info(
+        "Building simple exam matrix: name={}, grade={}, chapters={}",
+        request.getName(),
+        request.getGradeLevel(),
+        request.getChapters().size());
+
+    // Matrix is now a pure blueprint — bank is optional at build time. When
+    // a default bank IS provided we sanity-check that its grade matches the
+    // matrix grade so legacy callers fail fast instead of blowing up later.
+    if (request.getQuestionBankId() != null) {
+      QuestionBank bank =
+          questionBankRepository
+              .findByIdAndNotDeleted(request.getQuestionBankId())
+              .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
+      if (bank.getSchoolGradeId() != null && bank.getSchoolGrade() != null) {
+        Integer bankGrade = bank.getSchoolGrade().getGradeLevel();
+        if (bankGrade != null && !bankGrade.equals(request.getGradeLevel())) {
+          throw new AppException(ErrorCode.BANK_GRADE_MISMATCH);
+        }
+      }
+    }
+
+    Set<UUID> seenChapterIds = new HashSet<>();
+    List<MatrixRowRequest> rows = new ArrayList<>();
+    int orderIndex = 1;
+    for (BuildSimpleExamMatrixRequest.ChapterCognitiveCounts spec : request.getChapters()) {
+      if (!seenChapterIds.add(spec.getChapterId())) {
+        // Happy-case: one row per chapter, deduplicate caller mistakes early.
+        throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
+      }
+
+      Chapter chapter =
+          chapterRepository
+              .findById(spec.getChapterId())
+              .orElseThrow(() -> new AppException(ErrorCode.CHAPTER_NOT_FOUND));
+
+      BigDecimal pointsPerQuestion =
+          spec.getPointsPerQuestion() != null
+              ? spec.getPointsPerQuestion()
+              : request.getPointsPerQuestion();
+
+      List<MatrixCellRequest> cells = new ArrayList<>(4);
+      addCellIfPositive(cells, CognitiveLevel.NHAN_BIET, spec.getNb(), pointsPerQuestion);
+      addCellIfPositive(cells, CognitiveLevel.THONG_HIEU, spec.getTh(), pointsPerQuestion);
+      addCellIfPositive(cells, CognitiveLevel.VAN_DUNG, spec.getVd(), pointsPerQuestion);
+      addCellIfPositive(cells, CognitiveLevel.VAN_DUNG_CAO, spec.getVdc(), pointsPerQuestion);
+
+      if (cells.isEmpty()) {
+        // Skip rows where the caller asked for zero of every level — keeps the
+        // resulting matrix tidy instead of carrying empty rows that fail validation.
+        continue;
+      }
+
+      rows.add(
+          MatrixRowRequest.builder()
+              .chapterId(chapter.getId())
+              .questionTypeName(chapter.getTitle())
+              .orderIndex(orderIndex++)
+              .cells(cells)
+              .build());
+    }
+
+    if (rows.isEmpty()) {
+      throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
+    }
+
+    int totalQuestions =
+        rows.stream()
+            .flatMap(r -> r.getCells().stream())
+            .mapToInt(MatrixCellRequest::getQuestionCount)
+            .sum();
+
+    BuildExamMatrixRequest expanded =
+        BuildExamMatrixRequest.builder()
+            .name(request.getName())
+            .description(request.getDescription())
+            .questionBankId(request.getQuestionBankId())
+            .gradeLevel(request.getGradeLevel())
+            .isReusable(request.getIsReusable())
+            .totalQuestionsTarget(totalQuestions)
+            .numberOfParts(1)
+            .rows(rows)
+            .build();
+
+    return buildMatrix(expanded);
+  }
+
+  private void addCellIfPositive(
+      List<MatrixCellRequest> cells,
+      CognitiveLevel level,
+      Integer count,
+      BigDecimal pointsPerQuestion) {
+    if (count == null || count <= 0) return;
+    cells.add(
+        MatrixCellRequest.builder()
+            .partNumber(1)
+            .cognitiveLevel(level)
+            .questionCount(count)
+            .pointsPerQuestion(pointsPerQuestion)
+            .build());
   }
 
   @Override

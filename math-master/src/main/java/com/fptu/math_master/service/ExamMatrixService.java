@@ -4,6 +4,7 @@ import com.fptu.math_master.dto.request.AddTemplateMappingRequest;
 import com.fptu.math_master.dto.request.BatchUpsertMatrixRowCellsRequest;
 import com.fptu.math_master.dto.request.BatchAddTemplateMappingsRequest;
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
+import com.fptu.math_master.dto.request.BuildSimpleExamMatrixRequest;
 import com.fptu.math_master.dto.request.ExamMatrixRequest;
 import com.fptu.math_master.dto.request.FinalizePreviewRequest;
 import com.fptu.math_master.dto.request.GeneratePreviewRequest;
@@ -50,6 +51,13 @@ public interface ExamMatrixService {
    * and one {@link com.fptu.math_master.entity.ExamMatrixTemplateMapping} per cell.
    */
   ExamMatrixTableResponse buildMatrix(BuildExamMatrixRequest request);
+
+  /**
+   * Happy-case builder: one bank + chapters + per-chapter NB/TH/VD/VDC counts.
+   * Internally expands to the full {@link BuildExamMatrixRequest} (one row per
+   * chapter) so all downstream flows (validation, generation, PDF) keep working.
+   */
+  ExamMatrixTableResponse buildSimpleMatrix(BuildSimpleExamMatrixRequest request);
 
   /**
    * Return the hierarchical table view of an existing matrix,

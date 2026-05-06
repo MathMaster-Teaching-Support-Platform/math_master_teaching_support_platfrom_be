@@ -1,6 +1,7 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.BuildExamMatrixRequest;
+import com.fptu.math_master.dto.request.BuildSimpleExamMatrixRequest;
 import com.fptu.math_master.dto.request.BatchUpsertMatrixRowCellsRequest;
 import com.fptu.math_master.dto.request.ExamMatrixRequest;
 import com.fptu.math_master.dto.request.MatrixRowRequest;
@@ -250,6 +251,27 @@ public class ExamMatrixController {
     return ApiResponse.<ExamMatrixTableResponse>builder()
         .message("Exam matrix built successfully.")
         .result(examMatrixService.buildMatrix(request))
+        .build();
+  }
+
+  @PostMapping("/build-simple")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Build exam matrix — happy-case (chapter × NB/TH/VD/VDC)",
+      description =
+          "One-bank, one-row-per-chapter convenience builder. "
+              + "Caller picks the bank, the grade, and per-chapter counts for each cognitive "
+              + "level (NB/TH/VD/VDC). The service expands this into the full row/cell structure "
+              + "internally, so generation, validation and PDF export keep working.")
+  public ApiResponse<ExamMatrixTableResponse> buildSimpleMatrix(
+      @Valid @RequestBody BuildSimpleExamMatrixRequest request) {
+    log.info(
+        "REST request to build simple exam matrix: name={}, grade={}",
+        request.getName(),
+        request.getGradeLevel());
+    return ApiResponse.<ExamMatrixTableResponse>builder()
+        .message("Exam matrix built successfully.")
+        .result(examMatrixService.buildSimpleMatrix(request))
         .build();
   }
 

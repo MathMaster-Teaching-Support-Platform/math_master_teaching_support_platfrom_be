@@ -46,7 +46,15 @@ import org.hibernate.annotations.Type;
       @Index(name = "idx_questions_status", columnList = "question_status"),
       @Index(name = "idx_questions_source_type", columnList = "question_source_type"),
       @Index(name = "idx_questions_template", columnList = "template_id"),
-      @Index(name = "idx_questions_rendered_latex_hash", columnList = "rendered_latex_hash")
+      @Index(name = "idx_questions_rendered_latex_hash", columnList = "rendered_latex_hash"),
+      // V115: chapter-aware queries (bank tree + bucket-filtered search). The
+      // partial-WHERE variant lives in the SQL migration — JPA can't express
+      // partial indexes, but DDL-auto won't drop the more selective version
+      // because it's name-matched against this entry.
+      @Index(name = "idx_questions_chapter_id", columnList = "chapter_id"),
+      @Index(
+          name = "idx_questions_bank_chapter_cognitive",
+          columnList = "question_bank_id, chapter_id, cognitive_level")
     })
 /**
  * The entity of 'Question'.

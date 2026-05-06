@@ -6,7 +6,6 @@ import com.fptu.math_master.dto.request.AutoDistributePointsRequest;
 import com.fptu.math_master.dto.request.BatchAddQuestionsRequest;
 import com.fptu.math_master.dto.request.BatchUpdatePointsRequest;
 import com.fptu.math_master.dto.request.AssessmentRequest;
-import com.fptu.math_master.dto.request.CloneAssessmentRequest;
 import com.fptu.math_master.dto.request.DistributeAssessmentPointsRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentByPercentageRequest;
 import com.fptu.math_master.dto.request.GenerateAssessmentQuestionsRequest;
@@ -219,9 +218,10 @@ public class AssessmentServiceImpl implements AssessmentService {
     Assessment assessment = loadAssessmentOrThrow(assessmentId);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
-    if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
-      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
-    }
+    // Per-question points are explicitly editable on every assessment regardless
+    // of status / matrix / bank linkage. The teacher owns the final answer key
+    // and may need to rebalance points after the fact (typo fix, weight tweak,
+    // etc.) without going through a clone/republish cycle.
 
     AssessmentQuestion aq =
         assessmentQuestionRepository
@@ -331,10 +331,6 @@ public class AssessmentServiceImpl implements AssessmentService {
 
     if (assessment.getStartDate() != null && assessment.getStartDate().isBefore(now)) {
       throw new AppException(ErrorCode.ASSESSMENT_START_DATE_PAST);
-    }
-
-    if (assessment.getExamMatrixId() != null) {
-      validatePublishedMatrixCellCoverage(assessment);
     }
 
     assessment.setStatus(AssessmentStatus.PUBLISHED);
@@ -535,78 +531,15 @@ public class AssessmentServiceImpl implements AssessmentService {
 
   @Override
   @Transactional
-  public AssessmentResponse cloneAssessment(UUID sourceId, CloneAssessmentRequest request) {
-    log.info("Cloning assessment: {}", sourceId);
-
-    Assessment source = loadAssessmentOrThrow(sourceId);
-    UUID currentUserId = getCurrentUserId();
-    validateTeacherRole(currentUserId);
-
-    String newTitle =
-        (request.getNewTitle() != null && !request.getNewTitle().isBlank())
-            ? request.getNewTitle()
-            : "Copy of " + source.getTitle();
-
-    Assessment clone =
-        Assessment.builder()
-            .teacherId(currentUserId)
-            .title(newTitle)
-            .description(source.getDescription())
-            .assessmentType(source.getAssessmentType())
-            .timeLimitMinutes(source.getTimeLimitMinutes())
-            .passingScore(source.getPassingScore())
-            .randomizeQuestions(source.getRandomizeQuestions())
-            .showCorrectAnswers(source.getShowCorrectAnswers())
-            // Matrix is NOT cloned — teacher must rebuild if needed
-            // examMatrixId is now the FK field
-            .allowMultipleAttempts(source.getAllowMultipleAttempts())
-            .maxAttempts(source.getMaxAttempts())
-            .attemptScoringPolicy(source.getAttemptScoringPolicy())
-            .showScoreImmediately(source.getShowScoreImmediately())
-            .status(AssessmentStatus.DRAFT)
-            .build();
-
-    clone = assessmentRepository.save(clone);
-
-    // Clone questions only for non-matrix path and when explicitly requested
-    boolean shouldCloneQuestions =
-        source.getExamMatrixId() == null && Boolean.TRUE.equals(request.getCloneQuestions());
-
-    if (shouldCloneQuestions) {
-      java.util.List<AssessmentQuestion> sourceQuestions =
-          assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(source.getId());
-      for (AssessmentQuestion aq : sourceQuestions) {
-        AssessmentQuestion cloned =
-            AssessmentQuestion.builder()
-                .assessmentId(clone.getId())
-                .questionId(aq.getQuestionId())
-                .orderIndex(aq.getOrderIndex())
-                .pointsOverride(aq.getPointsOverride())
-                .build();
-        assessmentQuestionRepository.save(cloned);
-      }
-      log.info("Cloned {} question(s) into assessment {}", sourceQuestions.size(), clone.getId());
-    }
-
-    log.info("Assessment {} cloned to {}", sourceId, clone.getId());
-    return mapToResponse(clone);
-  }
-
-  @Override
-  @Transactional
   public AssessmentResponse addQuestion(UUID assessmentId, AddQuestionToAssessmentRequest request) {
     log.info("Adding question {} to assessment {}", request.getQuestionId(), assessmentId);
 
     Assessment assessment = loadAssessmentOrThrow(assessmentId);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
-    if (assessment.getStatus() != AssessmentStatus.DRAFT) {
-      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
-    }
-    if (assessment.getExamMatrixId() != null) {
-      // Matrix-path: questions are managed through the matrix flow
-      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
-    }
+    // Question management is unrestricted — teachers can add/remove questions
+    // on any status, including matrix-based assessments, so they can rebalance
+    // their answer keys after publishing without going through a clone cycle.
 
     // Verify the question exists and is not deleted
     questionRepository
@@ -731,12 +664,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     Assessment assessment = loadAssessmentOrThrow(assessmentId);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
-    if (assessment.getStatus() != AssessmentStatus.DRAFT) {
-      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
-    }
-    if (assessment.getExamMatrixId() != null) {
-      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
-    }
+    // Question management is unrestricted on every assessment — see addQuestion.
 
     assessmentQuestionRepository
         .findByAssessmentIdAndQuestionId(assessmentId, questionId)
@@ -794,8 +722,13 @@ public class AssessmentServiceImpl implements AssessmentService {
     // Regenerate from blueprint to keep assessment deterministic and aligned with matrix.
     assessmentQuestionRepository.deleteAllByAssessmentId(assessmentId);
 
+    // Matrix is a pure blueprint: prefer the bank set from the generation
+    // request (multi-bank), fall back to the legacy single-bank field, then
+    // to the matrix's stored default for legacy callers.
+    java.util.Collection<UUID> overrideBankIds = effectiveBankIds(request);
     QuestionSelectionService.SelectionPlan selectionPlan =
-      questionSelectionService.buildSelectionPlan(assessmentId, matrix.getId(), 1);
+      questionSelectionService.buildSelectionPlan(
+          assessmentId, matrix.getId(), overrideBankIds, 1);
 
     assessmentQuestionRepository.saveAll(selectionPlan.assessmentQuestions());
 
@@ -860,6 +793,24 @@ public class AssessmentServiceImpl implements AssessmentService {
     return assessmentRepository
         .findByIdAndNotDeleted(id)
         .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
+  }
+
+  /**
+   * Project the bank-id fields of a generation request into a single override
+   * collection. Prefers the multi-bank list when populated; falls back to the
+   * legacy single-bank field; returns null when neither is set so the
+   * QuestionSelectionService can fall back to the matrix's stored default.
+   */
+  private java.util.Collection<UUID> effectiveBankIds(GenerateAssessmentQuestionsRequest request) {
+    if (request.getQuestionBankIds() != null && !request.getQuestionBankIds().isEmpty()) {
+      java.util.List<UUID> deduped = new java.util.ArrayList<>();
+      for (UUID b : request.getQuestionBankIds()) if (b != null) deduped.add(b);
+      if (!deduped.isEmpty()) return deduped;
+    }
+    if (request.getQuestionBankId() != null) {
+      return java.util.List.of(request.getQuestionBankId());
+    }
+    return null;
   }
 
   private String normalizeKeywordPattern(String value) {
@@ -948,86 +899,6 @@ public class AssessmentServiceImpl implements AssessmentService {
   private BigDecimal safeTotalPoints(Double raw) {
     if (raw == null) return BigDecimal.ZERO;
     return new BigDecimal(raw.toString());
-  }
-
-  private void validatePublishedMatrixCellCoverage(Assessment assessment) {
-    ExamMatrix matrix =
-        examMatrixRepository
-            .findByIdAndNotDeleted(assessment.getExamMatrixId())
-            .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
-
-    if (matrix.getStatus() != MatrixStatus.APPROVED) {
-      throw new AppException(ErrorCode.MATRIX_NOT_APPROVED);
-    }
-
-    List<ExamMatrixBankMapping> mappings =
-        examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(matrix.getId());
-    if (mappings.isEmpty()) {
-      throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
-    }
-
-    // Group mappings by rowId to validate TF collectively
-    Map<UUID, List<ExamMatrixBankMapping>> mappingsByRow = mappings.stream()
-        .collect(Collectors.groupingBy(ExamMatrixBankMapping::getMatrixRowId));
-
-    for (Map.Entry<UUID, List<ExamMatrixBankMapping>> rowEntry : mappingsByRow.entrySet()) {
-      List<ExamMatrixBankMapping> rowMappings = rowEntry.getValue();
-      
-      // Separate TF and non-TF mappings
-      List<ExamMatrixBankMapping> tfMappings = new ArrayList<>();
-      List<ExamMatrixBankMapping> otherMappings = new ArrayList<>();
-      
-      for (ExamMatrixBankMapping m : rowMappings) {
-        if (m.getQuestionType() == QuestionType.TRUE_FALSE) {
-          tfMappings.add(m);
-        } else {
-          otherMappings.add(m);
-        }
-      }
-
-      // Validate MCQ/SA (must match exactly per cell)
-      for (ExamMatrixBankMapping mapping : otherMappings) {
-        long requiredCount = mapping.getQuestionCount() != null ? Math.max(0, mapping.getQuestionCount()) : 0;
-        if (requiredCount == 0) continue;
-
-        long actualCount = assessmentQuestionRepository.countByAssessmentIdAndMatrixBankMappingId(
-            assessment.getId(), mapping.getId());
-
-        if (actualCount != requiredCount) {
-          log.warn("MCQ/SA mapping {} has requiredCount={} but actualCount={}",
-              mapping.getId(), requiredCount, actualCount);
-          throw new AppException(ErrorCode.MATRIX_CELL_FILL_INCOMPLETE);
-        }
-      }
-
-      // Validate TF (aggregated per row)
-      // Because database constraints prevent linking one question to multiple mappings,
-      // the selection service links ALL TF questions for a row to the FIRST TF mapping.
-      if (!tfMappings.isEmpty()) {
-        int totalClausesRequired = 0;
-        long totalActualTFQuestions = 0;
-
-        for (ExamMatrixBankMapping mapping : tfMappings) {
-          int count = mapping.getQuestionCount() != null ? Math.max(0, mapping.getQuestionCount()) : 0;
-          totalClausesRequired += count;
-          totalActualTFQuestions += assessmentQuestionRepository.countByAssessmentIdAndMatrixBankMappingId(
-              assessment.getId(), mapping.getId());
-        }
-
-        if (totalClausesRequired > 0) {
-          int expectedTFQuestions = (int) Math.ceil(totalClausesRequired / 4.0);
-          if (totalActualTFQuestions < expectedTFQuestions) {
-            log.warn("TF row {} requires {} clauses ({} questions) but found {} questions",
-                rowEntry.getKey(), totalClausesRequired, expectedTFQuestions, totalActualTFQuestions);
-            throw new AppException(ErrorCode.MATRIX_CELL_FILL_INCOMPLETE);
-          }
-        }
-      }
-    }
-
-    log.debug(
-      "Matrix {} passed publish coverage validation and remains reusable",
-      matrix.getId());
   }
 
   /**
@@ -1332,22 +1203,43 @@ public class AssessmentServiceImpl implements AssessmentService {
             .orElseThrow(() -> new AppException(ErrorCode.EXAM_MATRIX_NOT_FOUND));
 
     // Matrix does NOT need to be APPROVED for percentage-based generation
-    // This allows creating multiple assessments from the same matrix
+    // This allows creating multiple assessments from the same matrix.
 
-    // Phase 4: Get the single question bank from the matrix
-    UUID questionBankId = matrix.getQuestionBankId();
-    if (questionBankId == null) {
+    // Matrix is a pure blueprint: prefer the bank set from the generation
+    // request (multi-bank), fall back to the legacy single-bank field, then
+    // to the matrix's stored default. Percentage-based selection still uses
+    // the *first* resolved bank per cell because the underlying
+    // countApprovedByBanksAndCognitiveLevel/findRandomApprovedByBanksAndCognitiveLevel
+    // queries already accept a Collection on this code path.
+    java.util.List<UUID> resolvedBankIds = new java.util.ArrayList<>();
+    if (request.getQuestionBankIds() != null && !request.getQuestionBankIds().isEmpty()) {
+      for (UUID b : request.getQuestionBankIds()) if (b != null) resolvedBankIds.add(b);
+    } else if (request.getQuestionBankId() != null) {
+      resolvedBankIds.add(request.getQuestionBankId());
+    } else if (matrix.getQuestionBankId() != null) {
+      resolvedBankIds.add(matrix.getQuestionBankId());
+    }
+    if (resolvedBankIds.isEmpty()) {
       throw new AppException(ErrorCode.QUESTION_BANK_REQUIRED);
     }
 
-    log.info("Using question bank {} from matrix {}", questionBankId, matrix.getId());
+    // Existing repository contract for percentage flow expects a single bank
+    // per call; keep the first as the canonical source and surface the rest
+    // only via the matrix-driven flow above.
+    UUID questionBankId = resolvedBankIds.get(0);
+
+    log.info(
+        "Using question bank(s) {} for percentage-based generation on matrix {} (primary={})",
+        resolvedBankIds,
+        matrix.getId(),
+        questionBankId);
 
     // BUG-3 FIX: Load matrix parts to respect question type configuration
     // Note: This is a simplified implementation that doesn't use chapter-based selection
     // For full chapter-aware generation, use generateAssessmentFromMatrix instead
     List<com.fptu.math_master.entity.ExamMatrixPart> parts =
         examMatrixPartRepository.findByExamMatrixIdOrderByPartNumber(matrix.getId());
-    
+
     if (parts.isEmpty()) {
       log.warn("Matrix {} has no parts configured, cannot generate assessment", matrix.getId());
       throw new AppException(ErrorCode.MATRIX_VALIDATION_FAILED);
@@ -1611,12 +1503,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     Assessment assessment = loadAssessmentOrThrow(assessmentId);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
-    if (assessment.getStatus() != AssessmentStatus.DRAFT) {
-      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
-    }
-    if (assessment.getExamMatrixId() != null) {
-      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_EDIT_BLOCKED);
-    }
+    // Question management is unrestricted on every assessment — see addQuestion.
 
     for (UUID questionId : request.getQuestionIds()) {
       questionRepository
@@ -1654,9 +1541,8 @@ public class AssessmentServiceImpl implements AssessmentService {
     Assessment assessment = loadAssessmentOrThrow(assessmentId);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
-    if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
-      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
-    }
+    // Per-question points are explicitly editable on every assessment regardless
+    // of status / matrix / bank linkage. See the rationale in setPointsOverride.
 
     List<AssessmentQuestion> toSave = new java.util.ArrayList<>();
     for (BatchUpdatePointsRequest.QuestionPointItem item : request.getQuestions()) {
@@ -1681,9 +1567,8 @@ public class AssessmentServiceImpl implements AssessmentService {
     Assessment assessment = loadAssessmentOrThrow(assessmentId);
     validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
 
-    if (assessment.getStatus() == AssessmentStatus.PUBLISHED) {
-      throw new AppException(ErrorCode.ASSESSMENT_ALREADY_PUBLISHED);
-    }
+    // Per-question points are explicitly editable on every assessment regardless
+    // of status / matrix / bank linkage. See the rationale in setPointsOverride.
 
     List<AssessmentQuestion> allAQs =
         assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessmentId);

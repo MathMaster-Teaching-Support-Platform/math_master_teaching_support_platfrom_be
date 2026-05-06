@@ -35,7 +35,9 @@ import lombok.Setter;
     indexes = {
       @Index(name = "idx_question_banks_teacher", columnList = "teacher_id"),
       @Index(name = "idx_question_banks_curriculum", columnList = "curriculum_id"),
-      @Index(name = "idx_question_banks_public", columnList = "is_public")
+      @Index(name = "idx_question_banks_public", columnList = "is_public"),
+      @Index(name = "idx_question_banks_school_grade", columnList = "school_grade_id"),
+      @Index(name = "idx_question_banks_subject", columnList = "subject_id")
     })
 /**
  * The entity of 'QuestionBank'.
@@ -53,6 +55,20 @@ public class QuestionBank extends BaseEntity {
    */
   @Column(name = "curriculum_id")
   private UUID curriculumId;
+
+  /**
+   * The school grade (lớp) this bank serves. Set at creation time and immutable afterwards.
+   * Drives the chapter list pre-populated for NB/TH/VD/VDC buckets.
+   */
+  @Column(name = "school_grade_id")
+  private UUID schoolGradeId;
+
+  /**
+   * Optional subject (môn) this bank scopes to within the chosen grade.
+   * Null = bank covers all subjects for that grade.
+   */
+  @Column(name = "subject_id")
+  private UUID subjectId;
 
   /**
    * name
@@ -87,6 +103,14 @@ public class QuestionBank extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "curriculum_id", insertable = false, updatable = false)
   private Curriculum curriculum;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "school_grade_id", insertable = false, updatable = false)
+  private SchoolGrade schoolGrade;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "subject_id", insertable = false, updatable = false)
+  private Subject subject;
 
   @OneToMany(mappedBy = "questionBank", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<QuestionTemplate> questionTemplates;
