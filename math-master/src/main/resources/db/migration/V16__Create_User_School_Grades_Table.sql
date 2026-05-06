@@ -1,5 +1,5 @@
 -- Create junction table for Many-to-Many relationship between users and school_grades
-CREATE TABLE user_school_grades (
+CREATE TABLE IF NOT EXISTS user_school_grades (
     user_id UUID NOT NULL,
     school_grade_id UUID NOT NULL,
     PRIMARY KEY (user_id, school_grade_id),
@@ -8,5 +8,5 @@ CREATE TABLE user_school_grades (
 );
 
 -- Add indexes for better query performance
-CREATE INDEX idx_user_school_grades_user ON user_school_grades(user_id);
-CREATE INDEX idx_user_school_grades_grade ON user_school_grades(school_grade_id);
+CREATE INDEX IF NOT EXISTS idx_user_school_grades_user ON user_school_grades(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_school_grades_grade ON user_school_grades(school_grade_id);

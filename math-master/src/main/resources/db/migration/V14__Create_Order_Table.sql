@@ -35,12 +35,12 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 -- Indexes for orders table
-CREATE INDEX idx_orders_student ON orders(student_id);
-CREATE INDEX idx_orders_course ON orders(course_id);
-CREATE INDEX idx_orders_status ON orders(status);
-CREATE INDEX idx_orders_number ON orders(order_number);
-CREATE INDEX idx_orders_expires_at ON orders(expires_at);
-CREATE INDEX idx_orders_created_at ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_student ON orders(student_id);
+CREATE INDEX IF NOT EXISTS idx_orders_course ON orders(course_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_number ON orders(order_number);
+CREATE INDEX IF NOT EXISTS idx_orders_expires_at ON orders(expires_at);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 
 -- ─── Update Transactions Table ───────────────────────────────────────────
 
