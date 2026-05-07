@@ -1158,19 +1158,12 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   }
 
   /**
-   * Validates tags for question template.
-   * - At least one tag is required
-   * - Maximum 5 tags allowed
-   * - All tags must be valid QuestionTag enum values
+   * Validates tags for question template (tags are optional; only the size ceiling is enforced).
    */
   private void validateTags(List<com.fptu.math_master.enums.QuestionTag> tags) {
-    if (tags == null || tags.isEmpty()) {
-      throw new AppException(ErrorCode.TAGS_REQUIRED);
-    }
-    if (tags.size() > 5) {
+    if (tags != null && tags.size() > 5) {
       throw new AppException(ErrorCode.TOO_MANY_TAGS);
     }
-    // Enum validation is automatic - invalid values will cause deserialization error
   }
 
   /**
