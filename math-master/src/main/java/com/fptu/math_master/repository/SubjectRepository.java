@@ -34,6 +34,8 @@ public interface SubjectRepository extends JpaRepository<Subject, UUID> {
 
   List<Subject> findBySchoolGradeIdAndIsActiveTrueOrderByName(UUID schoolGradeId);
 
+  List<Subject> findBySchoolGradeIdOrderByName(UUID schoolGradeId);
+
   long countBySchoolGradeIdAndIsActiveTrueAndDeletedAtIsNull(UUID schoolGradeId);
 
   boolean existsByCode(String code);

@@ -118,6 +118,18 @@ public class SubjectController {
         .build();
   }
 
+  @GetMapping("/school-grade/{schoolGradeId}/all")
+  @Operation(
+      summary = "List all subjects (active + inactive) for a school grade",
+      description = "Returns all subjects including inactive for the given school grade. For admin management.")
+  public ApiResponse<List<SubjectResponse>> getAllSubjectsBySchoolGradeId(
+      @PathVariable UUID schoolGradeId) {
+    log.info("REST request to get all subjects (including inactive) for schoolGradeId {}", schoolGradeId);
+    return ApiResponse.<List<SubjectResponse>>builder()
+        .result(subjectService.getAllSubjectsBySchoolGradeId(schoolGradeId))
+        .build();
+  }
+
   @PostMapping("/{subjectId}/grades")
   @PreAuthorize("hasRole('ADMIN')")
   @Operation(

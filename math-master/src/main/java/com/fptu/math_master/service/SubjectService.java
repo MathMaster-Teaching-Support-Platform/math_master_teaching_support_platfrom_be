@@ -33,6 +33,9 @@ public interface SubjectService {
   /** List subjects available for a given school grade id. */
   List<SubjectResponse> getSubjectsBySchoolGradeId(UUID schoolGradeId);
 
+  /** List all subjects (active + inactive) for a given school grade id. For admin management. */
+  List<SubjectResponse> getAllSubjectsBySchoolGradeId(UUID schoolGradeId);
+
   /** Assign a subject to a grade level. */
   SubjectResponse linkToGrade(UUID subjectId, LinkGradeSubjectRequest request);
 
