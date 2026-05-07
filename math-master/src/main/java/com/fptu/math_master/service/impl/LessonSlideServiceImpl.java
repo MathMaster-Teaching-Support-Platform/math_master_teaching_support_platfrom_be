@@ -129,7 +129,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
           "PRACTICE_PART",
           "CLOSING_SUMMARY",
           "ADDITIONAL_NOTES");
-  private static final int SLIDE_CONTENT_MAX_WORDS = 60;
+  private static final int SLIDE_CONTENT_MAX_WORDS = 80;
   private static final String PPTX_MIME =
       "application/vnd.openxmlformats-officedocument.presentationml.presentation";
   private static final String PNG_MIME = "image/png";
