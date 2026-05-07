@@ -1,6 +1,7 @@
 package com.fptu.math_master.controller;
 
 import com.fptu.math_master.dto.request.CreateLessonRequest;
+import com.fptu.math_master.dto.request.ReorderLessonsRequest;
 import com.fptu.math_master.dto.request.UpdateLessonRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.LessonResponse;
@@ -86,5 +87,19 @@ public class LessonController {
     log.info("DELETE /lessons/{}", lessonId);
     lessonService.deleteLesson(lessonId);
     return ApiResponse.<Void>builder().message("Lesson deleted successfully").build();
+  }
+
+  @PutMapping("/chapter/{chapterId}/reorder")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(
+      summary = "Reorder lessons in a chapter",
+      description = "Bulk-update the orderIndex of lessons within a chapter.")
+  public ApiResponse<List<LessonResponse>> reorderLessons(
+      @PathVariable UUID chapterId, @Valid @RequestBody ReorderLessonsRequest request) {
+    log.info("PUT /lessons/chapter/{}/reorder", chapterId);
+    return ApiResponse.<List<LessonResponse>>builder()
+        .message("Lessons reordered successfully")
+        .result(lessonService.reorderLessons(chapterId, request))
+        .build();
   }
 }
