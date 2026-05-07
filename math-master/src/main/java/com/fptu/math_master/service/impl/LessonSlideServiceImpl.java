@@ -1421,6 +1421,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       if (!latexBody.contains("\\begin{") && latexBody.contains("\\item ")) {
         latexBody = "\\begin{itemize}\n" + latexBody + "\n\\end{itemize}";
       }
+      // Display math \[...\] inside \item causes LaTeX compile errors.
+      // Convert them to inline math $...$ so itemize renders correctly.
+      latexBody = convertDisplayMathInsideItems(latexBody);
       sb.append(latexBody).append("\n");
       return sb.toString();
     }
@@ -1439,6 +1442,32 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         // Wrap text segments in \text{} and keep $...$ math segments as-is.
         sb.append(buildMixedLatexLine(trimmed)).append("\\\\[4pt]\n");
       }
+    }
+    return sb.toString();
+  }
+
+  /**
+   * Replaces display math \[...\] that appears on the same logical line as an \item with
+   * inline math $...$. Display math inside \item breaks compilation; inline math is safe.
+   * Operates only on lines that contain \item; other lines are left unchanged.
+   */
+  private String convertDisplayMathInsideItems(String latexBody) {
+    // Pattern matches \[ ... \] across whitespace (non-greedy) on any line that has \item
+    String[] lines = latexBody.split("\n", -1);
+    StringBuilder sb = new StringBuilder();
+    for (String line : lines) {
+      if (line.contains("\\item")) {
+        // Replace \[ ... \] with $ ... $ on this line
+        String fixed = line.replaceAll("\\\\\\[\\s*(.*?)\\s*\\\\\\]", "\\$$1\\$");
+        sb.append(fixed);
+      } else {
+        sb.append(line);
+      }
+      sb.append("\n");
+    }
+    // Remove trailing extra newline
+    if (sb.length() > 0 && sb.charAt(sb.length() - 1) == '\n') {
+      sb.deleteCharAt(sb.length() - 1);
     }
     return sb.toString();
   }
