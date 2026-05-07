@@ -164,7 +164,8 @@ public class QuestionServiceImpl implements QuestionService {
   }
 
   @Override
-  public Page<QuestionResponse> getMyQuestions(String name, String tag, Pageable pageable) {
+  public Page<QuestionResponse> getMyQuestions(
+      String name, String tag, UUID gradeId, UUID chapterId, Pageable pageable) {
     UUID currentUserId = getCurrentUserId();
     log.info("Fetching questions for user: {}", currentUserId);
 
@@ -175,7 +176,8 @@ public class QuestionServiceImpl implements QuestionService {
     // Hibernate appending camelCase field names that PostgreSQL can't resolve.
     Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
     return questionRepository
-        .findByCreatedByWithSearch(currentUserId, namePattern, tagPattern, unsorted)
+        .findByCreatedByWithSearch(
+            currentUserId, namePattern, tagPattern, gradeId, chapterId, unsorted)
         .map(this::mapToResponse);
   }
 

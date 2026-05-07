@@ -220,8 +220,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
    */
   @Query(value =
       "SELECT TO_CHAR(DATE_TRUNC('day', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS label, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT')), 0) AS inflow, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL')), 0) AS outflow " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'DEPOSIT'), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'WITHDRAWAL'), 0) AS outflow " +
       "FROM transactions t " +
       "WHERE t.status = 'SUCCESS' " +
       "  AND t.created_at >= :from AND t.created_at < :to " +
@@ -238,8 +238,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
    */
   @Query(value =
       "SELECT TO_CHAR(DATE_TRUNC('hour', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD HH24:00') AS label, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT')), 0) AS inflow, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL')), 0) AS outflow " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'DEPOSIT'), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'WITHDRAWAL'), 0) AS outflow " +
       "FROM transactions t " +
       "WHERE t.status = 'SUCCESS' " +
       "  AND t.created_at >= :from AND t.created_at < :to " +
@@ -256,8 +256,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
    */
   @Query(value =
       "SELECT TO_CHAR(DATE_TRUNC('week', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS label, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT')), 0) AS inflow, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL')), 0) AS outflow " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'DEPOSIT'), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'WITHDRAWAL'), 0) AS outflow " +
       "FROM transactions t " +
       "WHERE t.status = 'SUCCESS' " +
       "  AND t.created_at >= :from AND t.created_at < :to " +
@@ -274,8 +274,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
    */
   @Query(value =
       "SELECT TO_CHAR(DATE_TRUNC('month', t.created_at AT TIME ZONE 'UTC'), 'YYYY-MM') AS label, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('DEPOSIT','PAYMENT')), 0) AS inflow, " +
-      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type IN ('WITHDRAWAL')), 0) AS outflow " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'DEPOSIT'), 0) AS inflow, " +
+      "       COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'WITHDRAWAL'), 0) AS outflow " +
       "FROM transactions t " +
       "WHERE t.status = 'SUCCESS' " +
       "  AND t.created_at >= :from AND t.created_at < :to " +
@@ -352,7 +352,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
       "FROM transactions t " +
       "WHERE t.status = 'SUCCESS' " +
       "  AND t.created_at >= :from AND t.created_at < :to " +
-      "  AND t.type IN ('DEPOSIT','PAYMENT','WITHDRAWAL') " +
+      "  AND t.type IN ('DEPOSIT','WITHDRAWAL') " +
       "GROUP BY t.type " +
       "ORDER BY total DESC",
       nativeQuery = true)

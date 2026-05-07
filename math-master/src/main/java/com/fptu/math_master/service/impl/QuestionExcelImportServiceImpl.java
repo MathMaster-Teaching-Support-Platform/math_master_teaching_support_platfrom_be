@@ -770,7 +770,6 @@ public class QuestionExcelImportServiceImpl implements QuestionExcelImportServic
         if (truth) trueKeys.add(key);
         Map<String, Object> clauseMeta = new LinkedHashMap<>();
         clauseMeta.put("truthValue", truth);
-        clauseMeta.put("cognitiveLevel", cognitiveLevel == null ? null : cognitiveLevel.name());
         tfClauses.put(key, clauseMeta);
       }
       if (correctAnswer == null || correctAnswer.isBlank()) {

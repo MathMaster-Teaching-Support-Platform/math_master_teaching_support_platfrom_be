@@ -64,7 +64,6 @@ public class UpdateQuestionTemplateRequest {
   @NotNull(message = "Cognitive level is required")
   private CognitiveLevel cognitiveLevel;
 
-  @NotEmpty(message = "At least one tag is required")
   @Size(max = 5, message = "Maximum 5 tags allowed")
   private java.util.List<com.fptu.math_master.enums.QuestionTag> tags;
 

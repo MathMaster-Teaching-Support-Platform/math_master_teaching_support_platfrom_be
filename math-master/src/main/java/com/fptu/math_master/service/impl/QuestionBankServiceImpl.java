@@ -482,12 +482,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             .findByIdAndNotDeleted(bankId)
             .orElseThrow(() -> new AppException(ErrorCode.QUESTION_BANK_NOT_FOUND));
 
-    // Finale2: Split stats into non-TF (question-level) + TF (clause-level)
-    // TF clauses are expanded from generation_metadata->'tfClauses' JSONB
-    List<Object[]> nonTfStats = questionRepository.findNonTFMatrixStatsByBankId(bankId);
-    List<Object[]> tfClauseStats = questionRepository.findTFClauseStatsByBankId(bankId);
-    List<Object[]> rawStats = new java.util.ArrayList<>(nonTfStats);
-    rawStats.addAll(tfClauseStats);
+    List<Object[]> rawStats = questionRepository.findMatrixStatsByBankId(bankId);
 
     // Group by grade level
     Map<String, List<Object[]>> byGrade = new LinkedHashMap<>();

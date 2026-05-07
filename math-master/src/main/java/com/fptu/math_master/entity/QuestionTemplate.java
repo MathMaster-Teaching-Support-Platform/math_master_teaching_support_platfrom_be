@@ -176,7 +176,7 @@ public class QuestionTemplate extends BaseEntity {
   private CognitiveLevel cognitiveLevel;
 
   @Type(JsonBinaryType.class)
-  @Column(name = "tags", nullable = false, columnDefinition = "jsonb")
+  @Column(name = "tags", columnDefinition = "jsonb")
   private java.util.List<com.fptu.math_master.enums.QuestionTag> tags;
 
   @Builder.Default

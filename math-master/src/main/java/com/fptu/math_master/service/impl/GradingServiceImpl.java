@@ -216,95 +216,104 @@ public class GradingServiceImpl implements GradingService {
   }
 
   /**
-   * Grade TRUE_FALSE questions with Vietnamese THPT partial credit.
-   * Scoring rule: 4/4 correct → 1.0 point, 3/4 correct → 0.25 point, 0-2/4 → 0 points
+   * Grade TRUE_FALSE questions with equal points per clause.
+   * Score = correctClauses × (effectiveMaxPoints / clauseCount).
+   * Clause count is taken from the question's tfClauses metadata if present,
+   * otherwise defaults to 4 (A/B/C/D — the legacy fixed shape).
    */
   private boolean gradeTrueFalseWithPartialCredit(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
     if (question.getCorrectAnswer() == null) {
       return false;
     }
 
-    // Parse correct answer (comma-separated true keys)
+    // Determine clause keys from generation_metadata.tfClauses, fall back to A/B/C/D.
+    List<String> clauseKeys = resolveTfClauseKeys(question);
+    int clauseCount = clauseKeys.size();
+
     Set<String> expectedTrueKeys = new HashSet<>();
-    if (question.getCorrectAnswer() != null && !question.getCorrectAnswer().isBlank()) {
-      String[] keys = question.getCorrectAnswer().split(",");
-      for (String key : keys) {
+    if (!question.getCorrectAnswer().isBlank()) {
+      for (String key : question.getCorrectAnswer().split(",")) {
         expectedTrueKeys.add(key.trim());
       }
     }
 
-    // Parse student answer (comma-separated true keys)
     String studentAnswerStr = extractAnswerValue(answer, "value", "selected", "answer", "choice");
     Set<String> actualTrueKeys = new HashSet<>();
     if (studentAnswerStr != null && !studentAnswerStr.isBlank()) {
-      String[] keys = studentAnswerStr.split(",");
-      for (String key : keys) {
+      for (String key : studentAnswerStr.split(",")) {
         actualTrueKeys.add(key.trim());
       }
     }
 
-    // Count correct clauses (4 total: A, B, C, D)
     int correctCount = 0;
     Map<String, Object> clauseResults = new LinkedHashMap<>();
-
-    for (String key : List.of("A", "B", "C", "D")) {
+    for (String key : clauseKeys) {
       boolean expected = expectedTrueKeys.contains(key);
       boolean actual = actualTrueKeys.contains(key);
       boolean isCorrect = (expected == actual);
-
-      if (isCorrect) {
-        correctCount++;
-      }
-
-      clauseResults.put(key, Map.of(
-          "expected", expected,
-          "actual", actual,
-          "correct", isCorrect
-      ));
+      if (isCorrect) correctCount++;
+      clauseResults.put(
+          key, Map.of("expected", expected, "actual", actual, "correct", isCorrect));
     }
 
-    // Calculate score using Vietnamese THPT rule
-    BigDecimal score;
-    switch (correctCount) {
-      case 4:
-        score = effectiveMaxPoints;  // 4/4 → 1.0 point
-        break;
-      case 3:
-        score = effectiveMaxPoints.multiply(BigDecimal.valueOf(0.25));  // 3/4 → 0.25 point
-        break;
-      default:
-        score = BigDecimal.ZERO;  // 0-2/4 → 0 points
-    }
+    BigDecimal pointsPerClause =
+        clauseCount > 0
+            ? effectiveMaxPoints.divide(
+                BigDecimal.valueOf(clauseCount), 4, java.math.RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
+    BigDecimal score = pointsPerClause.multiply(BigDecimal.valueOf(correctCount));
 
-    // Store clause detail for assessment review
     Map<String, Object> scoringDetail = new LinkedHashMap<>();
     scoringDetail.put("questionType", "TRUE_FALSE");
     scoringDetail.put("clauseResults", clauseResults);
     scoringDetail.put("correctCount", correctCount);
-    scoringDetail.put("totalClauses", 4);
-    scoringDetail.put("scoringRule", "VIET_THPT");
-
+    scoringDetail.put("totalClauses", clauseCount);
+    scoringDetail.put("pointsPerClause", pointsPerClause);
     if (effectiveMaxPoints.compareTo(BigDecimal.ZERO) > 0) {
-      double earnedRatio = score.doubleValue() / effectiveMaxPoints.doubleValue();
-      scoringDetail.put("earnedRatio", earnedRatio);
+      scoringDetail.put(
+          "earnedRatio", score.doubleValue() / effectiveMaxPoints.doubleValue());
     }
 
-    // Store in thread-local context for caller to retrieve
     com.fptu.math_master.util.ScoringContext.setScoringDetail(scoringDetail);
 
-    answer.setIsCorrect(correctCount == 4);  // Only fully correct if 4/4
+    answer.setIsCorrect(correctCount == clauseCount);
     answer.setPointsEarned(score);
     answer.setScoringDetail(scoringDetail);
 
-    if (correctCount < 4) {
+    if (correctCount < clauseCount) {
       log.debug(
-          "TF auto-grade partial credit for answer {}: student='{}' correct={}/4",
-          answer.getId(),
-          studentAnswerStr,
-          correctCount);
+          "TF auto-grade partial credit for answer {}: student='{}' correct={}/{}",
+          answer.getId(), studentAnswerStr, correctCount, clauseCount);
     }
-
     return true;
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<String> resolveTfClauseKeys(Question question) {
+    Map<String, Object> metadata = question.getGenerationMetadata();
+    if (metadata != null) {
+      Object raw = metadata.get("tfClauses");
+      if (raw instanceof Map<?, ?> map && !map.isEmpty()) {
+        List<String> keys = new java.util.ArrayList<>();
+        for (Object k : map.keySet()) keys.add(String.valueOf(k));
+        java.util.Collections.sort(keys);
+        return keys;
+      }
+      Object opts = metadata.get("options");
+      if (opts instanceof Map<?, ?> map && !map.isEmpty()) {
+        List<String> keys = new java.util.ArrayList<>();
+        for (Object k : map.keySet()) keys.add(String.valueOf(k));
+        java.util.Collections.sort(keys);
+        return keys;
+      }
+    }
+    if (question.getOptions() != null && !question.getOptions().isEmpty()) {
+      List<String> keys = new java.util.ArrayList<>();
+      for (Object k : question.getOptions().keySet()) keys.add(String.valueOf(k));
+      java.util.Collections.sort(keys);
+      return keys;
+    }
+    return List.of("A", "B", "C", "D");
   }
 
   /**
@@ -385,40 +394,6 @@ public class GradingServiceImpl implements GradingService {
     }
   }
 
-  /**
-   * Legacy TRUE_FALSE grading (kept for backward compatibility).
-   * Use gradeTrueFalseWithPartialCredit() for new code.
-   */
-  private boolean gradeTrueFalse(Answer answer, Question question, BigDecimal effectiveMaxPoints) {
-    if (question.getCorrectAnswer() == null) {
-      return false;
-    }
-
-    String studentAnswer = extractAnswerValue(answer, "value", "selected", "answer", "choice");
-    String normalizedStudent = normalizeTrueFalseToken(studentAnswer);
-    String normalizedCorrect = normalizeTrueFalseToken(question.getCorrectAnswer());
-
-    if (normalizedStudent == null || normalizedCorrect == null) {
-      return false;
-    }
-
-    boolean isCorrect = normalizedStudent.equals(normalizedCorrect);
-    if (!isCorrect) {
-      log.debug(
-          "TF auto-grade mismatch for answer {}: student='{}' correct='{}'",
-          answer.getId(),
-          studentAnswer,
-          question.getCorrectAnswer());
-    }
-    answer.setIsCorrect(isCorrect);
-    answer.setPointsEarned(isCorrect ? effectiveMaxPoints : BigDecimal.ZERO);
-    return true;
-  }
-
-  /**
-   * Legacy SHORT_ANSWER grading (kept for backward compatibility).
-   * Use gradeShortAnswerWithValidation() for new code.
-   */
 
   private String extractAnswerValue(Answer answer, String... dataKeys) {
     if (answer.getAnswerData() != null && dataKeys != null) {
@@ -473,23 +448,6 @@ public class GradingServiceImpl implements GradingService {
   private String normalizeFreeText(String value) {
     String normalized = normalizeToken(value);
     return normalized == null ? null : normalized.toLowerCase().replaceAll("\\s+", " ");
-  }
-
-  private String normalizeTrueFalseToken(String value) {
-    String normalized = normalizeToken(value);
-    if (normalized == null) {
-      return null;
-    }
-
-    String lower = normalized.toLowerCase();
-    if (lower.equals("true") || lower.equals("t") || lower.equals("1") || lower.equals("đúng")) {
-      return "true";
-    }
-    if (lower.equals("false") || lower.equals("f") || lower.equals("0") || lower.equals("sai")) {
-      return "false";
-    }
-
-    return lower;
   }
 
   @Override

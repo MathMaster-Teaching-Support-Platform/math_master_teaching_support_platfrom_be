@@ -1244,7 +1244,6 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
       // Step 4: Generate clauses and determine true/false
       Map<String, String> clauses = new LinkedHashMap<>();
-      Map<String, Object> tfClauses = new LinkedHashMap<>();
       Set<String> trueKeys = new HashSet<>();
 
       for (int i = 0; i < Math.min(4, clauseTemplates.size()); i++) {
@@ -1268,13 +1267,6 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
         clauses.put(key, clauseText);
 
-        // Store clause metadata
-        @SuppressWarnings("unchecked")
-        Map<String, Object> clauseMeta = new LinkedHashMap<>();
-        clauseMeta.put("chapterId", clauseTemplate.get("chapterId"));
-        clauseMeta.put("cognitiveLevel", clauseTemplate.get("cognitiveLevel"));
-        tfClauses.put(key, clauseMeta);
-
         // Track true clauses
         Boolean truthValue = (Boolean) clauseTemplate.get("truthValue");
         if (truthValue != null && truthValue) {
@@ -1287,7 +1279,6 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
       // Step 6: Build metadata for grading
       Map<String, Object> gradingMetadata = new HashMap<>();
-      gradingMetadata.put("tfClauses", tfClauses);
 
       // Step 7: Build correct answer (comma-separated true keys)
       String correctAnswer = String.join(",", trueKeys);
@@ -1360,30 +1351,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
    */
   private List<Map<String, Object>> generateDefaultClauseTemplates() {
     List<Map<String, Object>> clauses = new ArrayList<>();
-    clauses.add(
-        Map.of(
-            "text", "Mệnh đề A",
-            "truthValue", true,
-            "chapterId", "default",
-            "cognitiveLevel", "THONG_HIEU"));
-    clauses.add(
-        Map.of(
-            "text", "Mệnh đề B",
-            "truthValue", false,
-            "chapterId", "default",
-            "cognitiveLevel", "THONG_HIEU"));
-    clauses.add(
-        Map.of(
-            "text", "Mệnh đề C",
-            "truthValue", true,
-            "chapterId", "default",
-            "cognitiveLevel", "VAN_DUNG"));
-    clauses.add(
-        Map.of(
-            "text", "Mệnh đề D",
-            "truthValue", false,
-            "chapterId", "default",
-            "cognitiveLevel", "VAN_DUNG"));
+    clauses.add(Map.of("text", "Mệnh đề A", "truthValue", true));
+    clauses.add(Map.of("text", "Mệnh đề B", "truthValue", false));
+    clauses.add(Map.of("text", "Mệnh đề C", "truthValue", true));
+    clauses.add(Map.of("text", "Mệnh đề D", "truthValue", false));
     return clauses;
   }
 

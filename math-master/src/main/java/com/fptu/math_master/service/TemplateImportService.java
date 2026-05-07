@@ -17,7 +17,11 @@ public interface TemplateImportService {
    * @return Analysis and suggested template draft
    */
   TemplateImportResponse importTemplateFromFile(
-      MultipartFile file, String subjectHint, String contextHint, UUID questionBankId);
+      MultipartFile file,
+      String subjectHint,
+      String contextHint,
+      UUID questionBankId,
+      UUID chapterId);
 
   /**
    * Extract text content from uploaded file

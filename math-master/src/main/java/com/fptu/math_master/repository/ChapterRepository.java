@@ -40,6 +40,12 @@ public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
   Optional<Chapter> findByCurriculumIdAndTitleAndNotDeleted(
       @Param("curriculumId") UUID curriculumId, @Param("title") String title);
 
+  /** Lookup by title (case-insensitive) — used by Excel bulk import to resolve per-row chapterName. */
+  @Query(
+      "SELECT c FROM Chapter c WHERE LOWER(TRIM(c.title)) = LOWER(TRIM(:title))"
+          + " AND c.deletedAt IS NULL")
+  List<Chapter> findActiveByTitleIgnoreCase(@Param("title") String title);
+
   // Query to find chapter that contains a specific lesson (backward compatibility)
   @Query(
       "SELECT c FROM Chapter c WHERE EXISTS (SELECT 1 FROM Lesson l WHERE l.chapterId = c.id"
