@@ -81,6 +81,17 @@ public class ChapterServiceImpl implements ChapterService {
   }
 
   @Override
+  public List<ChapterResponse> getChaptersBySubjectIdIncludingDeleted(UUID subjectId) {
+    subjectRepository
+        .findById(subjectId)
+        .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
+
+    return chapterRepository.findBySubjectIdIncludingDeleted(subjectId).stream()
+        .map(this::toResponseWithDeletedFlag)
+        .collect(Collectors.toList());
+  }
+
+  @Override
   @Transactional
   public ChapterResponse updateChapter(UUID id, UpdateChapterRequest request) {
     Chapter chapter = findActiveChapter(id);
@@ -105,6 +116,16 @@ public class ChapterServiceImpl implements ChapterService {
     chapterRepository.save(chapter);
   }
 
+  @Override
+  @Transactional
+  public ChapterResponse restoreChapter(UUID id) {
+    Chapter chapter = chapterRepository
+        .findById(id)
+        .orElseThrow(() -> new AppException(ErrorCode.CHAPTER_NOT_FOUND));
+    chapter.setDeletedAt(null);
+    return toResponse(chapterRepository.save(chapter));
+  }
+
   // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
@@ -123,6 +144,19 @@ public class ChapterServiceImpl implements ChapterService {
         .title(c.getTitle())
         .description(c.getDescription())
         .orderIndex(c.getOrderIndex())
+        .createdAt(c.getCreatedAt())
+        .updatedAt(c.getUpdatedAt())
+        .build();
+  }
+
+  private ChapterResponse toResponseWithDeletedFlag(Chapter c) {
+    return ChapterResponse.builder()
+        .id(c.getId())
+        .subjectId(c.getSubjectId())
+        .title(c.getTitle())
+        .description(c.getDescription())
+        .orderIndex(c.getOrderIndex())
+        .deleted(c.getDeletedAt() != null)
         .createdAt(c.getCreatedAt())
         .updatedAt(c.getUpdatedAt())
         .build();

@@ -21,6 +21,9 @@ public class LessonResponse {
   private Integer durationMinutes;
   private LessonDifficulty difficulty;
   private LessonStatus status;
+  /** true nếu lesson đã bị soft-delete (FE hiển thị màu khác). */
+  @Builder.Default
+  private boolean deleted = false;
   private Instant createdAt;
   private Instant updatedAt;
 }

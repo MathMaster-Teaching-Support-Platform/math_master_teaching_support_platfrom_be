@@ -124,6 +124,24 @@ public class SubjectServiceImpl implements SubjectService {
 
   @Override
   @Transactional(readOnly = true)
+  public List<SubjectResponse> getAllSubjectsIncludingInactive() {
+    return subjectRepository.findAllIncludingInactive().stream()
+        .map(this::buildResponse)
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  @Transactional
+  public SubjectResponse activateSubject(UUID subjectId) {
+    Subject subject = loadOrThrow(subjectId);
+    subject.setIsActive(true);
+    subject = subjectRepository.save(subject);
+    log.info("Subject activated: id={}", subjectId);
+    return buildResponse(subject);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<SubjectResponse> getSubjectsByGrade(Integer gradeLevel) {
     return subjectRepository.findActiveByGradeLevel(gradeLevel).stream()
         .map(this::buildResponse)

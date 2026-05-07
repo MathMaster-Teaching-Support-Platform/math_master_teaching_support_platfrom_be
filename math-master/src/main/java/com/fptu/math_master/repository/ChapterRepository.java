@@ -21,6 +21,10 @@ public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
   List<Chapter> findBySubjectIdAndNotDeleted(@Param("subjectId") UUID subjectId);
 
   @Query(
+      "SELECT c FROM Chapter c WHERE c.subjectId = :subjectId ORDER BY c.deletedAt IS NULL DESC, c.orderIndex")
+  List<Chapter> findBySubjectIdIncludingDeleted(@Param("subjectId") UUID subjectId);
+
+  @Query(
       "SELECT COUNT(c) FROM Chapter c WHERE c.curriculumId = :curriculumId AND c.deletedAt IS NULL")
   Long countByCurriculumIdAndNotDeleted(@Param("curriculumId") UUID curriculumId);
 

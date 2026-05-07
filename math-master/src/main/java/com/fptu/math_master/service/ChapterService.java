@@ -14,9 +14,13 @@ public interface ChapterService {
 
   List<ChapterResponse> getChaptersBySubjectId(UUID subjectId);
 
+  List<ChapterResponse> getChaptersBySubjectIdIncludingDeleted(UUID subjectId);
+
   List<ChapterResponse> getChaptersByCurriculumId(UUID curriculumId);
 
   ChapterResponse updateChapter(UUID id, UpdateChapterRequest request);
 
   void deleteChapter(UUID id);
+
+  ChapterResponse restoreChapter(UUID id);
 }

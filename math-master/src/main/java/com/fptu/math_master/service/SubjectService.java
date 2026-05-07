@@ -21,6 +21,12 @@ public interface SubjectService {
   /** List all active subjects. */
   List<SubjectResponse> getAllSubjects();
 
+  /** List all subjects including inactive (for admin management). */
+  List<SubjectResponse> getAllSubjectsIncludingInactive();
+
+  /** Re-activate a deactivated subject. */
+  SubjectResponse activateSubject(UUID subjectId);
+
   /** List subjects available for a given grade level. */
   List<SubjectResponse> getSubjectsByGrade(Integer gradeLevel);
 

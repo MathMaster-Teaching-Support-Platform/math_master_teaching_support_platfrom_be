@@ -19,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -85,5 +86,15 @@ public class SchoolGradeController {
   public ApiResponse<Void> deactivate(@PathVariable UUID id) {
     schoolGradeService.deactivate(id);
     return ApiResponse.<Void>builder().message("School grade deactivated successfully").build();
+  }
+
+  @PatchMapping("/{id}/activate")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(summary = "Re-activate a deactivated school grade")
+  public ApiResponse<SchoolGradeResponse> activate(@PathVariable UUID id) {
+    return ApiResponse.<SchoolGradeResponse>builder()
+        .message("School grade activated successfully")
+        .result(schoolGradeService.activate(id))
+        .build();
   }
 }

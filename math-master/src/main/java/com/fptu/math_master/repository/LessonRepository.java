@@ -21,6 +21,11 @@ public interface LessonRepository
   List<Lesson> findByChapterIdAndNotDeleted(@Param("chapterId") UUID chapterId);
 
   @Query(
+      "SELECT l FROM Lesson l WHERE l.chapterId = :chapterId"
+          + " ORDER BY l.deletedAt IS NULL DESC, l.orderIndex, l.createdAt")
+  List<Lesson> findByChapterIdIncludingDeleted(@Param("chapterId") UUID chapterId);
+
+  @Query(
       "SELECT l FROM Lesson l WHERE l.chapterId = :chapterId AND l.deletedAt IS NULL "
           + "AND LOWER(l.title) LIKE LOWER(CONCAT('%', :title, '%')) "
           + "ORDER BY l.orderIndex, l.createdAt")

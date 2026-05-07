@@ -109,6 +109,17 @@ public class SchoolGradeServiceImpl implements SchoolGradeService {
     schoolGradeRepository.save(schoolGrade);
   }
 
+  @Override
+  @Transactional
+  public SchoolGradeResponse activate(UUID id) {
+    SchoolGrade schoolGrade =
+        schoolGradeRepository
+            .findByIdAndNotDeleted(id)
+            .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+    schoolGrade.setIsActive(true);
+    return toResponse(schoolGradeRepository.save(schoolGrade));
+  }
+
   private SchoolGradeResponse toResponse(SchoolGrade schoolGrade) {
     return SchoolGradeResponse.builder()
         .id(schoolGrade.getId())

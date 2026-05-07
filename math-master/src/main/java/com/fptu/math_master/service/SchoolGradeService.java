@@ -17,4 +17,6 @@ public interface SchoolGradeService {
   List<SchoolGradeResponse> getAll(boolean activeOnly);
 
   void deactivate(UUID id);
+
+  SchoolGradeResponse activate(UUID id);
 }
