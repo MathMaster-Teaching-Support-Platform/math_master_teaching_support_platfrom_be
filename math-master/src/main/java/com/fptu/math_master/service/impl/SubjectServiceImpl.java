@@ -162,6 +162,18 @@ public class SubjectServiceImpl implements SubjectService {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public List<SubjectResponse> getAllSubjectsBySchoolGradeId(UUID schoolGradeId) {
+    schoolGradeRepository
+        .findByIdAndNotDeleted(schoolGradeId)
+        .orElseThrow(() -> new AppException(ErrorCode.SCHOOL_GRADE_NOT_FOUND));
+
+    return subjectRepository.findBySchoolGradeIdOrderByName(schoolGradeId).stream()
+        .map(this::buildResponse)
+        .collect(Collectors.toList());
+  }
+
+  @Override
   @Transactional
   public SubjectResponse linkToGrade(UUID subjectId, LinkGradeSubjectRequest request) {
     Subject subject = loadOrThrow(subjectId);
