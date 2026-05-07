@@ -2,6 +2,7 @@ package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.entity.User;
 import com.fptu.math_master.dto.request.CreateLessonRequest;
+import com.fptu.math_master.dto.request.ReorderLessonsRequest;
 import com.fptu.math_master.dto.request.UpdateLessonRequest;
 import com.fptu.math_master.dto.response.LessonResponse;
 import com.fptu.math_master.entity.Lesson;
@@ -16,6 +17,8 @@ import com.fptu.math_master.service.LessonService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
@@ -125,6 +128,30 @@ public class LessonServiceImpl implements LessonService {
     Lesson lesson = findActiveLesson(id);
     lesson.setDeletedAt(Instant.now());
     lessonRepository.save(lesson);
+  }
+
+  @Override
+  @Transactional
+  public List<LessonResponse> reorderLessons(UUID chapterId, ReorderLessonsRequest request) {
+    chapterRepository
+        .findById(chapterId)
+        .filter(c -> c.getDeletedAt() == null)
+        .orElseThrow(() -> new AppException(ErrorCode.CHAPTER_NOT_FOUND));
+
+    List<Lesson> lessons = lessonRepository.findByChapterIdAndNotDeleted(chapterId);
+    Map<UUID, Lesson> lessonMap = lessons.stream()
+        .collect(Collectors.toMap(Lesson::getId, l -> l));
+
+    Set<UUID> chapterLessonIds = lessonMap.keySet();
+    for (ReorderLessonsRequest.LessonOrder order : request.getOrders()) {
+      if (!chapterLessonIds.contains(order.getLessonId())) {
+        throw new AppException(ErrorCode.LESSON_NOT_FOUND);
+      }
+      lessonMap.get(order.getLessonId()).setOrderIndex(order.getOrderIndex());
+    }
+
+    List<Lesson> saved = lessonRepository.saveAll(lessons);
+    return saved.stream().map(this::toResponse).collect(Collectors.toList());
   }
 
   // -----------------------------------------------------------------------
