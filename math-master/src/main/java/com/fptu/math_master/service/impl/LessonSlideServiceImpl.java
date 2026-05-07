@@ -129,6 +129,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
           "PRACTICE_PART",
           "CLOSING_SUMMARY",
           "ADDITIONAL_NOTES");
+  private static final int SLIDE_CONTENT_MAX_WORDS = 60;
   private static final String PPTX_MIME =
       "application/vnd.openxmlformats-officedocument.presentationml.presentation";
   private static final String PNG_MIME = "image/png";
@@ -1815,7 +1816,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   private LessonSlideJsonItemResponse buildPreviewSlide(
       int slideNumber, String slideType, String heading, String content,
       LessonSlideOutputFormat outputFormat) {
-    String normalizedContent = truncateToWordLimit(normalizeAiGeneratedText(content), 60);
+    String normalizedContent = normalizeAiGeneratedText(content);
     String normalizedHeading = normalizeAiGeneratedText(heading);
 
     String previewImageUrl = null;
@@ -1954,12 +1955,14 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     try {
         String prompt =
           buildSlideDeckPrompt(lesson, additionalPrompt, outputFormat, requestedSlideCount);
+      log.info("[SlidePrompt] JSON prompt sent to AI:\n{}", prompt);
       String aiResponse = geminiService.sendMessage(prompt);
       AiDeckSections aiDeck = parseAiDeckSections(aiResponse);
       if (aiDeck == null || !hasEnoughAiContent(aiDeck)) {
         String taggedPrompt =
           buildSlideDeckTaggedPrompt(
             lesson, additionalPrompt, outputFormat, requestedSlideCount);
+        log.info("[SlidePrompt] Tagged prompt sent to AI:\n{}", taggedPrompt);
         String taggedResponse = geminiService.sendMessage(taggedPrompt);
         AiDeckSections taggedDeck = parseTaggedDeckSections(taggedResponse);
         if (taggedDeck != null && hasEnoughAiContent(taggedDeck)) {
@@ -2100,7 +2103,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         - Mỗi phần (opening/mainPart/example/practice/closing) chỉ 3-5 ý chính.
         - Mỗi ý tối đa khoảng 12-16 từ, ưu tiên câu ngắn và rõ nghĩa.
         - Tránh văn xuôi dài; ưu tiên gạch đầu dòng hoặc câu ngắn tách dòng.
-        - Tổng độ dài mỗi phần nên trong khoảng 60-90 từ, không lan man.
+        - Tổng độ dài mỗi phần KHÔNG ĐƯỢC QUÁ %d từ — viết thật ngắn gọn, không được dư.
         - Nội dung phải cụ thể, không lặp lại cùng một câu giữa các phần.
         - Mỗi mục mainPart1/mainPart2/mainPart3/examplePart/practicePart cần có nhiều ý (dạng gạch đầu dòng ngắn, xuống dòng THẬT bằng Enter).
         - Không ghi literal \n hoặc /n trong nội dung.
@@ -2130,6 +2133,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             learningObjectives,
             opening,
             lessonContent,
+            SLIDE_CONTENT_MAX_WORDS,
             outputFormat,
             formatGuidance);
   }
@@ -2163,7 +2167,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         - Nội dung phải NGẮN GỌN theo chuẩn 1 slide nhưng vẫn đầy đủ ý cốt lõi.
         - Mỗi phần chỉ 3-5 ý chính, mỗi ý tối đa khoảng 12-16 từ.
         - Ưu tiên gạch đầu dòng/câu ngắn, tránh đoạn văn dài.
-        - Tổng độ dài mỗi phần nên trong khoảng 60-90 từ.
+        - Tổng độ dài mỗi phần KHÔNG ĐƯỢC QUÁ %d từ — viết thật ngắn gọn, không được dư.
         - Mỗi phần mainPart1/mainPart2/mainPart3/examplePart/practicePart có nhiều ý và xuống dòng rõ ràng.
         - Không ghi literal \n hoặc /n trong nội dung.
         - outputFormat: %s
@@ -2198,6 +2202,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
           learningObjectives,
           opening,
           lessonContent,
+          SLIDE_CONTENT_MAX_WORDS,
           outputFormat,
           formatGuidance);
   }
