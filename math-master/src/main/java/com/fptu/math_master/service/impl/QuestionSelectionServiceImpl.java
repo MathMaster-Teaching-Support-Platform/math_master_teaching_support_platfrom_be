@@ -108,11 +108,15 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     List<ExamMatrixBankMapping> mappings =
         examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(examMatrixId);
 
+    Map<UUID, ExamMatrixRow> rowById = loadRowsById(examMatrixId);
+
+    // Order: part → chapter (matrix row) → cognitive level. Within a part, all
+    // questions for one chapter are grouped together (across cognitive levels)
+    // before moving to the next chapter.
     mappings.sort(
         Comparator.comparingInt(ExamMatrixBankMapping::getPartNumber)
+            .thenComparingInt(m -> rowOrderIndex(rowById, m.getMatrixRowId()))
             .thenComparing(m -> m.getCognitiveLevel().ordinal()));
-
-    Map<UUID, ExamMatrixRow> rowById = loadRowsById(examMatrixId);
 
     SelectionContext context =
         new SelectionContext(new ArrayList<>(), new HashSet<>(), startOrderIndex, 0);
@@ -324,6 +328,18 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
 
   private int requiredQuestions(ExamMatrixBankMapping mapping) {
     return mapping.getQuestionCount() != null ? Math.max(0, mapping.getQuestionCount()) : 0;
+  }
+
+  /**
+   * Resolve a matrix row's orderIndex for cell sorting. Rows without an
+   * explicit index sort last (Integer.MAX_VALUE) so they don't disturb the
+   * declared order.
+   */
+  private int rowOrderIndex(Map<UUID, ExamMatrixRow> rowById, UUID matrixRowId) {
+    if (matrixRowId == null) return Integer.MAX_VALUE;
+    ExamMatrixRow row = rowById.get(matrixRowId);
+    if (row == null || row.getOrderIndex() == null) return Integer.MAX_VALUE;
+    return row.getOrderIndex();
   }
 
   private List<Question> fetchQuestionsInOrder(List<UUID> selectedIds) {
