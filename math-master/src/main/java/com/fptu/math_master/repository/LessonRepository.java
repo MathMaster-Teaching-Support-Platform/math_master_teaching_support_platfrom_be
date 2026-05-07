@@ -22,7 +22,7 @@ public interface LessonRepository
 
   @Query(
       "SELECT l FROM Lesson l WHERE l.chapterId = :chapterId"
-          + " ORDER BY l.deletedAt IS NULL DESC, l.orderIndex, l.createdAt")
+          + " ORDER BY CASE WHEN l.deletedAt IS NULL THEN 0 ELSE 1 END ASC, l.orderIndex, l.createdAt")
   List<Lesson> findByChapterIdIncludingDeleted(@Param("chapterId") UUID chapterId);
 
   @Query(
