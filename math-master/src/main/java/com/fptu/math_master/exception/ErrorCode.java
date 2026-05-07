@@ -393,7 +393,9 @@ public enum ErrorCode {
       1217, "This proposal has already been reviewed", HttpStatus.BAD_REQUEST),
 
   // ─── System Config Error Codes ────────────────────────────────────────────
-  SYSTEM_CONFIG_NOT_FOUND(1218, "System config not found", HttpStatus.NOT_FOUND);
+  SYSTEM_CONFIG_NOT_FOUND(1218, "System config not found", HttpStatus.NOT_FOUND),
+
+  ASSESSMENT_NOT_CLOSED(1219, "Assessment is not closed", HttpStatus.BAD_REQUEST);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {

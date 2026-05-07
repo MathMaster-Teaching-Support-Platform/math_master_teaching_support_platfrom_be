@@ -142,6 +142,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
           "SELECT q.* FROM questions q "
               + "WHERE q.deleted_at IS NULL "
               + "AND q.created_by = :createdBy "
+              + "AND q.question_status = 'APPROVED' "
               + "AND q.id NOT IN ("
               + "  SELECT aq.question_id FROM assessment_questions aq WHERE aq.assessment_id = :assessmentId"
               + ") "
@@ -155,6 +156,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
           "SELECT COUNT(*) FROM questions q "
               + "WHERE q.deleted_at IS NULL "
               + "AND q.created_by = :createdBy "
+              + "AND q.question_status = 'APPROVED' "
               + "AND q.id NOT IN ("
               + "  SELECT aq.question_id FROM assessment_questions aq WHERE aq.assessment_id = :assessmentId"
               + ") "
@@ -191,6 +193,7 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
           + "WHERE q.questionBankId = :bankId "
           + "AND q.chapterId IN :chapterIds "
           + "AND q.deletedAt IS NULL "
+          + "AND q.questionStatus = com.fptu.math_master.enums.QuestionStatus.APPROVED "
           + "ORDER BY q.chapterId, q.cognitiveLevel, q.createdAt DESC")
   List<Question> findByBankAndChaptersForTree(
       @Param("bankId") UUID bankId, @Param("chapterIds") List<UUID> chapterIds);

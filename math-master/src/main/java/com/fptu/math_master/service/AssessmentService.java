@@ -64,9 +64,15 @@ public interface AssessmentService {
 
   AssessmentResponse closeAssessment(UUID id);
 
+  AssessmentResponse reopenAssessment(UUID id);
+
   AssessmentResponse addQuestion(UUID assessmentId, AddQuestionToAssessmentRequest request);
 
   List<AssessmentQuestionResponse> getAssessmentQuestions(UUID assessmentId);
+
+  List<AssessmentQuestionResponse> reorderQuestions(
+      UUID assessmentId,
+      com.fptu.math_master.dto.request.ReorderAssessmentQuestionsRequest request);
 
     PagedDataResponse<QuestionResponse> getAvailableQuestions(
             UUID assessmentId, String keyword, String tag, Pageable pageable);

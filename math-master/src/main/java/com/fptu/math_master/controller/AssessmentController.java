@@ -348,6 +348,20 @@ public class AssessmentController {
         .build();
   }
 
+  @PostMapping("/{id}/reopen")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Reopen a closed assessment",
+      description =
+          "Reopen a CLOSED assessment by flipping its status back to PUBLISHED so students can attempt it again.")
+  public ApiResponse<AssessmentResponse> reopenAssessment(@PathVariable UUID id) {
+    log.info("REST request to reopen assessment: {}", id);
+    return ApiResponse.<AssessmentResponse>builder()
+        .message("Assessment reopened successfully.")
+        .result(assessmentService.reopenAssessment(id))
+        .build();
+  }
+
   @PostMapping("/{assessmentId}/questions")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
   @Operation(
@@ -374,6 +388,25 @@ public class AssessmentController {
                 .result(assessmentService.getAssessmentQuestions(id))
                 .build();
     }
+
+  @PatchMapping("/{id}/questions/reorder")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  @Operation(
+      summary = "Batch reorder assessment questions",
+      description =
+          "Bulk update orderIndex for every question in the assessment in a single transaction. "
+              + "Body must include every question currently in the assessment. "
+              + "Returns the updated question list ordered by the new orderIndex.")
+  public ApiResponse<List<AssessmentQuestionResponse>> reorderAssessmentQuestions(
+      @PathVariable UUID id,
+      @jakarta.validation.Valid @RequestBody
+          com.fptu.math_master.dto.request.ReorderAssessmentQuestionsRequest request) {
+    log.info("REST request to reorder questions for assessment: {}", id);
+    return ApiResponse.<List<AssessmentQuestionResponse>>builder()
+        .message("Assessment questions reordered successfully.")
+        .result(assessmentService.reorderQuestions(id, request))
+        .build();
+  }
 
   @GetMapping("/{id}/available-questions")
   @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")

@@ -26,6 +26,8 @@ public class AssessmentQuestionResponse {
   private Map<String, Object> options;
   private String correctAnswer;
   private String explanation;
+  private String diagramData;
+  private String diagramUrl;
   private String[] tags;
   private CognitiveLevel cognitiveLevel;
   private Instant createdAt;

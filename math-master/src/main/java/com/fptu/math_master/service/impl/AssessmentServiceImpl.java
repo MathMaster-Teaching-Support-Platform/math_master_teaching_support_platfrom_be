@@ -650,6 +650,24 @@ public class AssessmentServiceImpl implements AssessmentService {
 
   @Override
   @Transactional
+  public AssessmentResponse reopenAssessment(UUID id) {
+    log.info("Reopening assessment: {}", id);
+
+    Assessment assessment = loadAssessmentOrThrow(id);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    if (assessment.getStatus() != AssessmentStatus.CLOSED) {
+      throw new AppException(ErrorCode.ASSESSMENT_NOT_CLOSED);
+    }
+
+    assessment.setStatus(AssessmentStatus.PUBLISHED);
+    assessment = assessmentRepository.save(assessment);
+    log.info("Assessment {} reopened", id);
+    return mapToResponse(assessment);
+  }
+
+  @Override
+  @Transactional
   public AssessmentResponse addQuestion(UUID assessmentId, AddQuestionToAssessmentRequest request) {
     log.info("Adding question {} to assessment {}", request.getQuestionId(), assessmentId);
 
@@ -728,12 +746,74 @@ public class AssessmentServiceImpl implements AssessmentService {
                   .options(question.getOptions())
                   .correctAnswer(question.getCorrectAnswer())
                   .explanation(question.getExplanation())
+                  .diagramData(question.getDiagramData())
+                  .diagramUrl(question.getRenderedImageUrl())
                   .tags(question.getTags())
                   .cognitiveLevel(question.getCognitiveLevel())
                   .createdAt(question.getCreatedAt())
                   .build();
             })
         .toList();
+  }
+
+  @Override
+  @Transactional
+  public List<AssessmentQuestionResponse> reorderQuestions(
+      UUID assessmentId,
+      com.fptu.math_master.dto.request.ReorderAssessmentQuestionsRequest request) {
+    log.info(
+        "Reordering {} questions for assessment {}", request.getOrders().size(), assessmentId);
+
+    Assessment assessment = loadAssessmentOrThrow(assessmentId);
+    validateOwnerOrAdmin(assessment.getTeacherId(), getCurrentUserId());
+
+    List<com.fptu.math_master.dto.request.ReorderAssessmentQuestionsRequest.Item> orders =
+        request.getOrders();
+
+    java.util.Set<UUID> seenQuestionIds = new java.util.HashSet<>();
+    java.util.Set<Integer> seenOrders = new java.util.HashSet<>();
+    for (var item : orders) {
+      if (!seenQuestionIds.add(item.getQuestionId())) {
+        throw new AppException(ErrorCode.DUPLICATE_ORDER_INDEX);
+      }
+      if (!seenOrders.add(item.getOrderIndex())) {
+        throw new AppException(ErrorCode.DUPLICATE_ORDER_INDEX);
+      }
+    }
+
+    List<AssessmentQuestion> existing =
+        assessmentQuestionRepository.findByAssessmentIdOrderByOrderIndex(assessmentId);
+    if (existing.size() != orders.size()) {
+      throw new AppException(ErrorCode.ASSESSMENT_QUESTION_NOT_FOUND);
+    }
+
+    java.util.Map<UUID, AssessmentQuestion> byQuestionId = new java.util.HashMap<>();
+    for (AssessmentQuestion aq : existing) {
+      byQuestionId.put(aq.getQuestionId(), aq);
+    }
+    for (var item : orders) {
+      if (!byQuestionId.containsKey(item.getQuestionId())) {
+        throw new AppException(ErrorCode.QUESTION_NOT_IN_ASSESSMENT);
+      }
+    }
+
+    // Two-phase save to avoid violating UNIQUE(assessment_id, order_index):
+    // 1) bump every targeted row's order_index to a non-conflicting negative value, flush
+    // 2) assign final order_index values
+    int tmp = -1;
+    for (AssessmentQuestion aq : existing) {
+      aq.setOrderIndex(tmp--);
+    }
+    assessmentQuestionRepository.saveAllAndFlush(existing);
+
+    for (var item : orders) {
+      AssessmentQuestion aq = byQuestionId.get(item.getQuestionId());
+      aq.setOrderIndex(item.getOrderIndex());
+    }
+    assessmentQuestionRepository.saveAllAndFlush(existing);
+
+    log.info("Reordered {} questions for assessment {}", orders.size(), assessmentId);
+    return getAssessmentQuestions(assessmentId);
   }
 
       @Override
