@@ -17,6 +17,9 @@ public interface SubjectRepository extends JpaRepository<Subject, UUID> {
   @Query("SELECT s FROM Subject s WHERE s.isActive = true ORDER BY s.name")
   List<Subject> findAllActive();
 
+  @Query("SELECT s FROM Subject s WHERE s.deletedAt IS NULL ORDER BY s.name")
+  List<Subject> findAllIncludingInactive();
+
   @Query(
       """
       SELECT s FROM Subject s

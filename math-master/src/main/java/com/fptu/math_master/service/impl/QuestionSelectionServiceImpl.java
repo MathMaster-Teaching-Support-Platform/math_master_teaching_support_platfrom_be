@@ -68,18 +68,8 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     }
 
     Map<UUID, ExamMatrixRow> rowById = loadRowsById(examMatrixId);
-    Map<UUID, List<ExamMatrixBankMapping>> tfByRow = new LinkedHashMap<>();
-    List<ExamMatrixBankMapping> nonTFValidation = new ArrayList<>();
 
     for (ExamMatrixBankMapping mapping : mappings) {
-      if (mapping.getQuestionType() == QuestionType.TRUE_FALSE) {
-        tfByRow.computeIfAbsent(mapping.getMatrixRowId(), k -> new ArrayList<>()).add(mapping);
-      } else {
-        nonTFValidation.add(mapping);
-      }
-    }
-
-    for (ExamMatrixBankMapping mapping : nonTFValidation) {
       int required = requiredQuestions(mapping);
       if (required <= 0) continue;
 
@@ -98,32 +88,6 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
       }
     }
 
-    for (Map.Entry<UUID, List<ExamMatrixBankMapping>> entry : tfByRow.entrySet()) {
-      ExamMatrixRow row = rowById.get(entry.getKey());
-      if (row == null || row.getChapterId() == null) {
-        log.warn("TF row {} missing chapter — skipping validation", entry.getKey());
-        continue;
-      }
-
-      int totalClauses = entry.getValue().stream().mapToInt(this::requiredQuestions).sum();
-      int tfQuestionsNeeded = (int) Math.ceil(totalClauses / 4.0);
-
-      Set<UUID> allTFIds = new HashSet<>();
-      for (ExamMatrixBankMapping m : entry.getValue()) {
-        String level = m.getCognitiveLevel() != null ? m.getCognitiveLevel().name() : null;
-        if (level == null) continue;
-        allTFIds.addAll(
-            questionRepository.findTFIdsByBanksAndChapterAndClauseCognitive(
-                bankIds, row.getChapterId(), level));
-      }
-
-      if (allTFIds.size() < tfQuestionsNeeded) {
-        log.error(
-            "Insufficient TF questions: chapter={}, clausesNeeded={}, questionsNeeded={}, available={}",
-            row.getChapterId(), totalClauses, tfQuestionsNeeded, allTFIds.size());
-        throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
-      }
-    }
   }
 
   @Override
@@ -144,29 +108,20 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
     List<ExamMatrixBankMapping> mappings =
         examMatrixBankMappingRepository.findByExamMatrixIdOrderByCreatedAt(examMatrixId);
 
+    Map<UUID, ExamMatrixRow> rowById = loadRowsById(examMatrixId);
+
+    // Order: part → chapter (matrix row) → cognitive level. Within a part, all
+    // questions for one chapter are grouped together (across cognitive levels)
+    // before moving to the next chapter.
     mappings.sort(
         Comparator.comparingInt(ExamMatrixBankMapping::getPartNumber)
+            .thenComparingInt(m -> rowOrderIndex(rowById, m.getMatrixRowId()))
             .thenComparing(m -> m.getCognitiveLevel().ordinal()));
-
-    Map<UUID, ExamMatrixRow> rowById = loadRowsById(examMatrixId);
 
     SelectionContext context =
         new SelectionContext(new ArrayList<>(), new HashSet<>(), startOrderIndex, 0);
 
-    List<ExamMatrixBankMapping> nonTFMappings = new ArrayList<>();
-    Map<UUID, List<ExamMatrixBankMapping>> tfMappingsByRow = new LinkedHashMap<>();
-
     for (ExamMatrixBankMapping mapping : mappings) {
-      if (mapping.getQuestionType() == QuestionType.TRUE_FALSE) {
-        tfMappingsByRow
-            .computeIfAbsent(mapping.getMatrixRowId(), k -> new ArrayList<>())
-            .add(mapping);
-      } else {
-        nonTFMappings.add(mapping);
-      }
-    }
-
-    for (ExamMatrixBankMapping mapping : nonTFMappings) {
       int required = requiredQuestions(mapping);
       ExamMatrixRow row = rowById.get(mapping.getMatrixRowId());
 
@@ -177,16 +132,6 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
 
       appendSelectionFromMapping(
           assessmentId, bankIds, row.getChapterId(), mapping, required, context);
-    }
-
-    for (Map.Entry<UUID, List<ExamMatrixBankMapping>> entry : tfMappingsByRow.entrySet()) {
-      ExamMatrixRow row = rowById.get(entry.getKey());
-      if (row == null || row.getChapterId() == null) {
-        log.warn("TF row {} missing chapter — skipping", entry.getKey());
-        continue;
-      }
-      appendTFSelectionForRow(
-          assessmentId, bankIds, row.getChapterId(), entry.getValue(), context);
     }
 
     return new SelectionPlan(context.plannedQuestions(), context.totalPoints());
@@ -218,10 +163,9 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
       }
     }
 
-    // Aggregate by (chapter, cognitive, type). Non-TF cells map 1:1 to a gap;
-    // TF cells aggregate per row because TF generation is whole-question.
+    // Each mapping maps 1:1 to a gap — TF questions are counted as whole
+    // questions just like MCQ/SA.
     List<Gap> gaps = new ArrayList<>();
-    Map<UUID, List<ExamMatrixBankMapping>> tfByRow = new LinkedHashMap<>();
 
     for (ExamMatrixBankMapping mapping : mappings) {
       int required = requiredQuestions(mapping);
@@ -229,11 +173,6 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
 
       ExamMatrixRow row = rowById.get(mapping.getMatrixRowId());
       if (row == null || row.getChapterId() == null) continue;
-
-      if (mapping.getQuestionType() == QuestionType.TRUE_FALSE) {
-        tfByRow.computeIfAbsent(mapping.getMatrixRowId(), k -> new ArrayList<>()).add(mapping);
-        continue;
-      }
 
       long available = countAvailable(resolvedBanks, row.getChapterId(), mapping);
       gaps.add(
@@ -244,33 +183,6 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
               mapping.getQuestionType() != null ? mapping.getQuestionType().name() : null,
               required,
               available));
-    }
-
-    for (Map.Entry<UUID, List<ExamMatrixBankMapping>> entry : tfByRow.entrySet()) {
-      ExamMatrixRow row = rowById.get(entry.getKey());
-      if (row == null || row.getChapterId() == null) continue;
-
-      int totalClauses = entry.getValue().stream().mapToInt(this::requiredQuestions).sum();
-      int tfQuestionsNeeded = (int) Math.ceil(totalClauses / 4.0);
-
-      Set<UUID> tfIds = new HashSet<>();
-      for (ExamMatrixBankMapping m : entry.getValue()) {
-        String level = m.getCognitiveLevel() != null ? m.getCognitiveLevel().name() : null;
-        if (level == null) continue;
-        tfIds.addAll(
-            questionRepository.findTFIdsByBanksAndChapterAndClauseCognitive(
-                resolvedBanks, row.getChapterId(), level));
-      }
-
-      // Synthetic TF gap: needed = whole TF questions, available = union of TF candidates
-      gaps.add(
-          new Gap(
-              row.getChapterId(),
-              chapterTitleById.get(row.getChapterId()),
-              "TRUE_FALSE_CLAUSES",
-              QuestionType.TRUE_FALSE.name(),
-              tfQuestionsNeeded,
-              tfIds.size()));
     }
 
     boolean ok = gaps.stream().allMatch(g -> g.available() >= g.required());
@@ -376,210 +288,6 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
   }
 
   // ========================================================================
-  // TF clause-level selection (multi-bank)
-  // ========================================================================
-
-  private void appendTFSelectionForRow(
-      UUID assessmentId,
-      Collection<UUID> bankIds,
-      UUID chapterId,
-      List<ExamMatrixBankMapping> tfMappings,
-      SelectionContext context) {
-
-    Map<String, Integer> clauseRequirement = new LinkedHashMap<>();
-    int totalClausesNeeded = 0;
-    ExamMatrixBankMapping firstMapping = tfMappings.get(0);
-
-    for (ExamMatrixBankMapping mapping : tfMappings) {
-      int count = requiredQuestions(mapping);
-      if (count <= 0) continue;
-      String level = mapping.getCognitiveLevel().name();
-      clauseRequirement.merge(level, count, Integer::sum);
-      totalClausesNeeded += count;
-    }
-
-    if (totalClausesNeeded <= 0) return;
-
-    int tfQuestionsNeeded = (int) Math.ceil(totalClausesNeeded / 4.0);
-
-    log.info(
-        "TF clause selection: chapter={}, clauseRequirement={}, totalClauses={}, questionsNeeded={}",
-        chapterId, clauseRequirement, totalClausesNeeded, tfQuestionsNeeded);
-
-    Set<UUID> allCandidateIds = new LinkedHashSet<>();
-    for (String level : clauseRequirement.keySet()) {
-      allCandidateIds.addAll(
-          questionRepository.findTFIdsByBanksAndChapterAndClauseCognitive(
-              bankIds, chapterId, level));
-    }
-
-    allCandidateIds.removeIf(context.usedQuestionIds()::contains);
-
-    if (allCandidateIds.size() < tfQuestionsNeeded) {
-      log.error(
-          "Insufficient TF questions: chapter={}, clauseReq={}, needed={} questions, available={}",
-          chapterId, clauseRequirement, tfQuestionsNeeded, allCandidateIds.size());
-      throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
-    }
-
-    List<UUID> candidateList = new ArrayList<>(allCandidateIds);
-    Map<UUID, Question> candidateMap = new HashMap<>();
-    for (Question q : questionRepository.findAllById(candidateList)) {
-      candidateMap.put(q.getId(), q);
-    }
-
-    List<UUID> scoredCandidates = new ArrayList<>(candidateList);
-    scoredCandidates.sort(
-        (a, b) -> {
-          int scoreA = scoreTFQuestion(candidateMap.get(a), chapterId, clauseRequirement);
-          int scoreB = scoreTFQuestion(candidateMap.get(b), chapterId, clauseRequirement);
-          return Integer.compare(scoreB, scoreA);
-        });
-
-    deterministicShuffle(
-        scoredCandidates, assessmentId, firstMapping != null ? firstMapping.getId() : UUID.randomUUID());
-
-    scoredCandidates.sort(
-        (a, b) -> {
-          int scoreA = scoreTFQuestion(candidateMap.get(a), chapterId, clauseRequirement);
-          int scoreB = scoreTFQuestion(candidateMap.get(b), chapterId, clauseRequirement);
-          return Integer.compare(scoreB, scoreA);
-        });
-
-    List<UUID> selected =
-        scoredCandidates.subList(0, Math.min(tfQuestionsNeeded, scoredCandidates.size()));
-
-    Map<String, Integer> totalSelectedComposition = new HashMap<>();
-    for (UUID questionId : selected) {
-      Question q = candidateMap.get(questionId);
-      readClauseComposition(q, chapterId)
-          .forEach((level, count) -> totalSelectedComposition.merge(level, count, Integer::sum));
-    }
-
-    for (Map.Entry<String, Integer> required : clauseRequirement.entrySet()) {
-      int needed = required.getValue();
-      int actual = totalSelectedComposition.getOrDefault(required.getKey(), 0);
-      if (actual < needed) {
-        log.error(
-            "Selected TF questions do not fulfill matrix requirements for chapter {}. "
-                + "Level {} needs {} but selected questions only provide {}.",
-            chapterId, required.getKey(), needed, actual);
-        throw new AppException(ErrorCode.INSUFFICIENT_QUESTIONS_AVAILABLE);
-      }
-    }
-
-    for (UUID questionId : selected) {
-      int slotIndex = context.nextOrderIndex();
-      context
-          .plannedQuestions()
-          .add(
-              AssessmentQuestion.builder()
-                  .assessmentId(assessmentId)
-                  .questionId(questionId)
-                  .matrixBankMappingId(firstMapping.getId())
-                  .orderIndex(slotIndex)
-                  .pointsOverride(firstMapping.getPointsPerQuestion())
-                  .build());
-
-      context.incrementOrderIndex();
-      context.usedQuestionIds().add(questionId);
-      context.totalPoints +=
-          firstMapping.getPointsPerQuestion() != null
-              ? firstMapping.getPointsPerQuestion().intValue()
-              : 0;
-    }
-  }
-
-  private int scoreTFQuestion(
-      Question question, UUID chapterId, Map<String, Integer> clauseRequirement) {
-    if (question == null) return 0;
-
-    Map<String, Integer> actualComposition = readClauseComposition(question, chapterId);
-    if (actualComposition.isEmpty()) return 0;
-
-    boolean isPerfectMatch = true;
-    int matchingClauses = 0;
-
-    for (Map.Entry<String, Integer> required : clauseRequirement.entrySet()) {
-      String level = required.getKey();
-      int requiredCount = required.getValue();
-      int actualCount = actualComposition.getOrDefault(level, 0);
-
-      if (actualCount < requiredCount) {
-        isPerfectMatch = false;
-        matchingClauses += actualCount;
-      } else if (actualCount == requiredCount) {
-        matchingClauses += actualCount;
-      } else {
-        isPerfectMatch = false;
-        matchingClauses += requiredCount;
-      }
-    }
-
-    for (String level : actualComposition.keySet()) {
-      if (!clauseRequirement.containsKey(level)) {
-        isPerfectMatch = false;
-      }
-    }
-
-    if (matchingClauses == 0) return 0;
-    return isPerfectMatch ? 1000 + matchingClauses : matchingClauses;
-  }
-
-  /**
-   * Read the clause composition of a TF question, with a fallback for legacy
-   * questions that don't carry {@code generation_metadata->'tfClauses'}.
-   *
-   * <p>When metadata is present we count clauses per cognitiveLevel (filtered
-   * by chapter when provided), folding English Bloom's labels onto the
-   * Vietnamese 4-tier scheme. When metadata is absent we approximate the
-   * question as 4 clauses at the question's own {@code cognitive_level} —
-   * required so legacy/hand-imported TF questions can still satisfy the
-   * matrix's strict clause requirement at generate time.
-   */
-  private Map<String, Integer> readClauseComposition(Question question, UUID chapterId) {
-    Map<String, Integer> composition = new HashMap<>();
-    if (question == null) return composition;
-
-    Map<String, Object> metadata = question.getGenerationMetadata();
-    if (metadata != null) {
-      Object raw = metadata.get("tfClauses");
-      if (raw instanceof Map<?, ?> tfClauses && !tfClauses.isEmpty()) {
-        for (Map.Entry<?, ?> clauseEntry : tfClauses.entrySet()) {
-          if (!(clauseEntry.getValue() instanceof Map<?, ?> clauseData)) continue;
-          Object clauseChapterId = clauseData.get("chapterId");
-          if (chapterId != null
-              && clauseChapterId != null
-              && !chapterId.toString().equals(clauseChapterId.toString())) continue;
-          Object clauseLevel = clauseData.get("cognitiveLevel");
-          if (clauseLevel != null) {
-            String folded = foldCognitiveLevel(clauseLevel.toString());
-            if (folded != null) composition.merge(folded, 1, Integer::sum);
-          }
-        }
-        if (!composition.isEmpty()) return composition;
-      }
-    }
-
-    if (question.getCognitiveLevel() != null) {
-      String folded = foldCognitiveLevel(question.getCognitiveLevel().name());
-      if (folded != null) composition.put(folded, 4);
-    }
-    return composition;
-  }
-
-  private static String foldCognitiveLevel(String raw) {
-    if (raw == null) return null;
-    return switch (raw) {
-      case "REMEMBER" -> "NHAN_BIET";
-      case "UNDERSTAND" -> "THONG_HIEU";
-      case "APPLY", "ANALYZE" -> "VAN_DUNG";
-      case "EVALUATE", "CREATE" -> "VAN_DUNG_CAO";
-      default -> raw;
-    };
-  }
-
-  // ========================================================================
   // Misc helpers
   // ========================================================================
 
@@ -620,6 +328,18 @@ public class QuestionSelectionServiceImpl implements QuestionSelectionService {
 
   private int requiredQuestions(ExamMatrixBankMapping mapping) {
     return mapping.getQuestionCount() != null ? Math.max(0, mapping.getQuestionCount()) : 0;
+  }
+
+  /**
+   * Resolve a matrix row's orderIndex for cell sorting. Rows without an
+   * explicit index sort last (Integer.MAX_VALUE) so they don't disturb the
+   * declared order.
+   */
+  private int rowOrderIndex(Map<UUID, ExamMatrixRow> rowById, UUID matrixRowId) {
+    if (matrixRowId == null) return Integer.MAX_VALUE;
+    ExamMatrixRow row = rowById.get(matrixRowId);
+    if (row == null || row.getOrderIndex() == null) return Integer.MAX_VALUE;
+    return row.getOrderIndex();
   }
 
   private List<Question> fetchQuestionsInOrder(List<UUID> selectedIds) {

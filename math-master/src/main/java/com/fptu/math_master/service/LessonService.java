@@ -21,5 +21,9 @@ public interface LessonService {
 
   void deleteLesson(UUID id);
 
+  LessonResponse restoreLesson(UUID id);
+
+  List<LessonResponse> getLessonsIncludingDeleted(UUID chapterId);
+
   List<LessonResponse> reorderLessons(UUID chapterId, ReorderLessonsRequest request);
 }

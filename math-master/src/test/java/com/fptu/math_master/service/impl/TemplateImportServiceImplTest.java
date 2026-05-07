@@ -573,7 +573,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
 
       // ===== ACT =====
       TemplateImportResponse response =
-          templateImportService.importTemplateFromFile(multipartFile, "Đại số", "Lớp 10", null);
+          templateImportService.importTemplateFromFile(multipartFile, "Đại số", "Lớp 10", null, null);
 
       // ===== ASSERT =====
       assertFalse(response.getAnalysisSuccessful());
@@ -601,7 +601,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
 
       // ===== ACT =====
       TemplateImportResponse response =
-          templateImportService.importTemplateFromFile(multipartFile, "Đại số", "Học kỳ 1", null);
+          templateImportService.importTemplateFromFile(multipartFile, "Đại số", "Học kỳ 1", null, null);
 
       // ===== ASSERT =====
       assertNotNull(response);
@@ -1282,7 +1282,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
               });
 
       TemplateImportResponse r =
-          templateImportService.importTemplateFromFile(multipartFile, "Algebra", "U1", null);
+          templateImportService.importTemplateFromFile(multipartFile, "Algebra", "U1", null, null);
 
       assertTrue(r.getAnalysisSuccessful());
       verify(questionTemplateRepository, times(1)).save(any(QuestionTemplate.class));
@@ -1303,7 +1303,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
           .thenThrow(new RuntimeException("db failure"));
 
       TemplateImportResponse r =
-          templateImportService.importTemplateFromFile(multipartFile, null, null, null);
+          templateImportService.importTemplateFromFile(multipartFile, null, null, null, null);
 
       assertTrue(r.getAnalysisSuccessful());
       assertTrue(
@@ -1323,7 +1323,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
           .thenReturn("  \n\t  ".getBytes(StandardCharsets.UTF_8));
 
       TemplateImportResponse r =
-          templateImportService.importTemplateFromFile(multipartFile, null, null, null);
+          templateImportService.importTemplateFromFile(multipartFile, null, null, null, null);
       assertFalse(r.getAnalysisSuccessful());
       assertTrue(
           r.getWarnings().stream()
@@ -1340,7 +1340,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
       when(multipartFile.getBytes()).thenThrow(new IOException("io"));
 
       TemplateImportResponse r =
-          templateImportService.importTemplateFromFile(multipartFile, null, null, null);
+          templateImportService.importTemplateFromFile(multipartFile, null, null, null, null);
       assertFalse(r.getAnalysisSuccessful());
       assertTrue(
           r.getWarnings().get(0).toLowerCase().contains("process")
@@ -1360,7 +1360,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
       when(questionBankRepository.findByIdAndNotDeleted(bankId)).thenReturn(Optional.empty());
 
       TemplateImportResponse r =
-          templateImportService.importTemplateFromFile(multipartFile, null, null, bankId);
+          templateImportService.importTemplateFromFile(multipartFile, null, null, bankId, null);
       assertFalse(r.getAnalysisSuccessful());
     }
 
@@ -1381,7 +1381,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
       when(questionBankRepository.findByIdAndNotDeleted(bankId)).thenReturn(Optional.of(bank));
 
       TemplateImportResponse r =
-          templateImportService.importTemplateFromFile(multipartFile, null, null, bankId);
+          templateImportService.importTemplateFromFile(multipartFile, null, null, bankId, null);
       assertFalse(r.getAnalysisSuccessful());
       assertTrue(
           r.getWarnings().get(0).toLowerCase().contains("process")
@@ -1410,7 +1410,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
           .thenAnswer(inv -> inv.getArgument(0));
 
       TemplateImportResponse r =
-          templateImportService.importTemplateFromFile(multipartFile, null, null, bankId);
+          templateImportService.importTemplateFromFile(multipartFile, null, null, bankId, null);
       assertTrue(r.getAnalysisSuccessful());
       verify(questionTemplateRepository, times(1)).save(any(QuestionTemplate.class));
     }
@@ -1445,7 +1445,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
 
       assertTrue(
           templateImportService
-              .importTemplateFromFile(multipartFile, null, null, bankId)
+              .importTemplateFromFile(multipartFile, null, null, bankId, null)
               .getAnalysisSuccessful());
     }
 
@@ -1459,7 +1459,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
       when(multipartFile.getBytes()).thenReturn("body".getBytes(StandardCharsets.UTF_8));
 
       TemplateImportResponse r =
-          templateImportService.importTemplateFromFile(multipartFile, null, null, null);
+          templateImportService.importTemplateFromFile(multipartFile, null, null, null, null);
       assertFalse(r.getAnalysisSuccessful());
       assertTrue(r.getWarnings().get(0).toLowerCase().contains("process"));
     }
@@ -1475,7 +1475,7 @@ class TemplateImportServiceImplTest extends BaseUnitTest {
       when(multipartFile.getBytes()).thenReturn(new byte[] {0x01, 0x02});
 
       TemplateImportResponse r =
-          templateImportService.importTemplateFromFile(multipartFile, null, null, null);
+          templateImportService.importTemplateFromFile(multipartFile, null, null, null, null);
       assertFalse(r.getAnalysisSuccessful());
     }
   }

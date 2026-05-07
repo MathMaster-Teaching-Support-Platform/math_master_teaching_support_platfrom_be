@@ -21,6 +21,10 @@ public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
   List<Chapter> findBySubjectIdAndNotDeleted(@Param("subjectId") UUID subjectId);
 
   @Query(
+      "SELECT c FROM Chapter c WHERE c.subjectId = :subjectId ORDER BY c.deletedAt IS NULL DESC, c.orderIndex")
+  List<Chapter> findBySubjectIdIncludingDeleted(@Param("subjectId") UUID subjectId);
+
+  @Query(
       "SELECT COUNT(c) FROM Chapter c WHERE c.curriculumId = :curriculumId AND c.deletedAt IS NULL")
   Long countByCurriculumIdAndNotDeleted(@Param("curriculumId") UUID curriculumId);
 
@@ -35,6 +39,12 @@ public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
           + " AND c.deletedAt IS NULL")
   Optional<Chapter> findByCurriculumIdAndTitleAndNotDeleted(
       @Param("curriculumId") UUID curriculumId, @Param("title") String title);
+
+  /** Lookup by title (case-insensitive) — used by Excel bulk import to resolve per-row chapterName. */
+  @Query(
+      "SELECT c FROM Chapter c WHERE LOWER(TRIM(c.title)) = LOWER(TRIM(:title))"
+          + " AND c.deletedAt IS NULL")
+  List<Chapter> findActiveByTitleIgnoreCase(@Param("title") String title);
 
   // Query to find chapter that contains a specific lesson (backward compatibility)
   @Query(

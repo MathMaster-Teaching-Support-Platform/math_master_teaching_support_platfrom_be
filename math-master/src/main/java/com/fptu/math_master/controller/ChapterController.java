@@ -21,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -117,5 +118,30 @@ public class ChapterController {
     log.info("DELETE /chapters/{}", chapterId);
     chapterService.deleteChapter(chapterId);
     return ApiResponse.<Void>builder().message("Chapter deleted successfully").build();
+  }
+
+  @Operation(
+      summary = "Restore a deleted chapter",
+      description = "Sets deletedAt=null, making the chapter visible again.")
+  @PatchMapping("/{chapterId}/restore")
+  @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+  public ApiResponse<ChapterResponse> restoreChapter(@PathVariable UUID chapterId) {
+    log.info("PATCH /chapters/{}/restore", chapterId);
+    return ApiResponse.<ChapterResponse>builder()
+        .message("Chapter restored successfully")
+        .result(chapterService.restoreChapter(chapterId))
+        .build();
+  }
+
+  @Operation(
+      summary = "List chapters by subject including deleted",
+      description = "Returns all chapters (active and soft-deleted). deleted=true means it was removed. For admin management.")
+  @GetMapping("/subject/{subjectId}/all")
+  public ApiResponse<List<ChapterResponse>> getChaptersBySubjectIncludingDeleted(
+      @PathVariable UUID subjectId) {
+    log.info("GET /chapters/subject/{}/all", subjectId);
+    return ApiResponse.<List<ChapterResponse>>builder()
+        .result(chapterService.getChaptersBySubjectIdIncludingDeleted(subjectId))
+        .build();
   }
 }

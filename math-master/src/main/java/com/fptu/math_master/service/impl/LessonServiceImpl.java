@@ -132,6 +132,27 @@ public class LessonServiceImpl implements LessonService {
 
   @Override
   @Transactional
+  public LessonResponse restoreLesson(UUID id) {
+    Lesson lesson = lessonRepository
+        .findById(id)
+        .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
+    lesson.setDeletedAt(null);
+    return toResponse(lessonRepository.save(lesson));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<LessonResponse> getLessonsIncludingDeleted(UUID chapterId) {
+    chapterRepository
+        .findById(chapterId)
+        .orElseThrow(() -> new AppException(ErrorCode.CHAPTER_NOT_FOUND));
+    return lessonRepository.findByChapterIdIncludingDeleted(chapterId).stream()
+        .map(l -> toResponse(l, true))
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  @Transactional
   public List<LessonResponse> reorderLessons(UUID chapterId, ReorderLessonsRequest request) {
     chapterRepository
         .findById(chapterId)
@@ -165,6 +186,10 @@ public class LessonServiceImpl implements LessonService {
   }
 
   private LessonResponse toResponse(Lesson l) {
+    return toResponse(l, false);
+  }
+
+  private LessonResponse toResponse(Lesson l, boolean includeDeletedFlag) {
     return LessonResponse.builder()
         .id(l.getId())
         .chapterId(l.getChapterId())
@@ -176,6 +201,7 @@ public class LessonServiceImpl implements LessonService {
         .durationMinutes(l.getDurationMinutes())
         .difficulty(l.getDifficulty())
         .status(l.getStatus())
+        .deleted(includeDeletedFlag && l.getDeletedAt() != null)
         .createdAt(l.getCreatedAt())
         .updatedAt(l.getUpdatedAt())
         .build();

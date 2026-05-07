@@ -11,6 +11,8 @@ import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Builder
 @AllArgsConstructor
@@ -95,5 +97,6 @@ public class AssessmentQuestion extends BaseEntity {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "matrix_bank_mapping_id", insertable = false, updatable = false)
+  @OnDelete(action = OnDeleteAction.SET_NULL)
   private ExamMatrixBankMapping examMatrixBankMapping;
 }

@@ -144,15 +144,24 @@ public class QuestionTemplateController {
   public ApiResponse<Page<QuestionTemplateResponse>> getMyQuestionTemplates(
       @RequestParam(required = false) String search,
       @RequestParam(required = false) TemplateStatus status,
+      @RequestParam(required = false) UUID gradeId,
+      @RequestParam(required = false) UUID chapterId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(defaultValue = "createdAt") String sortBy,
       @RequestParam(defaultValue = "DESC") String sortDirection) {
-    log.info("REST request to get my question templates, page: {}, size: {}", page, size);
+    log.info(
+        "REST request to get my question templates, gradeId={}, chapterId={}, page={}, size={}",
+        gradeId,
+        chapterId,
+        page,
+        size);
     Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
     Pageable pageable = PageRequest.of(page, size, sort);
     return ApiResponse.<Page<QuestionTemplateResponse>>builder()
-        .result(questionTemplateService.getMyQuestionTemplatesFiltered(search, status, pageable))
+        .result(
+            questionTemplateService.getMyQuestionTemplatesFiltered(
+                search, status, gradeId, chapterId, pageable))
         .build();
   }
 
@@ -319,11 +328,15 @@ public class QuestionTemplateController {
       @RequestParam("file") MultipartFile file,
       @RequestParam(required = false) String subjectHint,
       @RequestParam(required = false) String contextHint,
-      @RequestParam(required = false) UUID questionBankId) {
-    log.info("REST request to import template from file: {}", file.getOriginalFilename());
+      @RequestParam(required = false) UUID questionBankId,
+      @RequestParam UUID chapterId) {
+    log.info(
+        "REST request to import template from file: {}, chapterId={}",
+        file.getOriginalFilename(),
+        chapterId);
     TemplateImportResponse response =
         templateImportService.importTemplateFromFile(
-            file, subjectHint, contextHint, questionBankId);
+            file, subjectHint, contextHint, questionBankId, chapterId);
     String message =
         response.getAnalysisSuccessful()
             ? "Template analysis completed. Please review and edit the suggested template before saving."

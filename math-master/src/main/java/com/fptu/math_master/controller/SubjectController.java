@@ -19,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -60,6 +61,16 @@ public class SubjectController {
   public ApiResponse<List<SubjectResponse>> getAllSubjects() {
     return ApiResponse.<List<SubjectResponse>>builder()
         .result(subjectService.getAllSubjects())
+        .build();
+  }
+
+  @GetMapping("/all")
+  @Operation(
+      summary = "List all subjects including inactive",
+      description = "Returns both active and inactive subjects. For admin management page.")
+  public ApiResponse<List<SubjectResponse>> getAllSubjectsIncludingInactive() {
+    return ApiResponse.<List<SubjectResponse>>builder()
+        .result(subjectService.getAllSubjectsIncludingInactive())
         .build();
   }
 
@@ -140,5 +151,16 @@ public class SubjectController {
     log.info("REST request to deactivate subject: {}", subjectId);
     subjectService.deactivateSubject(subjectId);
     return ApiResponse.<Void>builder().message("Subject deactivated successfully.").build();
+  }
+
+  @PatchMapping("/{subjectId}/activate")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(summary = "Re-activate a deactivated subject")
+  public ApiResponse<SubjectResponse> activateSubject(@PathVariable UUID subjectId) {
+    log.info("REST request to activate subject: {}", subjectId);
+    return ApiResponse.<SubjectResponse>builder()
+        .message("Subject activated successfully.")
+        .result(subjectService.activateSubject(subjectId))
+        .build();
   }
 }

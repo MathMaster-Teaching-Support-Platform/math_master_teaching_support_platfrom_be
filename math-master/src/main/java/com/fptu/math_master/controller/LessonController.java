@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -100,6 +101,31 @@ public class LessonController {
     return ApiResponse.<List<LessonResponse>>builder()
         .message("Lessons reordered successfully")
         .result(lessonService.reorderLessons(chapterId, request))
+        .build();
+  }
+
+  @PatchMapping("/{lessonId}/restore")
+  @PreAuthorize("hasRole('ADMIN')")
+  @Operation(
+      summary = "Restore a deleted lesson",
+      description = "Sets deletedAt=null, making the lesson visible again.")
+  public ApiResponse<LessonResponse> restoreLesson(@PathVariable UUID lessonId) {
+    log.info("PATCH /lessons/{}/restore", lessonId);
+    return ApiResponse.<LessonResponse>builder()
+        .message("Lesson restored successfully")
+        .result(lessonService.restoreLesson(lessonId))
+        .build();
+  }
+
+  @GetMapping("/chapter/{chapterId}/all")
+  @Operation(
+      summary = "List lessons by chapter including deleted",
+      description = "Returns all lessons (active and soft-deleted). deleted=true means it was removed. For admin management.")
+  public ApiResponse<List<LessonResponse>> getLessonsIncludingDeleted(
+      @PathVariable UUID chapterId) {
+    log.info("GET /lessons/chapter/{}/all", chapterId);
+    return ApiResponse.<List<LessonResponse>>builder()
+        .result(lessonService.getLessonsIncludingDeleted(chapterId))
         .build();
   }
 }

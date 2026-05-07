@@ -13,6 +13,7 @@ import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.service.ExcelImportService;
 import com.fptu.math_master.util.SecurityUtils;
@@ -63,6 +64,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class ExcelImportServiceImpl implements ExcelImportService {
 
   QuestionTemplateRepository questionTemplateRepository;
+  ChapterRepository chapterRepository;
   Validator validator;
   ObjectMapper objectMapper;
 
@@ -173,7 +175,15 @@ public class ExcelImportServiceImpl implements ExcelImportService {
   @Transactional
   public TemplateBatchImportResponse importTemplatesBatch(
       QuestionTemplateBatchImportRequest request) {
-    log.info("Importing {} templates in batch", request.getTemplates().size());
+    log.info(
+        "Importing {} templates in batch, fallbackChapterId={}",
+        request.getTemplates().size(),
+        request.getChapterId());
+
+    UUID fallbackChapterId = request.getChapterId();
+    if (fallbackChapterId != null && !chapterRepository.existsById(fallbackChapterId)) {
+      throw new AppException(ErrorCode.CHAPTER_NOT_FOUND);
+    }
 
     UUID currentUserId = SecurityUtils.getCurrentUserId();
     List<QuestionTemplateResponse> successfulTemplates = new ArrayList<>();
@@ -182,7 +192,19 @@ public class ExcelImportServiceImpl implements ExcelImportService {
     int rowNumber = 1;
     for (QuestionTemplateRequest templateRequest : request.getTemplates()) {
       try {
+        UUID rowChapterId =
+            templateRequest.getChapterId() != null
+                ? templateRequest.getChapterId()
+                : fallbackChapterId;
+        if (rowChapterId == null) {
+          throw new IllegalArgumentException(
+              "chapterId is required for this row (set per-row or batch-level)");
+        }
+        if (!chapterRepository.existsById(rowChapterId)) {
+          throw new IllegalArgumentException("chapterId does not exist: " + rowChapterId);
+        }
         QuestionTemplate template = createTemplateEntity(templateRequest, currentUserId);
+        template.setChapterId(rowChapterId);
         template = questionTemplateRepository.save(template);
         successfulTemplates.add(mapToResponse(template));
         log.debug("Successfully imported template: {}", template.getName());

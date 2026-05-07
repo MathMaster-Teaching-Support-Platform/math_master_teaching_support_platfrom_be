@@ -17,6 +17,9 @@ public class ChapterResponse {
   private String title;
   private String description;
   private Integer orderIndex;
+  /** true nếu chapter đã bị soft-delete (FE hiển thị màu khác). */
+  @Builder.Default
+  private boolean deleted = false;
   private Instant createdAt;
   private Instant updatedAt;
 }
