@@ -41,18 +41,41 @@ public interface QuestionTemplateRepository extends JpaRepository<QuestionTempla
       @Param("createdBy") UUID createdBy, Pageable pageable);
 
   /**
-   * Teacher's own templates with optional search term and status filter.
+   * Teacher's own templates with optional search term, status, grade, and chapter filters.
+   * Grade is resolved via the academic chain: Chapter -> Subject -> SchoolGrade. Going
+   * through the bank misses templates created without a bank anchor.
+   *
+   * <p>Explicit {@code countQuery} is required because Spring Data cannot derive a
+   * correct count when {@code JOIN FETCH} is mixed with extra theta joins — without
+   * it pagination silently reports {@code totalPages=1} regardless of actual size.
    */
   @Query(
-      "SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator "
-          + "WHERE t.deletedAt IS NULL AND t.createdBy = :createdBy "
-          + "AND (:status IS NULL OR t.status = :status) "
-          + "AND (:search IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', CAST(:search as string), '%')) "
-          + "     OR LOWER(COALESCE(t.description, '')) LIKE LOWER(CONCAT('%', CAST(:search as string), '%')))")
+      value =
+          "SELECT t FROM QuestionTemplate t LEFT JOIN FETCH t.creator "
+              + "LEFT JOIN Chapter c ON c.id = t.chapterId "
+              + "LEFT JOIN Subject s ON s.id = c.subjectId "
+              + "WHERE t.deletedAt IS NULL AND t.createdBy = :createdBy "
+              + "AND (:status IS NULL OR t.status = :status) "
+              + "AND (:gradeId IS NULL OR s.schoolGradeId = :gradeId) "
+              + "AND (:chapterId IS NULL OR t.chapterId = :chapterId) "
+              + "AND (:search IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', CAST(:search as string), '%')) "
+              + "     OR LOWER(COALESCE(t.description, '')) LIKE LOWER(CONCAT('%', CAST(:search as string), '%')))",
+      countQuery =
+          "SELECT COUNT(t) FROM QuestionTemplate t "
+              + "LEFT JOIN Chapter c ON c.id = t.chapterId "
+              + "LEFT JOIN Subject s ON s.id = c.subjectId "
+              + "WHERE t.deletedAt IS NULL AND t.createdBy = :createdBy "
+              + "AND (:status IS NULL OR t.status = :status) "
+              + "AND (:gradeId IS NULL OR s.schoolGradeId = :gradeId) "
+              + "AND (:chapterId IS NULL OR t.chapterId = :chapterId) "
+              + "AND (:search IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', CAST(:search as string), '%')) "
+              + "     OR LOWER(COALESCE(t.description, '')) LIKE LOWER(CONCAT('%', CAST(:search as string), '%')))")
   Page<QuestionTemplate> findByCreatedByWithSearch(
       @Param("createdBy") UUID createdBy,
       @Param("status") TemplateStatus status,
       @Param("search") String search,
+      @Param("gradeId") UUID gradeId,
+      @Param("chapterId") UUID chapterId,
       Pageable pageable);
 
   /**

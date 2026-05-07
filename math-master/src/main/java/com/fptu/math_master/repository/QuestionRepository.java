@@ -70,21 +70,31 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
       nativeQuery = true,
       value =
           "SELECT q.* FROM questions q "
+              + "LEFT JOIN chapters c ON c.id = q.chapter_id "
+              + "LEFT JOIN subjects s ON s.id = c.subject_id "
               + "WHERE q.deleted_at IS NULL "
               + "AND q.created_by = :createdBy "
               + "AND (CAST(:name AS text) IS NULL OR q.question_text ILIKE CAST(:name AS text)) "
               + "AND (CAST(:tag AS text) IS NULL OR EXISTS (SELECT 1 FROM unnest(q.tags) t WHERE t ILIKE CAST(:tag AS text))) "
+              + "AND (CAST(:gradeId AS uuid) IS NULL OR s.school_grade_id = CAST(:gradeId AS uuid)) "
+              + "AND (CAST(:chapterId AS uuid) IS NULL OR q.chapter_id = CAST(:chapterId AS uuid)) "
               + "ORDER BY q.created_at DESC",
       countQuery =
           "SELECT COUNT(*) FROM questions q "
+              + "LEFT JOIN chapters c ON c.id = q.chapter_id "
+              + "LEFT JOIN subjects s ON s.id = c.subject_id "
               + "WHERE q.deleted_at IS NULL "
               + "AND q.created_by = :createdBy "
               + "AND (CAST(:name AS text) IS NULL OR q.question_text ILIKE CAST(:name AS text)) "
-              + "AND (CAST(:tag AS text) IS NULL OR EXISTS (SELECT 1 FROM unnest(q.tags) t WHERE t ILIKE CAST(:tag AS text)))")
+              + "AND (CAST(:tag AS text) IS NULL OR EXISTS (SELECT 1 FROM unnest(q.tags) t WHERE t ILIKE CAST(:tag AS text))) "
+              + "AND (CAST(:gradeId AS uuid) IS NULL OR s.school_grade_id = CAST(:gradeId AS uuid)) "
+              + "AND (CAST(:chapterId AS uuid) IS NULL OR q.chapter_id = CAST(:chapterId AS uuid))")
   Page<Question> findByCreatedByWithSearch(
       @Param("createdBy") UUID createdBy,
       @Param("name") String name,
       @Param("tag") String tag,
+      @Param("gradeId") UUID gradeId,
+      @Param("chapterId") UUID chapterId,
       Pageable pageable);
 
   /**

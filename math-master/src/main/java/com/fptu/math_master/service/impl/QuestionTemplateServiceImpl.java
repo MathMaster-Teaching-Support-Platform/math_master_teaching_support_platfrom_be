@@ -367,11 +367,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   @Override
   @Transactional(readOnly = true)
   public Page<QuestionTemplateResponse> getMyQuestionTemplatesFiltered(
-      String search, TemplateStatus status, Pageable pageable) {
+      String search, TemplateStatus status, UUID gradeId, UUID chapterId, Pageable pageable) {
     UUID currentUserId = SecurityUtils.getCurrentUserId();
     String searchTerm = (search != null && !search.isBlank()) ? search.trim() : null;
     return questionTemplateRepository
-        .findByCreatedByWithSearch(currentUserId, status, searchTerm, pageable)
+        .findByCreatedByWithSearch(currentUserId, status, searchTerm, gradeId, chapterId, pageable)
         .map(this::mapToResponse);
   }
 

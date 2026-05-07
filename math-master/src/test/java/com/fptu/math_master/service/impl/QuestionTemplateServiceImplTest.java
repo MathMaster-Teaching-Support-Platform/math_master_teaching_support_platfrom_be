@@ -831,13 +831,14 @@ class QuestionTemplateServiceImplTest extends BaseUnitTest {
       mockJwtTeacher(OWNER_ID);
       Pageable pageable = PageRequest.of(0, 5);
       when(questionTemplateRepository.findByCreatedByWithSearch(
-              eq(OWNER_ID), eq(TemplateStatus.DRAFT), eq(null), eq(pageable)))
+              eq(OWNER_ID), eq(TemplateStatus.DRAFT), eq(null), eq(null), eq(null), eq(pageable)))
           .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
-      questionTemplateService.getMyQuestionTemplatesFiltered("   \t", TemplateStatus.DRAFT, pageable);
+      questionTemplateService.getMyQuestionTemplatesFiltered(
+          "   \t", TemplateStatus.DRAFT, null, null, pageable);
 
       verify(questionTemplateRepository, times(1))
-          .findByCreatedByWithSearch(OWNER_ID, TemplateStatus.DRAFT, null, pageable);
+          .findByCreatedByWithSearch(OWNER_ID, TemplateStatus.DRAFT, null, null, null, pageable);
     }
 
     /**
@@ -853,13 +854,14 @@ class QuestionTemplateServiceImplTest extends BaseUnitTest {
       mockJwtTeacher(OWNER_ID);
       Pageable pageable = PageRequest.of(0, 5);
       when(questionTemplateRepository.findByCreatedByWithSearch(
-              eq(OWNER_ID), eq(null), eq("đạo hàm"), eq(pageable)))
+              eq(OWNER_ID), eq(null), eq("đạo hàm"), eq(null), eq(null), eq(pageable)))
           .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
-      questionTemplateService.getMyQuestionTemplatesFiltered("  đạo hàm  ", null, pageable);
+      questionTemplateService.getMyQuestionTemplatesFiltered(
+          "  đạo hàm  ", null, null, null, pageable);
 
       verify(questionTemplateRepository, times(1))
-          .findByCreatedByWithSearch(OWNER_ID, null, "đạo hàm", pageable);
+          .findByCreatedByWithSearch(OWNER_ID, null, "đạo hàm", null, null, pageable);
     }
 
     /**

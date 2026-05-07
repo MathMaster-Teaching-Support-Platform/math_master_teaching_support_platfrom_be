@@ -90,16 +90,26 @@ public class QuestionController {
           String sortBy,
       @Parameter(description = "Sort direction") @RequestParam(defaultValue = "DESC") String sort,
       @Parameter(description = "Search by question text") @RequestParam(required = false) String name,
-      @Parameter(description = "Search by tag") @RequestParam(required = false) String tag) {
+      @Parameter(description = "Search by tag") @RequestParam(required = false) String tag,
+      @Parameter(description = "Filter by grade (school_grade_id)")
+          @RequestParam(required = false)
+          UUID gradeId,
+      @Parameter(description = "Filter by chapter") @RequestParam(required = false) UUID chapterId) {
 
-    log.info("REST request to get my questions: page={}, size={}, name={}, tag={}", page, size, name, tag);
+    log.info(
+        "REST request to get my questions: page={}, size={}, name={}, gradeId={}, chapterId={}",
+        page,
+        size,
+        name,
+        gradeId,
+        chapterId);
 
     Sort.Direction sortDirection = Sort.Direction.fromString(sort.toUpperCase());
     Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
 
     return ApiResponse.<Page<QuestionResponse>>builder()
         .message("Questions retrieved successfully")
-        .result(questionService.getMyQuestions(name, tag, pageable))
+        .result(questionService.getMyQuestions(name, tag, gradeId, chapterId, pageable))
         .build();
   }
 

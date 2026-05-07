@@ -61,7 +61,7 @@ public interface QuestionTemplateService {
   Page<QuestionTemplateResponse> getMyQuestionTemplates(Pageable pageable);
 
   Page<QuestionTemplateResponse> getMyQuestionTemplatesFiltered(
-      String search, TemplateStatus status, Pageable pageable);
+      String search, TemplateStatus status, UUID gradeId, UUID chapterId, Pageable pageable);
 
   Page<QuestionTemplateResponse> searchQuestionTemplates(
       QuestionType templateType,

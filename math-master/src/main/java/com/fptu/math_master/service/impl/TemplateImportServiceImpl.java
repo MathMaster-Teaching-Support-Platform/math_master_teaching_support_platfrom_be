@@ -10,6 +10,7 @@ import com.fptu.math_master.enums.QuestionType;
 import com.fptu.math_master.enums.TemplateStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.QuestionBankRepository;
 import com.fptu.math_master.repository.QuestionTemplateRepository;
 import com.fptu.math_master.repository.UserRepository;
@@ -50,6 +51,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
   GeminiService geminiService;
   QuestionTemplateRepository questionTemplateRepository;
   QuestionBankRepository questionBankRepository;
+  ChapterRepository chapterRepository;
   UserRepository userRepository;
   ObjectMapper objectMapper = new ObjectMapper();
 
@@ -63,13 +65,25 @@ public class TemplateImportServiceImpl implements TemplateImportService {
 
   @Override
   public TemplateImportResponse importTemplateFromFile(
-      MultipartFile file, String subjectHint, String contextHint, UUID questionBankId) {
+      MultipartFile file,
+      String subjectHint,
+      String contextHint,
+      UUID questionBankId,
+      UUID chapterId) {
 
-    log.info("Importing template from file: {}", file.getOriginalFilename());
+    log.info(
+        "Importing template from file: {}, chapterId={}", file.getOriginalFilename(), chapterId);
 
     // Validate file
     if (!validateFile(file)) {
       return createErrorResponse("Invalid file format or size");
+    }
+
+    if (chapterId == null) {
+      throw new AppException(ErrorCode.INVALID_KEY);
+    }
+    if (!chapterRepository.existsById(chapterId)) {
+      throw new AppException(ErrorCode.CHAPTER_NOT_FOUND);
     }
 
     try {
@@ -95,7 +109,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
       if (response.getAnalysisSuccessful() && response.getSuggestedTemplate() != null) {
         try {
           QuestionTemplate savedTemplate =
-              saveDraftTemplate(response, currentUserId, questionBankId);
+              saveDraftTemplate(response, currentUserId, questionBankId, chapterId);
           log.info("Saved template as DRAFT with ID: {}", savedTemplate.getId());
         } catch (Exception e) {
           log.error("Failed to save template as DRAFT: {}", e.getMessage(), e);
@@ -848,7 +862,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
    * @return Saved QuestionTemplate entity
    */
   private QuestionTemplate saveDraftTemplate(
-      TemplateImportResponse response, UUID currentUserId, UUID questionBankId) {
+      TemplateImportResponse response, UUID currentUserId, UUID questionBankId, UUID chapterId) {
     TemplateImportResponse.TemplateDraft draft = response.getSuggestedTemplate();
 
     // Convert templateText Map<String, String> to Map<String, Object> for JSONB
@@ -861,6 +875,7 @@ public class TemplateImportServiceImpl implements TemplateImportService {
     QuestionTemplate template =
         QuestionTemplate.builder()
             .questionBankId(questionBankId)
+            .chapterId(chapterId)
             .name(draft.getName() != null ? draft.getName() : "Imported Template")
             .description(
                 draft.getDescription() != null

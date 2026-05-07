@@ -25,7 +25,8 @@ public interface QuestionService {
   /**
    * Get all questions created by current teacher
    */
-  Page<QuestionResponse> getMyQuestions(String name, String tag, Pageable pageable);
+  Page<QuestionResponse> getMyQuestions(
+      String name, String tag, UUID gradeId, UUID chapterId, Pageable pageable);
 
   /**
    * Get questions by question bank
