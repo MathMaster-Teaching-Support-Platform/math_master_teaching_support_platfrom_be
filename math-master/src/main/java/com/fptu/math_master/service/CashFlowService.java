@@ -34,9 +34,10 @@ public class CashFlowService {
 
     TransactionRepository transactionRepository;
 
+    // INFLOW = real money entering the platform (via PayOS deposit only).
+    // PAYMENT (subscription) is a student expense — deducted from student wallet, NOT a new inflow.
     private static final List<String> INFLOW_TYPES_STR = List.of(
-        TransactionType.DEPOSIT.name(),
-        TransactionType.PAYMENT.name()
+        TransactionType.DEPOSIT.name()
     );
 
     private static final List<String> OUTFLOW_TYPES_STR = List.of(
@@ -44,8 +45,7 @@ public class CashFlowService {
     );
 
     private static final List<TransactionType> INFLOW_TYPES = List.of(
-        TransactionType.DEPOSIT,
-        TransactionType.PAYMENT
+        TransactionType.DEPOSIT
     );
 
     private static final List<TransactionType> OUTFLOW_TYPES = List.of(
