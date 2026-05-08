@@ -384,6 +384,8 @@ public class ApplicationInitLogicImpl implements ApplicationInitLogic {
     createTokenCostIfNotExists("slide", "Gen Slide", 10);
     createTokenCostIfNotExists("mindmap", "Gen Mindmap", 5);
     createTokenCostIfNotExists("chat", "AI Chat", 1);
+    createTokenCostIfNotExists("question-blueprint", "Tạo mẫu từ câu hỏi (AI)", 1);
+    createTokenCostIfNotExists("question-generate", "Sinh câu hỏi từ mẫu (AI)", 1);
   }
 
   private void createTokenCostIfNotExists(String key, String label, int cost) {
