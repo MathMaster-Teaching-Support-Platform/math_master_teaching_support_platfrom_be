@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.fptu.math_master.dto.request.BulkPageMappingRequest;
+import com.fptu.math_master.dto.request.BulkSeriesPageMappingRequest;
 import com.fptu.math_master.dto.request.CreateBookRequest;
 import com.fptu.math_master.dto.request.UpdateBookRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -103,6 +104,7 @@ public class BookController {
   public ApiResponse<Page<BookResponse>> search(
       @RequestParam(required = false) UUID schoolGradeId,
       @RequestParam(required = false) UUID subjectId,
+      @RequestParam(required = false) UUID bookSeriesId,
       @RequestParam(required = false) UUID curriculumId,
       @RequestParam(required = false) UUID chapterId,
       @RequestParam(required = false) UUID lessonId,
@@ -113,7 +115,14 @@ public class BookController {
     return ApiResponse.<Page<BookResponse>>builder()
         .result(
             bookService.search(
-                schoolGradeId, subjectId, curriculumId, chapterId, lessonId, status, pageable))
+                schoolGradeId,
+                subjectId,
+                bookSeriesId,
+                curriculumId,
+                chapterId,
+                lessonId,
+                status,
+                pageable))
         .build();
   }
 
@@ -200,6 +209,32 @@ public class BookController {
     UUID actorId = UUID.fromString(jwt.getSubject());
     return ApiResponse.<List<BookLessonPageResponse>>builder()
         .result(bookLessonPageService.bulkUpsert(id, request, actorId))
+        .build();
+  }
+
+  @Operation(
+      summary = "Get series mapping (lesson -> assigned book -> page range)",
+      description = "Reads mapping across all books that belong to the same series as the anchor book.")
+  @GetMapping("/{id}/series-page-mapping")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<List<BookLessonPageResponse>> getSeriesPageMapping(@PathVariable UUID id) {
+    return ApiResponse.<List<BookLessonPageResponse>>builder()
+        .result(bookLessonPageService.listForSeriesByBook(id))
+        .build();
+  }
+
+  @Operation(
+      summary = "Replace series mapping and sync per-book mappings",
+      description = "One lesson is assigned to exactly one book in the same series.")
+  @PutMapping("/{id}/series-page-mapping")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<List<BookLessonPageResponse>> bulkUpsertSeriesPageMapping(
+      @PathVariable UUID id,
+      @Valid @RequestBody BulkSeriesPageMappingRequest request,
+      @AuthenticationPrincipal Jwt jwt) {
+    UUID actorId = UUID.fromString(jwt.getSubject());
+    return ApiResponse.<List<BookLessonPageResponse>>builder()
+        .result(bookLessonPageService.bulkUpsertSeriesByBook(id, request, actorId))
         .build();
   }
 

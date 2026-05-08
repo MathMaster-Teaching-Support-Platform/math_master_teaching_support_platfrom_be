@@ -23,6 +23,9 @@ public class CreateBookRequest {
   @NotNull(message = "subjectId is required")
   private UUID subjectId;
 
+  /** Optional; if omitted, backend may create a new series automatically. */
+  private UUID bookSeriesId;
+
   /** Optional — admins may attach a curriculum later; tree navigation is by subject. */
   private UUID curriculumId;
 

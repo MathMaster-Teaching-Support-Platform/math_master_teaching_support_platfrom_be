@@ -12,6 +12,7 @@ import com.fptu.math_master.dto.response.BlueprintParameter;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.service.BlueprintService;
 import com.fptu.math_master.service.GeminiService;
+import com.fptu.math_master.service.TokenCostConfigService;
 import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.PromptLoader;
 import com.fptu.math_master.util.SecurityUtils;
@@ -60,6 +61,7 @@ public class BlueprintServiceImpl implements BlueprintService {
   private final GeminiService geminiService;
   private final PromptLoader promptLoader;
   private final UserSubscriptionService userSubscriptionService;
+  private final TokenCostConfigService tokenCostConfigService;
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   // ───────────────────────────── Method 1: reverse-templating ─────────────────────────────
@@ -77,10 +79,15 @@ public class BlueprintServiceImpl implements BlueprintService {
       throw new RuntimeException("AI reverse-templating failed: " + e.getMessage(), e);
     }
 
-    // Token deduction: 1 token per blueprint, ADMIN exempt. Runs after a successful
-    // AI response so the user is never charged for a failed call.
+    // Token deduction: cost is admin-configurable via TokenCostConfig
+    // (featureKey="question-blueprint", default 1). ADMIN exempt. Runs after
+    // a successful AI response so the user is never charged for a failed call.
+    // costPerUse=0 means the feature is free.
     if (!SecurityUtils.hasRole("ADMIN")) {
-      userSubscriptionService.consumeMyTokens(1, "BLUEPRINT_FROM_QUESTION");
+      Integer cost = tokenCostConfigService.getCostPerUse("question-blueprint");
+      if (cost != null && cost > 0) {
+        userSubscriptionService.consumeMyTokens(cost, "BLUEPRINT_FROM_QUESTION");
+      }
     }
 
     JsonNode root = parseJsonOrThrow(aiContent, "reverse-template");

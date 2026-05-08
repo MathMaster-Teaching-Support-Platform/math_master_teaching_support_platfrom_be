@@ -13,7 +13,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class BookLessonPageResponse {
   private UUID id;
+  private UUID bookSeriesId;
   private UUID bookId;
+  private String bookTitle;
   private UUID lessonId;
   private String lessonTitle;
   private UUID chapterId;

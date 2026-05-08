@@ -18,6 +18,8 @@ public class BookResponse {
   private String schoolGradeName;
   private UUID subjectId;
   private String subjectName;
+  private UUID bookSeriesId;
+  private String bookSeriesName;
   private UUID curriculumId;
   private String curriculumName;
   private String title;

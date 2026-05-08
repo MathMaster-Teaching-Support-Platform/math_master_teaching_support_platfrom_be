@@ -22,6 +22,7 @@ public interface BookService {
   Page<BookResponse> search(
       UUID schoolGradeId,
       UUID subjectId,
+      UUID bookSeriesId,
       UUID curriculumId,
       UUID chapterId,
       UUID lessonId,
