@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.http.client.OkHttp3ClientHttpRequestFactory;
+
+import java.nio.charset.StandardCharsets;
 import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpStatusCodeException;
@@ -417,17 +419,39 @@ public class CrawlDataProxyController {
                                                        : new HttpEntity<>(headers);
 
         try {
-            return restTemplate.exchange(
+            ResponseEntity<byte[]> response = restTemplate.exchange(
                     URI.create(targetUrl),
                     HttpMethod.valueOf(request.getMethod()),
                     entity,
                     byte[].class);
+            return rewriteStaticUrls(response);
         } catch (HttpStatusCodeException ex) {
             return ResponseEntity
                     .status(ex.getStatusCode())
                     .headers(ex.getResponseHeaders())
                     .body(ex.getResponseBodyAsByteArray());
         }
+    }
+
+    /**
+     * Rewrites "/static/" paths in JSON responses to go through our proxy endpoint
+     * so FE can load images via Spring Boot (which proxies back to Python).
+     */
+    private ResponseEntity<byte[]> rewriteStaticUrls(ResponseEntity<byte[]> response) {
+        MediaType contentType = response.getHeaders().getContentType();
+        byte[] body = response.getBody();
+        if (body != null && contentType != null && contentType.isCompatibleWith(MediaType.APPLICATION_JSON)) {
+            String json = new String(body, StandardCharsets.UTF_8);
+            if (json.contains("\"/static/")) {
+                json = json.replace("\"/static/", "\"/api/v1/crawl-data/static/");
+                body = json.getBytes(StandardCharsets.UTF_8);
+                HttpHeaders headers = new HttpHeaders();
+                headers.putAll(response.getHeaders());
+                headers.setContentLength(body.length);
+                return ResponseEntity.status(response.getStatusCode()).headers(headers).body(body);
+            }
+        }
+        return response;
     }
 
     /**
