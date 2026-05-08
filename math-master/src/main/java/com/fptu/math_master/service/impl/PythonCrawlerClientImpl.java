@@ -27,6 +27,8 @@ import org.springframework.web.client.RestClientResponseException;
 public class PythonCrawlerClientImpl implements PythonCrawlerClient {
 
   private static final String BASE = "/api/v1";
+  private static final String STATIC_PREFIX = "/static/";
+  private static final String STATIC_PROXY_PREFIX = "/api/v1/crawl-data/static/";
 
   private final RestClient restClient;
 
@@ -106,7 +108,7 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
               .uri(BASE + "/books/{bookId}/lessons/{lessonId}/pages", bookId, lessonId)
               .retrieve()
               .body(new ParameterizedTypeReference<List<LessonPageResponse>>() {});
-      return pages == null ? Collections.emptyList() : pages;
+      return pages == null ? Collections.emptyList() : normalizePages(pages);
     } catch (HttpClientErrorException.NotFound nf) {
       return Collections.emptyList();
     } catch (ResourceAccessException ex) {
@@ -130,7 +132,7 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
                   })
               .retrieve()
               .body(new ParameterizedTypeReference<List<LessonPageResponse>>() {});
-      return pages == null ? Collections.emptyList() : pages;
+      return pages == null ? Collections.emptyList() : normalizePages(pages);
     } catch (HttpClientErrorException.NotFound nf) {
       return Collections.emptyList();
     } catch (ResourceAccessException ex) {
@@ -151,7 +153,7 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
                   pageNumber)
               .retrieve()
               .body(LessonPageResponse.class);
-      return Optional.ofNullable(page);
+      return Optional.ofNullable(page).map(this::normalizePage);
     } catch (HttpClientErrorException.NotFound nf) {
       return Optional.empty();
     } catch (ResourceAccessException ex) {
@@ -211,7 +213,7 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
         if (updated == null) {
           throw new AppException(ErrorCode.LESSON_PAGE_NOT_FOUND);
         }
-        return updated;
+        return normalizePage(updated);
       } catch (ResourceAccessException ex) {
         Throwable root = ex;
         while (root.getCause() != null && root.getCause() != root) {
@@ -280,4 +282,37 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
 
   /** Internal — must match Python /verification response shape. */
   private record VerifyState(Boolean fullyVerified, Integer totalPages, Integer verifiedPages) {}
+
+  private List<LessonPageResponse> normalizePages(List<LessonPageResponse> pages) {
+    pages.forEach(this::normalizePage);
+    return pages;
+  }
+
+  private LessonPageResponse normalizePage(LessonPageResponse page) {
+    if (page == null) {
+      return null;
+    }
+    page.setRawImageUrl(rewriteStaticPath(page.getRawImageUrl()));
+    if (page.getContentBlocks() != null) {
+      page.getContentBlocks().forEach(block -> {
+        block.setImageUrl(rewriteStaticPath(block.getImageUrl()));
+        block.setImagePath(rewriteStaticPath(block.getImagePath()));
+        block.setThumbnailUrl(rewriteStaticPath(block.getThumbnailUrl()));
+      });
+    }
+    return page;
+  }
+
+  private String rewriteStaticPath(String path) {
+    if (path == null || path.isBlank()) {
+      return path;
+    }
+    if (path.startsWith(STATIC_PROXY_PREFIX) || path.startsWith("http://") || path.startsWith("https://")) {
+      return path;
+    }
+    if (path.startsWith(STATIC_PREFIX)) {
+      return STATIC_PROXY_PREFIX + path.substring(STATIC_PREFIX.length());
+    }
+    return path;
+  }
 }
