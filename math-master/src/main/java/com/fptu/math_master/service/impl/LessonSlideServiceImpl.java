@@ -1097,10 +1097,13 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
     return value
         .replace("\\r\\n", "\n")
-        .replace("\\n", "\n")
+        // Replace literal \n only when NOT followed by a letter (to avoid breaking LaTeX
+        // commands like \neq, \not, \nabla, etc. that contain \n as a substring).
+        .replaceAll("\\\\n(?![a-zA-Z])", "\n")
+        // Convert \\ used as an inline separator (e.g. " \\ " or " \\\\ ") to a real newline.
+        // AI frequently uses \\ or \\\\ between sentences as a paragraph/line separator.
+        .replaceAll("\\h*\\\\{2,}\\h+", "\n")
         // Convert LaTeX line-break command \\ at the end of a line to a real newline.
-        // AI frequently appends \\ as a section/paragraph separator; keeping them raw
-        // causes the UI to display literal "\\" characters.
         .replaceAll("(?m)\\\\\\\\\\h*$", "\n")
         // Strip any remaining lone trailing backslash (single \).
         .replaceAll("(?m)(?<!\\\\)\\\\(?!\\\\)\\h*$", "")
@@ -1802,16 +1805,16 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
     // 10-slide canonical structure.
     if (slideCount == 10) {
-      slides.add(buildPreviewSlide(1,  "COVER",        "Cover",            deck.coverSummary(),        outputFormat));
-      slides.add(buildPreviewSlide(2,  "OBJECTIVES",   "Muc tieu",         deck.learningObjectives(),  outputFormat));
-      slides.add(buildPreviewSlide(3,  "OPENING",      "Khoi dong",        deck.opening(),             outputFormat));
-      slides.add(buildPreviewSlide(4,  "MAIN_CONTENT", "Noi dung chinh 1", deck.mainPart1(),           outputFormat));
-      slides.add(buildPreviewSlide(5,  "MAIN_CONTENT", "Noi dung chinh 2", deck.mainPart2(),           outputFormat));
-      slides.add(buildPreviewSlide(6,  "MAIN_CONTENT", "Noi dung chinh 3", deck.mainPart3(),           outputFormat));
-      slides.add(buildPreviewSlide(7,  "EXAMPLE",      "Vi du",            deck.examplePart(),         outputFormat));
-      slides.add(buildPreviewSlide(8,  "PRACTICE",     "Luyen tap",        deck.practicePart(),        outputFormat));
-      slides.add(buildPreviewSlide(9,  "SUMMARY",      "Tong ket",         deck.closingSummary(),      outputFormat));
-      slides.add(buildPreviewSlide(10, "CLOSING",      "Cam on / Q&A",     deck.lessonTitle(),         outputFormat));
+      slides.add(buildPreviewSlide(1,  "COVER",        "Tổng quan",           deck.coverSummary(),        outputFormat));
+      slides.add(buildPreviewSlide(2,  "OBJECTIVES",   "Mục tiêu",           deck.learningObjectives(),  outputFormat));
+      slides.add(buildPreviewSlide(3,  "OPENING",      "Khởi động",          deck.opening(),             outputFormat));
+      slides.add(buildPreviewSlide(4,  "MAIN_CONTENT", "Nội dung chính 1",   deck.mainPart1(),           outputFormat));
+      slides.add(buildPreviewSlide(5,  "MAIN_CONTENT", "Nội dung chính 2",   deck.mainPart2(),           outputFormat));
+      slides.add(buildPreviewSlide(6,  "MAIN_CONTENT", "Nội dung chính 3",   deck.mainPart3(),           outputFormat));
+      slides.add(buildPreviewSlide(7,  "EXAMPLE",      "Ví dụ",              deck.examplePart(),         outputFormat));
+      slides.add(buildPreviewSlide(8,  "PRACTICE",     "Luyện tập",          deck.practicePart(),        outputFormat));
+      slides.add(buildPreviewSlide(9,  "SUMMARY",      "Tổng kết",           deck.closingSummary(),      outputFormat));
+      slides.add(buildPreviewSlide(10, "CLOSING",      "Cảm ơn / Q&A",       deck.lessonTitle(),         outputFormat));
       return slides;
     }
 
@@ -1819,26 +1822,26 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     int middleCount = normalizedCount - 5;
     List<String> middleChunks = splitIntoChunks(deck.fullLessonContent(), middleCount);
 
-    slides.add(buildPreviewSlide(1, "COVER",      "Cover",     deck.coverSummary(),       outputFormat));
-    slides.add(buildPreviewSlide(2, "OBJECTIVES", "Muc tieu",  deck.learningObjectives(), outputFormat));
-    slides.add(buildPreviewSlide(3, "OPENING",    "Khoi dong", deck.opening(),            outputFormat));
+    slides.add(buildPreviewSlide(1, "COVER",      "Tổng quan",   deck.coverSummary(),       outputFormat));
+    slides.add(buildPreviewSlide(2, "OBJECTIVES", "Mục tiêu",    deck.learningObjectives(), outputFormat));
+    slides.add(buildPreviewSlide(3, "OPENING",    "Khởi động",   deck.opening(),            outputFormat));
 
     for (int i = 0; i < middleChunks.size(); i++) {
       String type = "MAIN_CONTENT";
-      String heading = "Noi dung chinh " + (i + 1);
+      String heading = "Nội dung chính " + (i + 1);
       if (i == middleChunks.size() - 2) {
         type = "EXAMPLE";
-        heading = "Vi du";
+        heading = "Ví dụ";
       }
       if (i == middleChunks.size() - 1) {
         type = "PRACTICE";
-        heading = "Luyen tap";
+        heading = "Luyện tập";
       }
       slides.add(buildPreviewSlide(4 + i, type, heading, middleChunks.get(i), outputFormat));
     }
 
-    slides.add(buildPreviewSlide(normalizedCount - 1, "SUMMARY", "Tong ket",      deck.closingSummary(), outputFormat));
-    slides.add(buildPreviewSlide(normalizedCount,     "CLOSING", "Cam on / Q&A",  deck.lessonTitle(),    outputFormat));
+    slides.add(buildPreviewSlide(normalizedCount - 1, "SUMMARY", "Tổng kết",        deck.closingSummary(), outputFormat));
+    slides.add(buildPreviewSlide(normalizedCount,     "CLOSING", "Cảm ơn / Q&A",    deck.lessonTitle(),    outputFormat));
     return slides;
   }
 
@@ -2128,6 +2131,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
         YÊU CẦU:
         - Viết bằng tiếng Việt có dấu.
+        - lessonSummary (trang bìa): viết đúng 2 dòng, mỗi dòng khoảng 10 từ (tổng khoảng 20 từ).
+        - learningObjectives (mục tiêu): viết đúng 2 dòng, mỗi dòng khoảng 10 từ (tổng khoảng 20 từ).
         - Nội dung phải NGẮN GỌN cho đúng phạm vi 1 slide nhưng vẫn TOÀN VẸN ý chính.
         - Mỗi phần (opening/mainPart/example/practice/closing) chỉ 3-5 ý chính.
         - Mỗi ý tối đa khoảng 12-16 từ, ưu tiên câu ngắn và rõ nghĩa.
@@ -2193,6 +2198,8 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
         YÊU CẦU:
         - Viết tiếng Việt có dấu, nội dung cụ thể, không lặp lại giữa các phần.
+        - LESSON_SUMMARY (trang bìa): viết đúng 2 dòng, mỗi dòng khoảng 10 từ (tổng khoảng 20 từ).
+        - LEARNING_OBJECTIVES (mục tiêu): viết đúng 2 dòng, mỗi dòng khoảng 10 từ (tổng khoảng 20 từ).
         - Nội dung phải NGẮN GỌN theo chuẩn 1 slide nhưng vẫn đầy đủ ý cốt lõi.
         - Mỗi phần chỉ 3-5 ý chính, mỗi ý tối đa khoảng 12-16 từ.
         - Ưu tiên gạch đầu dòng/câu ngắn, tránh đoạn văn dài.
