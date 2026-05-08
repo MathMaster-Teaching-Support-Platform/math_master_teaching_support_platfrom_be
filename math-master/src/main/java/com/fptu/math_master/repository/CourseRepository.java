@@ -49,6 +49,11 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
               + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "
               + "AND (:subjectId IS NULL OR c.subject_id = :subjectId) "
               + "AND (:keyword IS NULL OR c.title::text ILIKE CONCAT('%', :keyword, '%')) "
+              + "AND (:chapterId IS NULL OR EXISTS (SELECT 1 FROM course_lessons cl "
+              + "INNER JOIN lessons l ON l.id = cl.lesson_id "
+              + "WHERE cl.course_id = c.id AND cl.deleted_at IS NULL AND l.chapter_id = :chapterId)) "
+              + "AND (:lessonId IS NULL OR EXISTS (SELECT 1 FROM course_lessons cl2 "
+              + "WHERE cl2.course_id = c.id AND cl2.deleted_at IS NULL AND cl2.lesson_id = :lessonId)) "
               + "ORDER BY c.created_at DESC",
       countQuery =
           "SELECT COUNT(*) FROM courses c "
@@ -59,11 +64,18 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
               + "AND (c.school_grade_id IS NULL OR sg.is_active = true) "
               + "AND (:schoolGradeId IS NULL OR c.school_grade_id = :schoolGradeId) "
               + "AND (:subjectId IS NULL OR c.subject_id = :subjectId) "
-              + "AND (:keyword IS NULL OR c.title::text ILIKE CONCAT('%', :keyword, '%'))",
+              + "AND (:keyword IS NULL OR c.title::text ILIKE CONCAT('%', :keyword, '%')) "
+              + "AND (:chapterId IS NULL OR EXISTS (SELECT 1 FROM course_lessons cl "
+              + "INNER JOIN lessons l ON l.id = cl.lesson_id "
+              + "WHERE cl.course_id = c.id AND cl.deleted_at IS NULL AND l.chapter_id = :chapterId)) "
+              + "AND (:lessonId IS NULL OR EXISTS (SELECT 1 FROM course_lessons cl2 "
+              + "WHERE cl2.course_id = c.id AND cl2.deleted_at IS NULL AND cl2.lesson_id = :lessonId))",
       nativeQuery = true)
   Page<Course> findPublishedCoursesWithFilter(
       @Param("schoolGradeId") UUID schoolGradeId,
       @Param("subjectId") UUID subjectId,
+      @Param("chapterId") UUID chapterId,
+      @Param("lessonId") UUID lessonId,
       @Param("keyword") String keyword,
       Pageable pageable);
 

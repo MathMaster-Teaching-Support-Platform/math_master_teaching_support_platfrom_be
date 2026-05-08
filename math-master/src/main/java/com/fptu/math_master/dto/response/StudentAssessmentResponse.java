@@ -4,6 +4,7 @@ import com.fptu.math_master.enums.AssessmentStatus;
 import com.fptu.math_master.enums.AssessmentType;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,4 +41,13 @@ public class StudentAssessmentResponse {
   // Course context metadata (used by course-scoped student assessment listing)
   private Boolean isRequired;
   private Integer courseOrderIndex;
+
+  /** Khóa học liên kết (một trong các khóa học học sinh đang học có gắn đề này). */
+  private UUID courseId;
+  /** CT: khối / lớp SGK (từ khóa học liên kết). */
+  private UUID schoolGradeId;
+  /** CT: môn học (từ khóa học liên kết). */
+  private UUID subjectId;
+  /** Bài học gắn với đề (assessment_lessons), phục vụ lọc Chương / Bài trên FE. */
+  private List<UUID> lessonIds;
 }

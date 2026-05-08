@@ -1062,14 +1062,20 @@ class CourseServiceImplTest extends BaseUnitTest {
     void it_should_call_published_filter_with_unsorted_pageable() {
       Pageable pageable = PageRequest.of(0, 10);
       when(courseRepository.findPublishedCoursesWithFilter(
-              any(), any(), any(), any(Pageable.class)))
+              any(), any(), any(), any(), any(), any(Pageable.class)))
           .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-      courseService.getPublicCourses(SCHOOL_GRADE_ID, SUBJECT_ID, "từ khóa tìm kiếm", pageable);
+      courseService.getPublicCourses(
+          SCHOOL_GRADE_ID, SUBJECT_ID, null, null, "từ khóa tìm kiếm", pageable);
 
       verify(courseRepository, times(1))
           .findPublishedCoursesWithFilter(
-              eq(SCHOOL_GRADE_ID), eq(SUBJECT_ID), eq("từ khóa tìm kiếm"), any(Pageable.class));
+              eq(SCHOOL_GRADE_ID),
+              eq(SUBJECT_ID),
+              isNull(),
+              isNull(),
+              eq("từ khóa tìm kiếm"),
+              any(Pageable.class));
     }
 
     @Test

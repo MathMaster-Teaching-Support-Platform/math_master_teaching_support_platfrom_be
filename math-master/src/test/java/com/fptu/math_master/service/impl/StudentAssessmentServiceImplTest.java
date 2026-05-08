@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -40,10 +41,13 @@ import com.fptu.math_master.enums.SubmissionStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.AnswerRepository;
+import com.fptu.math_master.repository.AssessmentLessonRepository;
 import com.fptu.math_master.repository.AssessmentQuestionRepository;
 import com.fptu.math_master.repository.AssessmentRepository;
 import com.fptu.math_master.repository.CourseAssessmentRepository;
+import com.fptu.math_master.repository.CourseRepository;
 import com.fptu.math_master.repository.EnrollmentRepository;
+import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.QuizAttemptRepository;
 import com.fptu.math_master.repository.SubmissionRepository;
 import com.fptu.math_master.service.AssessmentDraftService;
@@ -98,6 +102,9 @@ class StudentAssessmentServiceImplTest extends BaseUnitTest {
   @Mock private GradingService gradingService;
   @Mock private EnrollmentRepository enrollmentRepository;
   @Mock private CourseAssessmentRepository courseAssessmentRepository;
+  @Mock private CourseRepository courseRepository;
+  @Mock private AssessmentLessonRepository assessmentLessonRepository;
+  @Mock private LessonRepository lessonRepository;
 
   private UUID studentId;
   private UUID courseId;
@@ -114,6 +121,11 @@ class StudentAssessmentServiceImplTest extends BaseUnitTest {
     submissionId = UUID.fromString("ae5b7e4d-2a6c-7d4f-e5b1-9c3d4e5f6a7b");
     attemptId = UUID.fromString("bf6c8f5e-3b7d-8e5a-f6c2-0d4e5f6a7b8c");
     questionId = UUID.fromString("c07d9a6f-4c8e-9f6b-a7d3-1e5f6a7b8c9d");
+
+    lenient().when(assessmentLessonRepository.findByAssessmentIdIn(any())).thenReturn(List.of());
+    lenient().when(courseRepository.findAllById(any())).thenReturn(List.of());
+    lenient().when(courseRepository.findById(any())).thenReturn(Optional.empty());
+    lenient().when(lessonRepository.findByChapterIdAndNotDeleted(any())).thenReturn(List.of());
   }
 
   @AfterEach
