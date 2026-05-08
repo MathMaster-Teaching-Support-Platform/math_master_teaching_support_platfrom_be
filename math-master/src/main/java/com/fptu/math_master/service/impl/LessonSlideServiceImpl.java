@@ -1098,9 +1098,10 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     return value
         .replace("\\r\\n", "\n")
         .replace("\\n", "\n")
+        // Convert \\ used as an inline separator (e.g. " \\ " or " \\\\ ") to a real newline.
+        // AI frequently uses \\ or \\\\ between sentences as a paragraph/line separator.
+        .replaceAll("\\h*\\\\{2,}\\h+", "\n")
         // Convert LaTeX line-break command \\ at the end of a line to a real newline.
-        // AI frequently appends \\ as a section/paragraph separator; keeping them raw
-        // causes the UI to display literal "\\" characters.
         .replaceAll("(?m)\\\\\\\\\\h*$", "\n")
         // Strip any remaining lone trailing backslash (single \).
         .replaceAll("(?m)(?<!\\\\)\\\\(?!\\\\)\\h*$", "")
