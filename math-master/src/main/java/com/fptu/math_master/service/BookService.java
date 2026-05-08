@@ -10,6 +10,7 @@ import com.fptu.math_master.dto.request.UpdateBookRequest;
 import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse;
 import com.fptu.math_master.dto.response.BookResponse;
+import com.fptu.math_master.dto.response.BookSeriesResponse;
 import com.fptu.math_master.dto.response.OcrTriggerResponse;
 import com.fptu.math_master.enums.BookStatus;
 
@@ -30,6 +31,8 @@ public interface BookService {
       Pageable pageable);
 
   BookResponse update(UUID id, UpdateBookRequest request, UUID actorId);
+
+  BookSeriesResponse updateSeriesName(UUID seriesId, String name, UUID actorId);
 
   /** Persists a PDF reference (e.g., MinIO key or URL) after upload. */
   BookResponse setPdfPath(UUID id, String pdfPath, UUID actorId);
