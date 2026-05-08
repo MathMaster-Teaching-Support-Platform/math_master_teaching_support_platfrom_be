@@ -373,6 +373,17 @@ public class CrawlDataProxyController {
     }
 
     // =========================================================
+    // STATIC FILES (images served by Python service)
+    // =========================================================
+
+    @Operation(summary = "[Static] Proxy static image files from crawl-data service",
+               description = "Proxies /static/images/... served by Python FastAPI directly (no /api/v1 prefix).")
+    @GetMapping("/static/**")
+    public ResponseEntity<byte[]> staticFiles(HttpServletRequest request) throws IOException {
+        return forwardStatic(request);
+    }
+
+    // =========================================================
     // PROXY CORE
     // =========================================================
 
@@ -410,6 +421,40 @@ public class CrawlDataProxyController {
                     URI.create(targetUrl),
                     HttpMethod.valueOf(request.getMethod()),
                     entity,
+                    byte[].class);
+        } catch (HttpStatusCodeException ex) {
+            return ResponseEntity
+                    .status(ex.getStatusCode())
+                    .headers(ex.getResponseHeaders())
+                    .body(ex.getResponseBodyAsByteArray());
+        }
+    }
+
+    /**
+     * Forwards /api/v1/crawl-data/static/** to {crawlDataBaseUrl}/static/**
+     * without prepending /api/v1, because Python FastAPI serves images at the root /static path.
+     */
+    private ResponseEntity<byte[]> forwardStatic(HttpServletRequest request) throws IOException {
+        String requestUri = request.getRequestURI();
+        // Strip /api/v1/crawl-data prefix to get /static/...
+        String downstreamPath = requestUri.startsWith(PROXY_PREFIX)
+                ? requestUri.substring(PROXY_PREFIX.length())
+                : requestUri;
+
+        String queryString = request.getQueryString();
+        String targetUrl = crawlDataBaseUrl + downstreamPath
+                + (queryString != null ? "?" + queryString : "");
+
+        log.debug("CrawlDataProxy[static]: {} -> {}", requestUri, targetUrl);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Internal-API-Key", internalApiKey);
+
+        try {
+            return restTemplate.exchange(
+                    URI.create(targetUrl),
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
                     byte[].class);
         } catch (HttpStatusCodeException ex) {
             return ResponseEntity
