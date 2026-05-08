@@ -1,32 +1,9 @@
 package com.fptu.math_master.controller;
 
-import com.fptu.math_master.dto.request.BulkPageMappingRequest;
-import com.fptu.math_master.dto.request.CreateBookRequest;
-import com.fptu.math_master.dto.request.UpdateBookRequest;
-import com.fptu.math_master.dto.response.ApiResponse;
-import com.fptu.math_master.dto.response.BookLessonPageResponse;
-import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
-import com.fptu.math_master.dto.response.BookProgressResponse;
-import com.fptu.math_master.dto.response.BookResponse;
-import com.fptu.math_master.dto.response.OcrTriggerResponse;
-import com.fptu.math_master.enums.BookStatus;
-import com.fptu.math_master.exception.AppException;
-import com.fptu.math_master.exception.ErrorCode;
-import com.fptu.math_master.service.BookLessonPageService;
-import com.fptu.math_master.service.BookService;
-import com.fptu.math_master.service.UploadService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -47,6 +24,32 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import com.fptu.math_master.dto.request.BulkPageMappingRequest;
+import com.fptu.math_master.dto.request.CreateBookRequest;
+import com.fptu.math_master.dto.request.UpdateBookRequest;
+import com.fptu.math_master.dto.response.ApiResponse;
+import com.fptu.math_master.dto.response.BookLessonPageResponse;
+import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
+import com.fptu.math_master.dto.response.BookProgressResponse;
+import com.fptu.math_master.dto.response.BookResponse;
+import com.fptu.math_master.dto.response.OcrTriggerResponse;
+import com.fptu.math_master.enums.BookStatus;
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
+import com.fptu.math_master.service.BookLessonPageService;
+import com.fptu.math_master.service.BookService;
+import com.fptu.math_master.service.UploadService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/v1/books")

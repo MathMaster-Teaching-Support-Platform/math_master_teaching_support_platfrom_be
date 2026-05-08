@@ -1,5 +1,18 @@
 package com.fptu.math_master.service.impl;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fptu.math_master.dto.request.BulkPageMappingRequest;
 import com.fptu.math_master.dto.request.PageMappingItem;
 import com.fptu.math_master.dto.response.BookLessonPageResponse;
@@ -17,21 +30,11 @@ import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.service.BookLessonPageService;
 import com.fptu.math_master.service.PythonCrawlerClient;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
