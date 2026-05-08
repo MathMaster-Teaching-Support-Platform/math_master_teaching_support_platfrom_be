@@ -420,7 +420,10 @@ public enum ErrorCode {
       HttpStatus.BAD_REQUEST),
   CRAWLER_UNAVAILABLE(
       1228, "Python crawler service is unavailable", HttpStatus.SERVICE_UNAVAILABLE),
-  LESSON_PAGE_NOT_FOUND(1229, "Lesson page not found", HttpStatus.NOT_FOUND);
+  LESSON_PAGE_NOT_FOUND(1229, "Lesson page not found", HttpStatus.NOT_FOUND),
+  FEEDBACK_NOT_FOUND(1230, "Feedback not found", HttpStatus.NOT_FOUND),
+  FEEDBACK_SUBMIT_ROLE_NOT_ALLOWED(
+      1231, "Only student or teacher can submit feedback", HttpStatus.FORBIDDEN);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
