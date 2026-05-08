@@ -27,4 +27,9 @@ public class MinioProperties {
 
   @NotBlank private String courseVideosBucket = "course-videos";
   @NotBlank private String courseMaterialsBucket = "course-materials";
+  /**
+   * Bucket containing OCR image assets referenced by lesson page content blocks (imagePath/rawImageUrl).
+   * Falls back to template bucket for backward compatibility.
+   */
+  @NotBlank private String ocrContentBucket = "slide-templates";
 }
