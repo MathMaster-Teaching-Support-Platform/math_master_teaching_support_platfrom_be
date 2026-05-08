@@ -47,6 +47,8 @@ public class SecurityConfig {
 
   private static final String[] PUBLIC_GET_ENDPOINTS = {
       "/api/schools/**",
+      // OCR images exported by Python are exposed under /api/static/** for FE preview.
+      "/api/static/**",
       "/actuator/health",
       "/actuator/info",
       "/actuator/mappings",
