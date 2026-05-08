@@ -395,7 +395,32 @@ public enum ErrorCode {
   // ─── System Config Error Codes ────────────────────────────────────────────
   SYSTEM_CONFIG_NOT_FOUND(1218, "System config not found", HttpStatus.NOT_FOUND),
 
-  ASSESSMENT_NOT_CLOSED(1219, "Assessment is not closed", HttpStatus.BAD_REQUEST);
+  ASSESSMENT_NOT_CLOSED(1219, "Assessment is not closed", HttpStatus.BAD_REQUEST),
+
+  // ─── Book / OCR Mapping Error Codes ───────────────────────────────────────
+  BOOK_NOT_FOUND(1220, "Book not found", HttpStatus.NOT_FOUND),
+  BOOK_INVALID_OCR_WINDOW(
+      1221, "ocrPageFrom must be <= ocrPageTo and within totalPages", HttpStatus.BAD_REQUEST),
+  BOOK_OCR_WINDOW_REQUIRED(
+      1222, "Book must have an OCR page window before mapping lessons", HttpStatus.BAD_REQUEST),
+  PAGE_MAPPING_OUT_OF_RANGE(
+      1223, "Page range is outside the book's OCR window", HttpStatus.BAD_REQUEST),
+  PAGE_MAPPING_OVERLAP_INVALID(
+      1224,
+      "Page ranges must be non-decreasing across consecutive lessons (overlap allowed only on a single page)",
+      HttpStatus.BAD_REQUEST),
+  PAGE_MAPPING_LESSON_FOREIGN(
+      1225,
+      "Lesson does not belong to the book's curriculum",
+      HttpStatus.BAD_REQUEST),
+  PAGE_MAPPING_DUPLICATE_LESSON(
+      1226, "A lesson appears more than once in the mapping", HttpStatus.BAD_REQUEST),
+  BOOK_NOT_READY_FOR_OCR(
+      1227, "Book must have a complete page mapping before OCR can be triggered",
+      HttpStatus.BAD_REQUEST),
+  CRAWLER_UNAVAILABLE(
+      1228, "Python crawler service is unavailable", HttpStatus.SERVICE_UNAVAILABLE),
+  LESSON_PAGE_NOT_FOUND(1229, "Lesson page not found", HttpStatus.NOT_FOUND);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {

@@ -316,16 +316,9 @@ function Invoke-RestartRedis {
 function Invoke-StartAll {
     Write-Header "Start All Services"
     if (-not (Assert-Docker)) { return }
-
-    # Check if starting app service - if so, check SSH tunnel
-    Write-Step "Checking SSH tunnel to production database..."
-    if (-not (Start-SSHTunnelIfNeeded)) {
-        Write-Host "Continuing without SSH tunnel check..." -ForegroundColor Yellow
-    }
-
     $root = Get-ProjectRoot; Assert-EnvFile $root; Push-Location $root
     Write-Step "Starting all containers..."
-    docker compose up -d --no-recreate
+    docker compose up -d
     if ($LASTEXITCODE -eq 0) { Write-OK "All services started."; Write-Host ""; docker compose ps }
     else { Write-Err "Some services failed to start." }
     Pop-Location
