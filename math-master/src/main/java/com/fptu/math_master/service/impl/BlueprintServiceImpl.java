@@ -12,7 +12,9 @@ import com.fptu.math_master.dto.response.BlueprintParameter;
 import com.fptu.math_master.entity.QuestionTemplate;
 import com.fptu.math_master.service.BlueprintService;
 import com.fptu.math_master.service.GeminiService;
+import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.PromptLoader;
+import com.fptu.math_master.util.SecurityUtils;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -57,6 +59,7 @@ public class BlueprintServiceImpl implements BlueprintService {
 
   private final GeminiService geminiService;
   private final PromptLoader promptLoader;
+  private final UserSubscriptionService userSubscriptionService;
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   // ───────────────────────────── Method 1: reverse-templating ─────────────────────────────
@@ -72,6 +75,12 @@ public class BlueprintServiceImpl implements BlueprintService {
     } catch (Exception e) {
       log.error("[Blueprint] reverse-template AI call failed: {}", e.getMessage(), e);
       throw new RuntimeException("AI reverse-templating failed: " + e.getMessage(), e);
+    }
+
+    // Token deduction: 1 token per blueprint, ADMIN exempt. Runs after a successful
+    // AI response so the user is never charged for a failed call.
+    if (!SecurityUtils.hasRole("ADMIN")) {
+      userSubscriptionService.consumeMyTokens(1, "BLUEPRINT_FROM_QUESTION");
     }
 
     JsonNode root = parseJsonOrThrow(aiContent, "reverse-template");

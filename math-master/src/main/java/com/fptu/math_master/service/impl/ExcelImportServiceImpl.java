@@ -83,20 +83,22 @@ public class ExcelImportServiceImpl implements ExcelImportService {
   private static final int COL_TAGS = 11;
   private static final int COL_IS_PUBLIC = 12;
 
+  // Header labels are display-only; the parser reads cells by column index
+  // (COL_NAME, COL_DESCRIPTION, …), so these strings can be Vietnamese.
   private static final String[] HEADERS = {
-    "name",
-    "description",
-    "templateType",
-    "templateText_vi",
-    "parameters",
-    "answerFormula",
-    "diagramTemplate",
-    "solutionStepsTemplate",
-    "optionsGenerator",
-    "statementMutations",
-    "cognitiveLevel",
-    "tags",
-    "isPublic"
+    "Tên mẫu",
+    "Mô tả",
+    "Loại câu hỏi",
+    "Đề bài (tiếng Việt)",
+    "Tham số",
+    "Công thức đáp án",
+    "Sơ đồ (LaTeX)",
+    "Lời giải mẫu",
+    "Bộ tạo đáp án (Trắc nghiệm)",
+    "Mệnh đề (Đúng/Sai)",
+    "Mức độ câu hỏi",
+    "Thẻ",
+    "Công khai"
   };
 
   private static final int HEADER_ROW = 0;
@@ -407,32 +409,35 @@ public class ExcelImportServiceImpl implements ExcelImportService {
     switch (type) {
       case MULTIPLE_CHOICE -> {
         if (request.getAnswerFormula() == null || request.getAnswerFormula().isBlank()) {
-          errors.add("answerFormula: required for MULTIPLE_CHOICE");
+          errors.add("Cột \"Công thức đáp án\" là bắt buộc với câu hỏi Trắc nghiệm.");
         }
         if (request.getOptionsGenerator() == null || request.getOptionsGenerator().isEmpty()) {
-          errors.add("optionsGenerator: required for MULTIPLE_CHOICE (JSON of A/B/C/D formulas)");
+          errors.add(
+              "Cột \"Bộ tạo đáp án\" là bắt buộc với câu hỏi Trắc nghiệm "
+                  + "(JSON 4 công thức cho A/B/C/D).");
         }
       }
       case TRUE_FALSE -> {
         Map<String, Object> sm = request.getStatementMutations();
         if (sm == null || !sm.containsKey("clauseTemplates")) {
           errors.add(
-              "statementMutations: required for TRUE_FALSE (JSON with clauseTemplates list)");
+              "Cột \"Mệnh đề\" là bắt buộc với câu hỏi Đúng/Sai "
+                  + "(JSON có trường clauseTemplates).");
         } else if (sm.get("clauseTemplates") instanceof List<?> list && list.isEmpty()) {
-          errors.add("statementMutations.clauseTemplates: must contain at least one clause");
+          errors.add("Cột \"Mệnh đề\" phải có ít nhất một mệnh đề.");
         }
       }
       case SHORT_ANSWER -> {
         if (request.getAnswerFormula() == null || request.getAnswerFormula().isBlank()) {
-          errors.add("answerFormula: required for SHORT_ANSWER");
+          errors.add("Cột \"Công thức đáp án\" là bắt buộc với câu hỏi Trả lời ngắn.");
         }
       }
       default ->
           errors.add(
-              "templateType '"
+              "Loại câu hỏi \""
                   + type
-                  + "' is not supported by Excel import; use MULTIPLE_CHOICE, "
-                  + "TRUE_FALSE, or SHORT_ANSWER");
+                  + "\" không được hỗ trợ. Vui lòng dùng MULTIPLE_CHOICE (Trắc nghiệm), "
+                  + "TRUE_FALSE (Đúng/Sai) hoặc SHORT_ANSWER (Trả lời ngắn).");
     }
 
     return errors;
@@ -511,7 +516,7 @@ public class ExcelImportServiceImpl implements ExcelImportService {
   }
 
   private void writeTemplatesSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("Question Templates");
+    Sheet sheet = workbook.createSheet("Mẫu câu hỏi");
 
     CellStyle headerStyle = workbook.createCellStyle();
     Font headerFont = workbook.createFont();
@@ -538,29 +543,49 @@ public class ExcelImportServiceImpl implements ExcelImportService {
 
     Row notes = sheet.createRow(NOTES_ROW);
     String[] noteText = new String[HEADERS.length];
-    noteText[COL_NAME] = "(Bắt buộc) Tên ngắn gọn của template";
-    noteText[COL_DESCRIPTION] = "(Tuỳ chọn) Mô tả chi tiết, mục tiêu sử dụng";
-    noteText[COL_TEMPLATE_TYPE] = "(Bắt buộc) MULTIPLE_CHOICE | TRUE_FALSE | SHORT_ANSWER";
+    noteText[COL_NAME] = "(Bắt buộc) Tên ngắn gọn của mẫu câu hỏi.";
+    noteText[COL_DESCRIPTION] = "(Tuỳ chọn) Mô tả chi tiết, mục tiêu sử dụng.";
+    noteText[COL_TEMPLATE_TYPE] =
+        "(Bắt buộc) Nhập đúng 1 trong 3 giá trị:  "
+            + "MULTIPLE_CHOICE = Trắc nghiệm  |  "
+            + "TRUE_FALSE = Đúng/Sai  |  "
+            + "SHORT_ANSWER = Trả lời ngắn.";
     noteText[COL_TEMPLATE_TEXT_VI] =
-        "(Bắt buộc) Đề bài tiếng Việt, dùng {{tên_tham_số}} để chèn tham số. Hỗ trợ LaTeX $...$";
+        "(Bắt buộc) Đề bài tiếng Việt. Dùng {{tên_tham_số}} để chèn biến số (vd {{a}}). "
+            + "Hỗ trợ công thức LaTeX trong cặp dấu $...$.";
     noteText[COL_PARAMETERS] =
-        "(Bắt buộc) JSON khai báo tham số, vd " + "{\"a\":{\"type\":\"int\",\"min\":1,\"max\":5}}";
+        "(Bắt buộc) JSON khai báo tham số.  "
+            + "type: \"integer\" = số nguyên, \"decimal\" = số thập phân, \"text\" = chuỗi.  "
+            + "min / max là giới hạn dưới và trên.  "
+            + "Ví dụ: {\"a\":{\"type\":\"integer\",\"min\":1,\"max\":5}} — biến a là số nguyên từ 1 đến 5.";
     noteText[COL_ANSWER_FORMULA] =
-        "MCQ + SA: công thức tính đáp án, dùng tham số gốc (vd \"(-b)/a\"). TF: bỏ trống.";
+        "Trắc nghiệm + Trả lời ngắn: công thức tính đáp án, dùng tham số gốc "
+            + "(vd \"(-b)/a\"). Đúng/Sai: bỏ trống.";
     noteText[COL_DIAGRAM_TEMPLATE] =
-        "(Tuỳ chọn) LaTeX/TikZ với {{tham_số}}, hỗ trợ \\begin{tikzpicture}...\\end{tikzpicture}";
+        "(Tuỳ chọn) Hình vẽ LaTeX/TikZ, có thể chèn {{tham_số}}. "
+            + "Hỗ trợ khối \\begin{tikzpicture}...\\end{tikzpicture}.";
     noteText[COL_SOLUTION_STEPS_TEMPLATE] =
-        "(Tuỳ chọn) Các bước giải mẫu, hỗ trợ LaTeX và {{tham_số}}";
+        "(Tuỳ chọn) Các bước giải mẫu, hỗ trợ LaTeX và {{tham_số}}.";
     noteText[COL_OPTIONS_GENERATOR] =
-        "MCQ: JSON {\"A\":\"công thức\",\"B\":\"công thức\",\"C\":\"công thức\",\"D\":\"công thức\"}."
-            + " Mỗi công thức dùng các tham số gốc (vd \"sqrt(3)/4*a^2\") và sẽ được tính ra số."
-            + " 1 trong 4 phải khớp answerFormula. TF/SA: bỏ trống.";
+        "Trắc nghiệm: JSON 4 công thức cho 4 đáp án A/B/C/D, vd "
+            + "{\"A\":\"công thức\",\"B\":\"công thức\",\"C\":\"công thức\",\"D\":\"công thức\"}. "
+            + "Mỗi công thức dùng các tham số gốc (vd \"sqrt(3)/4*a^2\"); hệ thống sẽ tính ra số. "
+            + "1 trong 4 phải trùng với cột Công thức đáp án. Đúng/Sai và Trả lời ngắn: bỏ trống.";
     noteText[COL_STATEMENT_MUTATIONS] =
-        "TF: JSON {\"clauseTemplates\":[{\"text\":\"...\",\"truthValue\":true},...]}. MCQ/SA: bỏ trống.";
-    noteText[COL_COGNITIVE_LEVEL] = "(Bắt buộc) NHAN_BIET | THONG_HIEU | VAN_DUNG | VAN_DUNG_CAO";
+        "Đúng/Sai: JSON danh sách mệnh đề, vd "
+            + "{\"clauseTemplates\":[{\"text\":\"...\",\"truthValue\":true},...]}. "
+            + "Trắc nghiệm và Trả lời ngắn: bỏ trống.";
+    noteText[COL_COGNITIVE_LEVEL] =
+        "(Bắt buộc) Nhập đúng 1 trong 4 giá trị:  "
+            + "NHAN_BIET = Nhận biết  |  "
+            + "THONG_HIEU = Thông hiểu  |  "
+            + "VAN_DUNG = Vận dụng  |  "
+            + "VAN_DUNG_CAO = Vận dụng cao.";
     noteText[COL_TAGS] =
-        "(Bắt buộc) Tag tiếng Việt phân tách bởi dấu phẩy, vd \"Hình học không gian, Tích phân\"";
-    noteText[COL_IS_PUBLIC] = "(Tuỳ chọn) TRUE | FALSE - mặc định FALSE";
+        "(Bắt buộc) Thẻ tiếng Việt, ngăn cách bởi dấu phẩy, vd \"Hình học không gian, Tích phân\".";
+    noteText[COL_IS_PUBLIC] =
+        "(Tuỳ chọn)  TRUE = công khai cho mọi giáo viên  |  FALSE = chỉ mình bạn dùng. "
+            + "Mặc định FALSE.";
     for (int i = 0; i < noteText.length; i++) {
       Cell c = notes.createCell(i);
       c.setCellValue(noteText[i] == null ? "" : noteText[i]);
@@ -598,8 +623,8 @@ public class ExcelImportServiceImpl implements ExcelImportService {
     set(
         row,
         COL_DESCRIPTION,
-        "MCQ hình học không gian: tính diện tích toàn phần khối chóp tam giác đều S.ABC "
-            + "cạnh đáy {{a}}, chiều cao {{h}}",
+        "Trắc nghiệm hình học không gian: tính diện tích toàn phần khối chóp tam giác đều "
+            + "S.ABC, cạnh đáy {{a}}, chiều cao {{h}}.",
         wrap);
     set(row, COL_TEMPLATE_TYPE, "MULTIPLE_CHOICE");
     set(
@@ -611,8 +636,8 @@ public class ExcelImportServiceImpl implements ExcelImportService {
     set(
         row,
         COL_PARAMETERS,
-        "{\"a\":{\"type\":\"int\",\"min\":2,\"max\":8},"
-            + "\"h\":{\"type\":\"int\",\"min\":3,\"max\":10}}",
+        "{\"a\":{\"type\":\"integer\",\"min\":2,\"max\":8},"
+            + "\"h\":{\"type\":\"integer\",\"min\":3,\"max\":10}}",
         wrap);
     set(row, COL_ANSWER_FORMULA, "sqrt(3)/4*a^2 + 3/2*a*sqrt(h^2 + a^2/12)", wrap);
     set(
@@ -680,7 +705,7 @@ public class ExcelImportServiceImpl implements ExcelImportService {
     set(
         row,
         COL_DESCRIPTION,
-        "TRUE_FALSE: Đọc bảng biến thiên hàm bậc 3 $y = ax^3 + bx^2 + cx + d$, xác định 4 mệnh đề "
+        "Đúng/Sai: Đọc bảng biến thiên hàm bậc 3 $y = ax^3 + bx^2 + cx + d$, xác định 4 mệnh đề "
             + "đúng/sai về cực trị, đồng biến, nghịch biến.",
         wrap);
     set(row, COL_TEMPLATE_TYPE, "TRUE_FALSE");
@@ -693,10 +718,10 @@ public class ExcelImportServiceImpl implements ExcelImportService {
     set(
         row,
         COL_PARAMETERS,
-        "{\"x1\":{\"type\":\"int\",\"min\":-4,\"max\":-1},"
-            + "\"x2\":{\"type\":\"int\",\"min\":1,\"max\":4},"
-            + "\"y1\":{\"type\":\"int\",\"min\":1,\"max\":10},"
-            + "\"y2\":{\"type\":\"int\",\"min\":-10,\"max\":-1}}",
+        "{\"x1\":{\"type\":\"integer\",\"min\":-4,\"max\":-1},"
+            + "\"x2\":{\"type\":\"integer\",\"min\":1,\"max\":4},"
+            + "\"y1\":{\"type\":\"integer\",\"min\":1,\"max\":10},"
+            + "\"y2\":{\"type\":\"integer\",\"min\":-10,\"max\":-1}}",
         wrap);
     // TF has no answerFormula
     set(row, COL_ANSWER_FORMULA, "");
@@ -746,7 +771,7 @@ public class ExcelImportServiceImpl implements ExcelImportService {
     set(
         row,
         COL_DESCRIPTION,
-        "SHORT_ANSWER: Tính tích phân có dạng $\\int (ax+b)^n\\,dx$ trên đoạn $[0,c]$, đáp án là "
+        "Trả lời ngắn: Tính tích phân có dạng $\\int (ax+b)^n\\,dx$ trên đoạn $[0,c]$, đáp án là "
             + "phân số tối giản hoặc số nguyên.",
         wrap);
     set(row, COL_TEMPLATE_TYPE, "SHORT_ANSWER");
@@ -759,9 +784,9 @@ public class ExcelImportServiceImpl implements ExcelImportService {
     set(
         row,
         COL_PARAMETERS,
-        "{\"a\":{\"type\":\"int\",\"min\":1,\"max\":3},"
-            + "\"b\":{\"type\":\"int\",\"min\":1,\"max\":5},"
-            + "\"c\":{\"type\":\"int\",\"min\":1,\"max\":3}}",
+        "{\"a\":{\"type\":\"integer\",\"min\":1,\"max\":3},"
+            + "\"b\":{\"type\":\"integer\",\"min\":1,\"max\":5},"
+            + "\"c\":{\"type\":\"integer\",\"min\":1,\"max\":3}}",
         wrap);
     set(row, COL_ANSWER_FORMULA, "((a*c+b)^4 - b^4) / (4*a)");
     set(
@@ -815,23 +840,28 @@ public class ExcelImportServiceImpl implements ExcelImportService {
   private void writeInstructionsSheet(Workbook workbook) {
     Sheet sheet = workbook.createSheet("Hướng dẫn");
     int r = 0;
-    sheet.createRow(r++).createCell(0).setCellValue("HƯỚNG DẪN IMPORT TEMPLATE CÂU HỎI");
+    sheet.createRow(r++).createCell(0).setCellValue("HƯỚNG DẪN NHẬP MẪU CÂU HỎI TỪ EXCEL");
     r++;
 
-    sheet.createRow(r++).createCell(0).setCellValue("LOẠI TEMPLATE HỖ TRỢ:");
-    sheet
-        .createRow(r++)
-        .createCell(0)
-        .setCellValue("• MULTIPLE_CHOICE — cần answerFormula + optionsGenerator (JSON A/B/C/D)");
+    sheet.createRow(r++).createCell(0).setCellValue("LOẠI CÂU HỎI HỖ TRỢ:");
     sheet
         .createRow(r++)
         .createCell(0)
         .setCellValue(
-            "• TRUE_FALSE — cần statementMutations.clauseTemplates (mỗi clause có text + truthValue)");
+            "• MULTIPLE_CHOICE (Trắc nghiệm) — cần điền cột Công thức đáp án và Bộ tạo đáp án "
+                + "(JSON 4 đáp án A/B/C/D).");
     sheet
         .createRow(r++)
         .createCell(0)
-        .setCellValue("• SHORT_ANSWER — cần answerFormula, không cần options/statements");
+        .setCellValue(
+            "• TRUE_FALSE (Đúng/Sai) — cần điền cột Mệnh đề (Đúng/Sai) — JSON danh sách mệnh đề "
+                + "kèm truthValue (đúng/sai).");
+    sheet
+        .createRow(r++)
+        .createCell(0)
+        .setCellValue(
+            "• SHORT_ANSWER (Trả lời ngắn) — cần điền cột Công thức đáp án; không cần "
+                + "Bộ tạo đáp án và Mệnh đề.");
     r++;
 
     sheet.createRow(r++).createCell(0).setCellValue("THAM SỐ {{}}:");
@@ -839,55 +869,80 @@ public class ExcelImportServiceImpl implements ExcelImportService {
         .createRow(r++)
         .createCell(0)
         .setCellValue(
-            "• Khai báo trong cột parameters: {\"a\":{\"type\":\"int\",\"min\":1,\"max\":5}}");
+            "• Khai báo trong cột Tham số: {\"a\":{\"type\":\"integer\",\"min\":1,\"max\":5}}");
     sheet
         .createRow(r++)
         .createCell(0)
         .setCellValue(
-            "• Sử dụng {{a}} trong templateText_vi, answerFormula, diagramTemplate, "
-                + "optionsGenerator, statementMutations");
+            "• type chỉ chấp nhận 3 giá trị:  \"integer\" = số nguyên (vd 1, 2, 3),  "
+                + "\"decimal\" = số thập phân (vd 0.5, 1.25),  \"text\" = chuỗi văn bản.");
     sheet
         .createRow(r++)
         .createCell(0)
         .setCellValue(
-            "• Tính sẵn biểu thức: dùng {{2*a}}, {{a/2}} - hệ thống sẽ tính khi sinh câu hỏi");
+            "• min / max là giới hạn dưới và giới hạn trên của giá trị "
+                + "(chỉ dùng cho integer / decimal).");
+    sheet
+        .createRow(r++)
+        .createCell(0)
+        .setCellValue(
+            "• Dùng {{a}} (đặt trong cặp ngoặc nhọn đôi) trong các cột: Đề bài, "
+                + "Công thức đáp án, Sơ đồ, Lời giải mẫu, Bộ tạo đáp án, Mệnh đề.");
+    sheet
+        .createRow(r++)
+        .createCell(0)
+        .setCellValue(
+            "• Có thể tính sẵn biểu thức: {{2*a}}, {{a/2}} — hệ thống sẽ tính ra số khi sinh câu hỏi.");
     r++;
 
-    sheet.createRow(r++).createCell(0).setCellValue("LATEX:");
+    sheet.createRow(r++).createCell(0).setCellValue("MỨC ĐỘ CÂU HỎI (cột Mức độ câu hỏi):");
+    sheet
+        .createRow(r++)
+        .createCell(0)
+        .setCellValue("• NHAN_BIET = Nhận biết  ·  THONG_HIEU = Thông hiểu");
+    sheet
+        .createRow(r++)
+        .createCell(0)
+        .setCellValue("• VAN_DUNG = Vận dụng    ·  VAN_DUNG_CAO = Vận dụng cao");
+    r++;
+
+    sheet.createRow(r++).createCell(0).setCellValue("CÔNG THỨC LATEX:");
     sheet.createRow(r++).createCell(0).setCellValue("• Inline: $...$  ·  Block: $$...$$");
     sheet
         .createRow(r++)
         .createCell(0)
-        .setCellValue("• Trong cell Excel KHÔNG cần escape backslash — dán nguyên \\dfrac, \\sqrt");
+        .setCellValue(
+            "• Trong ô Excel: KHÔNG cần thoát dấu gạch chéo — dán nguyên \\dfrac, \\sqrt như bình thường.");
     sheet
         .createRow(r++)
         .createCell(0)
         .setCellValue(
-            "• Trong JSON (optionsGenerator, statementMutations) PHẢI escape \\\\ để JSON hợp lệ");
+            "• Trong JSON (Bộ tạo đáp án, Mệnh đề): PHẢI dùng \\\\ thay cho \\ để JSON hợp lệ.");
     sheet
         .createRow(r++)
         .createCell(0)
         .setCellValue(
-            "• diagramTemplate giữ nguyên xuống dòng — dán cả khối \\begin{tikzpicture}...\\end{tikzpicture}");
+            "• Sơ đồ giữ nguyên xuống dòng — dán cả khối \\begin{tikzpicture}...\\end{tikzpicture}.");
     r++;
 
-    sheet.createRow(r++).createCell(0).setCellValue("3 VÍ DỤ TRONG SHEET 'Question Templates':");
-    sheet
-        .createRow(r++)
-        .createCell(0)
-        .setCellValue("Dòng 3: Geometry MCQ — diện tích khối chóp tam giác đều (TikZ 3D)");
+    sheet.createRow(r++).createCell(0).setCellValue("3 VÍ DỤ MẪU TRONG SHEET 'Mẫu câu hỏi':");
     sheet
         .createRow(r++)
         .createCell(0)
         .setCellValue(
-            "Dòng 4: TRUE_FALSE — bảng biến thiên hàm bậc ba (\\tkzTabInit), 4 mệnh đề "
-                + "với truthValue");
+            "Dòng 3: Trắc nghiệm hình học — diện tích khối chóp tam giác đều (có hình TikZ 3D).");
     sheet
         .createRow(r++)
         .createCell(0)
         .setCellValue(
-            "Dòng 5: SHORT_ANSWER — tích phân $\\int_0^c (ax+b)^3\\,dx$ với đồ thị PGFPlots "
-                + "(vùng tô màu)");
+            "Dòng 4: Đúng/Sai — bảng biến thiên hàm bậc ba (\\tkzTabInit), 4 mệnh đề kèm "
+                + "kết luận đúng/sai.");
+    sheet
+        .createRow(r++)
+        .createCell(0)
+        .setCellValue(
+            "Dòng 5: Trả lời ngắn — tích phân $\\int_0^c (ax+b)^3\\,dx$ với đồ thị "
+                + "PGFPlots (vùng tô màu).");
 
     sheet.setColumnWidth(0, 130 * 256);
   }
