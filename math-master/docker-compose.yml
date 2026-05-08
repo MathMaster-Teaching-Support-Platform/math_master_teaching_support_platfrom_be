@@ -181,6 +181,9 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
 
+      CRAWL_DATA_BASE_URL: ${CRAWL_DATA_BASE_URL:-http://host.docker.internal:8001}
+      CRAWL_DATA_INTERNAL_API_KEY: ${CRAWL_DATA_INTERNAL_API_KEY:-change-me-in-production}
+
       FIREBASE_ENABLED: ${FIREBASE_ENABLED:-true}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       FIREBASE_SERVICE_ACCOUNT_PATH: /run/secrets/firebase-service-account.json
