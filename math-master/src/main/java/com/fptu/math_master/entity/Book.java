@@ -35,6 +35,7 @@ import lombok.Setter;
     indexes = {
       @Index(name = "idx_books_school_grade", columnList = "school_grade_id"),
       @Index(name = "idx_books_subject", columnList = "subject_id"),
+      @Index(name = "idx_books_series", columnList = "book_series_id"),
       @Index(name = "idx_books_curriculum", columnList = "curriculum_id"),
       @Index(name = "idx_books_status", columnList = "status"),
       @Index(name = "idx_books_verified", columnList = "verified")
@@ -46,6 +47,9 @@ public class Book extends BaseEntity {
 
   @Column(name = "subject_id", nullable = false)
   private UUID subjectId;
+
+  @Column(name = "book_series_id")
+  private UUID bookSeriesId;
 
   @Column(name = "curriculum_id")
   private UUID curriculumId;
@@ -122,6 +126,10 @@ public class Book extends BaseEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "subject_id", insertable = false, updatable = false)
   private Subject subject;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "book_series_id", insertable = false, updatable = false)
+  private BookSeries bookSeries;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "curriculum_id", insertable = false, updatable = false)
