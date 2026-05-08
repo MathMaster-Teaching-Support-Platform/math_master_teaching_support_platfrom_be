@@ -32,6 +32,7 @@ import com.fptu.math_master.service.AIEnhancementService;
 import com.fptu.math_master.service.BlueprintService;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.QuestionTemplateService;
+import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -70,6 +71,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   QuestionBankRepository questionBankRepository;
   CanonicalQuestionRepository canonicalQuestionRepository;
   BlueprintService blueprintService;
+  UserSubscriptionService userSubscriptionService;
 
   @Override
   @Transactional
@@ -610,6 +612,14 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
           .generatedQuestionIds(generatedIds)
           .warnings(warnings)
           .build();
+    }
+
+    // Token deduction: cost = number of questions requested. Charged here, after
+    // the AI selector has produced usable value sets but before substitution, so
+    // a substitution failure rolls back the deduction with the parent @Transactional.
+    // ADMIN exempt.
+    if (!SecurityUtils.hasRole("ADMIN")) {
+      userSubscriptionService.consumeMyTokens(requested, "GENERATE_QUESTIONS_FROM_TEMPLATE");
     }
 
     String selectionPromptVersion = blueprintService.selectionPromptVersion();

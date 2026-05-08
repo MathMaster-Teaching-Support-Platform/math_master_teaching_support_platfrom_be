@@ -89,4 +89,12 @@ artifacts — do not invent content for them.
   submitted. Parameterise *inside* each clause text the same way.
 - For diagrams: a parameter that appears inside `\\draw (2,3)` is the same as
   one appearing in the formula if the value matches.
+- **The `warnings` array MUST be written in Vietnamese**, in plain everyday
+  language a high-school teacher (not a developer) can understand. Avoid
+  technical terms like "questionText", "correctAnswer", "placeholder",
+  "templateText", "round-trip", "occurrences" — say "đề bài", "đáp án",
+  "biến số {{a}}", "mẫu câu hỏi", "không tính ra đúng kết quả", "vị trí xuất
+  hiện". Keep each warning to one short sentence. Example:
+  *"Đề bài hơi chung chung — AI đã suy luận dãy số `{{a}}, ___, ___, ___, {{b}}`
+  từ đáp án `2,3,4` cho phù hợp với dạng bài này."*
 - Output **strict JSON only** — no commentary, no code fences, no trailing text.
