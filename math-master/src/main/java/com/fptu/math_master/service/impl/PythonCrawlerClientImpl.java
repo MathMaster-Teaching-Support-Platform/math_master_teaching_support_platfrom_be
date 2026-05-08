@@ -1,11 +1,14 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.dto.request.UpdateLessonPageRequest;
+import com.fptu.math_master.dto.response.ContentBlockDto;
 import com.fptu.math_master.dto.response.LessonPageHistoryEntryResponse;
 import com.fptu.math_master.dto.response.LessonPageResponse;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.service.PythonCrawlerClient;
+import com.fptu.math_master.service.UploadService;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -31,9 +34,16 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
   private static final String STATIC_PROXY_PREFIX = "/api/v1/crawl-data/static/";
 
   private final RestClient restClient;
+  private final UploadService uploadService;
+  private final MinioProperties minioProperties;
 
-  public PythonCrawlerClientImpl(@Qualifier("crawlDataRestClient") RestClient restClient) {
+  public PythonCrawlerClientImpl(
+      @Qualifier("crawlDataRestClient") RestClient restClient,
+      UploadService uploadService,
+      MinioProperties minioProperties) {
     this.restClient = restClient;
+    this.uploadService = uploadService;
+    this.minioProperties = minioProperties;
   }
 
   @Override
@@ -292,15 +302,46 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
     if (page == null) {
       return null;
     }
-    page.setRawImageUrl(rewriteStaticPath(page.getRawImageUrl()));
+    page.setRawImageUrl(resolveMediaUrl(page.getRawImageUrl()));
     if (page.getContentBlocks() != null) {
-      page.getContentBlocks().forEach(block -> {
-        block.setImageUrl(rewriteStaticPath(block.getImageUrl()));
-        block.setImagePath(rewriteStaticPath(block.getImagePath()));
-        block.setThumbnailUrl(rewriteStaticPath(block.getThumbnailUrl()));
-      });
+      page.getContentBlocks().forEach(this::normalizeBlockUrls);
     }
     return page;
+  }
+
+  private void normalizeBlockUrls(ContentBlockDto block) {
+    String imageUrl = resolveMediaUrl(block.getImageUrl());
+    String imagePath = resolveMediaUrl(block.getImagePath());
+    String thumbnailUrl = resolveMediaUrl(block.getThumbnailUrl());
+
+    block.setImageUrl(firstNonBlank(imageUrl, imagePath));
+    block.setImagePath(imagePath);
+    block.setThumbnailUrl(thumbnailUrl);
+  }
+
+  private String resolveMediaUrl(String value) {
+    String normalized = rewriteStaticPath(value);
+    if (normalized == null || normalized.isBlank()) {
+      return normalized;
+    }
+    if (normalized.startsWith(STATIC_PROXY_PREFIX)
+        || normalized.startsWith("http://")
+        || normalized.startsWith("https://")) {
+      return normalized;
+    }
+
+    // Remaining non-static strings are treated as private object keys.
+    try {
+      return uploadService.getPresignedUrl(normalized, minioProperties.getOcrContentBucket());
+    } catch (Exception ex) {
+      log.warn("Failed to presign OCR media key '{}': {}", normalized, ex.getMessage());
+      return normalized;
+    }
+  }
+
+  private String firstNonBlank(String first, String second) {
+    if (first != null && !first.isBlank()) return first;
+    return second;
   }
 
   private String rewriteStaticPath(String path) {

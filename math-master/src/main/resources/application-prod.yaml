@@ -123,6 +123,8 @@ minio:
   template-bucket: ${MINIO_TEMPLATE_BUCKET:slide-templates}
   verification-bucket: ${MINIO_VERIFICATION_BUCKET:teacher-verifications}
   course-videos-bucket: ${MINIO_COURSE_VIDEOS_BUCKET:course-videos}
+  course-materials-bucket: ${MINIO_COURSE_MATERIALS_BUCKET:course-materials}
+  ocr-content-bucket: ${MINIO_OCR_CONTENT_BUCKET:${MINIO_TEMPLATE_BUCKET:slide-templates}}
 
 logging:
   level:
