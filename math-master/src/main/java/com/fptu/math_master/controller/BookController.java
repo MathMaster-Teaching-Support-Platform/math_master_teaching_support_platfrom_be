@@ -5,12 +5,16 @@ import com.fptu.math_master.dto.request.CreateBookRequest;
 import com.fptu.math_master.dto.request.UpdateBookRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.BookLessonPageResponse;
+import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse;
 import com.fptu.math_master.dto.response.BookResponse;
 import com.fptu.math_master.dto.response.OcrTriggerResponse;
 import com.fptu.math_master.enums.BookStatus;
+import com.fptu.math_master.exception.AppException;
+import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.service.BookLessonPageService;
 import com.fptu.math_master.service.BookService;
+import com.fptu.math_master.service.UploadService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -27,6 +31,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -41,6 +46,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/v1/books")
@@ -53,6 +59,7 @@ public class BookController {
 
   BookService bookService;
   BookLessonPageService bookLessonPageService;
+  UploadService uploadService;
 
   // ---------------------------------------------------------------------------
   // Book CRUD
@@ -70,22 +77,40 @@ public class BookController {
 
   @Operation(summary = "Get book by ID")
   @GetMapping("/{id}")
+  @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<BookResponse> getById(@PathVariable UUID id) {
     return ApiResponse.<BookResponse>builder().result(bookService.getById(id)).build();
   }
 
+  @Operation(
+      summary = "Presigned URL to preview the uploaded PDF",
+      description =
+          "Returns a short-lived MinIO GET URL suitable for iframe/embed in the admin wizard.")
+  @GetMapping("/{id}/pdf-preview-url")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<BookPdfPreviewUrlResponse> getPdfPreviewUrl(@PathVariable UUID id) {
+    return ApiResponse.<BookPdfPreviewUrlResponse>builder()
+        .result(bookService.getPdfPreviewUrl(id))
+        .build();
+  }
+
   @Operation(summary = "Search books with filters")
   @GetMapping
+  @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<Page<BookResponse>> search(
       @RequestParam(required = false) UUID schoolGradeId,
       @RequestParam(required = false) UUID subjectId,
       @RequestParam(required = false) UUID curriculumId,
+      @RequestParam(required = false) UUID chapterId,
+      @RequestParam(required = false) UUID lessonId,
       @RequestParam(required = false) BookStatus status,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
     Pageable pageable = PageRequest.of(page, size);
     return ApiResponse.<Page<BookResponse>>builder()
-        .result(bookService.search(schoolGradeId, subjectId, curriculumId, status, pageable))
+        .result(
+            bookService.search(
+                schoolGradeId, subjectId, curriculumId, chapterId, lessonId, status, pageable))
         .build();
   }
 
@@ -119,6 +144,23 @@ public class BookController {
         .build();
   }
 
+  @Operation(summary = "Upload book PDF and persist the uploaded object key")
+  @PostMapping(value = "/{id}/pdf-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<BookResponse> uploadPdf(
+      @PathVariable UUID id,
+      @RequestParam("file") MultipartFile file,
+      @AuthenticationPrincipal Jwt jwt) {
+    if (file == null || file.isEmpty()) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+    UUID actorId = UUID.fromString(jwt.getSubject());
+    String objectKey = uploadService.uploadFile(file, "books/pdfs");
+    return ApiResponse.<BookResponse>builder()
+        .result(bookService.setPdfPath(id, objectKey, actorId))
+        .build();
+  }
+
   @Operation(summary = "Soft-delete a book and drop its OCR'd pages from Mongo")
   @DeleteMapping("/{id}")
   @PreAuthorize("hasRole('ADMIN')")
@@ -136,6 +178,7 @@ public class BookController {
       summary = "Get the current lesson→page mapping for a book",
       description = "Includes denormalized lesson/chapter info plus per-lesson OCR/verify counts.")
   @GetMapping("/{id}/page-mapping")
+  @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<List<BookLessonPageResponse>> getPageMapping(@PathVariable UUID id) {
     return ApiResponse.<List<BookLessonPageResponse>>builder()
         .result(bookLessonPageService.listForBook(id))
@@ -175,10 +218,25 @@ public class BookController {
   }
 
   @Operation(
+      summary = "Cancel an in-flight OCR job",
+      description =
+          "Signals the Python crawler to stop cooperatively and sets book status back to READY.")
+  @PostMapping("/{id}/ocr/cancel")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<BookResponse> cancelOcr(
+      @PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+    UUID actorId = UUID.fromString(jwt.getSubject());
+    return ApiResponse.<BookResponse>builder()
+        .result(bookService.cancelOcr(id, actorId))
+        .build();
+  }
+
+  @Operation(
       summary = "Per-page/lesson/book verification progress",
       description = "Aggregates the page-level verified flag from Mongo into lesson and book "
           + "rollups for the verify UI.")
   @GetMapping("/{id}/progress")
+  @PreAuthorize("hasRole('ADMIN')")
   public ApiResponse<BookProgressResponse> getProgress(@PathVariable UUID id) {
     return ApiResponse.<BookProgressResponse>builder()
         .result(bookService.getProgress(id))

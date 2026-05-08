@@ -65,7 +65,8 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
     validateRangesWithinOcrWindow(items, book);
 
     Map<UUID, Lesson> lessonsById = loadLessons(items);
-    validateLessonsBelongToCurriculum(lessonsById.values(), book.getCurriculumId());
+    validateLessonsBelongToCurriculum(
+      lessonsById.values(), book.getCurriculumId(), book.getSubjectId());
 
     List<PageMappingItem> sorted = sortByCurriculumOrder(items, lessonsById);
     validateNonOverlapping(sorted);
@@ -175,8 +176,8 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
     return byId;
   }
 
-  private void validateLessonsBelongToCurriculum(
-      java.util.Collection<Lesson> lessons, UUID curriculumId) {
+    private void validateLessonsBelongToCurriculum(
+      java.util.Collection<Lesson> lessons, UUID curriculumId, UUID subjectId) {
     Set<UUID> chapterIds = lessons.stream().map(Lesson::getChapterId).collect(Collectors.toSet());
     Map<UUID, Chapter> chaptersById =
         chapterRepository.findAllById(chapterIds).stream()
@@ -186,6 +187,17 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
       // Some chapter is missing or soft-deleted — refuse to map a lesson against a dangling parent.
       throw new AppException(ErrorCode.PAGE_MAPPING_LESSON_FOREIGN);
     }
+
+    if (curriculumId == null) {
+      // Curriculum is optional for books; in that case constrain lessons by subject only.
+      for (Chapter ch : chaptersById.values()) {
+        if (ch.getSubjectId() == null || !ch.getSubjectId().equals(subjectId)) {
+          throw new AppException(ErrorCode.PAGE_MAPPING_LESSON_FOREIGN);
+        }
+      }
+      return;
+    }
+
     for (Chapter ch : chaptersById.values()) {
       if (ch.getCurriculumId() == null || !ch.getCurriculumId().equals(curriculumId)) {
         throw new AppException(ErrorCode.PAGE_MAPPING_LESSON_FOREIGN);

@@ -47,7 +47,7 @@ public class Book extends BaseEntity {
   @Column(name = "subject_id", nullable = false)
   private UUID subjectId;
 
-  @Column(name = "curriculum_id", nullable = false)
+  @Column(name = "curriculum_id")
   private UUID curriculumId;
 
   @Size(max = 255)
@@ -93,6 +93,27 @@ public class Book extends BaseEntity {
 
   @Column(name = "verified_at")
   private Instant verifiedAt;
+
+  /** Last snapshot from Python OCR status poll — survives FE disconnect / crawler blips. */
+  @Size(max = 32)
+  @Column(name = "ocr_cached_runner_status", length = 32)
+  private String ocrCachedRunnerStatus;
+
+  @Size(max = 80)
+  @Column(name = "ocr_cached_phase", length = 80)
+  private String ocrCachedPhase;
+
+  @Column(name = "ocr_cached_progress_percent")
+  private Integer ocrCachedProgressPercent;
+
+  @Column(name = "ocr_cached_processed_pages")
+  private Integer ocrCachedProcessedPages;
+
+  @Column(name = "ocr_cached_total_pages")
+  private Integer ocrCachedTotalPages;
+
+  @Column(name = "ocr_cached_at")
+  private Instant ocrCachedAt;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "school_grade_id", insertable = false, updatable = false)

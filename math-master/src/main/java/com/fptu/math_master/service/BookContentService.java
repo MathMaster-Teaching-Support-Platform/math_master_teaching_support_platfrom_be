@@ -2,6 +2,7 @@ package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.UpdateLessonPageRequest;
 import com.fptu.math_master.dto.response.LessonContentResponse;
+import com.fptu.math_master.dto.response.LessonPageHistoryEntryResponse;
 import com.fptu.math_master.dto.response.LessonPageResponse;
 import java.util.List;
 import java.util.UUID;
@@ -25,6 +26,10 @@ public interface BookContentService {
 
   /** Single page lookup. */
   LessonPageResponse getPage(UUID bookId, UUID lessonId, int pageNumber);
+
+  /** Persisted edit history for one page. */
+  List<LessonPageHistoryEntryResponse> getPageHistory(
+      UUID bookId, UUID lessonId, int pageNumber, int limit);
 
   /** All pages for a book, grouped per lesson. */
   List<LessonContentResponse> getAllLessonsForBook(UUID bookId);

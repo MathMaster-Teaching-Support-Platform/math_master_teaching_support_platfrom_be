@@ -23,7 +23,7 @@ public class CreateBookRequest {
   @NotNull(message = "subjectId is required")
   private UUID subjectId;
 
-  @NotNull(message = "curriculumId is required")
+  /** Optional — admins may attach a curriculum later; tree navigation is by subject. */
   private UUID curriculumId;
 
   @NotBlank(message = "title is required")

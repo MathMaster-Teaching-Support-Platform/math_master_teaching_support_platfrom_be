@@ -1,6 +1,7 @@
 package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.UpdateLessonPageRequest;
+import com.fptu.math_master.dto.response.LessonPageHistoryEntryResponse;
 import com.fptu.math_master.dto.response.LessonPageResponse;
 import java.util.List;
 import java.util.Optional;
@@ -33,8 +34,20 @@ public interface PythonCrawlerClient {
    */
   OcrTriggerResult triggerOcrWithMapping(OcrTriggerRequest request);
 
-  /** Latest OCR status for a book — for the BE to keep its book.status column in sync. */
-  record OcrStatus(String status, Integer processedPages, Integer totalPages, String errorMessage) {}
+  /** Cooperatively asks the Python pipeline to stop (Mongo cancel flag). Safe if idle. */
+  void cancelOcr(UUID bookId);
+
+  /**
+   * Snapshot from Mongo/Python while OCR runs — includes coarse pipeline phase and counters for the
+   * admin UI.
+   */
+  record OcrStatus(
+      String status,
+      Integer processedPages,
+      Integer totalPages,
+      String errorMessage,
+      Integer progressPercent,
+      String currentPhase) {}
 
   OcrStatus getBookOcrStatus(UUID bookId);
 
@@ -49,6 +62,9 @@ public interface PythonCrawlerClient {
   List<LessonPageResponse> getPagesByLesson(UUID lessonId, UUID bookId);
 
   Optional<LessonPageResponse> getPage(UUID bookId, UUID lessonId, int pageNumber);
+
+  List<LessonPageHistoryEntryResponse> getPageHistory(
+      UUID bookId, UUID lessonId, int pageNumber, int limit);
 
   /** Patch one page (content blocks and/or verified flag). Returns the updated page. */
   LessonPageResponse updatePage(

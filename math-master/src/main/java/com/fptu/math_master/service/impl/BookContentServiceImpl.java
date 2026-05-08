@@ -2,6 +2,7 @@ package com.fptu.math_master.service.impl;
 
 import com.fptu.math_master.dto.request.UpdateLessonPageRequest;
 import com.fptu.math_master.dto.response.LessonContentResponse;
+import com.fptu.math_master.dto.response.LessonPageHistoryEntryResponse;
 import com.fptu.math_master.dto.response.LessonPageResponse;
 import com.fptu.math_master.entity.Book;
 import com.fptu.math_master.entity.BookLessonPage;
@@ -17,6 +18,7 @@ import com.fptu.math_master.service.PythonCrawlerClient;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -79,6 +81,26 @@ public class BookContentServiceImpl implements BookContentService {
     return crawlerClient
         .getPage(bookId, lessonId, pageNumber)
         .orElseThrow(() -> new AppException(ErrorCode.LESSON_PAGE_NOT_FOUND));
+  }
+
+  @Override
+  public List<LessonPageHistoryEntryResponse> getPageHistory(
+      UUID bookId, UUID lessonId, int pageNumber, int limit) {
+    findActiveBook(bookId);
+    findActiveLesson(lessonId);
+    return crawlerClient.getPageHistory(bookId, lessonId, pageNumber, limit).stream()
+        .map(
+            item ->
+                new LessonPageHistoryEntryResponse(
+                    item.id(),
+                    item.action(),
+                    item.changedBy(),
+                    item.changedAt(),
+                    item.summary(),
+                    item.before(),
+                    item.after(),
+                    splitSummary(item.summary())))
+        .toList();
   }
 
   @Override
@@ -164,5 +186,16 @@ public class BookContentServiceImpl implements BookContentService {
 
   private boolean allVerified(List<LessonPageResponse> pages) {
     return !pages.isEmpty() && pages.stream().allMatch(LessonPageResponse::isVerified);
+  }
+
+  private List<String> splitSummary(String summary) {
+    if (summary == null || summary.isBlank()) {
+      return List.of();
+    }
+    return List.of(summary.split(";")).stream()
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .filter(Objects::nonNull)
+        .toList();
   }
 }

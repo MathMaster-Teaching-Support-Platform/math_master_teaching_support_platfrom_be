@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,6 +16,7 @@ import com.fptu.math_master.BaseUnitTest;
 import com.fptu.math_master.dto.request.CreateBookRequest;
 import com.fptu.math_master.dto.response.BookProgressResponse;
 import com.fptu.math_master.dto.response.LessonPageResponse;
+import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.OcrTriggerResponse;
 import com.fptu.math_master.entity.Book;
 import com.fptu.math_master.entity.BookLessonPage;
@@ -30,7 +33,9 @@ import com.fptu.math_master.repository.CurriculumRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SubjectRepository;
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.service.PythonCrawlerClient;
+import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.service.PythonCrawlerClient.OcrTriggerResult;
 import java.util.List;
 import java.util.Optional;
@@ -55,6 +60,8 @@ class BookServiceImplTest extends BaseUnitTest {
   @Mock private CurriculumRepository curriculumRepository;
   @Mock private LessonRepository lessonRepository;
   @Mock private PythonCrawlerClient crawlerClient;
+  @Mock private UploadService uploadService;
+  @Mock private MinioProperties minioProperties;
 
   private static final UUID BOOK_ID = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
   private static final UUID GRADE_ID = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000002");
@@ -227,6 +234,70 @@ class BookServiceImplTest extends BaseUnitTest {
   }
 
   // ---------------------------------------------------------------------------
+  // cancelOcr()
+  // ---------------------------------------------------------------------------
+
+  @Nested
+  @DisplayName("cancelOcr()")
+  class CancelOcrTests {
+
+    @Test
+    void it_should_call_python_and_set_ready_when_book_was_running() {
+      Book book = readyForOcr();
+      book.setStatus(BookStatus.OCR_RUNNING);
+      book.setOcrError("prev");
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(bookRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+      when(bookLessonPageRepository.countByBookId(any())).thenReturn(1L);
+      when(schoolGradeRepository.findByIdAndNotDeleted(GRADE_ID))
+          .thenReturn(Optional.of(schoolGrade));
+      when(subjectRepository.findById(SUBJECT_ID)).thenReturn(Optional.of(subject));
+      when(curriculumRepository.findByIdAndNotDeleted(CURRICULUM_ID))
+          .thenReturn(Optional.of(curriculum));
+
+      var response = service.cancelOcr(BOOK_ID, ACTOR);
+
+      verify(crawlerClient).cancelOcr(BOOK_ID);
+      assertEquals(BookStatus.READY, book.getStatus());
+      assertNull(book.getOcrError());
+      assertEquals(BookStatus.READY, response.getStatus());
+    }
+
+    @Test
+    void it_should_still_reset_postgres_when_python_unreachable() {
+      Book book = readyForOcr();
+      book.setStatus(BookStatus.OCR_RUNNING);
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(bookRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+      when(bookLessonPageRepository.countByBookId(any())).thenReturn(1L);
+      when(schoolGradeRepository.findByIdAndNotDeleted(GRADE_ID))
+          .thenReturn(Optional.of(schoolGrade));
+      when(subjectRepository.findById(SUBJECT_ID)).thenReturn(Optional.of(subject));
+      when(curriculumRepository.findByIdAndNotDeleted(CURRICULUM_ID))
+          .thenReturn(Optional.of(curriculum));
+      doThrow(new AppException(ErrorCode.CRAWLER_UNAVAILABLE)).when(crawlerClient).cancelOcr(BOOK_ID);
+
+      service.cancelOcr(BOOK_ID, ACTOR);
+
+      assertEquals(BookStatus.READY, book.getStatus());
+    }
+
+    @Test
+    void it_should_reject_when_book_not_running() {
+      Book book = readyForOcr();
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+
+      AppException ex =
+          assertThrows(AppException.class, () -> service.cancelOcr(BOOK_ID, ACTOR));
+      assertEquals(ErrorCode.INVALID_REQUEST, ex.getErrorCode());
+      verify(crawlerClient, never()).cancelOcr(any());
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // getProgress()
   // ---------------------------------------------------------------------------
 
@@ -258,6 +329,134 @@ class BookServiceImplTest extends BaseUnitTest {
       assertEquals(4, progress.getTotalPages());
       assertEquals(3, progress.getVerifiedPages());
       assertEquals(false, progress.isBookVerified());
+      verify(crawlerClient, never()).getBookOcrStatus(any());
+      assertNull(progress.getOcrCrawlerReachable());
+    }
+
+    @Test
+    void it_should_merge_live_ocr_runner_fields_when_book_status_is_ocr_running() {
+      Book book = readyForOcr();
+      book.setStatus(BookStatus.OCR_RUNNING);
+      List<BookLessonPage> mappings = List.of(mapping(LESSON_ID, 1, 5));
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(bookLessonPageRepository.findByBookIdOrdered(BOOK_ID)).thenReturn(mappings);
+      when(lessonRepository.findByIdInAndNotDeleted(any())).thenReturn(List.of());
+      when(crawlerClient.getPagesByBookAndLesson(BOOK_ID, LESSON_ID)).thenReturn(List.of());
+      when(crawlerClient.getBookOcrStatus(BOOK_ID))
+          .thenReturn(
+              new PythonCrawlerClient.OcrStatus(
+                  "processing", 40, 82, null, Integer.valueOf(37), "analyzing"));
+
+      BookProgressResponse progress = service.getProgress(BOOK_ID);
+
+      assertEquals("processing", progress.getOcrRunnerStatus());
+      assertEquals(Integer.valueOf(37), progress.getOcrJobProgressPercent());
+      assertEquals("analyzing", progress.getOcrJobPhase());
+      assertEquals(Integer.valueOf(40), progress.getOcrJobProcessedPages());
+      assertEquals(Integer.valueOf(82), progress.getOcrJobTotalPages());
+      assertNull(progress.getOcrJobErrorMessage());
+      assertEquals(Boolean.TRUE, progress.getOcrCrawlerReachable());
+      assertEquals(Boolean.FALSE, progress.getOcrProgressFromCache());
+      verify(bookRepository).save(book);
+    }
+
+    @Test
+    void it_should_sync_postgres_book_to_ocr_done_when_mongo_runner_reports_done() {
+      Book book = readyForOcr();
+      book.setStatus(BookStatus.OCR_RUNNING);
+      List<BookLessonPage> mappings = List.of(mapping(LESSON_ID, 1, 5));
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(bookLessonPageRepository.findByBookIdOrdered(BOOK_ID)).thenReturn(mappings);
+      when(lessonRepository.findByIdInAndNotDeleted(any())).thenReturn(List.of());
+      when(crawlerClient.getPagesByBookAndLesson(BOOK_ID, LESSON_ID)).thenReturn(List.of());
+      when(crawlerClient.getBookOcrStatus(BOOK_ID))
+          .thenReturn(
+              new PythonCrawlerClient.OcrStatus(
+                  "done", 82, 82, null, Integer.valueOf(100), "done"));
+      when(bookRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+      BookProgressResponse progress = service.getProgress(BOOK_ID);
+
+      assertEquals(BookStatus.OCR_DONE, progress.getStatus());
+      assertEquals(BookStatus.OCR_DONE, book.getStatus());
+      verify(bookRepository).save(book);
+    }
+
+    @Test
+    void it_should_sync_postgres_book_to_ocr_failed_when_mongo_runner_reports_error() {
+      Book book = readyForOcr();
+      book.setStatus(BookStatus.OCR_RUNNING);
+      List<BookLessonPage> mappings = List.of(mapping(LESSON_ID, 1, 5));
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(bookLessonPageRepository.findByBookIdOrdered(BOOK_ID)).thenReturn(mappings);
+      when(lessonRepository.findByIdInAndNotDeleted(any())).thenReturn(List.of());
+      when(crawlerClient.getPagesByBookAndLesson(BOOK_ID, LESSON_ID)).thenReturn(List.of());
+      when(crawlerClient.getBookOcrStatus(BOOK_ID))
+          .thenReturn(
+              new PythonCrawlerClient.OcrStatus(
+                  "error", 0, 10, "boom", Integer.valueOf(0), ""));
+      when(bookRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+      BookProgressResponse progress = service.getProgress(BOOK_ID);
+
+      assertEquals(BookStatus.OCR_FAILED, progress.getStatus());
+      assertEquals("boom", book.getOcrError());
+      verify(bookRepository).save(book);
+    }
+
+    @Test
+    void it_should_flag_crawler_unreachable_when_ocr_status_call_fails() {
+      Book book = readyForOcr();
+      book.setStatus(BookStatus.OCR_RUNNING);
+      List<BookLessonPage> mappings = List.of(mapping(LESSON_ID, 1, 5));
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(bookLessonPageRepository.findByBookIdOrdered(BOOK_ID)).thenReturn(mappings);
+      when(lessonRepository.findByIdInAndNotDeleted(any())).thenReturn(List.of());
+      when(crawlerClient.getPagesByBookAndLesson(BOOK_ID, LESSON_ID)).thenReturn(List.of());
+      doThrow(new AppException(ErrorCode.CRAWLER_UNAVAILABLE))
+          .when(crawlerClient)
+          .getBookOcrStatus(BOOK_ID);
+
+      BookProgressResponse progress = service.getProgress(BOOK_ID);
+
+      assertEquals(Boolean.FALSE, progress.getOcrCrawlerReachable());
+      assertEquals(BookStatus.OCR_RUNNING, progress.getStatus());
+      verify(bookRepository, never()).save(any());
+    }
+
+    @Test
+    void it_should_use_postgres_ocr_snapshot_when_crawler_is_unreachable() {
+      Book book = readyForOcr();
+      book.setStatus(BookStatus.OCR_RUNNING);
+      book.setOcrCachedRunnerStatus("processing");
+      book.setOcrCachedPhase("analyzing");
+      book.setOcrCachedProgressPercent(42);
+      book.setOcrCachedProcessedPages(35);
+      book.setOcrCachedTotalPages(82);
+      book.setOcrCachedAt(java.time.Instant.parse("2026-05-08T10:15:30Z"));
+      List<BookLessonPage> mappings = List.of(mapping(LESSON_ID, 1, 5));
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(bookLessonPageRepository.findByBookIdOrdered(BOOK_ID)).thenReturn(mappings);
+      when(lessonRepository.findByIdInAndNotDeleted(any())).thenReturn(List.of());
+      when(crawlerClient.getPagesByBookAndLesson(BOOK_ID, LESSON_ID)).thenReturn(List.of());
+      doThrow(new AppException(ErrorCode.CRAWLER_UNAVAILABLE))
+          .when(crawlerClient)
+          .getBookOcrStatus(BOOK_ID);
+
+      BookProgressResponse progress = service.getProgress(BOOK_ID);
+
+      assertEquals(Boolean.FALSE, progress.getOcrCrawlerReachable());
+      assertEquals(Boolean.TRUE, progress.getOcrProgressFromCache());
+      assertEquals(Integer.valueOf(42), progress.getOcrJobProgressPercent());
+      assertEquals("analyzing", progress.getOcrJobPhase());
+      assertEquals(Integer.valueOf(35), progress.getOcrJobProcessedPages());
+      assertEquals(Integer.valueOf(82), progress.getOcrJobTotalPages());
+      verify(bookRepository, never()).save(any());
     }
   }
 
@@ -308,6 +507,38 @@ class BookServiceImplTest extends BaseUnitTest {
       service.refreshVerificationStatus(BOOK_ID, ACTOR);
 
       verify(bookRepository, never()).save(any());
+    }
+  }
+
+  @Nested
+  @DisplayName("getPdfPreviewUrl()")
+  class PdfPreviewTests {
+
+    @Test
+    void it_should_return_presigned_url_when_book_has_pdf_path() {
+      Book book = readyForOcr();
+      book.setPdfPath("books/pdfs/file.pdf");
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(minioProperties.getTemplateBucket()).thenReturn("slide-templates");
+      when(uploadService.getPresignedUrl("books/pdfs/file.pdf", "slide-templates"))
+          .thenReturn("https://minio.example/presigned");
+
+      BookPdfPreviewUrlResponse response = service.getPdfPreviewUrl(BOOK_ID);
+
+      assertEquals("https://minio.example/presigned", response.url());
+      verify(uploadService).getPresignedUrl(eq("books/pdfs/file.pdf"), eq("slide-templates"));
+    }
+
+    @Test
+    void it_should_reject_preview_when_pdf_path_is_blank() {
+      Book book = readyForOcr();
+      book.setPdfPath(null);
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+
+      AppException ex =
+          assertThrows(AppException.class, () -> service.getPdfPreviewUrl(BOOK_ID));
+      assertEquals(ErrorCode.INVALID_REQUEST, ex.getErrorCode());
+      verify(uploadService, never()).getPresignedUrl(any(), any());
     }
   }
 

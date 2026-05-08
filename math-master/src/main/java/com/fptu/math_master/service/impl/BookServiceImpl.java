@@ -1,7 +1,9 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.dto.request.CreateBookRequest;
 import com.fptu.math_master.dto.request.UpdateBookRequest;
+import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse.LessonProgress;
 import com.fptu.math_master.dto.response.BookResponse;
@@ -23,11 +25,13 @@ import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.service.BookService;
 import com.fptu.math_master.service.PythonCrawlerClient;
+import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.service.PythonCrawlerClient.OcrTriggerRequest;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -39,6 +43,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -53,6 +58,8 @@ public class BookServiceImpl implements BookService {
   CurriculumRepository curriculumRepository;
   LessonRepository lessonRepository;
   PythonCrawlerClient crawlerClient;
+  UploadService uploadService;
+  MinioProperties minioProperties;
 
   // ---------------------------------------------------------------------------
   // CRUD
@@ -72,15 +79,17 @@ public class BookServiceImpl implements BookService {
             .filter(s -> s.getDeletedAt() == null && Boolean.TRUE.equals(s.getIsActive()))
             .orElseThrow(() -> new AppException(ErrorCode.SUBJECT_NOT_FOUND));
 
-    Curriculum curriculum =
-        curriculumRepository
-            .findByIdAndNotDeleted(request.getCurriculumId())
-            .orElseThrow(() -> new AppException(ErrorCode.CURRICULUM_NOT_FOUND));
-
-    if (curriculum.getSubjectId() == null
-        || !curriculum.getSubjectId().equals(subject.getId())) {
-      // Curriculum must belong to the chosen subject; otherwise the lesson tree would be wrong.
-      throw new AppException(ErrorCode.INVALID_REQUEST);
+    // Curriculum is optional — when supplied it must belong to the same subject so the lesson
+    // tree stays consistent; admins can leave it blank and attach one later.
+    if (request.getCurriculumId() != null) {
+      Curriculum curriculum =
+          curriculumRepository
+              .findByIdAndNotDeleted(request.getCurriculumId())
+              .orElseThrow(() -> new AppException(ErrorCode.CURRICULUM_NOT_FOUND));
+      if (curriculum.getSubjectId() == null
+          || !curriculum.getSubjectId().equals(subject.getId())) {
+        throw new AppException(ErrorCode.INVALID_REQUEST);
+      }
     }
 
     validateOcrWindow(
@@ -108,19 +117,23 @@ public class BookServiceImpl implements BookService {
   }
 
   @Override
+  @Transactional(readOnly = true)
   public BookResponse getById(UUID id) {
     return toResponse(findActiveBook(id));
   }
 
   @Override
+  @Transactional(readOnly = true)
   public Page<BookResponse> search(
       UUID schoolGradeId,
       UUID subjectId,
       UUID curriculumId,
+    UUID chapterId,
+    UUID lessonId,
       BookStatus status,
       Pageable pageable) {
     return bookRepository
-        .search(schoolGradeId, subjectId, curriculumId, status, pageable)
+      .search(schoolGradeId, subjectId, curriculumId, chapterId, lessonId, status, pageable)
         .map(this::toResponse);
   }
 
@@ -154,6 +167,19 @@ public class BookServiceImpl implements BookService {
     book.setPdfPath(pdfPath);
     book.setUpdatedBy(actorId);
     return toResponse(bookRepository.save(book));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public BookPdfPreviewUrlResponse getPdfPreviewUrl(UUID id) {
+    Book book = findActiveBook(id);
+    String key = book.getPdfPath();
+    if (!StringUtils.hasText(key)) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+    String url =
+        uploadService.getPresignedUrl(key.trim(), minioProperties.getTemplateBucket());
+    return new BookPdfPreviewUrlResponse(url);
   }
 
   @Override
@@ -212,6 +238,7 @@ public class BookServiceImpl implements BookService {
 
     var result = crawlerClient.triggerOcrWithMapping(payload);
 
+    clearOcrSnapshotFields(book);
     book.setStatus(BookStatus.OCR_RUNNING);
     book.setOcrError(null);
     book.setUpdatedBy(actorId);
@@ -231,11 +258,35 @@ public class BookServiceImpl implements BookService {
         .build();
   }
 
+  @Override
+  @Transactional
+  public BookResponse cancelOcr(UUID id, UUID actorId) {
+    Book book = findActiveBook(id);
+    if (book.getStatus() != BookStatus.OCR_RUNNING) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+
+    try {
+      crawlerClient.cancelOcr(id);
+    } catch (AppException ex) {
+      log.warn("Crawler unavailable while cancelling OCR for book {}; Postgres status still reset", id);
+    }
+
+    clearOcrSnapshotFields(book);
+    book.setStatus(BookStatus.READY);
+    book.setOcrError(null);
+    book.setUpdatedBy(actorId);
+    bookRepository.save(book);
+
+    return toResponse(book);
+  }
+
   // ---------------------------------------------------------------------------
   // Verification rollup
   // ---------------------------------------------------------------------------
 
   @Override
+  @Transactional
   public BookProgressResponse getProgress(UUID id) {
     Book book = findActiveBook(id);
     List<BookLessonPage> mappings = bookLessonPageRepository.findByBookIdOrdered(id);
@@ -272,16 +323,119 @@ public class BookServiceImpl implements BookService {
 
     boolean bookVerified = totalLessons > 0 && verifiedLessons == totalLessons;
 
-    return BookProgressResponse.builder()
-        .bookId(id)
+    var builder =
+        BookProgressResponse.builder()
+            .bookId(id)
+            .bookVerified(bookVerified)
+            .totalLessons(totalLessons)
+            .verifiedLessons(verifiedLessons)
+            .totalPages(totalPages)
+            .verifiedPages(verifiedPages)
+            .lessons(perLesson);
+
+    Boolean ocrCrawlerReachable = null;
+    if (book.getStatus() == BookStatus.OCR_RUNNING) {
+      ocrCrawlerReachable = Boolean.TRUE;
+      try {
+        PythonCrawlerClient.OcrStatus ocr = crawlerClient.getBookOcrStatus(id);
+        boolean dirty = applyMongoTerminalStatus(book, ocr);
+        if (book.getStatus() == BookStatus.OCR_RUNNING) {
+          applyOcrSnapshotFromLive(book, ocr);
+          dirty = true;
+        }
+        if (dirty) {
+          bookRepository.save(book);
+        }
+        builder
+            .ocrRunnerStatus(ocr.status())
+            .ocrJobProgressPercent(ocr.progressPercent())
+            .ocrJobPhase(ocr.currentPhase())
+            .ocrJobProcessedPages(ocr.processedPages())
+            .ocrJobTotalPages(ocr.totalPages())
+            .ocrJobErrorMessage(ocr.errorMessage())
+            .ocrProgressFromCache(Boolean.FALSE)
+            .ocrProgressCachedAt(book.getOcrCachedAt());
+      } catch (AppException ex) {
+        ocrCrawlerReachable = Boolean.FALSE;
+        log.debug("Crawler unavailable while reading OCR progress for book {}", id);
+        applyOcrProgressFallbackFromBookCache(book, builder);
+      }
+    }
+
+    return builder
         .status(book.getStatus())
-        .bookVerified(bookVerified)
-        .totalLessons(totalLessons)
-        .verifiedLessons(verifiedLessons)
-        .totalPages(totalPages)
-        .verifiedPages(verifiedPages)
-        .lessons(perLesson)
+        .ocrCrawlerReachable(ocrCrawlerReachable)
         .build();
+  }
+
+  /**
+   * Align Postgres with terminal Mongo runner states. Mutates {@code book} only — caller saves.
+   *
+   * @return whether {@code book} was modified and should be persisted
+   */
+  private boolean applyMongoTerminalStatus(Book book, PythonCrawlerClient.OcrStatus ocr) {
+    String mongoStatus = ocr.status() != null ? ocr.status().toLowerCase() : "";
+    if ("done".equals(mongoStatus)) {
+      if (book.getStatus() != BookStatus.OCR_DONE) {
+        book.setStatus(BookStatus.OCR_DONE);
+        book.setOcrError(null);
+        clearOcrSnapshotFields(book);
+        return true;
+      }
+      return false;
+    }
+    if ("error".equals(mongoStatus)) {
+      if (book.getStatus() != BookStatus.OCR_FAILED) {
+        book.setStatus(BookStatus.OCR_FAILED);
+        String msg =
+            Optional.ofNullable(ocr.errorMessage()).filter(s -> !s.isBlank()).orElse("OCR thất bại");
+        book.setOcrError(msg);
+        clearOcrSnapshotFields(book);
+        return true;
+      }
+      return false;
+    }
+    return false;
+  }
+
+  private void applyOcrSnapshotFromLive(Book book, PythonCrawlerClient.OcrStatus ocr) {
+    book.setOcrCachedRunnerStatus(truncate(ocr.status(), 32));
+    book.setOcrCachedPhase(truncate(ocr.currentPhase(), 80));
+    book.setOcrCachedProgressPercent(ocr.progressPercent());
+    book.setOcrCachedProcessedPages(ocr.processedPages());
+    book.setOcrCachedTotalPages(ocr.totalPages());
+    book.setOcrCachedAt(Instant.now());
+  }
+
+  private void applyOcrProgressFallbackFromBookCache(
+      Book book, BookProgressResponse.BookProgressResponseBuilder builder) {
+    if (book.getOcrCachedAt() == null) {
+      return;
+    }
+    builder
+        .ocrRunnerStatus(book.getOcrCachedRunnerStatus())
+        .ocrJobPhase(book.getOcrCachedPhase())
+        .ocrJobProgressPercent(book.getOcrCachedProgressPercent())
+        .ocrJobProcessedPages(book.getOcrCachedProcessedPages())
+        .ocrJobTotalPages(book.getOcrCachedTotalPages())
+        .ocrProgressFromCache(Boolean.TRUE)
+        .ocrProgressCachedAt(book.getOcrCachedAt());
+  }
+
+  private static void clearOcrSnapshotFields(Book book) {
+    book.setOcrCachedRunnerStatus(null);
+    book.setOcrCachedPhase(null);
+    book.setOcrCachedProgressPercent(null);
+    book.setOcrCachedProcessedPages(null);
+    book.setOcrCachedTotalPages(null);
+    book.setOcrCachedAt(null);
+  }
+
+  private static String truncate(String s, int maxLen) {
+    if (s == null) {
+      return null;
+    }
+    return s.length() <= maxLen ? s : s.substring(0, maxLen);
   }
 
   @Override
@@ -332,14 +486,33 @@ public class BookServiceImpl implements BookService {
 
   private BookResponse toResponse(Book book) {
     long mappedCount = bookLessonPageRepository.countByBookId(book.getId());
+    String schoolGradeName =
+      schoolGradeRepository
+        .findByIdAndNotDeleted(book.getSchoolGradeId())
+        .map(sg -> sg.getName())
+        .orElse(null);
+    String subjectName =
+      subjectRepository
+        .findById(book.getSubjectId())
+        .filter(s -> s.getDeletedAt() == null)
+        .map(s -> s.getName())
+        .orElse(null);
+    String curriculumName =
+      book.getCurriculumId() == null
+        ? null
+        : curriculumRepository
+          .findByIdAndNotDeleted(book.getCurriculumId())
+          .map(c -> c.getName())
+          .orElse(null);
+
     return BookResponse.builder()
         .id(book.getId())
         .schoolGradeId(book.getSchoolGradeId())
-        .schoolGradeName(book.getSchoolGrade() != null ? book.getSchoolGrade().getName() : null)
+      .schoolGradeName(schoolGradeName)
         .subjectId(book.getSubjectId())
-        .subjectName(book.getSubject() != null ? book.getSubject().getName() : null)
+      .subjectName(subjectName)
         .curriculumId(book.getCurriculumId())
-        .curriculumName(book.getCurriculum() != null ? book.getCurriculum().getName() : null)
+      .curriculumName(curriculumName)
         .title(book.getTitle())
         .publisher(book.getPublisher())
         .academicYear(book.getAcademicYear())
