@@ -622,14 +622,20 @@ public class CourseServiceImpl implements CourseService {
   @Override
   @Transactional(readOnly = true)
   public Page<CourseResponse> getPublicCourses(
-      UUID schoolGradeId, UUID subjectId, String keyword, Pageable pageable) {
+      UUID schoolGradeId,
+      UUID subjectId,
+      UUID chapterId,
+      UUID lessonId,
+      String keyword,
+      Pageable pageable) {
     // Native query already has ORDER BY, ignore Pageable sort to avoid camelCase
     // field names
     Pageable unsortedPageable = org.springframework.data.domain.PageRequest.of(
         pageable.getPageNumber(),
         pageable.getPageSize());
     return courseRepository
-        .findPublishedCoursesWithFilter(schoolGradeId, subjectId, keyword, unsortedPageable)
+        .findPublishedCoursesWithFilter(
+            schoolGradeId, subjectId, chapterId, lessonId, keyword, unsortedPageable)
         .map(this::mapToResponse);
   }
 

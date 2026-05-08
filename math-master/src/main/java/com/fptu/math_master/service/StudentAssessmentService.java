@@ -15,7 +15,17 @@ import org.springframework.data.domain.Pageable;
 public interface StudentAssessmentService {
 
   // My Assessments
-  Page<StudentAssessmentResponse> getMyAssessments(String statusFilter, Pageable pageable);
+  default Page<StudentAssessmentResponse> getMyAssessments(String statusFilter, Pageable pageable) {
+    return getMyAssessments(statusFilter, pageable, null, null, null, null);
+  }
+
+  Page<StudentAssessmentResponse> getMyAssessments(
+      String statusFilter,
+      Pageable pageable,
+      UUID schoolGradeId,
+      UUID subjectId,
+      UUID chapterId,
+      UUID lessonId);
 
   Page<StudentAssessmentResponse> getMyAssessmentsByCourse(
       UUID courseId, String statusFilter, Pageable pageable);
