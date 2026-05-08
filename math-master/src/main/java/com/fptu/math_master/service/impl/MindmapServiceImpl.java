@@ -107,6 +107,7 @@ public class MindmapServiceImpl implements MindmapService {
     String aiPrompt = buildMindmapGenerationPrompt(request.getPrompt(), levels);
 
     // Call Gemini AI to generate mindmap structure
+    log.info("[Mindmap AI Prompt]\n{}", aiPrompt);
     String aiResponse;
     try {
       aiResponse = geminiService.sendMessage(aiPrompt);
@@ -656,6 +657,7 @@ public class MindmapServiceImpl implements MindmapService {
         - Keep content concise (max 100 characters per node)
         - Create 3-7 main branches from root, each with 2-5 sub-nodes at each level
         - Ensure displayOrder is sequential (0, 1, 2, ...)
+        - LANGUAGE: All node content ("content" field), "title", and "description" MUST be written in Vietnamese with full diacritics (tiếng Việt có dấu). Do NOT use English or unaccented Vietnamese.
         """
         .formatted(userPrompt, levels, levels);
   }
