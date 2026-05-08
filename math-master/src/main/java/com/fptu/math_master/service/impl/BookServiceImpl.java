@@ -22,6 +22,7 @@ import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse.LessonProgress;
 import com.fptu.math_master.dto.response.BookResponse;
+import com.fptu.math_master.dto.response.BookSeriesResponse;
 import com.fptu.math_master.dto.response.LessonPageResponse;
 import com.fptu.math_master.dto.response.OcrTriggerResponse;
 import com.fptu.math_master.entity.Book;
@@ -174,6 +175,47 @@ public class BookServiceImpl implements BookService {
 
     book.setUpdatedBy(actorId);
     return toResponse(bookRepository.save(book));
+  }
+
+  @Override
+  @Transactional
+  public BookSeriesResponse updateSeriesName(UUID seriesId, String name, UUID actorId) {
+    String normalizedName = name == null ? "" : name.trim();
+    if (normalizedName.isEmpty()) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+    Optional<BookSeries> maybeSeries = bookSeriesRepository.findByIdAndNotDeleted(seriesId);
+    if (maybeSeries.isPresent()) {
+      BookSeries series = maybeSeries.get();
+      series.setName(normalizedName);
+      series.setUpdatedBy(actorId);
+      BookSeries saved = bookSeriesRepository.save(series);
+      return BookSeriesResponse.builder().id(saved.getId()).name(saved.getName()).build();
+    }
+
+    // Legacy-safe path: FE may pass an anchor bookId when that book has no real bookSeriesId yet.
+    Book anchorBook =
+        bookRepository
+            .findByIdAndNotDeleted(seriesId)
+            .orElseThrow(() -> new AppException(ErrorCode.INVALID_REQUEST));
+    BookSeries createdSeries =
+        bookSeriesRepository.save(
+            BookSeries.builder()
+                .name(normalizedName)
+                .schoolGradeId(anchorBook.getSchoolGradeId())
+                .subjectId(anchorBook.getSubjectId())
+                .academicYear(anchorBook.getAcademicYear())
+                .build());
+    createdSeries.setUpdatedBy(actorId);
+
+    anchorBook.setBookSeriesId(createdSeries.getId());
+    anchorBook.setUpdatedBy(actorId);
+    bookRepository.save(anchorBook);
+
+    return BookSeriesResponse.builder()
+        .id(createdSeries.getId())
+        .name(createdSeries.getName())
+        .build();
   }
 
   @Override
