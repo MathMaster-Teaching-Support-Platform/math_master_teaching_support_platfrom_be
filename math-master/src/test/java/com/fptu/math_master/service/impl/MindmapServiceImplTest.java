@@ -322,13 +322,15 @@ class MindmapServiceImplTest extends BaseUnitTest {
       mindmap.setId(mindmapId);
       mindmap.setTeacherId(teacherId);
       mindmap.setTitle("Hàm số");
-      when(mindmapRepository.findByTeacherIdWithDetailsAndNotDeleted(teacherId, PageRequest.of(0, 5)))
+        when(
+            mindmapRepository.findByTeacherWithHierarchyFilters(
+              teacherId, null, null, null, null, PageRequest.of(0, 5)))
           .thenReturn(new PageImpl<>(List.of(mindmap), PageRequest.of(0, 5), 1));
       when(mindmapNodeRepository.countByMindmapIds(List.of(mindmapId))).thenReturn(List.of());
       when(userRepository.findAllById(Set.of(teacherId))).thenReturn(List.of(buildTeacher(teacherId)));
 
       // ===== ACT =====
-      var page = mindmapService.getMyMindmaps(null, PageRequest.of(0, 5));
+      var page = mindmapService.getMyMindmaps(null, null, null, null, PageRequest.of(0, 5));
 
       // ===== ASSERT =====
       assertEquals(1, page.getTotalElements());
@@ -344,14 +346,17 @@ class MindmapServiceImplTest extends BaseUnitTest {
       mindmap.setId(mindmapId);
       mindmap.setTeacherId(teacherId);
       mindmap.setTitle("Lượng giác");
-      when(mindmapRepository.findPublicWithFilters(
-              MindmapStatus.PUBLISHED, null, "Lượng giác", PageRequest.of(0, 5)))
+        when(
+            mindmapRepository.findPublicWithFilters(
+              MindmapStatus.PUBLISHED, null, null, null, null, "Lượng giác", PageRequest.of(0, 5)))
           .thenReturn(new PageImpl<>(List.of(mindmap), PageRequest.of(0, 5), 1));
       when(mindmapNodeRepository.countByMindmapIds(List.of(mindmapId))).thenReturn(List.of());
       when(userRepository.findAllById(Set.of(teacherId))).thenReturn(List.of(buildTeacher(teacherId)));
 
       // ===== ACT =====
-      var page = mindmapService.getPublicMindmaps(null, "  Lượng giác  ", PageRequest.of(0, 5));
+        var page =
+          mindmapService.getPublicMindmaps(
+            null, null, null, null, "  Lượng giác  ", PageRequest.of(0, 5));
 
       // ===== ASSERT =====
       assertEquals(1, page.getTotalElements());
@@ -1224,15 +1229,17 @@ class MindmapServiceImplTest extends BaseUnitTest {
       mindmap.setId(mindmapId);
       mindmap.setTeacherId(teacherId);
       PageRequest pageable = PageRequest.of(0, 5);
-      when(mindmapRepository.findByTeacherIdAndLessonIdWithDetailsAndNotDeleted(teacherId, lessonId, pageable))
+        when(
+            mindmapRepository.findByTeacherWithHierarchyFilters(
+              teacherId, null, null, null, lessonId, pageable))
           .thenReturn(new PageImpl<>(List.of(mindmap), pageable, 1));
       when(mindmapNodeRepository.countByMindmapIds(List.of(mindmapId))).thenReturn(List.of());
       when(userRepository.findAllById(Set.of(teacherId))).thenReturn(List.of(buildTeacher(teacherId)));
 
-      var page = mindmapService.getMyMindmaps(lessonId, pageable);
+      var page = mindmapService.getMyMindmaps(null, null, null, lessonId, pageable);
       assertEquals(1, page.getTotalElements());
-      verify(mindmapRepository, times(1))
-          .findByTeacherIdAndLessonIdWithDetailsAndNotDeleted(teacherId, lessonId, pageable);
+        verify(mindmapRepository, times(1))
+          .findByTeacherWithHierarchyFilters(teacherId, null, null, null, lessonId, pageable);
     }
 
     @Test
@@ -1698,12 +1705,14 @@ class MindmapServiceImplTest extends BaseUnitTest {
       m.setId(mindmapId);
       m.setTeacherId(teacherId);
       m.setTitle("No name filter");
-      when(mindmapRepository.findPublicWithFilters(MindmapStatus.PUBLISHED, null, null, PageRequest.of(0, 5)))
+        when(
+            mindmapRepository.findPublicWithFilters(
+              MindmapStatus.PUBLISHED, null, null, null, null, null, PageRequest.of(0, 5)))
           .thenReturn(new PageImpl<>(List.of(m), PageRequest.of(0, 5), 1));
       when(mindmapNodeRepository.countByMindmapIds(List.of(mindmapId))).thenReturn(List.of());
       when(userRepository.findAllById(Set.of(teacherId))).thenReturn(List.of(buildTeacher(teacherId)));
 
-      var page = mindmapService.getPublicMindmaps(null, null, PageRequest.of(0, 5));
+      var page = mindmapService.getPublicMindmaps(null, null, null, null, null, PageRequest.of(0, 5));
       assertEquals(1, page.getTotalElements());
     }
 

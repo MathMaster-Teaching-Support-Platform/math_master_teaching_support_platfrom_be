@@ -463,18 +463,22 @@ class LessonSlideServiceImplTest extends BaseUnitTest {
               teacherId,
               "Hinh hoc khong gian");
       Page<LessonSlideGeneratedFile> page = new PageImpl<>(List.of(file), pageable, 1);
-      when(lessonSlideGeneratedFileRepository.findAllPublicWithFilters(lessonId, "hinh hoc", pageable))
+        when(
+            lessonSlideGeneratedFileRepository.findAllPublicWithFilters(
+              null, null, null, lessonId, "hinh hoc", pageable))
           .thenReturn(page);
 
       // ===== ACT =====
-      Page<?> result = lessonSlideService.getAllPublicGeneratedSlides(lessonId, "  hinh hoc  ", pageable);
+        Page<?> result =
+          lessonSlideService.getAllPublicGeneratedSlides(
+            null, null, null, lessonId, "  hinh hoc  ", pageable);
 
       // ===== ASSERT =====
       assertAll(() -> assertNotNull(result), () -> assertEquals(1L, result.getTotalElements()));
 
       // ===== VERIFY =====
-      verify(lessonSlideGeneratedFileRepository, times(1))
-          .findAllPublicWithFilters(lessonId, "hinh hoc", pageable);
+        verify(lessonSlideGeneratedFileRepository, times(1))
+          .findAllPublicWithFilters(null, null, null, lessonId, "hinh hoc", pageable);
       verifyNoMoreInteractions(lessonSlideGeneratedFileRepository);
     }
 
@@ -482,18 +486,18 @@ class LessonSlideServiceImplTest extends BaseUnitTest {
     void it_should_pass_null_keyword_when_keyword_input_is_null() {
       // ===== ARRANGE =====
       Pageable pageable = PageRequest.of(0, 5);
-      when(lessonSlideGeneratedFileRepository.findAllPublicWithFilters(lessonId, null, pageable))
+        when(lessonSlideGeneratedFileRepository.findAllPublicWithFilters(null, null, null, lessonId, null, pageable))
           .thenReturn(Page.empty(pageable));
 
       // ===== ACT =====
-      Page<?> result = lessonSlideService.getAllPublicGeneratedSlides(lessonId, null, pageable);
+      Page<?> result = lessonSlideService.getAllPublicGeneratedSlides(null, null, null, lessonId, null, pageable);
 
       // ===== ASSERT =====
       assertEquals(0L, result.getTotalElements());
 
       // ===== VERIFY =====
-      verify(lessonSlideGeneratedFileRepository, times(1))
-          .findAllPublicWithFilters(lessonId, null, pageable);
+        verify(lessonSlideGeneratedFileRepository, times(1))
+          .findAllPublicWithFilters(null, null, null, lessonId, null, pageable);
       verifyNoMoreInteractions(lessonSlideGeneratedFileRepository);
     }
   }
@@ -531,14 +535,16 @@ class LessonSlideServiceImplTest extends BaseUnitTest {
       AppException ex =
           assertThrows(
               AppException.class,
-              () -> lessonSlideService.getPublicGeneratedSlidesByLesson(lessonId, "abc", pageable));
+                () ->
+                  lessonSlideService.getPublicGeneratedSlidesByLesson(
+                    lessonId, null, null, null, "abc", pageable));
       assertEquals(ErrorCode.LESSON_NOT_FOUND, ex.getErrorCode());
 
       // ===== VERIFY =====
       verify(lessonRepository, times(1)).findByIdAndNotDeleted(lessonId);
       verifyNoMoreInteractions(lessonRepository);
-      verify(lessonSlideGeneratedFileRepository, never())
-          .findAllPublicWithFilters(lessonId, "abc", pageable);
+        verify(lessonSlideGeneratedFileRepository, never())
+          .findAllPublicWithFilters(null, null, null, lessonId, "abc", pageable);
       verifyNoMoreInteractions(lessonSlideGeneratedFileRepository);
     }
 
@@ -553,19 +559,23 @@ class LessonSlideServiceImplTest extends BaseUnitTest {
               "Bai giang xac suat");
       Page<LessonSlideGeneratedFile> page = new PageImpl<>(List.of(file), pageable, 1);
       when(lessonRepository.findByIdAndNotDeleted(lessonId)).thenReturn(Optional.of(samplePublishedLesson));
-      when(lessonSlideGeneratedFileRepository.findAllPublicWithFilters(lessonId, "xac suat", pageable))
+        when(
+            lessonSlideGeneratedFileRepository.findAllPublicWithFilters(
+              null, null, null, lessonId, "xac suat", pageable))
           .thenReturn(page);
 
       // ===== ACT =====
-      Page<?> result = lessonSlideService.getPublicGeneratedSlidesByLesson(lessonId, "  xac suat  ", pageable);
+        Page<?> result =
+          lessonSlideService.getPublicGeneratedSlidesByLesson(
+            lessonId, null, null, null, "  xac suat  ", pageable);
 
       // ===== ASSERT =====
       assertAll(() -> assertNotNull(result), () -> assertEquals(1L, result.getTotalElements()));
 
       // ===== VERIFY =====
       verify(lessonRepository, times(1)).findByIdAndNotDeleted(lessonId);
-      verify(lessonSlideGeneratedFileRepository, times(1))
-          .findAllPublicWithFilters(lessonId, "xac suat", pageable);
+        verify(lessonSlideGeneratedFileRepository, times(1))
+          .findAllPublicWithFilters(null, null, null, lessonId, "xac suat", pageable);
       verifyNoMoreInteractions(lessonRepository, lessonSlideGeneratedFileRepository);
     }
   }
@@ -1274,16 +1284,20 @@ class LessonSlideServiceImplTest extends BaseUnitTest {
             .when(() -> SecurityUtils.hasRole(PredefinedRole.TEACHER_ROLE))
             .thenReturn(true);
         securityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(teacherId);
-        when(lessonSlideGeneratedFileRepository.findByTeacher(teacherId)).thenReturn(List.of(file));
+        when(
+          lessonSlideGeneratedFileRepository.findByTeacherWithFilters(
+              teacherId, null, null, null, null, null))
+            .thenReturn(List.of(file));
 
         // ===== ACT =====
-        var result = lessonSlideService.getMyGeneratedSlides(null);
+        var result = lessonSlideService.getMyGeneratedSlides(null, null, null, null, null);
 
         // ===== ASSERT =====
         assertEquals(1, result.size());
 
         // ===== VERIFY =====
-        verify(lessonSlideGeneratedFileRepository, times(1)).findByTeacher(teacherId);
+        verify(lessonSlideGeneratedFileRepository, times(1))
+          .findByTeacherWithFilters(teacherId, null, null, null, null, null);
         verifyNoMoreInteractions(lessonSlideGeneratedFileRepository);
       }
     }
@@ -1298,17 +1312,20 @@ class LessonSlideServiceImplTest extends BaseUnitTest {
             .when(() -> SecurityUtils.hasRole(PredefinedRole.TEACHER_ROLE))
             .thenReturn(true);
         securityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(teacherId);
-        when(lessonSlideGeneratedFileRepository.findByTeacherAndLesson(teacherId, lessonId))
-            .thenReturn(List.of(file));
+        when(
+            lessonSlideGeneratedFileRepository.findByTeacherWithFilters(
+              teacherId, null, null, null, lessonId, null))
+          .thenReturn(List.of(file));
 
         // ===== ACT =====
-        var result = lessonSlideService.getMyGeneratedSlides(lessonId);
+        var result = lessonSlideService.getMyGeneratedSlides(null, null, null, lessonId, null);
 
         // ===== ASSERT =====
         assertEquals(1, result.size());
 
         // ===== VERIFY =====
-        verify(lessonSlideGeneratedFileRepository, times(1)).findByTeacherAndLesson(teacherId, lessonId);
+        verify(lessonSlideGeneratedFileRepository, times(1))
+          .findByTeacherWithFilters(teacherId, null, null, null, lessonId, null);
         verifyNoMoreInteractions(lessonSlideGeneratedFileRepository);
       }
     }
