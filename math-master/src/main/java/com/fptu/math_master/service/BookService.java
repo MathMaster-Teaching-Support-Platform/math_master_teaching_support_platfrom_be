@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import com.fptu.math_master.dto.request.CreateBookRequest;
+import com.fptu.math_master.dto.request.ReOcrBookPageRequest;
 import com.fptu.math_master.dto.request.UpdateBookRequest;
 import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse;
@@ -53,6 +54,12 @@ public interface BookService {
 
   /** Stops an in-flight OCR job (best-effort) and returns the book to READY. */
   BookResponse cancelOcr(UUID id, UUID actorId);
+
+  /**
+   * Queues Python re-OCR for one mapped PDF page (Gemini + Mathpix path). Does not change book
+   * status to {@code OCR_RUNNING}; blocked while a full-book OCR job is running.
+   */
+  void reOcrSingleBookPage(UUID id, ReOcrBookPageRequest request, UUID actorId);
 
   /** Refreshes book.verified flag from Python's per-page verification state. */
   void refreshVerificationStatus(UUID id, UUID actorId);

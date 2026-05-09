@@ -17,6 +17,7 @@ import org.springframework.util.StringUtils;
 
 import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.dto.request.CreateBookRequest;
+import com.fptu.math_master.dto.request.ReOcrBookPageRequest;
 import com.fptu.math_master.dto.request.UpdateBookRequest;
 import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse;
@@ -43,6 +44,7 @@ import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.service.BookService;
 import com.fptu.math_master.service.PythonCrawlerClient;
+import com.fptu.math_master.service.PythonCrawlerClient.OcrSinglePageTriggerRequest;
 import com.fptu.math_master.service.PythonCrawlerClient.OcrTriggerRequest;
 import com.fptu.math_master.service.UploadService;
 
@@ -344,6 +346,66 @@ public class BookServiceImpl implements BookService {
         .totalPagesQueued(totalPages)
         .message(result.message())
         .build();
+  }
+
+  @Override
+  @Transactional
+  public void reOcrSingleBookPage(UUID id, ReOcrBookPageRequest request, UUID actorId) {
+    Book book = findActiveBook(id);
+
+    if (book.getStatus() == BookStatus.OCR_RUNNING) {
+      throw new AppException(ErrorCode.BOOK_OCR_ALREADY_RUNNING);
+    }
+    if (book.getPdfPath() == null || book.getPdfPath().isBlank()) {
+      throw new AppException(ErrorCode.BOOK_NOT_READY_FOR_OCR);
+    }
+    if (book.getOcrPageFrom() == null || book.getOcrPageTo() == null) {
+      throw new AppException(ErrorCode.BOOK_OCR_WINDOW_REQUIRED);
+    }
+
+    List<BookLessonPage> mappings = bookLessonPageRepository.findByBookIdOrdered(id);
+    if (mappings.isEmpty()) {
+      throw new AppException(ErrorCode.BOOK_NOT_READY_FOR_OCR);
+    }
+
+    UUID lessonId = request.lessonId();
+    int pageNumber = request.pageNumber();
+
+    BookLessonPage mappingRow =
+        mappings.stream()
+            .filter(m -> m.getLessonId().equals(lessonId))
+            .findFirst()
+            .orElseThrow(
+                () ->
+                    new AppException(
+                        ErrorCode.INVALID_REQUEST, "Lesson is not in this book's page mapping."));
+
+    if (pageNumber < mappingRow.getPageStart() || pageNumber > mappingRow.getPageEnd()) {
+      throw new AppException(ErrorCode.PAGE_MAPPING_OUT_OF_RANGE);
+    }
+    if (pageNumber < book.getOcrPageFrom() || pageNumber > book.getOcrPageTo()) {
+      throw new AppException(ErrorCode.PAGE_MAPPING_OUT_OF_RANGE);
+    }
+
+    OcrSinglePageTriggerRequest payload =
+        new OcrSinglePageTriggerRequest(
+            id,
+            lessonId,
+            pageNumber,
+            book.getPdfPath(),
+            book.getOcrPageFrom(),
+            book.getOcrPageTo(),
+            mappings.stream()
+                .map(
+                    m ->
+                        new OcrTriggerRequest.MappingItem(
+                            m.getLessonId(), m.getPageStart(), m.getPageEnd()))
+                .toList());
+
+    crawlerClient.triggerSinglePageOcr(payload);
+
+    book.setUpdatedBy(actorId);
+    bookRepository.save(book);
   }
 
   @Override

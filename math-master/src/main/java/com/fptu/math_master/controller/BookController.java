@@ -3,8 +3,6 @@ package com.fptu.math_master.controller;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -28,14 +26,18 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.validation.Valid;
+
 import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.dto.request.BulkPageMappingRequest;
 import com.fptu.math_master.dto.request.BulkSeriesPageMappingRequest;
 import com.fptu.math_master.dto.request.CreateBookRequest;
+import com.fptu.math_master.dto.request.ReOcrBookPageRequest;
 import com.fptu.math_master.dto.request.UpdateBookSeriesNameRequest;
 import com.fptu.math_master.dto.request.UpdateBookRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.BookLessonPageResponse;
+import com.fptu.math_master.dto.response.BookPageImagePresignedUrlResponse;
 import com.fptu.math_master.dto.response.BookPageImageResponse;
 import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse;
@@ -241,6 +243,31 @@ public class BookController {
   }
 
   @Operation(
+      summary = "Presigned browser URL for an OCR block page image",
+      description =
+          "Returns a short-lived MinIO GET URL so the admin UI can render the image without sending"
+              + " Authorization on the image request (same pattern as course thumbnails). The saved"
+              + " block field imageUrl remains the stable /api/v1/books/.../page-images/... path.")
+  @GetMapping("/{id}/page-images/presigned")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<BookPageImagePresignedUrlResponse> getPageImagePresignedUrl(
+      @PathVariable UUID id, @RequestParam("fileName") String fileName) {
+    bookService.getById(id);
+    String safeName = sanitizeImageFileName(fileName);
+    String key = "books/" + id + "/page-images/" + safeName;
+    try {
+      String url = uploadService.getPresignedUrl(key, minioProperties.getOcrContentBucket());
+      return ApiResponse.<BookPageImagePresignedUrlResponse>builder()
+          .result(new BookPageImagePresignedUrlResponse(url))
+          .build();
+    } catch (Exception ex) {
+      log.warn("Presign failed for book {} page-image {}", id, safeName, ex);
+      throw new AppException(
+          ErrorCode.UNCATEGORIZED_EXCEPTION, "Could not generate image URL");
+    }
+  }
+
+  @Operation(
       summary = "Serve an admin-uploaded OCR content block image",
       description =
           "Streams the image bytes from MinIO. Scoped under the book ID so the URL is auditable"
@@ -254,7 +281,7 @@ public class BookController {
     byte[] data = uploadService.downloadFile(key, minioProperties.getOcrContentBucket());
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(guessImageContentType(safeName)))
-        .cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePrivate())
+        .cacheControl(CacheControl.noStore())
         .body(data);
   }
 
@@ -350,6 +377,26 @@ public class BookController {
     UUID actorId = UUID.fromString(jwt.getSubject());
     return ApiResponse.<OcrTriggerResponse>builder()
         .result(bookService.triggerOcr(id, actorId))
+        .build();
+  }
+
+  @Operation(
+      summary = "Re-run OCR for one mapped PDF page",
+      description =
+          "Queues the Python service to OCR again for this lesson's cell only (Gemini + Mathpix). "
+              + "Does not start full-book OCR or set status to OCR_RUNNING. "
+              + "Reject while a full-book OCR job is still running.")
+  @PostMapping("/{id}/ocr/single-page")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<Void> reOcrSingleBookPage(
+      @PathVariable UUID id,
+      @Valid @RequestBody ReOcrBookPageRequest body,
+      @AuthenticationPrincipal Jwt jwt) {
+    UUID actorId = UUID.fromString(jwt.getSubject());
+    bookService.reOcrSingleBookPage(id, body, actorId);
+    return ApiResponse.<Void>builder()
+        .message(
+            "Đã xếp hàng OCR lại trang này (Gemini + Mathpix). Đợi vài giây rồi làm mới hoặc chọn lại trang.")
         .build();
   }
 
