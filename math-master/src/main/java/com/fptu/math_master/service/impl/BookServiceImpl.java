@@ -222,8 +222,38 @@ public class BookServiceImpl implements BookService {
   @Transactional
   public BookResponse setPdfPath(UUID id, String pdfPath, UUID actorId) {
     Book book = findActiveBook(id);
-    book.setPdfPath(pdfPath);
+    if (!StringUtils.hasText(pdfPath)) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+    String trimmed = pdfPath.trim();
+    String previous = book.getPdfPath();
+    boolean pathChanged = previous == null || !trimmed.equals(previous.trim());
+
+    book.setPdfPath(trimmed);
     book.setUpdatedBy(actorId);
+
+    // Replacing the PDF invalidates any prior OCR outcome — wizard step "Chạy OCR" must not keep
+    // OCR_FAILED / OCR_DONE until the user runs OCR again on the new file.
+    if (pathChanged) {
+      BookStatus st = book.getStatus();
+      if (st == BookStatus.OCR_RUNNING) {
+        try {
+          crawlerClient.cancelOcr(id);
+        } catch (AppException ex) {
+          log.warn("Crawler unavailable while cancelling OCR after PDF replace for book {}", id);
+        }
+      }
+      if (st == BookStatus.OCR_DONE || st == BookStatus.OCR_FAILED || st == BookStatus.OCR_RUNNING) {
+        book.setStatus(BookStatus.READY);
+        book.setOcrError(null);
+        clearOcrSnapshotFields(book);
+        if (Boolean.TRUE.equals(book.getVerified())) {
+          book.setVerified(false);
+          book.setVerifiedAt(null);
+        }
+      }
+    }
+
     return toResponse(bookRepository.save(book));
   }
 

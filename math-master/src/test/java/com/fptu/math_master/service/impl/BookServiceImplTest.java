@@ -524,6 +524,66 @@ class BookServiceImplTest extends BaseUnitTest {
   }
 
   @Nested
+  @DisplayName("setPdfPath()")
+  class SetPdfPathTests {
+
+    @Test
+    void it_should_reset_ready_and_clear_error_when_pdf_key_changes_after_ocr_failed() {
+      Book book = readyForOcr();
+      book.setStatus(BookStatus.OCR_FAILED);
+      book.setOcrError("MinIO object missing");
+      book.setPdfPath("books/pdfs/old.pdf");
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(bookRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+      when(bookLessonPageRepository.countByBookId(any())).thenReturn(1L);
+      when(schoolGradeRepository.findByIdAndNotDeleted(GRADE_ID))
+          .thenReturn(Optional.of(schoolGrade));
+      when(subjectRepository.findById(SUBJECT_ID)).thenReturn(Optional.of(subject));
+      when(curriculumRepository.findByIdAndNotDeleted(CURRICULUM_ID))
+          .thenReturn(Optional.of(curriculum));
+
+      service.setPdfPath(BOOK_ID, "books/pdfs/new.pdf", ACTOR);
+
+      verify(crawlerClient, never()).cancelOcr(any());
+      assertEquals(BookStatus.READY, book.getStatus());
+      assertEquals("books/pdfs/new.pdf", book.getPdfPath());
+      assertNull(book.getOcrError());
+    }
+
+    @Test
+    void it_should_cancel_python_when_pdf_key_changes_mid_ocr_run() {
+      Book book = readyForOcr();
+      book.setStatus(BookStatus.OCR_RUNNING);
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(bookRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+      when(bookLessonPageRepository.countByBookId(any())).thenReturn(1L);
+      when(schoolGradeRepository.findByIdAndNotDeleted(GRADE_ID))
+          .thenReturn(Optional.of(schoolGrade));
+      when(subjectRepository.findById(SUBJECT_ID)).thenReturn(Optional.of(subject));
+      when(curriculumRepository.findByIdAndNotDeleted(CURRICULUM_ID))
+          .thenReturn(Optional.of(curriculum));
+
+      service.setPdfPath(BOOK_ID, "books/pdfs/replaced.pdf", ACTOR);
+
+      verify(crawlerClient).cancelOcr(BOOK_ID);
+      assertEquals(BookStatus.READY, book.getStatus());
+      assertEquals("books/pdfs/replaced.pdf", book.getPdfPath());
+    }
+
+    @Test
+    void it_should_reject_blank_pdf_path() {
+      Book book = readyForOcr();
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+
+      AppException ex =
+          assertThrows(AppException.class, () -> service.setPdfPath(BOOK_ID, "  ", ACTOR));
+      assertEquals(ErrorCode.INVALID_REQUEST, ex.getErrorCode());
+    }
+  }
+
+  @Nested
   @DisplayName("getPdfPreviewUrl()")
   class PdfPreviewTests {
 
