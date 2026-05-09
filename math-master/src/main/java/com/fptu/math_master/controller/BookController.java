@@ -34,6 +34,7 @@ import com.fptu.math_master.dto.request.UpdateBookSeriesNameRequest;
 import com.fptu.math_master.dto.request.UpdateBookRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.BookLessonPageResponse;
+import com.fptu.math_master.dto.response.BookPageImagePresignedUrlResponse;
 import com.fptu.math_master.dto.response.BookPageImageResponse;
 import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse;
@@ -236,6 +237,31 @@ public class BookController {
     return ApiResponse.<BookPageImageResponse>builder()
         .result(new BookPageImageResponse(imageUrl, objectKey))
         .build();
+  }
+
+  @Operation(
+      summary = "Presigned browser URL for an OCR block page image",
+      description =
+          "Returns a short-lived MinIO GET URL so the admin UI can render the image without sending"
+              + " Authorization on the image request (same pattern as course thumbnails). The saved"
+              + " block field imageUrl remains the stable /api/v1/books/.../page-images/... path.")
+  @GetMapping("/{id}/page-images/presigned")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<BookPageImagePresignedUrlResponse> getPageImagePresignedUrl(
+      @PathVariable UUID id, @RequestParam("fileName") String fileName) {
+    bookService.getById(id);
+    String safeName = sanitizeImageFileName(fileName);
+    String key = "books/" + id + "/page-images/" + safeName;
+    try {
+      String url = uploadService.getPresignedUrl(key, minioProperties.getOcrContentBucket());
+      return ApiResponse.<BookPageImagePresignedUrlResponse>builder()
+          .result(new BookPageImagePresignedUrlResponse(url))
+          .build();
+    } catch (Exception ex) {
+      log.warn("Presign failed for book {} page-image {}", id, safeName, ex);
+      throw new AppException(
+          ErrorCode.UNCATEGORIZED_EXCEPTION, "Could not generate image URL");
+    }
   }
 
   @Operation(
