@@ -427,7 +427,11 @@ public enum ErrorCode {
   MATRIX_GRADE_MISMATCH(
       1232,
       "Row grade must belong to the same school level (cấp) as the matrix",
-      HttpStatus.BAD_REQUEST);
+      HttpStatus.BAD_REQUEST),
+  BOOK_OCR_ALREADY_RUNNING(
+      1233,
+      "A full-book OCR job is already running; cancel or wait before re-running OCR on one page.",
+      HttpStatus.CONFLICT);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {

@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.fptu.math_master.BaseUnitTest;
 import com.fptu.math_master.dto.request.CreateBookRequest;
+import com.fptu.math_master.dto.request.ReOcrBookPageRequest;
 import com.fptu.math_master.dto.response.BookProgressResponse;
 import com.fptu.math_master.dto.response.LessonPageResponse;
 import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
@@ -38,6 +39,7 @@ import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.service.PythonCrawlerClient;
 import com.fptu.math_master.service.UploadService;
+import com.fptu.math_master.service.PythonCrawlerClient.OcrSinglePageTriggerRequest;
 import com.fptu.math_master.service.PythonCrawlerClient.OcrTriggerResult;
 import java.util.List;
 import java.util.Optional;
@@ -243,6 +245,69 @@ class BookServiceImplTest extends BaseUnitTest {
 
       AppException ex = assertThrows(AppException.class, () -> service.triggerOcr(BOOK_ID, ACTOR));
       assertEquals(ErrorCode.BOOK_OCR_WINDOW_REQUIRED, ex.getErrorCode());
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // reOcrSingleBookPage()
+  // ---------------------------------------------------------------------------
+
+  @Nested
+  @DisplayName("reOcrSingleBookPage()")
+  class ReOcrSingleBookPageTests {
+
+    @Test
+    void it_should_dispatch_to_python_without_setting_book_status_running() {
+      Book book = readyForOcr();
+      book.setStatus(BookStatus.OCR_DONE);
+      List<BookLessonPage> mappings = List.of(mapping(LESSON_ID, 10, 20));
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(bookLessonPageRepository.findByBookIdOrdered(BOOK_ID)).thenReturn(mappings);
+      when(crawlerClient.triggerSinglePageOcr(any()))
+          .thenReturn(new OcrTriggerResult("ACCEPTED", "queued", 1));
+      when(bookRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+      var req = new ReOcrBookPageRequest(LESSON_ID, 15);
+      service.reOcrSingleBookPage(BOOK_ID, req, ACTOR);
+
+      assertEquals(BookStatus.OCR_DONE, book.getStatus());
+      ArgumentCaptor<OcrSinglePageTriggerRequest> cap =
+          ArgumentCaptor.forClass(OcrSinglePageTriggerRequest.class);
+      verify(crawlerClient).triggerSinglePageOcr(cap.capture());
+      assertEquals(BOOK_ID, cap.getValue().bookId());
+      assertEquals(LESSON_ID, cap.getValue().lessonId());
+      assertEquals(15, cap.getValue().pageNumber());
+      verify(bookRepository).save(book);
+    }
+
+    @Test
+    void it_should_reject_when_full_book_ocr_is_running() {
+      Book book = readyForOcr();
+      book.setStatus(BookStatus.OCR_RUNNING);
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+
+      var req = new ReOcrBookPageRequest(LESSON_ID, 15);
+      AppException ex =
+          assertThrows(AppException.class, () -> service.reOcrSingleBookPage(BOOK_ID, req, ACTOR));
+      assertEquals(ErrorCode.BOOK_OCR_ALREADY_RUNNING, ex.getErrorCode());
+      verify(crawlerClient, never()).triggerSinglePageOcr(any());
+    }
+
+    @Test
+    void it_should_reject_when_lesson_not_in_mapping() {
+      Book book = readyForOcr();
+      List<BookLessonPage> mappings = List.of(mapping(LESSON_ID, 10, 20));
+
+      when(bookRepository.findByIdAndNotDeleted(BOOK_ID)).thenReturn(Optional.of(book));
+      when(bookLessonPageRepository.findByBookIdOrdered(BOOK_ID)).thenReturn(mappings);
+
+      UUID other = UUID.randomUUID();
+      var req = new ReOcrBookPageRequest(other, 15);
+      AppException ex =
+          assertThrows(AppException.class, () -> service.reOcrSingleBookPage(BOOK_ID, req, ACTOR));
+      assertEquals(ErrorCode.INVALID_REQUEST, ex.getErrorCode());
+      verify(crawlerClient, never()).triggerSinglePageOcr(any());
     }
   }
 
