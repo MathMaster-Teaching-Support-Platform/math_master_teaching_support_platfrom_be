@@ -818,7 +818,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       if (!(raw instanceof String formula) || formula.isBlank()) {
         return null;
       }
-      String evaluated = evaluateFormula(formula, params);
+      String evaluated =
+          isAnswerFormulaPlaceholder(formula)
+              ? correctAnswerStr
+              : evaluateFormula(formula, params);
       if (evaluated == null || "?".equals(evaluated)) {
         log.debug(
             "Deterministic MCQ skipped for template '{}': option {} formula '{}' did not evaluate",
@@ -1107,7 +1110,33 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     String tpl = template.getSolutionStepsTemplate();
     if (tpl == null || tpl.isBlank()) return null;
     String filled = fillStrictDoubleBrace(tpl, params);
+    filled = substituteAnswerFormulaInTemplateText(template, filled, params);
     return evaluateInlineArithmetic(filled, params);
+  }
+
+  /**
+   * Teachers often alias the evaluated numeric answer as {@code {{answerFormula}}} inside prose —
+   * it is NOT a parameter key. Substitute with {@link QuestionTemplate#getAnswerFormula()} evaluated
+   * against {@code params}.
+   */
+  private String substituteAnswerFormulaInTemplateText(
+      QuestionTemplate template, String text, Map<String, Object> params) {
+    if (text == null || !text.contains("answerFormula")) {
+      return text;
+    }
+    String computed = evaluateFormula(template.getAnswerFormula(), params);
+    if ("?".equals(computed)) {
+      return text;
+    }
+    return text.replaceAll("\\{\\{\\s*answerFormula\\s*\\}\\}", Matcher.quoteReplacement(computed));
+  }
+
+  /** Option row equals {@code {{answerFormula}}} → use precomputed correct numeric answer. */
+  private static boolean isAnswerFormulaPlaceholder(String formula) {
+    if (formula == null) {
+      return false;
+    }
+    return formula.trim().matches("(?is)\\{\\{\\s*answerFormula\\s*}}");
   }
 
   /**
