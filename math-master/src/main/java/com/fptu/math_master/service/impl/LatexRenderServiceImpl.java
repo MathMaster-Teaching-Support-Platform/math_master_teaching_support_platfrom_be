@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -139,6 +140,10 @@ public class LatexRenderServiceImpl implements LatexRenderService {
             "(?m)(\\\\tkzTabInit[^\\n]*\\n)(\\s*)(?!\\{)([-+]?\\\\infty[^\\n]*\\})",
             "$1$2{$3");
 
+    // AI often emits \sqrt{(1)} or \sqrt{2.5*1*1-1} inside TikZ coordinates — QuickLaTeX rejects that.
+    // Collapse every purely-numeric \sqrt{expr} to a decimal before TikZ sees \sqrt as text.
+    fixed = collapseNumericSqrtMacros(fixed);
+
     // Fix: \sqrt{expr} used as a TikZ coordinate component — TikZ/pgf cannot evaluate LaTeX math
     // macros as coordinate expressions. Convert to pgfmath form.
     // Handles:
@@ -163,6 +168,56 @@ public class LatexRenderServiceImpl implements LatexRenderService {
     }
 
     return fixed;
+  }
+
+  /**
+   * Replaces {@code \\sqrt{expr}} with a plain numeric literal whenever {@code expr} evaluates with
+   * {@link #evalPgfmathExpr}. Fixes AI output like {@code \\draw (-\\sqrt{(1)},0)} which QuickLaTeX
+   * cannot compile inside coordinate expressions.
+   */
+  private static String collapseNumericSqrtMacros(String latex) {
+    if (latex == null || !latex.contains("\\sqrt")) {
+      return latex;
+    }
+    Pattern sqrtPat = Pattern.compile("\\\\sqrt\\{([^}]+)\\}");
+    String cur = latex;
+    for (int pass = 0; pass < 20; pass++) {
+      Matcher m = sqrtPat.matcher(cur);
+      StringBuffer sb = new StringBuffer();
+      boolean changed = false;
+      while (m.find()) {
+        String inner = m.group(1).trim();
+        try {
+          double arg = evalPgfmathExpr(inner);
+          if (arg < 0) {
+            throw new IllegalArgumentException("negative radicand");
+          }
+          double r = Math.sqrt(arg);
+          m.appendReplacement(sb, Matcher.quoteReplacement(formatNumericForTikzCoordinate(r)));
+          changed = true;
+        } catch (Exception e) {
+          m.appendReplacement(sb, Matcher.quoteReplacement(m.group(0)));
+        }
+      }
+      m.appendTail(sb);
+      cur = sb.toString();
+      if (!changed) {
+        break;
+      }
+    }
+    return cur;
+  }
+
+  private static String formatNumericForTikzCoordinate(double r) {
+    if (Double.isNaN(r) || Double.isInfinite(r)) {
+      return "0";
+    }
+    if (Math.abs(r - Math.rint(r)) < 1e-9) {
+      return String.valueOf((long) Math.rint(r));
+    }
+    String s = String.format(Locale.ROOT, "%.10g", r);
+    s = s.replaceAll("(\\.\\d*?)0+$", "$1").replaceAll("\\.$", "");
+    return s;
   }
 
   private Question resolveQuestion(UUID questionId) {
@@ -277,6 +332,17 @@ public class LatexRenderServiceImpl implements LatexRenderService {
     if ("1".equals(status)) {
       log.error("QuickLaTeX compile error. rawLatex={} error={}", rawLatexForLogging, payload);
       throw new LatexCompileException(payload);
+    }
+
+    if ("-1".equals(status)) {
+      log.error(
+          "QuickLaTeX render failure (status -1). rawLatex={} payload={}",
+          rawLatexForLogging,
+          payload);
+      throw new LatexCompileException(
+          "LaTeX/TikZ không hợp lệ hoặc QuickLaTeX không dịch được (status -1). "
+              + "Tránh \\sqrt{…} trong tọa độ TikZ — dùng số hoặc {{…}} pgfmath. Chi tiết: "
+              + payload);
     }
 
     if (!"0".equals(status)) {

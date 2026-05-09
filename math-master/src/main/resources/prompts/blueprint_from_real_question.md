@@ -89,6 +89,10 @@ artifacts — do not invent content for them.
   submitted. Parameterise *inside* each clause text the same way.
 - For diagrams: a parameter that appears inside `\\draw (2,3)` is the same as
   one appearing in the formula if the value matches.
+- **TikZ coordinates:** Never put `\\sqrt{...}` or raw LaTeX math inside `(x,y)`
+  coordinate pairs — QuickLaTeX cannot compile that. Use **numeric literals**
+  (possibly via `{{param}}` that becomes a number) or `\\pgfmathsetmacro` then
+  use the macro name in coordinates.
 - **The `warnings` array MUST be written in Vietnamese**, in plain everyday
   language a high-school teacher (not a developer) can understand. Avoid
   technical terms like "questionText", "correctAnswer", "placeholder",

@@ -400,6 +400,30 @@ class LatexRenderServiceImplTest extends BaseUnitTest {
   }
 
   /**
+   * Abnormal case: QuickLaTeX status -1 (generic failure image) maps to compile-style exception.
+   */
+  @Test
+  void it_should_throw_compile_exception_when_quicklatex_returns_status_minus_one() throws Exception {
+    LatexRenderRequest request = LatexRenderRequest.builder().latex("x+y+z").build();
+    when(diagramCacheRepository.findByLatexHash(any())).thenReturn(Optional.empty());
+    when(
+            questionRepository
+                .findFirstByRenderedLatexHashAndRenderedImageUrlIsNotNullAndDeletedAtIsNullOrderByCreatedAtDesc(
+                    any()))
+        .thenReturn(Optional.empty());
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(httpResponse);
+    when(httpResponse.statusCode()).thenReturn(200);
+    when(httpResponse.body()).thenReturn("-1\nhttps://quicklatex.com/cache3/error.png 0 0 0");
+
+    LatexCompileException exception =
+        assertThrows(LatexCompileException.class, () -> service.render(request));
+
+    assertNotNull(exception.getMessage());
+    assertEquals(true, exception.getMessage().contains("status -1"));
+  }
+
+  /**
    * Abnormal case: Throws proxy exception when response payload does not contain an image URL.
    */
   @Test
