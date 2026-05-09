@@ -611,9 +611,10 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== ASSERT =====
       assertEquals("4", options.get("A"));
-      assertEquals("4+1", options.get("B"));
+      // renderOptionValue collapses pure arithmetic after placeholder substitution.
+      assertEquals("5", options.get("B"));
       assertEquals("5", options.get("C"));
-      assertEquals("4-1", options.get("D"));
+      assertEquals("3", options.get("D"));
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());

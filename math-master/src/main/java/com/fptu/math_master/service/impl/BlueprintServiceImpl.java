@@ -246,11 +246,38 @@ public class BlueprintServiceImpl implements BlueprintService {
       if (v == null) {
         continue;
       }
-      String replacement = Matcher.quoteReplacement(v.toString());
+      String replacement =
+          Matcher.quoteReplacement(embedNumericPlaceholderSubstitution(v));
       Pattern pat = Pattern.compile("\\{\\{\\s*" + Pattern.quote(name) + "\\s*\\}\\}");
       out = pat.matcher(out).replaceAll(replacement);
     }
     return out;
+  }
+
+  /**
+   * Negative values must be parenthesized when pasted after unary {@code -} or division (same rule as
+   * {@code AIEnhancementServiceImpl#formatParameterValueForEmbedding}).
+   */
+  private static String embedNumericPlaceholderSubstitution(Object v) {
+    if (v == null) {
+      return "";
+    }
+    if (!(v instanceof Number n)) {
+      return String.valueOf(v);
+    }
+    double d = n.doubleValue();
+    String s;
+    if (n instanceof Long || n instanceof Integer || n instanceof Short || n instanceof Byte) {
+      s = String.valueOf(n.longValue());
+    } else if (d == Math.floor(d) && !Double.isInfinite(d)) {
+      s = String.valueOf((long) d);
+    } else {
+      s = String.valueOf(d);
+    }
+    if (d < 0) {
+      return "(" + s + ")";
+    }
+    return s;
   }
 
   /**
