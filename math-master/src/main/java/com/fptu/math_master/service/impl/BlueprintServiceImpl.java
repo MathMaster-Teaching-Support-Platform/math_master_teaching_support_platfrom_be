@@ -73,24 +73,24 @@ public class BlueprintServiceImpl implements BlueprintService {
 
     String aiContent;
     try {
-      aiContent = geminiService.sendMessage(prompt);
+      aiContent = geminiService.sendJsonMessage(prompt);
     } catch (Exception e) {
       log.error("[Blueprint] reverse-template AI call failed: {}", e.getMessage(), e);
       throw new RuntimeException("AI reverse-templating failed: " + e.getMessage(), e);
     }
 
+    JsonNode root = parseJsonOrThrow(aiContent, "reverse-template");
+
     // Token deduction: cost is admin-configurable via TokenCostConfig
     // (featureKey="question-blueprint", default 1). ADMIN exempt. Runs after
-    // a successful AI response so the user is never charged for a failed call.
-    // costPerUse=0 means the feature is free.
+    // a successful parse so the user is never charged for a truncated/unparseable
+    // AI response. costPerUse=0 means the feature is free.
     if (!SecurityUtils.hasRole("ADMIN")) {
       Integer cost = tokenCostConfigService.getCostPerUse("question-blueprint");
       if (cost != null && cost > 0) {
         userSubscriptionService.consumeMyTokens(cost, "BLUEPRINT_FROM_QUESTION");
       }
     }
-
-    JsonNode root = parseJsonOrThrow(aiContent, "reverse-template");
 
     BlueprintFromRealQuestionResponse.BlueprintFromRealQuestionResponseBuilder b =
         BlueprintFromRealQuestionResponse.builder();
@@ -272,7 +272,7 @@ public class BlueprintServiceImpl implements BlueprintService {
 
     String aiContent;
     try {
-      aiContent = geminiService.sendMessage(prompt);
+      aiContent = geminiService.sendJsonMessage(prompt);
     } catch (Exception e) {
       log.error("[Blueprint] value-selection AI call failed: {}", e.getMessage(), e);
       return List.of();

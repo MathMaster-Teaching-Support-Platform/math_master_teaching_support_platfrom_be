@@ -50,6 +50,14 @@ public class GeminiResponse {
         log.warn("Gemini candidate blocked, finishReason: {}", reason);
         throw new RuntimeException("Gemini blocked candidate: " + reason);
       }
+      if ("MAX_TOKENS".equals(reason)) {
+        // Hitting MAX_TOKENS means the output was truncated mid-stream — for JSON-mode
+        // callers this guarantees an unparseable response. Surface it loudly so the caller
+        // can raise the cap or shorten the prompt instead of silently returning garbage.
+        log.warn("Gemini candidate hit MAX_TOKENS — response was truncated");
+        throw new RuntimeException(
+            "Gemini response truncated at MAX_TOKENS — increase maxOutputTokens or shorten the input");
+      }
     }
 
     if (first.getContent() == null) {
