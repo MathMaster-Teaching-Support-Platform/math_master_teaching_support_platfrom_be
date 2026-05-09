@@ -20,6 +20,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.regex.Pattern;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -123,6 +124,16 @@ public class LatexRenderServiceImpl implements LatexRenderService {
         fixed.replaceAll(
             "(?m)(\\\\tkzTabInit[^\\n]*\\n)(\\s*)(?!\\{)([-+]?\\\\infty[^\\n]*\\})",
             "$1$2{$3");
+
+    // Fix: \sqrt{expr} used directly as a TikZ coordinate — TikZ cannot evaluate LaTeX math
+    // commands as coordinate values.
+    // e.g.  (-\sqrt{9},0)  →  ({-sqrt(9)},0)
+    //       (\sqrt{a+1},y)  →  ({sqrt(a+1)},y)
+    fixed = fixed.replaceAll("\\((-?)\\\\sqrt\\{([^}]*)\\}", "({$1sqrt($2)}");
+
+    // Fix: arithmetic expressions (*, /) used as TikZ coordinate components without pgfmath {}.
+    // e.g.  \node at (0, 0.3*9*9 + -3) {...}  →  \node at (0, {0.3*9*9 + -3}) {...}
+    fixed = wrapArithmeticTikzCoordinates(fixed);
 
     if (!fixed.equals(latex)) {
       log.warn("Normalized malformed LaTeX before render");
@@ -284,6 +295,51 @@ public class LatexRenderServiceImpl implements LatexRenderService {
       return DEFAULT_PREAMBLE;
     }
     return "";
+  }
+
+  /**
+   * Scans TikZ coordinate pairs {@code (x,y)} and wraps any component that contains
+   * arithmetic operators ({@code *} or {@code /}) in curly braces so that pgfmath
+   * can evaluate it.  Components that are already wrapped in {@code {}} are left alone.
+   *
+   * <p>Examples:
+   * <pre>
+   *   (0, 0.3*9*9 + -3)     →  (0, {0.3*9*9 + -3})
+   *   (2*a, b)              →  ({2*a}, b)
+   *   ({-sqrt(9)}, -3)      →  unchanged (already wrapped)
+   * </pre>
+   */
+  private static String wrapArithmeticTikzCoordinates(String input) {
+    if (input == null || (!input.contains("*") && !input.contains("/"))) {
+      return input; // fast path: no arithmetic operators present
+    }
+    // Match coordinate pairs (a,b) that contain no nested parens or braces.
+    return Pattern.compile("\\(([^(){}\n]*),([^(){}\n]*)\\)")
+        .matcher(input)
+        .replaceAll(
+            mr -> {
+              String xa = mr.group(1).trim();
+              String ya = mr.group(2).trim();
+              String x = needsTikzPgfmathWrap(xa) ? "{" + xa + "}" : xa;
+              String y = needsTikzPgfmathWrap(ya) ? "{" + ya + "}" : ya;
+              // Preserve original spacing around the comma
+              return "(" + x + "," + y + ")";
+            });
+  }
+
+  /**
+   * Returns {@code true} when a TikZ coordinate component needs to be wrapped in
+   * curly braces for pgfmath evaluation: it must contain {@code *} or {@code /}
+   * and must not already be wrapped.
+   */
+  private static boolean needsTikzPgfmathWrap(String coord) {
+    if (coord == null || coord.isEmpty()) {
+      return false;
+    }
+    if (coord.startsWith("{") && coord.endsWith("}")) {
+      return false; // already wrapped
+    }
+    return coord.contains("*") || coord.contains("/");
   }
 
   private String sha256(String input) {
