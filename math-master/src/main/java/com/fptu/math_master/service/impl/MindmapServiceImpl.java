@@ -752,6 +752,7 @@ public class MindmapServiceImpl implements MindmapService {
         - Create 3-7 main branches from root, each with 2-5 sub-nodes at each level
         - Ensure displayOrder is sequential (0, 1, 2, ...)
         - LANGUAGE: All node content ("content" field), "title", and "description" MUST be written in Vietnamese with full diacritics (tiếng Việt có dấu). Do NOT use English or unaccented Vietnamese.
+        - PLAIN TEXT ONLY: Do NOT use any LaTeX, MathJax, or mathematical markup in any field. Write all mathematical expressions in plain Vietnamese text with full diacritics (e.g. "x bình phương" thay vì "x^2", "căn bậc hai của x" thay vì "\\sqrt{x}", "x không bằng 0" thay vì "x \\neq 0"). No backslashes, no dollar signs, no \\(...\\), no $...$, no \\[...\\]. Mọi nội dung sinh ra đều phải dùng tiếng Việt có dấu đầy đủ.
         """
         .formatted(userPrompt, bookSection, levels, levels);
   }
