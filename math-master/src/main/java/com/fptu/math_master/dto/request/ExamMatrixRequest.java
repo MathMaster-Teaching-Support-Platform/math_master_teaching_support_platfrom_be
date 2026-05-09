@@ -59,4 +59,12 @@ public class ExamMatrixRequest {
   @Valid
   private List<ExamMatrixPartRequest> parts;
 
+  /**
+   * Optional school-grade level (lớp 1–12) for this matrix.
+   * When set, all rows added later must belong to the same school level (cấp).
+   */
+  @jakarta.validation.constraints.Min(value = 1, message = "gradeLevel must be between 1 and 12")
+  @jakarta.validation.constraints.Max(value = 12, message = "gradeLevel must be between 1 and 12")
+  private Integer gradeLevel;
+
 }

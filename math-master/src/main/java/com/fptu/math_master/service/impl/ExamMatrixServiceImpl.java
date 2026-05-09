@@ -127,6 +127,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
             .totalPointsTarget(request.getTotalPointsTarget())
             .questionBankId(request.getQuestionBankId())
             .numberOfParts(effectiveNumberOfParts)
+            .gradeLevel(request.getGradeLevel())
             .status(MatrixStatus.DRAFT)
             .build();
 
@@ -1357,6 +1358,7 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
                 .orElse(0)
             + 1;
 
+    validateSchoolLevelConsistency(matrix, rowRequest.getChapterId());
     persistRow(matrixId, rowRequest, nextOrder);
     return buildTableResponse(matrix);
   }
@@ -1694,6 +1696,44 @@ public class ExamMatrixServiceImpl implements ExamMatrixService {
         .updatedAt(t.getUpdatedAt())
         .relevanceScore(computeRelevanceScore(t, requiredType, requiredLevel))
         .build();
+  }
+
+  /**
+   * Validates that the chapter being added belongs to the same school level (cấp) as the matrix.
+   * Only enforced when the matrix has a gradeLevel set; silently passes otherwise.
+   */
+  private void validateSchoolLevelConsistency(ExamMatrix matrix, UUID chapterId) {
+    Integer matrixGrade = matrix.getGradeLevel();
+    if (matrixGrade == null) return;
+
+    Chapter chapter =
+        chapterRepository
+            .findById(chapterId)
+            .filter(ch -> ch.getDeletedAt() == null)
+            .orElseThrow(() -> new AppException(ErrorCode.CHAPTER_NOT_FOUND));
+
+    if (chapter.getSubjectId() == null) return;
+
+    Subject subject =
+        subjectRepository
+            .findById(chapter.getSubjectId())
+            .filter(s -> s.getDeletedAt() == null)
+            .orElse(null);
+
+    if (subject == null || subject.getSchoolGrade() == null) return;
+
+    Integer chapterGrade = subject.getSchoolGrade().getGradeLevel();
+    if (chapterGrade == null) return;
+
+    if (toSchoolLevel(matrixGrade) != toSchoolLevel(chapterGrade)) {
+      throw new AppException(ErrorCode.MATRIX_GRADE_MISMATCH);
+    }
+  }
+
+  private int toSchoolLevel(int grade) {
+    if (grade <= 5) return 1;
+    if (grade <= 9) return 2;
+    return 3;
   }
 
   /**

@@ -1847,7 +1847,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         int weight = questionWeights.getOrDefault(aq.getQuestionId(), 1);
         java.math.BigDecimal questionPoints = pointPerUnit
             .multiply(java.math.BigDecimal.valueOf(weight))
-            .setScale(2, java.math.RoundingMode.HALF_UP);
+            .setScale(1, java.math.RoundingMode.HALF_UP);
         aq.setPointsOverride(questionPoints);
         toSave.add(aq);
       }
@@ -1870,7 +1870,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         int weight = questionWeights.getOrDefault(aq.getQuestionId(), 1);
         java.math.BigDecimal questionPoints = pointPerUnit
             .multiply(java.math.BigDecimal.valueOf(weight))
-            .setScale(2, java.math.RoundingMode.HALF_UP);
+            .setScale(1, java.math.RoundingMode.HALF_UP);
         aq.setPointsOverride(questionPoints);
         toSave.add(aq);
       }
@@ -1887,7 +1887,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         int weight = questionWeights.getOrDefault(aq.getQuestionId(), 1);
         java.math.BigDecimal questionPoints = pointPerUnit
             .multiply(java.math.BigDecimal.valueOf(weight))
-            .setScale(2, java.math.RoundingMode.HALF_UP);
+            .setScale(1, java.math.RoundingMode.HALF_UP);
         aq.setPointsOverride(questionPoints);
         toSave.add(aq);
       }
@@ -1918,7 +1918,7 @@ public class AssessmentServiceImpl implements AssessmentService {
       throw new AppException(ErrorCode.INVALID_REQUEST);
     }
 
-    int scale = request.getScale() == null ? 2 : request.getScale();
+    int scale = request.getScale() == null ? 1 : request.getScale();
     BigDecimal totalPoints = request.getTotalPoints().setScale(scale, RoundingMode.HALF_UP);
 
     List<AssessmentQuestion> allAQs =

@@ -423,7 +423,11 @@ public enum ErrorCode {
   LESSON_PAGE_NOT_FOUND(1229, "Lesson page not found", HttpStatus.NOT_FOUND),
   FEEDBACK_NOT_FOUND(1230, "Feedback not found", HttpStatus.NOT_FOUND),
   FEEDBACK_SUBMIT_ROLE_NOT_ALLOWED(
-      1231, "Only student or teacher can submit feedback", HttpStatus.FORBIDDEN);
+      1231, "Only student or teacher can submit feedback", HttpStatus.FORBIDDEN),
+  MATRIX_GRADE_MISMATCH(
+      1232,
+      "Row grade must belong to the same school level (cấp) as the matrix",
+      HttpStatus.BAD_REQUEST);
 
 
   ErrorCode(int code, String message, HttpStatusCode statusCode) {
