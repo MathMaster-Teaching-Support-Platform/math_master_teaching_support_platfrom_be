@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 @Slf4j
@@ -105,9 +106,19 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
       return status == null ? new OcrStatus("UNKNOWN", 0, 0, null, null, null) : status;
     } catch (ResourceAccessException ex) {
       throw new AppException(ErrorCode.CRAWLER_UNAVAILABLE);
-    } catch (HttpClientErrorException.NotFound nf) {
-      // Book has no OCR run yet — that's a valid state, not an error.
-      return new OcrStatus("NOT_STARTED", 0, 0, null, null, null);
+    } catch (RestClientResponseException ex) {
+      if (ex.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
+        return new OcrStatus("NOT_STARTED", 0, 0, null, null, null);
+      }
+      log.warn(
+          "Crawler returned {} for OCR status book={}: {}",
+          ex.getStatusCode(),
+          bookId,
+          shortResponseBody(ex));
+      throw new AppException(ErrorCode.CRAWLER_UNAVAILABLE);
+    } catch (RestClientException ex) {
+      log.warn("Rest client error reading OCR status book={}: {}", bookId, ex.getMessage());
+      throw new AppException(ErrorCode.CRAWLER_UNAVAILABLE);
     }
   }
 
@@ -121,10 +132,26 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
               .retrieve()
               .body(new ParameterizedTypeReference<List<LessonPageResponse>>() {});
       return pages == null ? Collections.emptyList() : normalizePages(pages);
-    } catch (HttpClientErrorException.NotFound nf) {
-      return Collections.emptyList();
     } catch (ResourceAccessException ex) {
       throw new AppException(ErrorCode.CRAWLER_UNAVAILABLE);
+    } catch (RestClientResponseException ex) {
+      if (ex.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
+        return Collections.emptyList();
+      }
+      log.warn(
+          "Crawler returned {} listing pages for book={}, lesson={}: {}",
+          ex.getStatusCode(),
+          bookId,
+          lessonId,
+          shortResponseBody(ex));
+      return Collections.emptyList();
+    } catch (RestClientException ex) {
+      log.warn(
+          "Rest client error listing pages for book={}, lesson={}: {}",
+          bookId,
+          lessonId,
+          ex.getMessage());
+      return Collections.emptyList();
     }
   }
 
@@ -145,10 +172,26 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
               .retrieve()
               .body(new ParameterizedTypeReference<List<LessonPageResponse>>() {});
       return pages == null ? Collections.emptyList() : normalizePages(pages);
-    } catch (HttpClientErrorException.NotFound nf) {
-      return Collections.emptyList();
     } catch (ResourceAccessException ex) {
       throw new AppException(ErrorCode.CRAWLER_UNAVAILABLE);
+    } catch (RestClientResponseException ex) {
+      if (ex.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
+        return Collections.emptyList();
+      }
+      log.warn(
+          "Crawler returned {} listing pages for lesson={}, bookId={}: {}",
+          ex.getStatusCode(),
+          lessonId,
+          bookId,
+          shortResponseBody(ex));
+      return Collections.emptyList();
+    } catch (RestClientException ex) {
+      log.warn(
+          "Rest client error listing pages for lesson={}, bookId={}: {}",
+          lessonId,
+          bookId,
+          ex.getMessage());
+      return Collections.emptyList();
     }
   }
 
@@ -324,6 +367,15 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
     block.setImageUrl(firstNonBlank(imageUrl, imagePath));
     block.setImagePath(imagePath);
     block.setThumbnailUrl(thumbnailUrl);
+  }
+
+  private static String shortResponseBody(RestClientResponseException ex) {
+    String body = ex.getResponseBodyAsString();
+    if (body == null || body.isEmpty()) {
+      return "";
+    }
+    int max = 500;
+    return body.length() <= max ? body : body.substring(0, max) + "...";
   }
 
   private String resolveMediaUrl(String value, Map<String, String> mediaUrlCache) {

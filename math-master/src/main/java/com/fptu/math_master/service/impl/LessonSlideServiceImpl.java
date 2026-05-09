@@ -30,7 +30,10 @@ import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SlideTemplateRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.dto.request.LatexRenderRequest;
-import com.fptu.math_master.configuration.properties.CrawlDataProperties;
+import com.fptu.math_master.dto.response.ContentBlockDto;
+import com.fptu.math_master.dto.response.LessonContentResponse;
+import com.fptu.math_master.dto.response.LessonPageResponse;
+import com.fptu.math_master.service.BookContentService;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.LatexRenderService;
 import com.fptu.math_master.service.LessonSlideService;
@@ -38,8 +41,7 @@ import com.fptu.math_master.service.TokenCostConfigService;
 import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.SecurityUtils;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.web.client.RestClient;
+
 import io.minio.BucketExistsArgs;
 import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
@@ -167,9 +169,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   TokenCostConfigService tokenCostConfigService;
   UploadService uploadService;
   ObjectMapper objectMapper;
-  @Qualifier("crawlDataRestClient")
-  RestClient crawlDataRestClient;
-  CrawlDataProperties crawlDataProperties;
+  BookContentService bookContentService;
 
   @Override
   @Transactional
@@ -1121,9 +1121,12 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
     return value
         .replace("\\r\\n", "\n")
-        // Replace literal \n only when NOT followed by a letter (to avoid breaking LaTeX
-        // commands like \neq, \not, \nabla, etc. that contain \n as a substring).
-        .replaceAll("\\\\n(?![a-zA-Z])", "\n")
+        // Replace literal \n only when NOT preceded by a backslash that's part of a LaTeX
+        // command. We match \n where the char before \ is not a-z (i.e. not mid-command)
+        // AND the n is not followed by a-z (e.g. \not, \nabla).
+        // Known LaTeX commands starting with \n: \ne, \neq, \neg, \not, \nabla, \newline, \notin
+        // We protect all of them by requiring the match to NOT be \<letter>n OR \n<letter>.
+        .replaceAll("(?<![a-zA-Z\\\\])\\\\n(?![a-zA-Z])", "\n")
         // Convert \\ used as an inline separator (e.g. " \\ " or " \\\\ ") to a real newline.
         // AI frequently uses \\ or \\\\ between sentences as a paragraph/line separator.
         .replaceAll("\\h*\\\\{2,}\\h+", "\n")
@@ -1140,7 +1143,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
     String normalized = value.replace("\\$", "$");
     normalized = normalized.replace("\\\\(", "\\(").replace("\\\\)", "\\)");
-    return normalized.replace("\\\\[", "\\[").replace("\\\\]", "\\]");
+    normalized = normalized.replace("\\\\[", "\\[").replace("\\\\]", "\\]");
+    // \ne not followed by a letter → \neq (avoids \neg, \newline, \notin being changed)
+    // KaTeX and some renderers don't support \ne; \neq is universally safe.
+    normalized = normalized.replaceAll("\\\\ne(?![a-zA-Z])", "\\\\neq");
+    return normalized;
   }
 
   private String sanitizeDisplayText(String value) {
@@ -2348,29 +2355,13 @@ public class LessonSlideServiceImpl implements LessonSlideService {
    * Returns an empty string when the lesson has no associated book content or when
    * the upstream call fails (fail-silently so slide generation is never blocked).
    */
-  @SuppressWarnings("unchecked")
   private String fetchBookContentText(UUID lessonId) {
-    log.info("[SlidePrompt] Fetching book content from crawl-data for lessonId={}", lessonId);
+    log.info("[SlidePrompt] Fetching book content via BookContentService for lessonId={}", lessonId);
     try {
-      String json = crawlDataRestClient
-          .get()
-          .uri("/api/v1/lessons/{id}/content", lessonId)
-          .retrieve()
-          .body(String.class);
-      if (json == null || json.isBlank()) {
-        log.info("[SlidePrompt] lessonId={} — crawl-data trả về body rỗng", lessonId);
-        return "";
-      }
-      Map<?, ?> root = objectMapper.readValue(json, Map.class);
-      Object result = root.get("result");
-      if (!(result instanceof Map<?, ?> resultMap)) {
-        log.info("[SlidePrompt] lessonId={} — result không phải Map, type={}",
-            lessonId, result == null ? "null" : result.getClass().getSimpleName());
-        return "";
-      }
-      Object pagesObj = resultMap.get("pages");
-      if (!(pagesObj instanceof List<?> pages)) {
-        log.info("[SlidePrompt] lessonId={} — pages không tồn tại hoặc không phải List", lessonId);
+      LessonContentResponse lessonContent = bookContentService.getLessonContent(lessonId);
+      List<LessonPageResponse> pages = lessonContent.getPages();
+      if (pages == null || pages.isEmpty()) {
+        log.info("[SlidePrompt] lessonId={} — không có trang nào trong sách giáo khoa", lessonId);
         return "";
       }
       log.info("[SlidePrompt] lessonId={} — tìm thấy {} trang sách giáo khoa", lessonId, pages.size());
@@ -2383,7 +2374,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       }
       return compressed;
     } catch (Exception ex) {
-      log.warn("[SlidePrompt] Could not fetch book content for lessonId={}: {} — {}",
+      log.warn("[SlidePrompt] Không lấy được book content cho lessonId={}: {} — {}",
           lessonId, ex.getClass().getSimpleName(), ex.getMessage());
       return "";
     }
@@ -2394,26 +2385,19 @@ public class LessonSlideServiceImpl implements LessonSlideService {
    * Image blocks are dropped; formula/definition/exercise/table blocks are labelled;
    * plain text blocks are emitted as-is. This reduces ~10k-token JSON to ~1-2k tokens.
    */
-  private String compressBookContent(List<?> pages) {
+  private String compressBookContent(List<LessonPageResponse> pages) {
     StringBuilder sb = new StringBuilder();
-    for (Object pageObj : pages) {
-      if (!(pageObj instanceof Map<?, ?> page)) continue;
-      Object pageNumber = page.get("pageNumber");
-      Object blocksObj = page.get("contentBlocks");
-      if (!(blocksObj instanceof List<?> blocks)) continue;
+    for (LessonPageResponse page : pages) {
+      List<ContentBlockDto> blocks = page.getContentBlocks();
+      if (blocks == null || blocks.isEmpty()) continue;
 
       StringBuilder pageContent = new StringBuilder();
-      for (Object blockObj : blocks) {
-        if (!(blockObj instanceof Map<?, ?> block)) continue;
-        Object typeObj = block.get("type");
-        String type = typeObj != null ? String.valueOf(typeObj) : "";
+      for (ContentBlockDto block : blocks) {
+        String type = block.getType() != null ? block.getType() : "";
         if ("image".equals(type)) continue; // ảnh không có giá trị text
 
-        Object contentObj = block.get("content");
-        String content = contentObj != null ? String.valueOf(contentObj).trim() : "";
-        Object latexObj = block.get("latex");
-        String latex = (latexObj != null && !"null".equals(String.valueOf(latexObj)))
-            ? String.valueOf(latexObj).trim() : null;
+        String content = block.getContent() != null ? block.getContent().trim() : "";
+        String latex = block.getLatex() != null ? block.getLatex().trim() : null;
 
         String line;
         if (latex != null && !latex.isBlank()) {
@@ -2435,7 +2419,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
       if (pageContent.length() > 0) {
         if (sb.length() > 0) sb.append("\n");
-        sb.append("=== Trang ").append(pageNumber).append(" ===\n");
+        sb.append("=== Trang ").append(page.getPageNumber()).append(" ===\n");
         sb.append(pageContent);
       }
     }
@@ -2449,10 +2433,12 @@ public class LessonSlideServiceImpl implements LessonSlideService {
               + "- Danh sách bước/ý: dùng \\\\begin{itemize} \\\\item ... \\\\end{itemize}. KHÔNG dùng dấu gạch đầu dòng thủ công.\n"
               + "- Vì output là JSON string, PHẢI escape backslash: \\\\frac, \\\\item, \\\\begin, \\\\end, \\\\textbf, v.v.\n"
               + "- KHÔNG thêm ký tự \\\\ ở cuối dòng văn bản thường.\n"
+              + "- Dùng \\\\neq thay vì \\\\ne để ký hiệu ≠.\n"
               + "- KHÔNG viết công thức dạng chữ thuần túy."
           : "- Tất cả biểu thức toán học PHẢI dùng LaTeX inline ($...$) hoặc display (\\[ ... \\]).\n"
               + "- Danh sách bước/ý: dùng \\begin{itemize} \\item ... \\end{itemize}. KHÔNG dùng dấu gạch đầu dòng thủ công.\n"
               + "- KHÔNG thêm ký tự \\ ở cuối dòng văn bản thường.\n"
+              + "- Dùng \\neq thay vì \\ne để ký hiệu ≠.\n"
               + "- KHÔNG viết công thức dạng chữ thuần túy.";
       case HYBRID -> jsonMode
           ? "- Nội dung mô tả bằng tiếng Việt, công thức/ký hiệu toán dùng LaTeX inline ($...$).\n"

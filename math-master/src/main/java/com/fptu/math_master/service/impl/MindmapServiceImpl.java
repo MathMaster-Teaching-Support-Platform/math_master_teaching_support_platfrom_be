@@ -12,6 +12,10 @@ import com.fptu.math_master.enums.MindmapStatus;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.*;
+import com.fptu.math_master.dto.response.ContentBlockDto;
+import com.fptu.math_master.dto.response.LessonContentResponse;
+import com.fptu.math_master.dto.response.LessonPageResponse;
+import com.fptu.math_master.service.BookContentService;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.MindmapService;
 import com.fptu.math_master.service.TokenCostConfigService;
@@ -58,6 +62,7 @@ public class MindmapServiceImpl implements MindmapService {
   UserRepository userRepository;
   LessonRepository lessonRepository;
   GeminiService geminiService;
+  BookContentService bookContentService;
   UserSubscriptionService userSubscriptionService;
   TokenCostConfigService tokenCostConfigService;
   ObjectMapper objectMapper;
@@ -102,9 +107,30 @@ public class MindmapServiceImpl implements MindmapService {
     int cost = tokenCostConfigService.getCostPerUse("mindmap");
     userSubscriptionService.consumeMyTokens(cost, "MINDMAP");
 
+    // Parse lessonId early so we can fetch book content before building the prompt
+    UUID lessonIdForContent = null;
+    if (request.getLessonId() != null && !request.getLessonId().trim().isEmpty()) {
+      try {
+        lessonIdForContent = UUID.fromString(request.getLessonId());
+      } catch (IllegalArgumentException e) {
+        log.warn("[MindmapPrompt] lessonId không hợp lệ, bỏ qua book content: {}", request.getLessonId());
+      }
+    }
+
+    // Fetch book content to inject into AI prompt for better accuracy
+    log.info("[MindmapPrompt] Bắt đầu lấy content sách cho lessonId={}", lessonIdForContent);
+    String bookContent = lessonIdForContent != null ? fetchBookContentText(lessonIdForContent) : "";
+    log.info("[MindmapPrompt] lessonId={} — bookContent sẵn sàng: {} ký tự, sẽ{} inject vào prompt",
+        lessonIdForContent, bookContent.length(), bookContent.isBlank() ? " KHÔNG" : "");
+    if (!bookContent.isBlank()) {
+      log.info("[MindmapPrompt] lessonId={} — nội dung sẽ inject (500 ký tự đầu):\n{}",
+          lessonIdForContent,
+          bookContent.length() > 500 ? bookContent.substring(0, 500) + "..." : bookContent);
+    }
+
     // Build the AI prompt with levels
     Integer levels = request.getLevels() != null ? request.getLevels() : 3;
-    String aiPrompt = buildMindmapGenerationPrompt(request.getPrompt(), levels);
+    String aiPrompt = buildMindmapGenerationPrompt(request.getPrompt(), levels, bookContent);
 
     // Call Gemini AI to generate mindmap structure
     log.info("[Mindmap AI Prompt]\n{}", aiPrompt);
@@ -128,15 +154,14 @@ public class MindmapServiceImpl implements MindmapService {
 
     // Create mindmap entity
     UUID lessonId = null;
-    if (request.getLessonId() != null && !request.getLessonId().trim().isEmpty()) {
+    if (lessonIdForContent != null) {
       try {
-        lessonId = UUID.fromString(request.getLessonId());
         lessonRepository
-            .findById(lessonId)
+            .findById(lessonIdForContent)
             .orElseThrow(() -> new AppException(ErrorCode.ASSESSMENT_NOT_FOUND));
-      } catch (IllegalArgumentException e) {
-        log.warn("Invalid lessonId format: {}", request.getLessonId());
-        // lessonId remains null, mindmap will be created without lesson link
+        lessonId = lessonIdForContent;
+      } catch (AppException e) {
+        throw e; // lesson not found — propagate
       }
     }
 
@@ -612,12 +637,69 @@ public class MindmapServiceImpl implements MindmapService {
 
   // Helper methods
 
-  private String buildMindmapGenerationPrompt(String userPrompt, int levels) {
+  private String fetchBookContentText(UUID lessonId) {
+    log.info("[MindmapPrompt] Fetching book content via BookContentService cho lessonId={}", lessonId);
+    try {
+      LessonContentResponse lessonContent = bookContentService.getLessonContent(lessonId);
+      List<LessonPageResponse> pages = lessonContent.getPages();
+      if (pages == null || pages.isEmpty()) {
+        log.info("[MindmapPrompt] lessonId={} — không có trang nào trong sách giáo khoa", lessonId);
+        return "";
+      }
+      log.info("[MindmapPrompt] lessonId={} — tìm thấy {} trang sách giáo khoa", lessonId, pages.size());
+      String compressed = compressBookContent(pages);
+      log.info("[MindmapPrompt] lessonId={} — sau nén: {} ký tự", lessonId, compressed.length());
+      return compressed;
+    } catch (Exception ex) {
+      log.warn("[MindmapPrompt] Không lấy được book content cho lessonId={}: {} — {}",
+          lessonId, ex.getClass().getSimpleName(), ex.getMessage());
+      return "";
+    }
+  }
+
+  private String compressBookContent(List<LessonPageResponse> pages) {
+    StringBuilder sb = new StringBuilder();
+    for (LessonPageResponse page : pages) {
+      sb.append("=== Trang ").append(page.getPageNumber()).append(" ===\n");
+      List<ContentBlockDto> blocks = page.getContentBlocks();
+      if (blocks == null) continue;
+      for (ContentBlockDto block : blocks) {
+        String type = block.getType();
+        String content = block.getContent();
+        if ("image".equalsIgnoreCase(type)) continue;
+        if (content == null || content.isBlank()) continue;
+        if ("definition".equalsIgnoreCase(type)) {
+          sb.append("[DEF] ").append(content).append("\n");
+        } else if ("exercise".equalsIgnoreCase(type)) {
+          sb.append("[EX] ").append(content).append("\n");
+        } else if ("table".equalsIgnoreCase(type)) {
+          sb.append("[TABLE] ").append(content).append("\n");
+        } else if ("formula".equalsIgnoreCase(type) || block.getLatex() != null) {
+          sb.append("[FORMULA] ").append(content).append("\n");
+        } else {
+          sb.append(content).append("\n");
+        }
+      }
+    }
+    return sb.toString().trim();
+  }
+
+  private String buildMindmapGenerationPrompt(String userPrompt, int levels, String bookContent) {
+    String bookSection = "";
+    if (bookContent != null && !bookContent.isBlank()) {
+      bookSection = """
+
+          === NỘI DUNG SÁCH GIÁO KHOA (dùng làm nguồn tham khảo chính xác) ===
+          %s
+          === KẾT THÚC NỘI DUNG SÁCH ===
+          """.formatted(bookContent);
+    }
+
     return """
         You are an expert educational content creator. Generate a mindmap structure in JSON format based on the following topic/prompt:
 
         %s
-
+        %s
         IMPORTANT: The mindmap must have EXACTLY %d levels deep (including the root node).
         - Level 1: Root node (will use blue color)
         - Level 2: Child nodes (will use green color)
@@ -670,8 +752,9 @@ public class MindmapServiceImpl implements MindmapService {
         - Create 3-7 main branches from root, each with 2-5 sub-nodes at each level
         - Ensure displayOrder is sequential (0, 1, 2, ...)
         - LANGUAGE: All node content ("content" field), "title", and "description" MUST be written in Vietnamese with full diacritics (tiếng Việt có dấu). Do NOT use English or unaccented Vietnamese.
+        - PLAIN TEXT ONLY: Do NOT use any LaTeX, MathJax, or mathematical markup in any field. Write all mathematical expressions in plain Vietnamese text with full diacritics (e.g. "x bình phương" thay vì "x^2", "căn bậc hai của x" thay vì "\\sqrt{x}", "x không bằng 0" thay vì "x \\neq 0"). No backslashes, no dollar signs, no \\(...\\), no $...$, no \\[...\\]. Mọi nội dung sinh ra đều phải dùng tiếng Việt có dấu đầy đủ.
         """
-        .formatted(userPrompt, levels, levels);
+        .formatted(userPrompt, bookSection, levels, levels);
   }
 
   private MindmapStructure parseMindmapFromAI(String aiResponse) throws Exception {
