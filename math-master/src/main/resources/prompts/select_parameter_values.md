@@ -55,5 +55,15 @@ distinctness.
   the allowed range.
 - **`_reason`** is a one-sentence explanation, mainly for debugging. Keep it
   short. The generator does not display it to students.
-- **Do NOT compute the answer.** That is the substitutor's job downstream.
+- **Graph / diagram coherence:** If parameters describe axes or extrema of a curve
+  (`y_min_val`, `y_max_val`, `y_axis_lower_bound`, `y_axis_upper_bound`,
+  `x_root_val`, `x_axis_bound`), they MUST be numerically consistent so the sketch
+  makes sense:
+  - Always **`y_min_val < y_max_val`** (strict).
+  - **`y_axis_lower_bound < y_min_val`** so the y-axis extends below the trough.
+  - **`y_axis_upper_bound > y_max_val`** so the y-axis extends above the peak.
+  - **`x_axis_bound > x_root_val`** when `x_root_val > 0` so turning points fit on the plot.
+  Violating these produces misleading diagrams even when pairwise constraints look OK.
+- **Algebra vs picture:** If `answerFormula` counts horizontal-line intersections for a given graph family, pick tuples where **`-b/a`** (from parameters `a`, `b`) falls in the intended vertical band relative to `y_min_val` / `y_max_val` — do not mix unrelated extremum values with the same counting logic.
+- **Do NOT compute the answer.** That is the substitutor's job downstream — but you MUST satisfy geometric ordering above so the downstream answer matches the drawing.
 - Output **strict JSON only** — no commentary, no code fences, no trailing text.

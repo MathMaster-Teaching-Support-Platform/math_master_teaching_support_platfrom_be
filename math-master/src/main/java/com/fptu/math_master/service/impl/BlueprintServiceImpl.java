@@ -27,6 +27,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.script.ScriptEngine;
+import javax.script.ScriptEngineManager;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +68,8 @@ public class BlueprintServiceImpl implements BlueprintService {
   /** After substituting sample values, any remaining `{{name}}` means invalid blueprint output. */
   private static final Pattern UNRESOLVED_DIAGRAM_PLACEHOLDER =
       Pattern.compile("\\{\\{\\s*[\\p{L}\\p{N}_]+\\s*\\}\\}");
+  private static final Pattern DOUBLE_BRACE_TOKEN =
+      Pattern.compile("\\{\\{\\s*([\\p{L}\\p{N}_]+)\\s*\\}\\}");
 
   /** Gemini re-tries when diagram LaTeX fails QuickLaTeX; avoids infinite provider spend. */
   private static final int BLUEPRINT_DIAGRAM_RENDER_MAX_ATTEMPTS = 5;
@@ -462,8 +466,12 @@ public class BlueprintServiceImpl implements BlueprintService {
         else if (v.isDouble() || v.isFloat()) tuple.put(e.getKey(), v.asDouble());
         else tuple.put(e.getKey(), v.asText(""));
       });
-      if (passesGuardrails(tuple, params)) {
+      if (passesGuardrails(tuple, params)
+          && passesSemanticAxisOrdering(tuple)
+          && passesAnswerFormulaSmoke(template, tuple)) {
         validSets.add(tuple);
+      } else {
+        log.debug("[Blueprint] dropped AI tuple {} (guardrails / axis ordering / answerFormula smoke)", tuple);
       }
     }
     return validSets;
@@ -492,6 +500,105 @@ public class BlueprintServiceImpl implements BlueprintService {
       Pattern.compile("(\\w+)\\s*(?:<=|≤)\\s*(-?\\d+(?:\\.\\d+)?)");
   private static final Pattern DIV_RE =
       Pattern.compile("divisible\\s*by\\s*(\\d+)", Pattern.CASE_INSENSITIVE);
+
+  /**
+   * Numeric consistency for typical graph-axis parameter names (AI often violates ordering).
+   */
+  private static boolean passesSemanticAxisOrdering(Map<String, Object> tuple) {
+    Double yMin = getNumeric(tuple, "y_min_val");
+    Double yMax = getNumeric(tuple, "y_max_val");
+    if (yMin != null && yMax != null && yMin >= yMax) {
+      return false;
+    }
+    Double yLow = getNumeric(tuple, "y_axis_lower_bound");
+    if (yLow != null && yMin != null && yLow >= yMin) {
+      return false;
+    }
+    Double yHigh = getNumeric(tuple, "y_axis_upper_bound");
+    if (yHigh != null && yMax != null && yHigh <= yMax) {
+      return false;
+    }
+    Double xRoot = getNumeric(tuple, "x_root_val");
+    Double xBound = getNumeric(tuple, "x_axis_bound");
+    if (xRoot != null && xBound != null && xRoot > 0 && xBound <= xRoot) {
+      return false;
+    }
+    return true;
+  }
+
+  private static Double getNumeric(Map<String, Object> tuple, String key) {
+    Object v = tuple.get(key);
+    if (v == null) {
+      return null;
+    }
+    try {
+      return Double.parseDouble(v.toString());
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  /**
+   * Substitute tuple into {@link QuestionTemplate#getAnswerFormula()} and evaluate as JavaScript
+   * (same family as generation). Drops tuples that still contain placeholders or evaluate to
+   * NaN/Infinity / script error — catches inconsistent AI samples without trusting prose constraints.
+   */
+  private boolean passesAnswerFormulaSmoke(QuestionTemplate template, Map<String, Object> tuple) {
+    String formula = template.getAnswerFormula();
+    if (formula == null || formula.isBlank()) {
+      return true;
+    }
+    String sub = substituteTupleIntoAnswerFormula(formula, tuple);
+    if (sub.contains("{{")) {
+      return false;
+    }
+    String js =
+        sub.trim()
+            .replace('$', ' ')
+            .replace('\u2212', '-')
+            .replace('−', '-')
+            .replace("^", "**");
+    ScriptEngine engine = resolveScriptEngine();
+    if (engine == null) {
+      return true;
+    }
+    try {
+      Object r = engine.eval(js);
+      if (r instanceof Number n) {
+        double d = n.doubleValue();
+        return !Double.isNaN(d) && !Double.isInfinite(d);
+      }
+      if (r instanceof Boolean b) {
+        return b;
+      }
+      return r != null;
+    } catch (Exception e) {
+      log.debug("[Blueprint] answerFormula smoke failed for '{}': {}", js, e.getMessage());
+      return false;
+    }
+  }
+
+  private static ScriptEngine resolveScriptEngine() {
+    ScriptEngineManager mgr = new ScriptEngineManager();
+    ScriptEngine engine = mgr.getEngineByName("graal.js");
+    if (engine == null) {
+      engine = mgr.getEngineByName("JavaScript");
+    }
+    return engine;
+  }
+
+  private static String substituteTupleIntoAnswerFormula(String formula, Map<String, Object> tuple) {
+    Matcher m = DOUBLE_BRACE_TOKEN.matcher(formula);
+    StringBuffer sb = new StringBuffer();
+    while (m.find()) {
+      String name = m.group(1);
+      Object val = tuple.get(name);
+      String rep = val == null ? m.group(0) : embedNumericPlaceholderSubstitution(val);
+      m.appendReplacement(sb, Matcher.quoteReplacement(rep));
+    }
+    m.appendTail(sb);
+    return sb.toString();
+  }
 
   /** Quick programmatic check; not exhaustive but catches the obvious AI off-by-ones. */
   private boolean passesGuardrails(Map<String, Object> tuple, List<BlueprintParameter> params) {
