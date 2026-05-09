@@ -2007,10 +2007,14 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       LessonSlideOutputFormat outputFormat,
       int requestedSlideCount) {
     DeckSections fallback = buildDeckSections(lesson, additionalPrompt);
-    String bookContent = fetchBookContentText(lesson.getId());
+    UUID lessonId = lesson.getId();
+    log.info("[SlidePrompt] Bắt đầu lấy content sách cho lessonId={}", lessonId);
+    String bookContent = fetchBookContentText(lessonId);
+    log.info("[SlidePrompt] lessonId={} — bookContent sẵn sàng: {} ký tự, sẽ{} inject vào prompt",
+        lessonId, bookContent.length(), bookContent.isBlank() ? " KHÔNG" : "");
     if (!bookContent.isBlank()) {
-      log.info("[SlidePrompt] Fetched book content ({} chars) for lessonId={}",
-          bookContent.length(), lesson.getId());
+      log.info("[SlidePrompt] lessonId={} — nội dung sẽ inject (500 ký tự đầu):\n{}",
+          lessonId, bookContent.length() > 500 ? bookContent.substring(0, 500) + "..." : bookContent);
     }
 
     try {
@@ -2354,21 +2358,28 @@ public class LessonSlideServiceImpl implements LessonSlideService {
           .retrieve()
           .body(String.class);
       if (json == null || json.isBlank()) {
-        log.info("[SlidePrompt] Book content API returned empty body for lessonId={}", lessonId);
+        log.info("[SlidePrompt] lessonId={} — crawl-data trả về body rỗng", lessonId);
         return "";
       }
       Map<?, ?> root = objectMapper.readValue(json, Map.class);
       Object result = root.get("result");
       if (!(result instanceof Map<?, ?> resultMap)) {
-        log.info("[SlidePrompt] Book content API result is null/unexpected type for lessonId={}", lessonId);
+        log.info("[SlidePrompt] lessonId={} — result không phải Map, type={}",
+            lessonId, result == null ? "null" : result.getClass().getSimpleName());
         return "";
       }
-      String compressed = compressBookContent(resultMap);
+      Object pagesObj = resultMap.get("pages");
+      if (!(pagesObj instanceof List<?> pages)) {
+        log.info("[SlidePrompt] lessonId={} — pages không tồn tại hoặc không phải List", lessonId);
+        return "";
+      }
+      log.info("[SlidePrompt] lessonId={} — tìm thấy {} trang sách giáo khoa", lessonId, pages.size());
+      String compressed = compressBookContent(pages);
       if (compressed.isBlank()) {
-        log.info("[SlidePrompt] Book content compressed to empty for lessonId={}", lessonId);
+        log.info("[SlidePrompt] lessonId={} — compress xong nhưng kết quả rỗng (toàn ảnh?)", lessonId);
       } else {
-        log.info("[SlidePrompt] Book content fetched and compressed ({} chars) for lessonId={}",
-            compressed.length(), lessonId);
+        log.info("[SlidePrompt] lessonId={} — book content sẵn sàng inject: {} ký tự",
+            lessonId, compressed.length());
       }
       return compressed;
     } catch (Exception ex) {
@@ -2383,11 +2394,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
    * Image blocks are dropped; formula/definition/exercise/table blocks are labelled;
    * plain text blocks are emitted as-is. This reduces ~10k-token JSON to ~1-2k tokens.
    */
-  @SuppressWarnings("unchecked")
-  private String compressBookContent(Map<?, ?> resultMap) {
-    Object pagesObj = resultMap.get("pages");
-    if (!(pagesObj instanceof List<?> pages)) return "";
-
+  private String compressBookContent(List<?> pages) {
     StringBuilder sb = new StringBuilder();
     for (Object pageObj : pages) {
       if (!(pageObj instanceof Map<?, ?> page)) continue;
@@ -2400,12 +2407,13 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         if (!(blockObj instanceof Map<?, ?> block)) continue;
         Object typeObj = block.get("type");
         String type = typeObj != null ? String.valueOf(typeObj) : "";
-        if ("image".equals(type)) continue; // images add no text value
+        if ("image".equals(type)) continue; // ảnh không có giá trị text
 
         Object contentObj = block.get("content");
         String content = contentObj != null ? String.valueOf(contentObj).trim() : "";
         Object latexObj = block.get("latex");
-        String latex = (latexObj != null) ? String.valueOf(latexObj).trim() : null;
+        String latex = (latexObj != null && !"null".equals(String.valueOf(latexObj)))
+            ? String.valueOf(latexObj).trim() : null;
 
         String line;
         if (latex != null && !latex.isBlank()) {
