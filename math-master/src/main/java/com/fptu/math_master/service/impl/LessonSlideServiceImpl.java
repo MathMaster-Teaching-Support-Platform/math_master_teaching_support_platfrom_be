@@ -2384,10 +2384,12 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       StringBuilder pageContent = new StringBuilder();
       for (Object blockObj : blocks) {
         if (!(blockObj instanceof Map<?, ?> block)) continue;
-        String type = String.valueOf(block.getOrDefault("type", ""));
+        Object typeObj = block.get("type");
+        String type = typeObj != null ? String.valueOf(typeObj) : "";
         if ("image".equals(type)) continue; // images add no text value
 
-        String content = String.valueOf(block.getOrDefault("content", "")).trim();
+        Object contentObj = block.get("content");
+        String content = contentObj != null ? String.valueOf(contentObj).trim() : "";
         Object latexObj = block.get("latex");
         String latex = (latexObj != null) ? String.valueOf(latexObj).trim() : null;
 
