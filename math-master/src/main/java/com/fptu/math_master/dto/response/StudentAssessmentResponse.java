@@ -37,6 +37,8 @@ public class StudentAssessmentResponse {
   private Boolean allowMultipleAttempts;
   private Boolean canStart;
   private String cannotStartReason;
+  private BigDecimal lastScore;
+
 
   // Course context metadata (used by course-scoped student assessment listing)
   private Boolean isRequired;

@@ -631,8 +631,11 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     String studentStatus = determineStudentStatus(assessment, submissionOpt, now);
     UUID currentAttemptId = null;
     Integer attemptNumber = 0;
+    BigDecimal lastScore = null;
 
     if (submissionOpt.isPresent()) {
+      lastScore = submissionOpt.get().getFinalScore();
+      
       List<QuizAttempt> inProgressAttempts =
           quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
               assessment.getId(), studentId, SubmissionStatus.IN_PROGRESS);
@@ -679,6 +682,7 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
           .schoolGradeId(curriculumContext.schoolGradeId())
           .subjectId(curriculumContext.subjectId())
           .lessonIds(curriculumContext.lessonIds())
+          .lastScore(lastScore)
         .build();
   }
 
