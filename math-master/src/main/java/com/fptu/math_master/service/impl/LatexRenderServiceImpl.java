@@ -20,6 +20,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Map;
 import java.util.Optional;
@@ -148,6 +149,10 @@ public class LatexRenderServiceImpl implements LatexRenderService {
     fixed = fixed.replaceAll(
         "(-?)\\\\sqrt\\{([^}]*)\\}((?:[+\\-][0-9.]+)?)",
         "{$1sqrt($2)$3}");
+
+    // Evaluate \pgfmathsetmacro{\name}{expr} definitions and inline computed numeric values.
+    // This removes the macro usage entirely so QuickLaTeX never sees variable references.
+    fixed = evaluatePgfmathMacros(fixed);
 
     // Fix: arithmetic expressions (*, /) used as TikZ coordinate components without pgfmath {}.
     // e.g.  \node at (0, 0.3*9*9 + -3)  →  \node at (0, {0.3*9*9 + -3})
@@ -313,6 +318,129 @@ public class LatexRenderServiceImpl implements LatexRenderService {
       return DEFAULT_PREAMBLE;
     }
     return "";
+  }
+
+  /**
+   * Finds every {@code \pgfmathsetmacro{\name}{expr}} in the LaTeX, evaluates {@code expr}
+   * using a simple arithmetic parser, removes the macro definition lines, and substitutes
+   * every occurrence of {@code \name} with the computed numeric string.
+   *
+   * <p>Supports: {@code + - * / ^} (power), parentheses, negative/unary minus, and
+   * double-negatives (e.g. {@code 1 - -2}).
+   * Falls back to leaving the macro line untouched if evaluation fails.
+   */
+  private String evaluatePgfmathMacros(String latex) {
+    if (!latex.contains("\\pgfmathsetmacro")) {
+      return latex;
+    }
+    // Match: \pgfmathsetmacro{\name}{expression}  (optional trailing whitespace / newline)
+    Pattern macroPattern = Pattern.compile(
+        "\\\\pgfmathsetmacro\\s*\\{\\\\([a-zA-Z]+)\\}\\s*\\{([^}]+)\\}[ \\t]*\\r?\\n?");
+    Matcher m = macroPattern.matcher(latex);
+    Map<String, String> macros = new LinkedHashMap<>();
+    StringBuffer sb = new StringBuffer();
+    while (m.find()) {
+      String name = m.group(1);
+      String expr = m.group(2).trim();
+      try {
+        double value = evalPgfmathExpr(expr);
+        // Format as integer when possible, otherwise as compact decimal.
+        String valueStr;
+        if (value == Math.floor(value) && !Double.isInfinite(value) && Math.abs(value) < 1e12) {
+          valueStr = String.valueOf((long) value);
+        } else {
+          valueStr = String.format("%.6g", value).replaceAll("0+$", "").replaceAll("\\.$", "");
+        }
+        macros.put(name, valueStr);
+        m.appendReplacement(sb, ""); // drop the \pgfmathsetmacro line
+        log.info("[LatexNorm] pgfmathsetmacro name={} evaluated to {} (expr={})", name, valueStr, expr);
+      } catch (Exception e) {
+        log.warn("[LatexNorm] pgfmathsetmacro name={} expr='{}' could not be evaluated ({}), leaving as-is",
+            name, expr, e.getMessage());
+        m.appendReplacement(sb, Matcher.quoteReplacement(m.group(0)));
+      }
+    }
+    m.appendTail(sb);
+    String result = sb.toString();
+    // Replace every \name usage with the computed value.
+    for (Map.Entry<String, String> entry : macros.entrySet()) {
+      result = result.replace("\\" + entry.getKey(), entry.getValue());
+    }
+    return result;
+  }
+
+  /**
+   * Evaluates a pgfmath-style arithmetic expression to a {@code double}.
+   * Supports {@code + - * / ^}, parentheses, and unary/double negatives.
+   */
+  private static double evalPgfmathExpr(String raw) {
+    return new PgfmathExprParser(raw).parseExpr();
+  }
+
+  private static final class PgfmathExprParser {
+    private final String s;
+    private int i;
+
+    PgfmathExprParser(String s) { this.s = s.trim(); this.i = 0; }
+
+    double parseExpr() {
+      double v = parseTerm();
+      for (;;) {
+        skipWs();
+        if (i < s.length() && s.charAt(i) == '+') { i++; v += parseTerm(); }
+        else if (i < s.length() && s.charAt(i) == '-') { i++; v -= parseTerm(); }
+        else break;
+      }
+      return v;
+    }
+
+    double parseTerm() {
+      double v = parsePow();
+      for (;;) {
+        skipWs();
+        if (i < s.length() && s.charAt(i) == '*') { i++; v *= parsePow(); }
+        else if (i < s.length() && s.charAt(i) == '/') { i++; v /= parsePow(); }
+        else break;
+      }
+      return v;
+    }
+
+    double parsePow() {
+      double base = parseUnary();
+      skipWs();
+      if (i < s.length() && s.charAt(i) == '^') {
+        i++;
+        double exp = parseUnary();
+        return Math.pow(base, exp);
+      }
+      return base;
+    }
+
+    double parseUnary() {
+      skipWs();
+      if (i < s.length() && s.charAt(i) == '-') { i++; return -parsePrimary(); }
+      if (i < s.length() && s.charAt(i) == '+') { i++; return parsePrimary(); }
+      return parsePrimary();
+    }
+
+    double parsePrimary() {
+      skipWs();
+      if (i < s.length() && s.charAt(i) == '(') {
+        i++;
+        double v = parseExpr();
+        skipWs();
+        if (i < s.length() && s.charAt(i) == ')') i++;
+        return v;
+      }
+      int start = i;
+      while (i < s.length() && (Character.isDigit(s.charAt(i)) || s.charAt(i) == '.')) i++;
+      if (i == start) {
+        throw new IllegalArgumentException("Expected number at pos " + i + " in: " + s);
+      }
+      return Double.parseDouble(s.substring(start, i));
+    }
+
+    void skipWs() { while (i < s.length() && s.charAt(i) == ' ') i++; }
   }
 
   /**
