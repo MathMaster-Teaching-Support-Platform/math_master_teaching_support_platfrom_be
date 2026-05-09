@@ -937,7 +937,8 @@ public class CourseServiceImpl implements CourseService {
     List<String> matchedLessonTitles = matchedLessonIds.stream()
         .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
         .toList();
-    return mapToCourseAssessmentResponse(courseAssessment, assessment, matchedLessonTitles);
+    List<UUID> allLessonIds = assessmentLessonRepository.findLessonIdsByAssessmentId(request.getAssessmentId());
+    return mapToCourseAssessmentResponse(courseAssessment, assessment, allLessonIds, matchedLessonIds, matchedLessonTitles);
   }
 
   @Override
@@ -951,6 +952,9 @@ public class CourseServiceImpl implements CourseService {
     Map<UUID, String> lessonTitleById = getLessonTitleById(courseLessonIds);
     Set<UUID> assessmentIds = courseAssessments.stream().map(CourseAssessment::getAssessmentId)
         .collect(Collectors.toSet());
+    Map<UUID, List<UUID>> allLessonIdsByAssessmentId = buildAllLessonIdsByAssessmentId(assessmentIds);
+    Map<UUID, List<UUID>> matchedLessonIdsByAssessmentId = buildMatchedLessonIdsByAssessmentId(assessmentIds,
+        courseLessonIds);
     Map<UUID, List<String>> matchedLessonTitlesByAssessmentId = buildMatchedLessonTitlesByAssessmentId(assessmentIds,
         courseLessonIds, lessonTitleById);
 
@@ -960,9 +964,11 @@ public class CourseServiceImpl implements CourseService {
               Assessment assessment = assessmentRepository
                   .findByIdAndNotDeleted(ca.getAssessmentId())
                   .orElse(null);
+              List<UUID> allLessonIds = allLessonIdsByAssessmentId.getOrDefault(ca.getAssessmentId(), List.of());
+              List<UUID> matchedIds = matchedLessonIdsByAssessmentId.getOrDefault(ca.getAssessmentId(), List.of());
               List<String> matchedTitles = matchedLessonTitlesByAssessmentId.getOrDefault(ca.getAssessmentId(),
                   List.of());
-              return mapToCourseAssessmentResponse(ca, assessment, matchedTitles);
+              return mapToCourseAssessmentResponse(ca, assessment, allLessonIds, matchedIds, matchedTitles);
             })
         .filter(response -> {
           // Apply filters
@@ -1107,10 +1113,12 @@ public class CourseServiceImpl implements CourseService {
     Assessment assessment = assessmentRepository.findByIdAndNotDeleted(assessmentId).orElse(null);
     Set<UUID> courseLessonIds = getCourseLessonIds(courseId);
     Map<UUID, String> lessonTitleById = getLessonTitleById(courseLessonIds);
-    List<String> matchedLessonTitles = getMatchedLessonIds(assessmentId, courseLessonIds).stream()
+    List<UUID> matchedLessonIds = getMatchedLessonIds(assessmentId, courseLessonIds);
+    List<String> matchedLessonTitles = matchedLessonIds.stream()
         .map(id -> lessonTitleById.getOrDefault(id, "Unknown lesson"))
         .toList();
-    return mapToCourseAssessmentResponse(courseAssessment, assessment, matchedLessonTitles);
+    List<UUID> allLessonIds = assessmentLessonRepository.findLessonIdsByAssessmentId(assessmentId);
+    return mapToCourseAssessmentResponse(courseAssessment, assessment, allLessonIds, matchedLessonIds, matchedLessonTitles);
   }
 
   @Override
@@ -1142,14 +1150,17 @@ public class CourseServiceImpl implements CourseService {
   }
 
   private CourseAssessmentResponse mapToCourseAssessmentResponse(
-      CourseAssessment ca, Assessment assessment, List<String> matchedLessonTitles) {
+      CourseAssessment ca, Assessment assessment, List<UUID> assessmentLessonIds,
+      List<UUID> matchedLessonIds, List<String> matchedLessonTitles) {
     CourseAssessmentResponse.CourseAssessmentResponseBuilder builder = CourseAssessmentResponse.builder()
         .id(ca.getId())
         .courseId(ca.getCourseId())
         .assessmentId(ca.getAssessmentId())
         .orderIndex(ca.getOrderIndex())
         .isRequired(ca.isRequired())
+        .assessmentLessonIds(assessmentLessonIds)
         .matchedLessonCount(matchedLessonTitles.size())
+        .matchedLessonIds(matchedLessonIds)
         .matchedLessonTitles(matchedLessonTitles)
         .lessonMatched(!matchedLessonTitles.isEmpty())
         .createdAt(ca.getCreatedAt())
@@ -1183,6 +1194,7 @@ public class CourseServiceImpl implements CourseService {
   private Set<UUID> getCourseLessonIds(UUID courseId) {
     return courseLessonRepository.findByCourseIdAndNotDeleted(courseId).stream()
         .map(cl -> cl.getLessonId())
+        .filter(java.util.Objects::nonNull)
         .collect(Collectors.toCollection(HashSet::new));
   }
 
@@ -1202,6 +1214,17 @@ public class CourseServiceImpl implements CourseService {
         .filter(courseLessonIds::contains)
         .distinct()
         .toList();
+  }
+
+  private Map<UUID, List<UUID>> buildAllLessonIdsByAssessmentId(Collection<UUID> assessmentIds) {
+    if (assessmentIds.isEmpty()) {
+      return Map.of();
+    }
+    Map<UUID, List<UUID>> map = new HashMap<>();
+    for (AssessmentLesson link : assessmentLessonRepository.findByAssessmentIdIn(assessmentIds)) {
+      map.computeIfAbsent(link.getAssessmentId(), k -> new ArrayList<>()).add(link.getLessonId());
+    }
+    return map;
   }
 
   private Map<UUID, List<UUID>> buildMatchedLessonIdsByAssessmentId(
