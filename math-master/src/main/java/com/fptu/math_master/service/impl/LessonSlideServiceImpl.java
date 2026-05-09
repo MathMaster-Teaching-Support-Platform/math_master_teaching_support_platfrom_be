@@ -2151,7 +2151,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         : "";
 
     return """
-        Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
+        Bạn là giáo viên Toán tại Việt Nam.
         Hãy soạn nội dung trình chiếu đầy đủ cho bài học theo cấu trúc %d slide.
 
         THÔNG TIN ĐẦU VÀO:
@@ -2346,20 +2346,34 @@ public class LessonSlideServiceImpl implements LessonSlideService {
    */
   @SuppressWarnings("unchecked")
   private String fetchBookContentText(UUID lessonId) {
+    log.info("[SlidePrompt] Fetching book content from crawl-data for lessonId={}", lessonId);
     try {
       String json = crawlDataRestClient
           .get()
           .uri("/api/v1/lessons/{id}/content", lessonId)
           .retrieve()
           .body(String.class);
-      if (json == null || json.isBlank()) return "";
+      if (json == null || json.isBlank()) {
+        log.info("[SlidePrompt] Book content API returned empty body for lessonId={}", lessonId);
+        return "";
+      }
       Map<?, ?> root = objectMapper.readValue(json, Map.class);
       Object result = root.get("result");
-      if (!(result instanceof Map<?, ?> resultMap)) return "";
-      return compressBookContent(resultMap);
+      if (!(result instanceof Map<?, ?> resultMap)) {
+        log.info("[SlidePrompt] Book content API result is null/unexpected type for lessonId={}", lessonId);
+        return "";
+      }
+      String compressed = compressBookContent(resultMap);
+      if (compressed.isBlank()) {
+        log.info("[SlidePrompt] Book content compressed to empty for lessonId={}", lessonId);
+      } else {
+        log.info("[SlidePrompt] Book content fetched and compressed ({} chars) for lessonId={}",
+            compressed.length(), lessonId);
+      }
+      return compressed;
     } catch (Exception ex) {
-      log.warn("[SlidePrompt] Could not fetch book content for lessonId={}: {}",
-          lessonId, ex.getMessage());
+      log.warn("[SlidePrompt] Could not fetch book content for lessonId={}: {} — {}",
+          lessonId, ex.getClass().getSimpleName(), ex.getMessage());
       return "";
     }
   }
