@@ -109,6 +109,19 @@ public class LatexRenderServiceImpl implements LatexRenderService {
 
     String fixed = latex;
 
+    // Strip full LaTeX document wrapper — QuickLaTeX accepts only the body, not a full document.
+    // Handles both \documentclass + \begin{document} and bare \begin{document}.
+    if (fixed.contains("\\begin{document}")) {
+      int beginDoc = fixed.indexOf("\\begin{document}");
+      int endDoc = fixed.lastIndexOf("\\end{document}");
+      if (endDoc > beginDoc) {
+        fixed = fixed.substring(beginDoc + "\\begin{document}".length(), endDoc).strip();
+      } else {
+        fixed = fixed.substring(beginDoc + "\\begin{document}".length()).strip();
+      }
+      log.warn("Stripped \\begin{{document}} wrapper from LaTeX input before rendering");
+    }
+
     // Common AI typo: missing braces in tikz environment commands.
     fixed = fixed.replace("\\begintikzpicture", "\\begin{tikzpicture}");
     fixed = fixed.replace("\\endtikzpicture", "\\end{tikzpicture}");
@@ -125,14 +138,19 @@ public class LatexRenderServiceImpl implements LatexRenderService {
             "(?m)(\\\\tkzTabInit[^\\n]*\\n)(\\s*)(?!\\{)([-+]?\\\\infty[^\\n]*\\})",
             "$1$2{$3");
 
-    // Fix: \sqrt{expr} used directly as a TikZ coordinate — TikZ cannot evaluate LaTeX math
-    // commands as coordinate values.
-    // e.g.  (-\sqrt{9},0)  →  ({-sqrt(9)},0)
-    //       (\sqrt{a+1},y)  →  ({sqrt(a+1)},y)
-    fixed = fixed.replaceAll("\\((-?)\\\\sqrt\\{([^}]*)\\}", "({$1sqrt($2)}");
+    // Fix: \sqrt{expr} used as a TikZ coordinate component — TikZ/pgf cannot evaluate LaTeX math
+    // macros as coordinate expressions. Convert to pgfmath form.
+    // Handles:
+    //   \sqrt{4}+1.5   →  {sqrt(4)+1.5}   (offset after)
+    //   -\sqrt{4}-1    →  {-sqrt(4)-1}    (negated with offset)
+    //   \sqrt{4}       →  {sqrt(4)}        (plain)
+    // These patterns appear in coordinates, domain=, and node labels.
+    fixed = fixed.replaceAll(
+        "(-?)\\\\sqrt\\{([^}]*)\\}((?:[+\\-][0-9.]+)?)",
+        "{$1sqrt($2)$3}");
 
     // Fix: arithmetic expressions (*, /) used as TikZ coordinate components without pgfmath {}.
-    // e.g.  \node at (0, 0.3*9*9 + -3) {...}  →  \node at (0, {0.3*9*9 + -3}) {...}
+    // e.g.  \node at (0, 0.3*9*9 + -3)  →  \node at (0, {0.3*9*9 + -3})
     fixed = wrapArithmeticTikzCoordinates(fixed);
 
     if (!fixed.equals(latex)) {
