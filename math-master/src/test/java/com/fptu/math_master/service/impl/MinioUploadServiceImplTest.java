@@ -350,6 +350,29 @@ class MinioUploadServiceImplTest extends BaseUnitTest {
      * </ul>
      */
     @Test
+    void it_should_generate_presigned_url_when_book_key_has_redundant_bucket_prefix() {
+      when(minioProperties.getPublicEndpoint()).thenReturn("");
+      when(minioProperties.getEndpoint()).thenReturn("http://localhost:9000");
+      when(minioProperties.getAccessKey()).thenReturn("minio-admin");
+      when(minioProperties.getSecretKey()).thenReturn("minio-secret");
+
+      String url =
+          minioUploadService.getPresignedUrl(
+              "slide-templates/slide-templates/books/pdfs/chapter.pdf", "slide-templates");
+
+      assertAll(
+          () -> assertNotNull(url),
+          () -> assertTrue(url.contains("books/pdfs/chapter.pdf")),
+          () -> assertTrue(url.contains("X-Amz-Signature")));
+
+      verify(minioProperties, times(1)).getPublicEndpoint();
+      verify(minioProperties, times(1)).getEndpoint();
+      verify(minioProperties, times(1)).getAccessKey();
+      verify(minioProperties, times(1)).getSecretKey();
+      verifyNoMoreInteractions(minioClient, minioProperties);
+    }
+
+    @Test
     void it_should_generate_presigned_url_when_key_is_full_url() {
       // ===== ARRANGE =====
       when(minioProperties.getPublicEndpoint()).thenReturn("http://localhost:9000/minio");

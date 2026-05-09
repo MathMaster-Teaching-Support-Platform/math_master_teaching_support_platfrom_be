@@ -253,7 +253,35 @@ public class MinioUploadServiceImpl implements UploadService {
       }
     }
 
-    return value;
+    return stripRedundantBucketPrefixForPathStyle(value, bucketName);
+  }
+
+  /**
+   * Path-style URLs look like {@code /{bucket}/{key}}. If {@code key} already starts with the bucket
+   * name (common mistake when persisting {@code slide-templates/books/...} instead of {@code
+   * books/...}), MinIO receives {@code /{bucket}/{bucket}/books/...}} and returns NoSuchKey.
+   *
+   * <p>Slide templates legitimately use keys like {@code slide-templates/<uuid>/file.pptx}; those are
+   * preserved because only redundant {@code {bucket}/{bucket}/} repetition or mistaken {@code
+   * {bucket}/books/} / {@code {bucket}/materials/} prefixes (same bucket as path-style first segment)
+   * are stripped.
+   */
+  private String stripRedundantBucketPrefixForPathStyle(String value, String bucketName) {
+    if (!StringUtils.hasText(bucketName) || !StringUtils.hasText(value)) {
+      return value;
+    }
+    String prefix = bucketName + "/";
+    String result = value;
+    while (result.startsWith(prefix + prefix)) {
+      result = result.substring(prefix.length());
+    }
+    while (result.startsWith(prefix + "books/")) {
+      result = result.substring(prefix.length());
+    }
+    while (result.startsWith(prefix + "materials/")) {
+      result = result.substring(prefix.length());
+    }
+    return result;
   }
 
   private void ensureBucketExists(String bucketName) throws Exception {
@@ -274,6 +302,9 @@ public class MinioUploadServiceImpl implements UploadService {
   @Override
   public void deleteFile(String filePath, String bucketName) {
     String normalizedKey = normalizeObjectKey(filePath, bucketName);
+    if (!StringUtils.hasText(normalizedKey)) {
+      return;
+    }
     try {
       minioClient.removeObject(
           RemoveObjectArgs.builder().bucket(bucketName).object(normalizedKey).build());
