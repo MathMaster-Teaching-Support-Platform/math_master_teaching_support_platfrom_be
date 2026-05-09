@@ -192,9 +192,15 @@ public class LessonSlideController {
   @GetMapping("/generated")
   @Operation(summary = "List generated slide files of current teacher")
   public ApiResponse<List<LessonSlideGeneratedFileResponse>> getGeneratedSlides(
-      @RequestParam(value = "lessonId", required = false) UUID lessonId) {
+      @RequestParam(value = "gradeId", required = false) UUID gradeId,
+      @RequestParam(value = "subjectId", required = false) UUID subjectId,
+      @RequestParam(value = "chapterId", required = false) UUID chapterId,
+      @RequestParam(value = "lessonId", required = false) UUID lessonId,
+      @RequestParam(value = "keyword", required = false) String keyword) {
     return ApiResponse.<List<LessonSlideGeneratedFileResponse>>builder()
-        .result(lessonSlideService.getMyGeneratedSlides(lessonId))
+        .result(
+            lessonSlideService.getMyGeneratedSlides(
+                gradeId, subjectId, chapterId, lessonId, keyword))
         .build();
   }
 

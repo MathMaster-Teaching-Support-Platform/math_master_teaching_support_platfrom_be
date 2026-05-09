@@ -51,6 +51,9 @@ public class LessonSlidePublicController {
             summary = "List all public generated slides",
             description = "Public endpoint for students to browse all published generated slides.")
       public ApiResponse<Page<LessonSlideGeneratedFileResponse>> listAllPublicGeneratedSlides(
+        @RequestParam(required = false) UUID gradeId,
+        @RequestParam(required = false) UUID subjectId,
+        @RequestParam(required = false) UUID chapterId,
         @RequestParam(required = false) UUID lessonId,
         @RequestParam(required = false) String keyword,
         @RequestParam(defaultValue = "0") int page,
@@ -62,7 +65,9 @@ public class LessonSlidePublicController {
       Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
 
       return ApiResponse.<Page<LessonSlideGeneratedFileResponse>>builder()
-        .result(lessonSlideService.getAllPublicGeneratedSlides(lessonId, keyword, pageable))
+        .result(
+            lessonSlideService.getAllPublicGeneratedSlides(
+                gradeId, subjectId, chapterId, lessonId, keyword, pageable))
                 .build();
     }
 
@@ -72,6 +77,9 @@ public class LessonSlidePublicController {
       description = "Public endpoint for students to browse downloadable generated slides.")
   public ApiResponse<Page<LessonSlideGeneratedFileResponse>> listPublicGeneratedSlides(
       @PathVariable UUID lessonId,
+      @RequestParam(required = false) UUID gradeId,
+      @RequestParam(required = false) UUID subjectId,
+      @RequestParam(required = false) UUID chapterId,
       @RequestParam(required = false) String keyword,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size,
@@ -82,7 +90,9 @@ public class LessonSlidePublicController {
     Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
 
     return ApiResponse.<Page<LessonSlideGeneratedFileResponse>>builder()
-      .result(lessonSlideService.getPublicGeneratedSlidesByLesson(lessonId, keyword, pageable))
+      .result(
+          lessonSlideService.getPublicGeneratedSlidesByLesson(
+              lessonId, gradeId, subjectId, chapterId, keyword, pageable))
         .build();
   }
 

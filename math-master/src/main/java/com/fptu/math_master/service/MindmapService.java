@@ -78,7 +78,8 @@ public interface MindmapService {
    * @param pageable pagination
    * @return page of mindmaps
    */
-  Page<MindmapResponse> getMyMindmaps(UUID lessonId, Pageable pageable);
+  Page<MindmapResponse> getMyMindmaps(
+      UUID gradeId, UUID subjectId, UUID chapterId, UUID lessonId, Pageable pageable);
 
   /**
    * Get mindmaps by lesson id
@@ -95,7 +96,13 @@ public interface MindmapService {
    * @param pageable pagination
    * @return page of public mindmaps
    */
-  Page<MindmapResponse> getPublicMindmaps(UUID lessonId, String name, Pageable pageable);
+  Page<MindmapResponse> getPublicMindmaps(
+      UUID gradeId,
+      UUID subjectId,
+      UUID chapterId,
+      UUID lessonId,
+      String name,
+      Pageable pageable);
 
   BinaryFileData exportMindmap(UUID id, String format);
 

@@ -42,6 +42,28 @@ public interface MindmapRepository
       @Param("teacherId") UUID teacherId, Pageable pageable);
 
   @Query(
+      "SELECT m FROM Mindmap m "
+          + "LEFT JOIN FETCH m.teacher "
+          + "LEFT JOIN FETCH m.lesson l "
+          + "LEFT JOIN Chapter c ON l.chapterId = c.id "
+          + "LEFT JOIN Subject s ON c.subjectId = s.id "
+          + "LEFT JOIN SchoolGrade g ON s.schoolGradeId = g.id "
+          + "WHERE m.teacherId = :teacherId "
+          + "AND m.deletedAt IS NULL "
+          + "AND (:lessonId IS NULL OR m.lessonId = :lessonId) "
+          + "AND (:chapterId IS NULL OR c.id = :chapterId) "
+          + "AND (:subjectId IS NULL OR s.id = :subjectId) "
+          + "AND (:gradeId IS NULL OR g.id = :gradeId) "
+          + "ORDER BY m.createdAt DESC")
+  Page<Mindmap> findByTeacherWithHierarchyFilters(
+      @Param("teacherId") UUID teacherId,
+      @Param("gradeId") UUID gradeId,
+      @Param("subjectId") UUID subjectId,
+      @Param("chapterId") UUID chapterId,
+      @Param("lessonId") UUID lessonId,
+      Pageable pageable);
+
+  @Query(
       "SELECT m FROM Mindmap m WHERE m.lessonId = :lessonId AND m.deletedAt IS NULL ORDER BY m.createdAt DESC")
   Page<Mindmap> findByLessonIdAndNotDeleted(@Param("lessonId") UUID lessonId, Pageable pageable);
 
@@ -77,12 +99,29 @@ public interface MindmapRepository
   @Query(
       "SELECT m FROM Mindmap m "
           + "WHERE m.status = :status AND m.deletedAt IS NULL "
+          + "AND (:gradeId IS NULL OR EXISTS ("
+          + "    SELECT 1 FROM Lesson l "
+          + "    JOIN Chapter c ON l.chapterId = c.id "
+          + "    JOIN Subject s ON c.subjectId = s.id "
+          + "    JOIN SchoolGrade g ON s.schoolGradeId = g.id "
+          + "    WHERE l.id = m.lessonId AND g.id = :gradeId)) "
+          + "AND (:subjectId IS NULL OR EXISTS ("
+          + "    SELECT 1 FROM Lesson l "
+          + "    JOIN Chapter c ON l.chapterId = c.id "
+          + "    JOIN Subject s ON c.subjectId = s.id "
+          + "    WHERE l.id = m.lessonId AND s.id = :subjectId)) "
+          + "AND (:chapterId IS NULL OR EXISTS ("
+          + "    SELECT 1 FROM Lesson l "
+          + "    WHERE l.id = m.lessonId AND l.chapterId = :chapterId)) "
           + "AND (:lessonId IS NULL OR m.lessonId = :lessonId) "
           + "AND (:name IS NULL OR :name = '' "
           + "     OR LOWER(m.title) LIKE LOWER(CONCAT('%', :name, '%')) "
           + "     OR LOWER(COALESCE(m.description, '')) LIKE LOWER(CONCAT('%', :name, '%'))) ")
   Page<Mindmap> findPublicWithFilters(
       @Param("status") MindmapStatus status,
+      @Param("gradeId") UUID gradeId,
+      @Param("subjectId") UUID subjectId,
+      @Param("chapterId") UUID chapterId,
       @Param("lessonId") UUID lessonId,
       @Param("name") String name,
       Pageable pageable);

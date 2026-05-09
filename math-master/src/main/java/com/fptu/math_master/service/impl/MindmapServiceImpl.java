@@ -316,21 +316,21 @@ public class MindmapServiceImpl implements MindmapService {
 
   @Override
   @Transactional(readOnly = true)
-  public Page<MindmapResponse> getMyMindmaps(UUID lessonId, Pageable pageable) {
+  public Page<MindmapResponse> getMyMindmaps(
+      UUID gradeId, UUID subjectId, UUID chapterId, UUID lessonId, Pageable pageable) {
     UUID currentUserId = getCurrentUserId();
-    log.info("Getting mindmaps for teacher: {} with lessonId: {}", currentUserId, lessonId);
+    log.info(
+        "Getting mindmaps for teacher: {} with filters gradeId={}, subjectId={}, chapterId={}, lessonId={}",
+        currentUserId,
+        gradeId,
+        subjectId,
+        chapterId,
+        lessonId);
     long startedAt = System.currentTimeMillis();
 
-    Page<Mindmap> mindmaps;
-    if (lessonId != null) {
-      // Filter by both teacherId and lessonId
-      mindmaps =
-          mindmapRepository.findByTeacherIdAndLessonIdWithDetailsAndNotDeleted(
-              currentUserId, lessonId, pageable);
-    } else {
-      // Get all mindmaps for the teacher with optimized query
-      mindmaps = mindmapRepository.findByTeacherIdWithDetailsAndNotDeleted(currentUserId, pageable);
-    }
+    Page<Mindmap> mindmaps =
+        mindmapRepository.findByTeacherWithHierarchyFilters(
+            currentUserId, gradeId, subjectId, chapterId, lessonId, pageable);
 
     List<Mindmap> content = mindmaps.getContent();
     long loadedMindmapsAt = System.currentTimeMillis();
@@ -410,11 +410,23 @@ public class MindmapServiceImpl implements MindmapService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<MindmapResponse> getPublicMindmaps(UUID lessonId, String name, Pageable pageable) {
+    public Page<MindmapResponse> getPublicMindmaps(
+      UUID gradeId,
+      UUID subjectId,
+      UUID chapterId,
+      UUID lessonId,
+      String name,
+      Pageable pageable) {
       String normalizedName = name == null ? null : name.trim();
       Page<Mindmap> mindmaps =
           mindmapRepository.findPublicWithFilters(
-              MindmapStatus.PUBLISHED, lessonId, normalizedName, pageable);
+          MindmapStatus.PUBLISHED,
+          gradeId,
+          subjectId,
+          chapterId,
+          lessonId,
+          normalizedName,
+          pageable);
 
     List<Mindmap> content = mindmaps.getContent();
     List<UUID> mindmapIds = content.stream().map(Mindmap::getId).toList();

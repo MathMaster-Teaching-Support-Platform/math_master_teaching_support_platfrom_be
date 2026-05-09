@@ -695,14 +695,20 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   @Override
   @Transactional(readOnly = true)
-  public List<LessonSlideGeneratedFileResponse> getMyGeneratedSlides(UUID lessonId) {
+  public List<LessonSlideGeneratedFileResponse> getMyGeneratedSlides(
+      UUID gradeId, UUID subjectId, UUID chapterId, UUID lessonId, String keyword) {
     validateTeacherRole();
     UUID currentUserId = SecurityUtils.getCurrentUserId();
+    String normalizedKeyword = keyword == null ? null : keyword.trim();
 
     List<LessonSlideGeneratedFile> files =
-        lessonId == null
-            ? lessonSlideGeneratedFileRepository.findByTeacher(currentUserId)
-            : lessonSlideGeneratedFileRepository.findByTeacherAndLesson(currentUserId, lessonId);
+        lessonSlideGeneratedFileRepository.findByTeacherWithFilters(
+            currentUserId,
+            gradeId,
+            subjectId,
+            chapterId,
+            lessonId,
+            normalizedKeyword);
 
     return files.stream().map(this::toGeneratedFileResponse).toList();
   }
@@ -876,24 +882,36 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   @Override
   @Transactional(readOnly = true)
   public Page<LessonSlideGeneratedFileResponse> getAllPublicGeneratedSlides(
-      UUID lessonId, String keyword, Pageable pageable) {
+      UUID gradeId,
+      UUID subjectId,
+      UUID chapterId,
+      UUID lessonId,
+      String keyword,
+      Pageable pageable) {
     String normalizedKeyword = keyword == null ? null : keyword.trim();
     return lessonSlideGeneratedFileRepository
-        .findAllPublicWithFilters(lessonId, normalizedKeyword, pageable)
+        .findAllPublicWithFilters(
+            gradeId, subjectId, chapterId, lessonId, normalizedKeyword, pageable)
         .map(this::toGeneratedFileResponse);
   }
 
   @Override
   @Transactional(readOnly = true)
   public Page<LessonSlideGeneratedFileResponse> getPublicGeneratedSlidesByLesson(
-      UUID lessonId, String keyword, Pageable pageable) {
+      UUID lessonId,
+      UUID gradeId,
+      UUID subjectId,
+      UUID chapterId,
+      String keyword,
+      Pageable pageable) {
     lessonRepository
         .findByIdAndNotDeleted(lessonId)
         .orElseThrow(() -> new AppException(ErrorCode.LESSON_NOT_FOUND));
 
     String normalizedKeyword = keyword == null ? null : keyword.trim();
     return lessonSlideGeneratedFileRepository
-        .findAllPublicWithFilters(lessonId, normalizedKeyword, pageable)
+        .findAllPublicWithFilters(
+            gradeId, subjectId, chapterId, lessonId, normalizedKeyword, pageable)
         .map(this::toGeneratedFileResponse);
   }
 
