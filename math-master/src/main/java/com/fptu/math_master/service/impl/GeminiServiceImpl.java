@@ -39,7 +39,20 @@ public class GeminiServiceImpl implements GeminiService {
 
   @Override
   public String sendMessage(String prompt) {
-    log.info("Sending message to Gemini API (model: {})", geminiProperties.getModel());
+    return sendTextPrompt(prompt, 8192, null);
+  }
+
+  @Override
+  public String sendJsonMessage(String prompt) {
+    return sendTextPrompt(prompt, 32768, "application/json");
+  }
+
+  private String sendTextPrompt(String prompt, int maxOutputTokens, String responseMimeType) {
+    log.info(
+        "Sending message to Gemini API (model: {}, maxOutputTokens: {}, responseMimeType: {})",
+        geminiProperties.getModel(),
+        maxOutputTokens,
+        responseMimeType);
     long startTime = System.currentTimeMillis();
 
     try {
@@ -54,7 +67,8 @@ public class GeminiServiceImpl implements GeminiService {
               .generationConfig(
                   GeminiRequest.GenerationConfig.builder()
                       .temperature(0.7)
-                      .maxOutputTokens(8192)
+                      .maxOutputTokens(maxOutputTokens)
+                      .responseMimeType(responseMimeType)
                       .build())
               .safetySettings(
                   Arrays.asList(

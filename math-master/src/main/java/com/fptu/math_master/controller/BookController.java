@@ -3,8 +3,6 @@ package com.fptu.math_master.controller;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -254,7 +252,7 @@ public class BookController {
     byte[] data = uploadService.downloadFile(key, minioProperties.getOcrContentBucket());
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(guessImageContentType(safeName)))
-        .cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePrivate())
+        .cacheControl(CacheControl.noStore())
         .body(data);
   }
 
