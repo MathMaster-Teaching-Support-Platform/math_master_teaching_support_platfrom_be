@@ -1798,7 +1798,13 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       String paramName = entry.getKey();
       Object paramValue = entry.getValue();
       String valueStr = paramValue != null ? paramValue.toString() : "0";
-      String replaced = expression.replaceAll("\\b" + Pattern.quote(paramName) + "\\b", valueStr);
+      String insert =
+          Matcher.quoteReplacement(
+              paramValue instanceof Number
+                  ? formatParameterValueForEmbedding(paramValue)
+                  : valueStr);
+      String replaced =
+          expression.replaceAll("\\b" + Pattern.quote(paramName) + "\\b", insert);
       if (!replaced.equals(expression)) {
         replacedAnyParameter = true;
         expression = replaced;
@@ -1958,8 +1964,12 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         String paramName = entry.getKey();
         Object paramValue = entry.getValue();
         String valueStr = paramValue != null ? paramValue.toString() : "0";
-        // Replace parameter name (as whole word) with its value
-        expression = expression.replaceAll("\\b" + Pattern.quote(paramName) + "\\b", valueStr);
+        String insert =
+            Matcher.quoteReplacement(
+                paramValue instanceof Number
+                    ? formatParameterValueForEmbedding(paramValue)
+                    : valueStr);
+        expression = expression.replaceAll("\\b" + Pattern.quote(paramName) + "\\b", insert);
       }
 
       log.debug("Evaluating formula: '{}' with substituted expression: '{}'", formula, expression);
@@ -2140,7 +2150,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
                 "vi", templateText.getOrDefault("en", templateText.values().iterator().next()))
             .toString();
     for (Map.Entry<String, Object> e : params.entrySet()) {
-      text = text.replace("{{" + e.getKey() + "}}", formatParameterValue(e.getValue()));
+      text =
+          text.replace(
+              "{{" + e.getKey() + "}}", formatParameterValueForEmbedding(e.getValue()));
     }
     // Normalize sign combinations after substitution:
     // "N + -M"  → "N - M"
@@ -3062,7 +3074,12 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     while (matcher.find()) {
       String token = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
       Object resolved = resolvePlaceholderValue(token, params);
-      String replacement = resolved == null ? matcher.group() : String.valueOf(resolved);
+      String replacement =
+          resolved == null
+              ? matcher.group()
+              : (resolved instanceof Number
+                  ? formatParameterValueForEmbedding(resolved)
+                  : String.valueOf(resolved));
       matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
     }
     matcher.appendTail(sb);
@@ -3226,7 +3243,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         continue;
       }
       String token = "{{" + key + "}}";
-      String value = formatParameterValue(entry.getValue());
+      String value = formatParameterValueForEmbedding(entry.getValue());
       rendered = rendered.replace(token, value);
     }
 
@@ -3490,6 +3507,22 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     String formatted = formatDecimal(d, 4);
     return formatted.replaceAll("0+$", "").replaceAll("\\.$", "");
+  }
+
+  /**
+   * Embed a numeric parameter into arithmetic / LaTeX / TikZ without breaking unary minus.
+   * Example: {@code -{{b}}} with {@code b = -2} must become {@code -(-2)}, not {@code --2}.
+   */
+  private String formatParameterValueForEmbedding(Object value) {
+    if (!(value instanceof Number)) {
+      return String.valueOf(value);
+    }
+    double d = ((Number) value).doubleValue();
+    String s = formatParameterValue(value);
+    if (d < 0) {
+      return "(" + s + ")";
+    }
+    return s;
   }
 
   private String formatDecimal(double value, int scale) {
