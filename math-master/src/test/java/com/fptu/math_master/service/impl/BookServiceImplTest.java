@@ -20,6 +20,7 @@ import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.OcrTriggerResponse;
 import com.fptu.math_master.entity.Book;
 import com.fptu.math_master.entity.BookLessonPage;
+import com.fptu.math_master.entity.BookSeries;
 import com.fptu.math_master.entity.Curriculum;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.SchoolGrade;
@@ -29,6 +30,7 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.BookLessonPageRepository;
 import com.fptu.math_master.repository.BookRepository;
+import com.fptu.math_master.repository.BookSeriesRepository;
 import com.fptu.math_master.repository.CurriculumRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.SchoolGradeRepository;
@@ -54,6 +56,7 @@ class BookServiceImplTest extends BaseUnitTest {
   @InjectMocks private BookServiceImpl service;
 
   @Mock private BookRepository bookRepository;
+  @Mock private BookSeriesRepository bookSeriesRepository;
   @Mock private BookLessonPageRepository bookLessonPageRepository;
   @Mock private SchoolGradeRepository schoolGradeRepository;
   @Mock private SubjectRepository subjectRepository;
@@ -88,6 +91,16 @@ class BookServiceImplTest extends BaseUnitTest {
     curriculum.setId(CURRICULUM_ID);
     curriculum.setSubjectId(SUBJECT_ID);
     curriculum.setName("Cánh diều");
+
+    when(bookSeriesRepository.save(any()))
+        .thenAnswer(
+            inv -> {
+              BookSeries series = inv.getArgument(0);
+              if (series.getId() == null) {
+                series.setId(UUID.fromString("aaaaaaaa-0000-0000-0000-000000000099"));
+              }
+              return series;
+            });
   }
 
   // ---------------------------------------------------------------------------

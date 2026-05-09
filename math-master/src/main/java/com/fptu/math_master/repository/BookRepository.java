@@ -33,6 +33,7 @@ public interface BookRepository
       "SELECT b FROM Book b WHERE b.deletedAt IS NULL"
           + " AND (:schoolGradeId IS NULL OR b.schoolGradeId = :schoolGradeId)"
           + " AND (:subjectId IS NULL OR b.subjectId = :subjectId)"
+          + " AND (:bookSeriesId IS NULL OR b.bookSeriesId = :bookSeriesId)"
           + " AND (:curriculumId IS NULL OR b.curriculumId = :curriculumId)"
           + " AND (:chapterId IS NULL OR EXISTS ("
           + "   SELECT 1 FROM BookLessonPage blp"
@@ -51,6 +52,7 @@ public interface BookRepository
   Page<Book> search(
       @Param("schoolGradeId") UUID schoolGradeId,
       @Param("subjectId") UUID subjectId,
+      @Param("bookSeriesId") UUID bookSeriesId,
       @Param("curriculumId") UUID curriculumId,
       @Param("chapterId") UUID chapterId,
       @Param("lessonId") UUID lessonId,
@@ -61,4 +63,9 @@ public interface BookRepository
       "SELECT b FROM Book b WHERE b.subjectId = :subjectId AND b.deletedAt IS NULL"
           + " ORDER BY b.createdAt DESC")
   List<Book> findBySubjectIdAndNotDeleted(@Param("subjectId") UUID subjectId);
+
+  @Query(
+      "SELECT b FROM Book b WHERE b.bookSeriesId = :bookSeriesId AND b.deletedAt IS NULL"
+          + " ORDER BY b.createdAt DESC")
+  List<Book> findByBookSeriesIdAndNotDeleted(@Param("bookSeriesId") UUID bookSeriesId);
 }

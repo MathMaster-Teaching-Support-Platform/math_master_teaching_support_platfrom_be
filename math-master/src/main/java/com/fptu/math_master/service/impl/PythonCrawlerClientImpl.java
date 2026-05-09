@@ -1,13 +1,18 @@
 package com.fptu.math_master.service.impl;
 
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.dto.request.UpdateLessonPageRequest;
+import com.fptu.math_master.dto.response.ContentBlockDto;
 import com.fptu.math_master.dto.response.LessonPageHistoryEntryResponse;
 import com.fptu.math_master.dto.response.LessonPageResponse;
 import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.service.PythonCrawlerClient;
+import com.fptu.math_master.service.UploadService;
+import java.util.HashMap;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -31,9 +36,16 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
   private static final String STATIC_PROXY_PREFIX = "/api/v1/crawl-data/static/";
 
   private final RestClient restClient;
+  private final UploadService uploadService;
+  private final MinioProperties minioProperties;
 
-  public PythonCrawlerClientImpl(@Qualifier("crawlDataRestClient") RestClient restClient) {
+  public PythonCrawlerClientImpl(
+      @Qualifier("crawlDataRestClient") RestClient restClient,
+      UploadService uploadService,
+      MinioProperties minioProperties) {
     this.restClient = restClient;
+    this.uploadService = uploadService;
+    this.minioProperties = minioProperties;
   }
 
   @Override
@@ -284,23 +296,67 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
   private record VerifyState(Boolean fullyVerified, Integer totalPages, Integer verifiedPages) {}
 
   private List<LessonPageResponse> normalizePages(List<LessonPageResponse> pages) {
-    pages.forEach(this::normalizePage);
+    Map<String, String> mediaUrlCache = new HashMap<>();
+    pages.forEach(page -> normalizePage(page, mediaUrlCache));
     return pages;
   }
 
   private LessonPageResponse normalizePage(LessonPageResponse page) {
+    return normalizePage(page, new HashMap<>());
+  }
+
+  private LessonPageResponse normalizePage(LessonPageResponse page, Map<String, String> mediaUrlCache) {
     if (page == null) {
       return null;
     }
-    page.setRawImageUrl(rewriteStaticPath(page.getRawImageUrl()));
+    page.setRawImageUrl(resolveMediaUrl(page.getRawImageUrl(), mediaUrlCache));
     if (page.getContentBlocks() != null) {
-      page.getContentBlocks().forEach(block -> {
-        block.setImageUrl(rewriteStaticPath(block.getImageUrl()));
-        block.setImagePath(rewriteStaticPath(block.getImagePath()));
-        block.setThumbnailUrl(rewriteStaticPath(block.getThumbnailUrl()));
-      });
+      page.getContentBlocks().forEach(block -> normalizeBlockUrls(block, mediaUrlCache));
     }
     return page;
+  }
+
+  private void normalizeBlockUrls(ContentBlockDto block, Map<String, String> mediaUrlCache) {
+    String imageUrl = resolveMediaUrl(block.getImageUrl(), mediaUrlCache);
+    String imagePath = resolveMediaUrl(block.getImagePath(), mediaUrlCache);
+    String thumbnailUrl = resolveMediaUrl(block.getThumbnailUrl(), mediaUrlCache);
+
+    block.setImageUrl(firstNonBlank(imageUrl, imagePath));
+    block.setImagePath(imagePath);
+    block.setThumbnailUrl(thumbnailUrl);
+  }
+
+  private String resolveMediaUrl(String value, Map<String, String> mediaUrlCache) {
+    String normalized = rewriteStaticPath(value);
+    if (normalized == null || normalized.isBlank()) {
+      return normalized;
+    }
+    if (normalized.startsWith(STATIC_PROXY_PREFIX)
+        || normalized.startsWith("http://")
+        || normalized.startsWith("https://")) {
+      return normalized;
+    }
+
+    String cached = mediaUrlCache.get(normalized);
+    if (cached != null) {
+      return cached;
+    }
+
+    // Remaining non-static strings are treated as private object keys.
+    try {
+      String presigned = uploadService.getPresignedUrl(normalized, minioProperties.getOcrContentBucket());
+      mediaUrlCache.put(normalized, presigned);
+      return presigned;
+    } catch (Exception ex) {
+      log.warn("Failed to presign OCR media key '{}': {}", normalized, ex.getMessage());
+      mediaUrlCache.put(normalized, normalized);
+      return normalized;
+    }
+  }
+
+  private String firstNonBlank(String first, String second) {
+    if (first != null && !first.isBlank()) return first;
+    return second;
   }
 
   private String rewriteStaticPath(String path) {

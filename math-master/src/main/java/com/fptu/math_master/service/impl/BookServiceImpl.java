@@ -22,10 +22,12 @@ import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse.LessonProgress;
 import com.fptu.math_master.dto.response.BookResponse;
+import com.fptu.math_master.dto.response.BookSeriesResponse;
 import com.fptu.math_master.dto.response.LessonPageResponse;
 import com.fptu.math_master.dto.response.OcrTriggerResponse;
 import com.fptu.math_master.entity.Book;
 import com.fptu.math_master.entity.BookLessonPage;
+import com.fptu.math_master.entity.BookSeries;
 import com.fptu.math_master.entity.Curriculum;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.entity.Subject;
@@ -34,6 +36,7 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.BookLessonPageRepository;
 import com.fptu.math_master.repository.BookRepository;
+import com.fptu.math_master.repository.BookSeriesRepository;
 import com.fptu.math_master.repository.CurriculumRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.repository.SchoolGradeRepository;
@@ -55,6 +58,7 @@ import lombok.extern.slf4j.Slf4j;
 public class BookServiceImpl implements BookService {
 
   BookRepository bookRepository;
+  BookSeriesRepository bookSeriesRepository;
   BookLessonPageRepository bookLessonPageRepository;
   SchoolGradeRepository schoolGradeRepository;
   SubjectRepository subjectRepository;
@@ -102,6 +106,7 @@ public class BookServiceImpl implements BookService {
         Book.builder()
             .schoolGradeId(request.getSchoolGradeId())
             .subjectId(request.getSubjectId())
+            .bookSeriesId(resolveBookSeriesId(request))
             .curriculumId(request.getCurriculumId())
             .title(request.getTitle())
             .publisher(request.getPublisher())
@@ -130,13 +135,22 @@ public class BookServiceImpl implements BookService {
   public Page<BookResponse> search(
       UUID schoolGradeId,
       UUID subjectId,
+      UUID bookSeriesId,
       UUID curriculumId,
     UUID chapterId,
     UUID lessonId,
       BookStatus status,
       Pageable pageable) {
     return bookRepository
-      .search(schoolGradeId, subjectId, curriculumId, chapterId, lessonId, status, pageable)
+      .search(
+          schoolGradeId,
+          subjectId,
+          bookSeriesId,
+          curriculumId,
+          chapterId,
+          lessonId,
+          status,
+          pageable)
         .map(this::toResponse);
   }
 
@@ -161,6 +175,47 @@ public class BookServiceImpl implements BookService {
 
     book.setUpdatedBy(actorId);
     return toResponse(bookRepository.save(book));
+  }
+
+  @Override
+  @Transactional
+  public BookSeriesResponse updateSeriesName(UUID seriesId, String name, UUID actorId) {
+    String normalizedName = name == null ? "" : name.trim();
+    if (normalizedName.isEmpty()) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+    Optional<BookSeries> maybeSeries = bookSeriesRepository.findByIdAndNotDeleted(seriesId);
+    if (maybeSeries.isPresent()) {
+      BookSeries series = maybeSeries.get();
+      series.setName(normalizedName);
+      series.setUpdatedBy(actorId);
+      BookSeries saved = bookSeriesRepository.save(series);
+      return BookSeriesResponse.builder().id(saved.getId()).name(saved.getName()).build();
+    }
+
+    // Legacy-safe path: FE may pass an anchor bookId when that book has no real bookSeriesId yet.
+    Book anchorBook =
+        bookRepository
+            .findByIdAndNotDeleted(seriesId)
+            .orElseThrow(() -> new AppException(ErrorCode.INVALID_REQUEST));
+    BookSeries createdSeries =
+        bookSeriesRepository.save(
+            BookSeries.builder()
+                .name(normalizedName)
+                .schoolGradeId(anchorBook.getSchoolGradeId())
+                .subjectId(anchorBook.getSubjectId())
+                .academicYear(anchorBook.getAcademicYear())
+                .build());
+    createdSeries.setUpdatedBy(actorId);
+
+    anchorBook.setBookSeriesId(createdSeries.getId());
+    anchorBook.setUpdatedBy(actorId);
+    bookRepository.save(anchorBook);
+
+    return BookSeriesResponse.builder()
+        .id(createdSeries.getId())
+        .name(createdSeries.getName())
+        .build();
   }
 
   @Override
@@ -500,6 +555,13 @@ public class BookServiceImpl implements BookService {
         .filter(s -> s.getDeletedAt() == null)
         .map(s -> s.getName())
         .orElse(null);
+    String bookSeriesName =
+        book.getBookSeriesId() == null
+            ? null
+            : bookSeriesRepository
+                .findByIdAndNotDeleted(book.getBookSeriesId())
+                .map(BookSeries::getName)
+                .orElse(null);
     String curriculumName =
       book.getCurriculumId() == null
         ? null
@@ -514,6 +576,8 @@ public class BookServiceImpl implements BookService {
       .schoolGradeName(schoolGradeName)
         .subjectId(book.getSubjectId())
       .subjectName(subjectName)
+        .bookSeriesId(book.getBookSeriesId())
+        .bookSeriesName(bookSeriesName)
         .curriculumId(book.getCurriculumId())
       .curriculumName(curriculumName)
         .title(book.getTitle())
@@ -532,5 +596,29 @@ public class BookServiceImpl implements BookService {
         .createdAt(book.getCreatedAt())
         .updatedAt(book.getUpdatedAt())
         .build();
+  }
+
+  private UUID resolveBookSeriesId(CreateBookRequest request) {
+    if (request.getBookSeriesId() != null) {
+      BookSeries existing =
+          bookSeriesRepository
+              .findByIdAndNotDeleted(request.getBookSeriesId())
+              .orElseThrow(() -> new AppException(ErrorCode.INVALID_REQUEST));
+      if (!existing.getSchoolGradeId().equals(request.getSchoolGradeId())
+          || !existing.getSubjectId().equals(request.getSubjectId())) {
+        throw new AppException(ErrorCode.INVALID_REQUEST);
+      }
+      return existing.getId();
+    }
+
+    BookSeries created =
+        bookSeriesRepository.save(
+            BookSeries.builder()
+                .name(request.getTitle())
+                .schoolGradeId(request.getSchoolGradeId())
+                .subjectId(request.getSubjectId())
+                .academicYear(request.getAcademicYear())
+                .build());
+    return created.getId();
   }
 }

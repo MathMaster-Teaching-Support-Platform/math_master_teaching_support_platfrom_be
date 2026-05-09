@@ -39,8 +39,12 @@ public class CourseAssessmentResponse {
   private BigDecimal totalPoints;
   private Long submissionCount;
 
+  // All lesson IDs linked to this assessment (for client-side filtering by chapter/lesson)
+  private List<UUID> assessmentLessonIds;
+
   // Lesson matching metadata for this course context
   private Integer matchedLessonCount;
+  private List<UUID> matchedLessonIds;
   private List<String> matchedLessonTitles;
   private boolean lessonMatched;
 }

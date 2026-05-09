@@ -14,11 +14,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fptu.math_master.dto.request.BulkPageMappingRequest;
+import com.fptu.math_master.dto.request.BulkSeriesPageMappingRequest;
 import com.fptu.math_master.dto.request.PageMappingItem;
+import com.fptu.math_master.dto.request.SeriesPageMappingItem;
 import com.fptu.math_master.dto.response.BookLessonPageResponse;
 import com.fptu.math_master.dto.response.LessonPageResponse;
 import com.fptu.math_master.entity.Book;
 import com.fptu.math_master.entity.BookLessonPage;
+import com.fptu.math_master.entity.BookSeriesLessonPage;
 import com.fptu.math_master.entity.Chapter;
 import com.fptu.math_master.entity.Lesson;
 import com.fptu.math_master.enums.BookStatus;
@@ -26,6 +29,7 @@ import com.fptu.math_master.exception.AppException;
 import com.fptu.math_master.exception.ErrorCode;
 import com.fptu.math_master.repository.BookLessonPageRepository;
 import com.fptu.math_master.repository.BookRepository;
+import com.fptu.math_master.repository.BookSeriesLessonPageRepository;
 import com.fptu.math_master.repository.ChapterRepository;
 import com.fptu.math_master.repository.LessonRepository;
 import com.fptu.math_master.service.BookLessonPageService;
@@ -44,6 +48,7 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
 
   BookRepository bookRepository;
   BookLessonPageRepository bookLessonPageRepository;
+  BookSeriesLessonPageRepository bookSeriesLessonPageRepository;
   LessonRepository lessonRepository;
   ChapterRepository chapterRepository;
   PythonCrawlerClient crawlerClient;
@@ -105,7 +110,68 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
       bookRepository.save(book);
     }
 
-    return toResponses(saved, lessonsById);
+    return toResponses(saved, lessonsById, book);
+  }
+
+  @Override
+  @Transactional
+  public List<BookLessonPageResponse> bulkUpsertSeriesByBook(
+      UUID bookId, BulkSeriesPageMappingRequest request, UUID actorId) {
+    Book anchorBook = findActiveBook(bookId);
+    if (anchorBook.getBookSeriesId() == null) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+    List<SeriesPageMappingItem> items = request.getMappings();
+    validateNoDuplicateLessonsForSeries(items);
+    validateSeriesPageRangesShape(items);
+
+    List<Book> seriesBooks = bookRepository.findByBookSeriesIdAndNotDeleted(anchorBook.getBookSeriesId());
+    Map<UUID, Book> booksById =
+        seriesBooks.stream().collect(Collectors.toMap(Book::getId, b -> b));
+    for (SeriesPageMappingItem item : items) {
+      Book mappedBook = booksById.get(item.getBookId());
+      if (mappedBook == null) {
+        throw new AppException(ErrorCode.INVALID_REQUEST);
+      }
+      validateSeriesRangeInsideBookWindow(item, mappedBook);
+    }
+
+    Set<UUID> lessonIds =
+        items.stream().map(SeriesPageMappingItem::getLessonId).collect(Collectors.toSet());
+    Map<UUID, Lesson> lessonsById =
+        lessonRepository.findByIdInAndNotDeleted(lessonIds).stream()
+            .collect(Collectors.toMap(Lesson::getId, l -> l));
+    if (lessonsById.size() != lessonIds.size()) {
+      throw new AppException(ErrorCode.LESSON_NOT_FOUND);
+    }
+    validateLessonsBelongToCurriculum(
+        lessonsById.values(), anchorBook.getCurriculumId(), anchorBook.getSubjectId());
+
+    validateSeriesNonOverlappingPerBook(items, lessonsById);
+
+    List<SeriesPageMappingItem> sorted = sortSeriesByCurriculumOrder(items, lessonsById);
+    bookSeriesLessonPageRepository.hardDeleteAllBySeriesId(anchorBook.getBookSeriesId());
+    bookSeriesLessonPageRepository.flush();
+
+    List<BookSeriesLessonPage> seriesRows = new ArrayList<>(sorted.size());
+    for (int i = 0; i < sorted.size(); i++) {
+      SeriesPageMappingItem it = sorted.get(i);
+      BookSeriesLessonPage row =
+          BookSeriesLessonPage.builder()
+              .bookSeriesId(anchorBook.getBookSeriesId())
+              .bookId(it.getBookId())
+              .lessonId(it.getLessonId())
+              .pageStart(it.getPageStart())
+              .pageEnd(it.getPageEnd())
+              .orderIndex(i)
+              .build();
+      row.setCreatedBy(actorId);
+      row.setUpdatedBy(actorId);
+      seriesRows.add(row);
+    }
+    List<BookSeriesLessonPage> savedSeriesRows = bookSeriesLessonPageRepository.saveAll(seriesRows);
+    syncBookLevelMappings(savedSeriesRows, booksById, actorId);
+    return toResponsesFromSeries(savedSeriesRows, lessonsById, booksById);
   }
 
   // ---------------------------------------------------------------------------
@@ -114,7 +180,7 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
 
   @Override
   public List<BookLessonPageResponse> listForBook(UUID bookId) {
-    findActiveBook(bookId); // existence check
+    Book book = findActiveBook(bookId);
     List<BookLessonPage> rows = bookLessonPageRepository.findByBookIdOrdered(bookId);
     if (rows.isEmpty()) return List.of();
 
@@ -122,7 +188,39 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
     Map<UUID, Lesson> lessonsById =
         lessonRepository.findByIdInAndNotDeleted(lessonIds).stream()
             .collect(Collectors.toMap(Lesson::getId, l -> l));
-    return toResponses(rows, lessonsById);
+    return toResponses(rows, lessonsById, book);
+  }
+
+  @Override
+  public List<BookLessonPageResponse> listForSeriesByBook(UUID bookId) {
+    Book book = findActiveBook(bookId);
+    if (book.getBookSeriesId() == null) return List.of();
+
+    List<Book> seriesBooks = bookRepository.findByBookSeriesIdAndNotDeleted(book.getBookSeriesId());
+    Map<UUID, Book> booksById =
+        seriesBooks.stream().collect(Collectors.toMap(Book::getId, b -> b));
+
+    List<BookSeriesLessonPage> rows =
+        bookSeriesLessonPageRepository.findBySeriesIdOrdered(book.getBookSeriesId());
+    if (!rows.isEmpty()) {
+      Set<UUID> lessonIds = rows.stream().map(BookSeriesLessonPage::getLessonId).collect(Collectors.toSet());
+      Map<UUID, Lesson> lessonsById =
+          lessonRepository.findByIdInAndNotDeleted(lessonIds).stream()
+              .collect(Collectors.toMap(Lesson::getId, l -> l));
+      return toResponsesFromSeries(rows, lessonsById, booksById);
+    }
+
+    // Legacy fallback: if series-level mapping table is empty, hydrate from per-book mappings so FE
+    // still sees mapped lessons when switching books within a series.
+    if (seriesBooks.isEmpty()) return List.of();
+    List<BookLessonPage> legacyRows =
+        bookLessonPageRepository.findByBookIdsOrdered(booksById.keySet());
+    if (legacyRows.isEmpty()) return List.of();
+    Set<UUID> lessonIds = legacyRows.stream().map(BookLessonPage::getLessonId).collect(Collectors.toSet());
+    Map<UUID, Lesson> lessonsById =
+        lessonRepository.findByIdInAndNotDeleted(lessonIds).stream()
+            .collect(Collectors.toMap(Lesson::getId, l -> l));
+    return toResponsesFromBookMappings(legacyRows, lessonsById, booksById, book.getBookSeriesId());
   }
 
   // ---------------------------------------------------------------------------
@@ -146,6 +244,41 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
           || it.getPageEnd() < it.getPageStart()) {
         throw new AppException(ErrorCode.PAGE_MAPPING_OUT_OF_RANGE);
       }
+    }
+  }
+
+  private void validateNoDuplicateLessonsForSeries(List<SeriesPageMappingItem> items) {
+    Set<UUID> seen = new HashSet<>();
+    for (SeriesPageMappingItem it : items) {
+      if (!seen.add(it.getLessonId())) {
+        throw new AppException(ErrorCode.PAGE_MAPPING_DUPLICATE_LESSON);
+      }
+    }
+  }
+
+  private void validateSeriesPageRangesShape(List<SeriesPageMappingItem> items) {
+    for (SeriesPageMappingItem it : items) {
+      if (it.getPageStart() == null
+          || it.getPageEnd() == null
+          || it.getPageStart() < 1
+          || it.getPageEnd() < it.getPageStart()) {
+        throw new AppException(ErrorCode.PAGE_MAPPING_OUT_OF_RANGE);
+      }
+    }
+  }
+
+  private void validateSeriesRangeInsideBookWindow(SeriesPageMappingItem item, Book book) {
+    Integer lo = book.getOcrPageFrom();
+    Integer hi = book.getOcrPageTo();
+    Integer total = book.getTotalPages();
+    int loBound = lo != null ? lo : 1;
+    Integer hiBound = hi != null ? hi : total;
+
+    if (item.getPageStart() < loBound) {
+      throw new AppException(ErrorCode.PAGE_MAPPING_OUT_OF_RANGE);
+    }
+    if (hiBound != null && item.getPageEnd() > hiBound) {
+      throw new AppException(ErrorCode.PAGE_MAPPING_OUT_OF_RANGE);
     }
   }
 
@@ -236,6 +369,28 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
     return items.stream().sorted(byCurriculum).toList();
   }
 
+  private List<SeriesPageMappingItem> sortSeriesByCurriculumOrder(
+      List<SeriesPageMappingItem> items, Map<UUID, Lesson> lessonsById) {
+    Set<UUID> chapterIds =
+        lessonsById.values().stream().map(Lesson::getChapterId).collect(Collectors.toSet());
+    Map<UUID, Integer> chapterOrder = new HashMap<>();
+    for (Chapter c : chapterRepository.findAllById(chapterIds)) {
+      chapterOrder.put(c.getId(), c.getOrderIndex() == null ? Integer.MAX_VALUE : c.getOrderIndex());
+    }
+    Comparator<SeriesPageMappingItem> byCurriculum =
+        Comparator.comparingInt(
+                (SeriesPageMappingItem it) -> {
+                  Lesson l = lessonsById.get(it.getLessonId());
+                  return chapterOrder.getOrDefault(l.getChapterId(), Integer.MAX_VALUE);
+                })
+            .thenComparingInt(
+                it -> {
+                  Lesson l = lessonsById.get(it.getLessonId());
+                  return l.getOrderIndex() == null ? Integer.MAX_VALUE : l.getOrderIndex();
+                });
+    return items.stream().sorted(byCurriculum).toList();
+  }
+
   /**
    * Once sorted by curriculum order, page ranges may not jump backwards. A single shared page
    * between consecutive lessons is allowed (lessons[i].pageEnd == lessons[i+1].pageStart) since
@@ -245,6 +400,30 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
     for (int i = 1; i < sorted.size(); i++) {
       PageMappingItem prev = sorted.get(i - 1);
       PageMappingItem cur = sorted.get(i);
+      if (cur.getPageStart() < prev.getPageEnd()) {
+        throw new AppException(ErrorCode.PAGE_MAPPING_OVERLAP_INVALID);
+      }
+    }
+  }
+
+  /**
+   * Per PDF/book in a series: lessons mapped to the same book must follow curriculum order without
+   * page ranges jumping backwards (same rule as {@link #validateNonOverlapping}).
+   */
+  private void validateSeriesNonOverlappingPerBook(
+      List<SeriesPageMappingItem> items, Map<UUID, Lesson> lessonsById) {
+    Map<UUID, List<SeriesPageMappingItem>> byBook =
+        items.stream().collect(Collectors.groupingBy(SeriesPageMappingItem::getBookId));
+    for (List<SeriesPageMappingItem> bookItems : byBook.values()) {
+      List<SeriesPageMappingItem> sorted = sortSeriesByCurriculumOrder(bookItems, lessonsById);
+      validateNonOverlappingSeries(sorted);
+    }
+  }
+
+  private void validateNonOverlappingSeries(List<SeriesPageMappingItem> sorted) {
+    for (int i = 1; i < sorted.size(); i++) {
+      SeriesPageMappingItem prev = sorted.get(i - 1);
+      SeriesPageMappingItem cur = sorted.get(i);
       if (cur.getPageStart() < prev.getPageEnd()) {
         throw new AppException(ErrorCode.PAGE_MAPPING_OVERLAP_INVALID);
       }
@@ -261,8 +440,12 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
         .orElseThrow(() -> new AppException(ErrorCode.BOOK_NOT_FOUND));
   }
 
+  /**
+   * @param book Loaded upfront — avoids lazy {@link BookLessonPage#getBook()} outside a session
+   *     (would cause LazyInitializationException on GET /page-mapping).
+   */
   private List<BookLessonPageResponse> toResponses(
-      List<BookLessonPage> rows, Map<UUID, Lesson> lessonsById) {
+      List<BookLessonPage> rows, Map<UUID, Lesson> lessonsById, Book book) {
     Set<UUID> chapterIds =
         rows.stream()
             .map(r -> {
@@ -296,7 +479,9 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
       out.add(
           BookLessonPageResponse.builder()
               .id(r.getId())
+              .bookSeriesId(book.getBookSeriesId())
               .bookId(r.getBookId())
+              .bookTitle(book.getTitle())
               .lessonId(r.getLessonId())
               .lessonTitle(lesson == null ? null : lesson.getTitle())
               .lessonOrderIndex(lesson == null ? null : lesson.getOrderIndex())
@@ -310,5 +495,125 @@ public class BookLessonPageServiceImpl implements BookLessonPageService {
               .build());
     }
     return out;
+  }
+
+  private List<BookLessonPageResponse> toResponsesFromSeries(
+      List<BookSeriesLessonPage> rows, Map<UUID, Lesson> lessonsById, Map<UUID, Book> booksById) {
+    Set<UUID> chapterIds =
+        rows.stream()
+            .map(r -> {
+              Lesson l = lessonsById.get(r.getLessonId());
+              return l == null ? null : l.getChapterId();
+            })
+            .filter(java.util.Objects::nonNull)
+            .collect(Collectors.toSet());
+    Map<UUID, Chapter> chaptersById =
+        chapterRepository.findAllById(chapterIds).stream()
+            .collect(Collectors.toMap(Chapter::getId, c -> c));
+
+    List<BookLessonPageResponse> out = new ArrayList<>(rows.size());
+    for (BookSeriesLessonPage r : rows) {
+      Lesson lesson = lessonsById.get(r.getLessonId());
+      Chapter chapter = lesson == null ? null : chaptersById.get(lesson.getChapterId());
+      Book mappedBook = booksById.get(r.getBookId());
+      out.add(
+          BookLessonPageResponse.builder()
+              .id(r.getId())
+              .bookSeriesId(r.getBookSeriesId())
+              .bookId(r.getBookId())
+              .bookTitle(mappedBook == null ? null : mappedBook.getTitle())
+              .lessonId(r.getLessonId())
+              .lessonTitle(lesson == null ? null : lesson.getTitle())
+              .lessonOrderIndex(lesson == null ? null : lesson.getOrderIndex())
+              .chapterId(lesson == null ? null : lesson.getChapterId())
+              .chapterTitle(chapter == null ? null : chapter.getTitle())
+              .chapterOrderIndex(chapter == null ? null : chapter.getOrderIndex())
+              .pageStart(r.getPageStart())
+              .pageEnd(r.getPageEnd())
+              .ocrPageCount(0)
+              .verifiedPageCount(0)
+              .build());
+    }
+    return out;
+  }
+
+  private List<BookLessonPageResponse> toResponsesFromBookMappings(
+      List<BookLessonPage> rows,
+      Map<UUID, Lesson> lessonsById,
+      Map<UUID, Book> booksById,
+      UUID bookSeriesId) {
+    Set<UUID> chapterIds =
+        rows.stream()
+            .map(r -> {
+              Lesson l = lessonsById.get(r.getLessonId());
+              return l == null ? null : l.getChapterId();
+            })
+            .filter(java.util.Objects::nonNull)
+            .collect(Collectors.toSet());
+    Map<UUID, Chapter> chaptersById =
+        chapterRepository.findAllById(chapterIds).stream()
+            .collect(Collectors.toMap(Chapter::getId, c -> c));
+
+    List<BookLessonPageResponse> out = new ArrayList<>(rows.size());
+    for (BookLessonPage r : rows) {
+      Lesson lesson = lessonsById.get(r.getLessonId());
+      Chapter chapter = lesson == null ? null : chaptersById.get(lesson.getChapterId());
+      Book mappedBook = booksById.get(r.getBookId());
+      out.add(
+          BookLessonPageResponse.builder()
+              .id(r.getId())
+              .bookSeriesId(bookSeriesId)
+              .bookId(r.getBookId())
+              .bookTitle(mappedBook == null ? null : mappedBook.getTitle())
+              .lessonId(r.getLessonId())
+              .lessonTitle(lesson == null ? null : lesson.getTitle())
+              .lessonOrderIndex(lesson == null ? null : lesson.getOrderIndex())
+              .chapterId(lesson == null ? null : lesson.getChapterId())
+              .chapterTitle(chapter == null ? null : chapter.getTitle())
+              .chapterOrderIndex(chapter == null ? null : chapter.getOrderIndex())
+              .pageStart(r.getPageStart())
+              .pageEnd(r.getPageEnd())
+              .ocrPageCount(0)
+              .verifiedPageCount(0)
+              .build());
+    }
+    return out;
+  }
+
+  private void syncBookLevelMappings(
+      List<BookSeriesLessonPage> seriesRows, Map<UUID, Book> booksById, UUID actorId) {
+    List<BookSeriesLessonPage> sorted = seriesRows;
+    for (Map.Entry<UUID, Book> entry : booksById.entrySet()) {
+      UUID currentBookId = entry.getKey();
+      bookLessonPageRepository.hardDeleteAllByBookId(currentBookId);
+      bookLessonPageRepository.flush();
+
+      List<BookSeriesLessonPage> bookRows =
+          sorted.stream().filter(r -> r.getBookId().equals(currentBookId)).toList();
+      List<BookLessonPage> mappedRows = new ArrayList<>(bookRows.size());
+      for (int i = 0; i < bookRows.size(); i++) {
+        BookSeriesLessonPage source = bookRows.get(i);
+        BookLessonPage row =
+            BookLessonPage.builder()
+                .bookId(currentBookId)
+                .lessonId(source.getLessonId())
+                .pageStart(source.getPageStart())
+                .pageEnd(source.getPageEnd())
+                .orderIndex(i)
+                .build();
+        row.setCreatedBy(actorId);
+        row.setUpdatedBy(actorId);
+        mappedRows.add(row);
+      }
+      bookLessonPageRepository.saveAll(mappedRows);
+
+      Book targetBook = entry.getValue();
+      if (targetBook == null) continue;
+      if (targetBook.getStatus() == BookStatus.DRAFT || targetBook.getStatus() == BookStatus.MAPPING) {
+        targetBook.setStatus(mappedRows.isEmpty() ? BookStatus.MAPPING : BookStatus.READY);
+        targetBook.setUpdatedBy(actorId);
+        bookRepository.save(targetBook);
+      }
+    }
   }
 }

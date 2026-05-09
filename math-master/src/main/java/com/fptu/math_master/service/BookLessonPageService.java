@@ -1,6 +1,7 @@
 package com.fptu.math_master.service;
 
 import com.fptu.math_master.dto.request.BulkPageMappingRequest;
+import com.fptu.math_master.dto.request.BulkSeriesPageMappingRequest;
 import com.fptu.math_master.dto.response.BookLessonPageResponse;
 import java.util.List;
 import java.util.UUID;
@@ -22,4 +23,11 @@ public interface BookLessonPageService {
 
   /** Returns the current mapping for a book, ordered by chapter/lesson order. */
   List<BookLessonPageResponse> listForBook(UUID bookId);
+
+  /** Returns series mapping (lesson -> assigned book + page range). */
+  List<BookLessonPageResponse> listForSeriesByBook(UUID bookId);
+
+  /** Replace series mapping and sync per-book mapping snapshots. */
+  List<BookLessonPageResponse> bulkUpsertSeriesByBook(
+      UUID bookId, BulkSeriesPageMappingRequest request, UUID actorId);
 }

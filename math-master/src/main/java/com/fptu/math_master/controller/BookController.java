@@ -3,12 +3,15 @@ package com.fptu.math_master.controller;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -25,14 +28,19 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.dto.request.BulkPageMappingRequest;
+import com.fptu.math_master.dto.request.BulkSeriesPageMappingRequest;
 import com.fptu.math_master.dto.request.CreateBookRequest;
+import com.fptu.math_master.dto.request.UpdateBookSeriesNameRequest;
 import com.fptu.math_master.dto.request.UpdateBookRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
 import com.fptu.math_master.dto.response.BookLessonPageResponse;
+import com.fptu.math_master.dto.response.BookPageImageResponse;
 import com.fptu.math_master.dto.response.BookPdfPreviewUrlResponse;
 import com.fptu.math_master.dto.response.BookProgressResponse;
 import com.fptu.math_master.dto.response.BookResponse;
+import com.fptu.math_master.dto.response.BookSeriesResponse;
 import com.fptu.math_master.dto.response.OcrTriggerResponse;
 import com.fptu.math_master.enums.BookStatus;
 import com.fptu.math_master.exception.AppException;
@@ -63,6 +71,7 @@ public class BookController {
   BookService bookService;
   BookLessonPageService bookLessonPageService;
   UploadService uploadService;
+  MinioProperties minioProperties;
 
   // ---------------------------------------------------------------------------
   // Book CRUD
@@ -103,6 +112,7 @@ public class BookController {
   public ApiResponse<Page<BookResponse>> search(
       @RequestParam(required = false) UUID schoolGradeId,
       @RequestParam(required = false) UUID subjectId,
+      @RequestParam(required = false) UUID bookSeriesId,
       @RequestParam(required = false) UUID curriculumId,
       @RequestParam(required = false) UUID chapterId,
       @RequestParam(required = false) UUID lessonId,
@@ -113,7 +123,14 @@ public class BookController {
     return ApiResponse.<Page<BookResponse>>builder()
         .result(
             bookService.search(
-                schoolGradeId, subjectId, curriculumId, chapterId, lessonId, status, pageable))
+                schoolGradeId,
+                subjectId,
+                bookSeriesId,
+                curriculumId,
+                chapterId,
+                lessonId,
+                status,
+                pageable))
         .build();
   }
 
@@ -127,6 +144,19 @@ public class BookController {
     UUID actorId = UUID.fromString(jwt.getSubject());
     return ApiResponse.<BookResponse>builder()
         .result(bookService.update(id, request, actorId))
+        .build();
+  }
+
+  @Operation(summary = "Rename a book series")
+  @PatchMapping("/series/{seriesId}/name")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<BookSeriesResponse> updateSeriesName(
+      @PathVariable UUID seriesId,
+      @Valid @RequestBody UpdateBookSeriesNameRequest request,
+      @AuthenticationPrincipal Jwt jwt) {
+    UUID actorId = UUID.fromString(jwt.getSubject());
+    return ApiResponse.<BookSeriesResponse>builder()
+        .result(bookService.updateSeriesName(seriesId, request.getName(), actorId))
         .build();
   }
 
@@ -174,6 +204,83 @@ public class BookController {
   }
 
   // ---------------------------------------------------------------------------
+  // OCR content-block image upload (Step 4 verify wizard)
+  // ---------------------------------------------------------------------------
+
+  @Operation(
+      summary = "Upload an image for an OCR content block",
+      description =
+          "Used by the Step-4 verify wizard so admins can replace an OCR-extracted image with one"
+              + " they upload manually. Returns a stable, admin-protected URL the FE saves into"
+              + " the block's imageUrl/imagePath.")
+  @PostMapping(value = "/{id}/page-images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<BookPageImageResponse> uploadPageImage(
+      @PathVariable UUID id, @RequestParam("file") MultipartFile file) {
+    if (file == null || file.isEmpty()) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+    String contentType = file.getContentType();
+    if (contentType == null || !contentType.startsWith("image/")) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+    // Make sure the book exists before uploading; this also enforces admin authorization audit.
+    bookService.getById(id);
+
+    String directory = "books/" + id + "/page-images";
+    String objectKey =
+        uploadService.uploadFile(file, directory, minioProperties.getOcrContentBucket());
+    int slash = objectKey.lastIndexOf('/');
+    String fileName = slash >= 0 ? objectKey.substring(slash + 1) : objectKey;
+    // Mirrors the OCR static path convention so the FE can use the URL directly in <img src=...>;
+    // both Vite proxy (dev) and nginx (prod) route the /api prefix to this backend.
+    String imageUrl = "/api/v1/books/" + id + "/page-images/" + fileName;
+    return ApiResponse.<BookPageImageResponse>builder()
+        .result(new BookPageImageResponse(imageUrl, objectKey))
+        .build();
+  }
+
+  @Operation(
+      summary = "Serve an admin-uploaded OCR content block image",
+      description =
+          "Streams the image bytes from MinIO. Scoped under the book ID so the URL is auditable"
+              + " and not directly tied to bucket/path internals.")
+  @GetMapping("/{id}/page-images/{fileName:.+}")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ResponseEntity<byte[]> servePageImage(
+      @PathVariable UUID id, @PathVariable String fileName) {
+    String safeName = sanitizeImageFileName(fileName);
+    String key = "books/" + id + "/page-images/" + safeName;
+    byte[] data = uploadService.downloadFile(key, minioProperties.getOcrContentBucket());
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(guessImageContentType(safeName)))
+        .cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePrivate())
+        .body(data);
+  }
+
+  private static String sanitizeImageFileName(String fileName) {
+    if (fileName == null || fileName.isBlank()) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+    // Reject path traversal; the upload step always produces a single-segment UUID + extension.
+    if (fileName.contains("/") || fileName.contains("\\") || fileName.contains("..")) {
+      throw new AppException(ErrorCode.INVALID_REQUEST);
+    }
+    return fileName;
+  }
+
+  private static String guessImageContentType(String fileName) {
+    String lower = fileName.toLowerCase();
+    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+    if (lower.endsWith(".png")) return "image/png";
+    if (lower.endsWith(".gif")) return "image/gif";
+    if (lower.endsWith(".webp")) return "image/webp";
+    if (lower.endsWith(".svg")) return "image/svg+xml";
+    if (lower.endsWith(".bmp")) return "image/bmp";
+    return "application/octet-stream";
+  }
+
+  // ---------------------------------------------------------------------------
   // Page mapping
   // ---------------------------------------------------------------------------
 
@@ -200,6 +307,32 @@ public class BookController {
     UUID actorId = UUID.fromString(jwt.getSubject());
     return ApiResponse.<List<BookLessonPageResponse>>builder()
         .result(bookLessonPageService.bulkUpsert(id, request, actorId))
+        .build();
+  }
+
+  @Operation(
+      summary = "Get series mapping (lesson -> assigned book -> page range)",
+      description = "Reads mapping across all books that belong to the same series as the anchor book.")
+  @GetMapping("/{id}/series-page-mapping")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<List<BookLessonPageResponse>> getSeriesPageMapping(@PathVariable UUID id) {
+    return ApiResponse.<List<BookLessonPageResponse>>builder()
+        .result(bookLessonPageService.listForSeriesByBook(id))
+        .build();
+  }
+
+  @Operation(
+      summary = "Replace series mapping and sync per-book mappings",
+      description = "One lesson is assigned to exactly one book in the same series.")
+  @PutMapping("/{id}/series-page-mapping")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<List<BookLessonPageResponse>> bulkUpsertSeriesPageMapping(
+      @PathVariable UUID id,
+      @Valid @RequestBody BulkSeriesPageMappingRequest request,
+      @AuthenticationPrincipal Jwt jwt) {
+    UUID actorId = UUID.fromString(jwt.getSubject());
+    return ApiResponse.<List<BookLessonPageResponse>>builder()
+        .result(bookLessonPageService.bulkUpsertSeriesByBook(id, request, actorId))
         .build();
   }
 

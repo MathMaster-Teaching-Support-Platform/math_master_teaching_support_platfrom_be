@@ -44,10 +44,22 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
   GradingService gradingService;
   EnrollmentRepository enrollmentRepository;
   CourseAssessmentRepository courseAssessmentRepository;
+  CourseRepository courseRepository;
+  AssessmentLessonRepository assessmentLessonRepository;
+  LessonRepository lessonRepository;
+
+  private record CurriculumContext(
+      UUID courseId, UUID schoolGradeId, UUID subjectId, List<UUID> lessonIds) {}
 
   @Override
   @Transactional(readOnly = true)
-  public Page<StudentAssessmentResponse> getMyAssessments(String statusFilter, Pageable pageable) {
+  public Page<StudentAssessmentResponse> getMyAssessments(
+      String statusFilter,
+      Pageable pageable,
+      UUID schoolGradeIdFilter,
+      UUID subjectIdFilter,
+      UUID chapterIdFilter,
+      UUID lessonIdFilter) {
     UUID studentId = getCurrentUserId();
     Instant now = Instant.now();
 
@@ -58,16 +70,47 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
       return new PageImpl<>(List.of(), pageable, 0);
     }
 
+    final Set<UUID> chapterLessonIds =
+        chapterIdFilter == null
+            ? Set.of()
+            : lessonRepository.findByChapterIdAndNotDeleted(chapterIdFilter).stream()
+                .map(Lesson::getId)
+                .collect(Collectors.toSet());
+
     List<Assessment> allAssessments =
         assessmentRepository.findByIdInAndNotDeleted(accessibleAssessmentIds).stream()
             .filter(a -> a.getStatus() == AssessmentStatus.PUBLISHED)
             .filter(a -> isAssessmentAvailable(a, now))
             .collect(Collectors.toList());
 
+    Set<UUID> assessmentIdSet =
+        allAssessments.stream().map(Assessment::getId).collect(Collectors.toSet());
+    Map<UUID, CurriculumContext> curriculumByAssessment =
+        buildCurriculumContextMap(studentId, assessmentIdSet);
+
     List<StudentAssessmentResponse> responses =
         allAssessments.stream()
-          .map(assessment -> mapToStudentResponse(assessment, studentId, now, null, null))
+            .map(
+                assessment ->
+                    mapToStudentResponse(
+                        assessment,
+                        studentId,
+                        now,
+                        null,
+                        null,
+                        curriculumByAssessment.getOrDefault(
+                            assessment.getId(),
+                            new CurriculumContext(null, null, null, List.of()))))
             .filter(response -> matchesStatusFilter(response, statusFilter))
+            .filter(
+                response ->
+                    matchesStudentAssessmentCurriculumFilter(
+                        response,
+                        schoolGradeIdFilter,
+                        subjectIdFilter,
+                        chapterIdFilter,
+                        lessonIdFilter,
+                        chapterLessonIds))
             .sorted(
                 Comparator.comparing(
                     StudentAssessmentResponse::getDueDate,
@@ -114,6 +157,16 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
             .filter(a -> isAssessmentAvailable(a, now))
             .collect(Collectors.toList());
 
+    Course courseMeta = courseRepository.findById(courseId).orElse(null);
+    Set<UUID> scopedAssessmentIds =
+        assessments.stream().map(Assessment::getId).collect(Collectors.toSet());
+    Map<UUID, List<UUID>> lessonIdsByAssessment =
+        assessmentLessonRepository.findByAssessmentIdIn(scopedAssessmentIds).stream()
+            .collect(
+                Collectors.groupingBy(
+                    AssessmentLesson::getAssessmentId,
+                    Collectors.mapping(AssessmentLesson::getLessonId, Collectors.toList())));
+
     List<StudentAssessmentResponse> responses =
         assessments.stream()
             .map(
@@ -124,7 +177,12 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
                       studentId,
                       now,
                       ca != null ? ca.isRequired() : null,
-                      ca != null ? ca.getOrderIndex() : null);
+                      ca != null ? ca.getOrderIndex() : null,
+                      new CurriculumContext(
+                          courseId,
+                          courseMeta != null ? courseMeta.getSchoolGradeId() : null,
+                          courseMeta != null ? courseMeta.getSubjectId() : null,
+                          lessonIdsByAssessment.getOrDefault(assessment.getId(), List.of())));
                 })
             .filter(response -> matchesStatusFilter(response, statusFilter))
             .sorted(
@@ -164,7 +222,10 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
       throw new AppException(ErrorCode.ASSESSMENT_NOT_PUBLISHED);
     }
 
-    return mapToStudentResponse(assessment, studentId, now, null, null);
+    CurriculumContext curriculum =
+        buildCurriculumContextMap(studentId, List.of(assessmentId))
+            .getOrDefault(assessmentId, new CurriculumContext(null, null, null, List.of()));
+    return mapToStudentResponse(assessment, studentId, now, null, null, curriculum);
   }
 
   @Override
@@ -454,12 +515,106 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     return courseAssessments.stream().map(CourseAssessment::getAssessmentId).collect(Collectors.toSet());
   }
 
+  private boolean matchesStudentAssessmentCurriculumFilter(
+      StudentAssessmentResponse r,
+      UUID schoolGradeIdFilter,
+      UUID subjectIdFilter,
+      UUID chapterIdFilter,
+      UUID lessonIdFilter,
+      Set<UUID> lessonIdsInSelectedChapter) {
+    List<UUID> lids = r.getLessonIds() != null ? r.getLessonIds() : List.of();
+    if (lessonIdFilter != null) {
+      return lids.contains(lessonIdFilter);
+    }
+    if (chapterIdFilter != null) {
+      if (lids.isEmpty() || lessonIdsInSelectedChapter.isEmpty()) {
+        return false;
+      }
+      return lids.stream().anyMatch(lessonIdsInSelectedChapter::contains);
+    }
+    if (subjectIdFilter != null
+        && (r.getSubjectId() == null || !r.getSubjectId().equals(subjectIdFilter))) {
+      return false;
+    }
+    if (schoolGradeIdFilter != null
+        && (r.getSchoolGradeId() == null || !r.getSchoolGradeId().equals(schoolGradeIdFilter))) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Gắn metadata khóa học / CT (lớp, môn, danh sách bài) cho từng đề mà học sinh truy cập được qua
+   * enrollment.
+   */
+  private Map<UUID, CurriculumContext> buildCurriculumContextMap(
+      UUID studentId, Collection<UUID> assessmentIds) {
+    if (assessmentIds.isEmpty()) {
+      return Map.of();
+    }
+
+    List<Enrollment> enrollments =
+        enrollmentRepository.findByStudentIdAndStatusAndDeletedAtIsNullOrderByEnrolledAtDesc(
+            studentId, com.fptu.math_master.enums.EnrollmentStatus.ACTIVE);
+    Set<UUID> courseIds =
+        enrollments.stream().map(Enrollment::getCourseId).collect(Collectors.toSet());
+    if (courseIds.isEmpty()) {
+      return assessmentIds.stream()
+          .collect(
+              Collectors.toMap(id -> id, id -> new CurriculumContext(null, null, null, List.of())));
+    }
+
+    List<CourseAssessment> allLinks =
+        courseAssessmentRepository.findByCourseIdInAndNotDeleted(courseIds);
+    Map<UUID, UUID> primaryCourseByAssessment = new HashMap<>();
+    for (CourseAssessment ca : allLinks) {
+      UUID assessmentRefId = ca.getAssessmentId();
+      UUID cid = ca.getCourseId();
+      primaryCourseByAssessment.compute(
+          assessmentRefId,
+          (k, existing) -> {
+            if (existing == null) return cid;
+            return existing.compareTo(cid) <= 0 ? existing : cid;
+          });
+    }
+
+    Set<UUID> neededCourseIds = new HashSet<>(primaryCourseByAssessment.values());
+    Map<UUID, Course> courseById =
+        courseRepository.findAllById(neededCourseIds).stream()
+            .collect(Collectors.toMap(Course::getId, c -> c));
+
+    List<AssessmentLesson> lessonRows =
+        assessmentLessonRepository.findByAssessmentIdIn(assessmentIds);
+    Map<UUID, List<UUID>> lessonsByAssessment =
+        lessonRows.stream()
+            .collect(
+                Collectors.groupingBy(
+                    AssessmentLesson::getAssessmentId,
+                    Collectors.mapping(AssessmentLesson::getLessonId, Collectors.toList())));
+
+    Map<UUID, CurriculumContext> out = new HashMap<>();
+    for (UUID aid : assessmentIds) {
+      UUID cid = primaryCourseByAssessment.get(aid);
+      Course course = cid != null ? courseById.get(cid) : null;
+      List<UUID> lids = lessonsByAssessment.getOrDefault(aid, List.of());
+      out.put(
+          aid,
+          new CurriculumContext(
+              cid,
+              course != null ? course.getSchoolGradeId() : null,
+              course != null ? course.getSubjectId() : null,
+              lids));
+    }
+    return out;
+  }
+
   private StudentAssessmentResponse mapToStudentResponse(
       Assessment assessment,
       UUID studentId,
       Instant now,
       Boolean isRequired,
-      Integer courseOrderIndex) {
+      Integer courseOrderIndex,
+      CurriculumContext curriculumContext) {
     Long totalQuestions =
         (long)
             assessmentQuestionRepository
@@ -476,8 +631,11 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
     String studentStatus = determineStudentStatus(assessment, submissionOpt, now);
     UUID currentAttemptId = null;
     Integer attemptNumber = 0;
+    BigDecimal lastScore = null;
 
     if (submissionOpt.isPresent()) {
+      lastScore = submissionOpt.get().getFinalScore();
+      
       List<QuizAttempt> inProgressAttempts =
           quizAttemptRepository.findByAssessmentIdAndStudentIdAndStatus(
               assessment.getId(), studentId, SubmissionStatus.IN_PROGRESS);
@@ -517,9 +675,14 @@ public class StudentAssessmentServiceImpl implements StudentAssessmentService {
         .maxAttempts(assessment.getMaxAttempts())
         .allowMultipleAttempts(assessment.getAllowMultipleAttempts())
         .canStart(canStart)
-        .cannotStartReason(cannotStartReason)
+          .cannotStartReason(cannotStartReason)
           .isRequired(isRequired)
           .courseOrderIndex(courseOrderIndex)
+          .courseId(curriculumContext.courseId())
+          .schoolGradeId(curriculumContext.schoolGradeId())
+          .subjectId(curriculumContext.subjectId())
+          .lessonIds(curriculumContext.lessonIds())
+          .lastScore(lastScore)
         .build();
   }
 

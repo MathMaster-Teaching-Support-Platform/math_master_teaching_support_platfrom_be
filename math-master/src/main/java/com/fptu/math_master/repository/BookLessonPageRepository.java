@@ -20,6 +20,11 @@ public interface BookLessonPageRepository extends JpaRepository<BookLessonPage, 
   List<BookLessonPage> findByBookIdOrdered(@Param("bookId") UUID bookId);
 
   @Query(
+      "SELECT m FROM BookLessonPage m WHERE m.bookId IN :bookIds AND m.deletedAt IS NULL"
+          + " ORDER BY m.orderIndex, m.pageStart")
+  List<BookLessonPage> findByBookIdsOrdered(@Param("bookIds") Collection<UUID> bookIds);
+
+  @Query(
       "SELECT m FROM BookLessonPage m WHERE m.bookId = :bookId AND m.lessonId = :lessonId"
           + " AND m.deletedAt IS NULL")
   Optional<BookLessonPage> findByBookIdAndLessonId(

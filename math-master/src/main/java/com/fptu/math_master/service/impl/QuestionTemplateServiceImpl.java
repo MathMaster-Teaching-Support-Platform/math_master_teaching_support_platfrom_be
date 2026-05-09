@@ -32,6 +32,7 @@ import com.fptu.math_master.service.AIEnhancementService;
 import com.fptu.math_master.service.BlueprintService;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.QuestionTemplateService;
+import com.fptu.math_master.service.TokenCostConfigService;
 import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.SecurityUtils;
 import java.time.Instant;
@@ -72,6 +73,7 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
   CanonicalQuestionRepository canonicalQuestionRepository;
   BlueprintService blueprintService;
   UserSubscriptionService userSubscriptionService;
+  TokenCostConfigService tokenCostConfigService;
 
   @Override
   @Transactional
@@ -614,12 +616,18 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
           .build();
     }
 
-    // Token deduction: cost = number of questions requested. Charged here, after
-    // the AI selector has produced usable value sets but before substitution, so
-    // a substitution failure rolls back the deduction with the parent @Transactional.
-    // ADMIN exempt.
+    // Token deduction: cost-per-question is admin-configurable via TokenCostConfig
+    // (featureKey="question-generate", default 1). Total cost = perQuestion ×
+    // requested. Charged here, after the AI selector has produced usable value
+    // sets but before substitution, so a substitution failure rolls back the
+    // deduction with the parent @Transactional. ADMIN exempt; costPerUse=0
+    // means the feature is free.
     if (!SecurityUtils.hasRole("ADMIN")) {
-      userSubscriptionService.consumeMyTokens(requested, "GENERATE_QUESTIONS_FROM_TEMPLATE");
+      Integer perQuestion = tokenCostConfigService.getCostPerUse("question-generate");
+      int totalCost = (perQuestion == null ? 0 : perQuestion) * requested;
+      if (totalCost > 0) {
+        userSubscriptionService.consumeMyTokens(totalCost, "GENERATE_QUESTIONS_FROM_TEMPLATE");
+      }
     }
 
     String selectionPromptVersion = blueprintService.selectionPromptVersion();

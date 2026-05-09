@@ -1353,7 +1353,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         Assessment.builder()
             .teacherId(currentUserId)
             .title(matrix.getName() != null ? matrix.getName() : "Auto-Generated Assessment")
-            .description("Auto-generated from exam matrix: " + matrix.getName())
+            .description("Được tạo tự động từ ma trận: " + matrix.getName())
             .assessmentType(com.fptu.math_master.enums.AssessmentType.QUIZ)
             .status(AssessmentStatus.DRAFT)
             .randomizeQuestions(false)

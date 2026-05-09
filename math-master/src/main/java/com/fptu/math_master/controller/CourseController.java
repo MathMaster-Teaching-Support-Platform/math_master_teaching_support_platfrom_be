@@ -269,12 +269,15 @@ public class CourseController {
   public ApiResponse<Page<CourseResponse>> getPublicCourses(
       @RequestParam(required = false) UUID schoolGradeId,
       @RequestParam(required = false) UUID subjectId,
+      @RequestParam(required = false) UUID chapterId,
+      @RequestParam(required = false) UUID lessonId,
       @RequestParam(required = false) String keyword,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
     var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
     return ApiResponse.<Page<CourseResponse>>builder()
-        .result(courseService.getPublicCourses(schoolGradeId, subjectId, keyword, pageable))
+        .result(
+            courseService.getPublicCourses(schoolGradeId, subjectId, chapterId, lessonId, keyword, pageable))
         .build();
   }
 

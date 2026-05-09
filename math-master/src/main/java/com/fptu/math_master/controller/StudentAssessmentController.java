@@ -43,7 +43,11 @@ public class StudentAssessmentController {
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size,
       @RequestParam(defaultValue = "dueDate") String sortBy,
-      @RequestParam(defaultValue = "ASC") String sortDir) {
+      @RequestParam(defaultValue = "ASC") String sortDir,
+      @RequestParam(required = false) UUID schoolGradeId,
+      @RequestParam(required = false) UUID subjectId,
+      @RequestParam(required = false) UUID chapterId,
+      @RequestParam(required = false) UUID lessonId) {
 
     Sort sort =
         sortDir.equalsIgnoreCase("DESC")
@@ -53,7 +57,9 @@ public class StudentAssessmentController {
     Pageable pageable = PageRequest.of(page, size, sort);
 
     return ApiResponse.<Page<StudentAssessmentResponse>>builder()
-        .result(studentAssessmentService.getMyAssessments(status, pageable))
+        .result(
+            studentAssessmentService.getMyAssessments(
+                status, pageable, schoolGradeId, subjectId, chapterId, lessonId))
         .build();
   }
 
