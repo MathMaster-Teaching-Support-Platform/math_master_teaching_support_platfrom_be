@@ -28,11 +28,27 @@ public interface PythonCrawlerClient {
   /** Response from {@link #triggerOcrWithMapping}. */
   record OcrTriggerResult(String status, String message, Integer totalPagesQueued) {}
 
+  /** Request body for {@link #triggerSinglePageOcr}. Built server-side from Postgres book + mapping. */
+  record OcrSinglePageTriggerRequest(
+      UUID bookId,
+      UUID lessonId,
+      Integer pageNumber,
+      String pdfPath,
+      Integer ocrPageFrom,
+      Integer ocrPageTo,
+      List<OcrTriggerRequest.MappingItem> mappings) {}
+
   /**
    * Asynchronously starts OCR for a book using the provided lesson→page mapping. Returns
    * immediately; poll {@link #getBookOcrStatus(UUID)} for progress.
    */
   OcrTriggerResult triggerOcrWithMapping(OcrTriggerRequest request);
+
+  /**
+   * Re-OCR one mapped PDF page for one lesson (verify wizard). Does not flip Postgres book status to
+   * OCR_RUNNING.
+   */
+  OcrTriggerResult triggerSinglePageOcr(OcrSinglePageTriggerRequest request);
 
   /** Cooperatively asks the Python pipeline to stop (Mongo cancel flag). Safe if idle. */
   void cancelOcr(UUID bookId);

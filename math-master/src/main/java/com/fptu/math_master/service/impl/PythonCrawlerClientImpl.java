@@ -75,6 +75,32 @@ public class PythonCrawlerClientImpl implements PythonCrawlerClient {
   }
 
   @Override
+  public OcrTriggerResult triggerSinglePageOcr(OcrSinglePageTriggerRequest request) {
+    try {
+      OcrTriggerResult result =
+          restClient
+              .post()
+              .uri(BASE + "/books/{bookId}/ocr-single-page", request.bookId())
+              .contentType(MediaType.APPLICATION_JSON)
+              .body(request)
+              .retrieve()
+              .body(OcrTriggerResult.class);
+      return result == null ? new OcrTriggerResult("UNKNOWN", null, 0) : result;
+    } catch (ResourceAccessException ex) {
+      log.error(
+          "Crawler unreachable when triggering single-page OCR for book {}", request.bookId(), ex);
+      throw new AppException(ErrorCode.CRAWLER_UNAVAILABLE);
+    } catch (RestClientResponseException ex) {
+      log.error(
+          "Crawler returned {} for single-page OCR of book {}: {}",
+          ex.getStatusCode(),
+          request.bookId(),
+          ex.getResponseBodyAsString());
+      throw new AppException(ErrorCode.CRAWLER_UNAVAILABLE);
+    }
+  }
+
+  @Override
   public void cancelOcr(UUID bookId) {
     try {
       restClient

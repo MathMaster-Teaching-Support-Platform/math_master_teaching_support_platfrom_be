@@ -26,10 +26,13 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.validation.Valid;
+
 import com.fptu.math_master.configuration.properties.MinioProperties;
 import com.fptu.math_master.dto.request.BulkPageMappingRequest;
 import com.fptu.math_master.dto.request.BulkSeriesPageMappingRequest;
 import com.fptu.math_master.dto.request.CreateBookRequest;
+import com.fptu.math_master.dto.request.ReOcrBookPageRequest;
 import com.fptu.math_master.dto.request.UpdateBookSeriesNameRequest;
 import com.fptu.math_master.dto.request.UpdateBookRequest;
 import com.fptu.math_master.dto.response.ApiResponse;
@@ -374,6 +377,26 @@ public class BookController {
     UUID actorId = UUID.fromString(jwt.getSubject());
     return ApiResponse.<OcrTriggerResponse>builder()
         .result(bookService.triggerOcr(id, actorId))
+        .build();
+  }
+
+  @Operation(
+      summary = "Re-run OCR for one mapped PDF page",
+      description =
+          "Queues the Python service to OCR again for this lesson's cell only (Gemini + Mathpix). "
+              + "Does not start full-book OCR or set status to OCR_RUNNING. "
+              + "Reject while a full-book OCR job is still running.")
+  @PostMapping("/{id}/ocr/single-page")
+  @PreAuthorize("hasRole('ADMIN')")
+  public ApiResponse<Void> reOcrSingleBookPage(
+      @PathVariable UUID id,
+      @Valid @RequestBody ReOcrBookPageRequest body,
+      @AuthenticationPrincipal Jwt jwt) {
+    UUID actorId = UUID.fromString(jwt.getSubject());
+    bookService.reOcrSingleBookPage(id, body, actorId);
+    return ApiResponse.<Void>builder()
+        .message(
+            "Đã xếp hàng OCR lại trang này (Gemini + Mathpix). Đợi vài giây rồi làm mới hoặc chọn lại trang.")
         .build();
   }
 
