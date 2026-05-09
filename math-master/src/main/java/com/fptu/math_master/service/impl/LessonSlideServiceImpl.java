@@ -30,6 +30,7 @@ import com.fptu.math_master.repository.SchoolGradeRepository;
 import com.fptu.math_master.repository.SlideTemplateRepository;
 import com.fptu.math_master.repository.SubjectRepository;
 import com.fptu.math_master.dto.request.LatexRenderRequest;
+import com.fptu.math_master.configuration.properties.CrawlDataProperties;
 import com.fptu.math_master.service.GeminiService;
 import com.fptu.math_master.service.LatexRenderService;
 import com.fptu.math_master.service.LessonSlideService;
@@ -37,6 +38,8 @@ import com.fptu.math_master.service.TokenCostConfigService;
 import com.fptu.math_master.service.UploadService;
 import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.SecurityUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.web.client.RestClient;
 import io.minio.BucketExistsArgs;
 import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
@@ -164,6 +167,9 @@ public class LessonSlideServiceImpl implements LessonSlideService {
   TokenCostConfigService tokenCostConfigService;
   UploadService uploadService;
   ObjectMapper objectMapper;
+  @Qualifier("crawlDataRestClient")
+  RestClient crawlDataRestClient;
+  CrawlDataProperties crawlDataProperties;
 
   @Override
   @Transactional
@@ -2001,17 +2007,22 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       LessonSlideOutputFormat outputFormat,
       int requestedSlideCount) {
     DeckSections fallback = buildDeckSections(lesson, additionalPrompt);
+    String bookContent = fetchBookContentText(lesson.getId());
+    if (!bookContent.isBlank()) {
+      log.info("[SlidePrompt] Fetched book content ({} chars) for lessonId={}",
+          bookContent.length(), lesson.getId());
+    }
 
     try {
         String prompt =
-          buildSlideDeckPrompt(lesson, additionalPrompt, outputFormat, requestedSlideCount);
+          buildSlideDeckPrompt(lesson, additionalPrompt, outputFormat, requestedSlideCount, bookContent);
       log.info("[SlidePrompt] JSON prompt sent to AI:\n{}", prompt);
       String aiResponse = geminiService.sendMessage(prompt);
       AiDeckSections aiDeck = parseAiDeckSections(aiResponse);
       if (aiDeck == null || !hasEnoughAiContent(aiDeck)) {
         String taggedPrompt =
           buildSlideDeckTaggedPrompt(
-            lesson, additionalPrompt, outputFormat, requestedSlideCount);
+            lesson, additionalPrompt, outputFormat, requestedSlideCount, bookContent);
         log.info("[SlidePrompt] Tagged prompt sent to AI:\n{}", taggedPrompt);
         String taggedResponse = geminiService.sendMessage(taggedPrompt);
         AiDeckSections taggedDeck = parseTaggedDeckSections(taggedResponse);
@@ -2127,13 +2138,17 @@ public class LessonSlideServiceImpl implements LessonSlideService {
       Lesson lesson,
       String additionalPrompt,
       LessonSlideOutputFormat outputFormat,
-      int requestedSlideCount) {
+      int requestedSlideCount,
+      String bookContent) {
     String lessonTitle = safe(lesson.getTitle());
     String lessonContent = safe(lesson.getLessonContent());
     String lessonSummary = safe(lesson.getSummary());
     String learningObjectives = safe(lesson.getLearningObjectives());
     String opening = safe(additionalPrompt);
     String formatGuidance = buildFormatGuidance(outputFormat, true);
+    String bookSection = bookContent != null && !bookContent.isBlank()
+        ? "- bookContent (nội dung sách giáo khoa, ưu tiên dùng làm nguồn chính xác):\n" + bookContent
+        : "";
 
     return """
         Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
@@ -2146,9 +2161,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         - additionalPrompt: %s
         - rawLessonContent:
         %s
+        %s
 
         YÊU CẦU:
         - Viết bằng tiếng Việt có dấu.
+        - Nếu có bookContent, hãy ưu tiên dùng nội dung từ sách giáo khoa để đảm bảo chính xác về công thức, định nghĩa, ví dụ.
         - lessonSummary (trang bìa): viết đúng 2 dòng, mỗi dòng khoảng 10 từ (tổng khoảng 20 từ).
         - learningObjectives (mục tiêu): viết đúng 2 dòng, mỗi dòng khoảng 10 từ (tổng khoảng 20 từ).
         - Nội dung phải NGẮN GỌN cho đúng phạm vi 1 slide nhưng vẫn TOÀN VẸN ý chính.
@@ -2185,6 +2202,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
             learningObjectives,
             opening,
             lessonContent,
+            bookSection,
             SLIDE_CONTENT_MAX_WORDS,
             outputFormat,
             formatGuidance);
@@ -2194,13 +2212,17 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         Lesson lesson,
         String additionalPrompt,
         LessonSlideOutputFormat outputFormat,
-        int requestedSlideCount) {
+        int requestedSlideCount,
+        String bookContent) {
     String lessonTitle = safe(lesson.getTitle());
     String lessonContent = safe(lesson.getLessonContent());
     String lessonSummary = safe(lesson.getSummary());
     String learningObjectives = safe(lesson.getLearningObjectives());
     String opening = safe(additionalPrompt);
     String formatGuidance = buildFormatGuidance(outputFormat, false);
+    String bookSection = bookContent != null && !bookContent.isBlank()
+        ? "- bookContent (nội dung sách giáo khoa, dùng làm tài liệu tham khảo, kiểm tra độ chính xác của nội dung):\n" + bookContent
+        : "";
 
     return """
         Bạn là giáo viên Toán THCS/THPT tại Việt Nam.
@@ -2213,9 +2235,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
         - additionalPrompt: %s
         - rawLessonContent:
         %s
+        %s
 
         YÊU CẦU:
         - Viết tiếng Việt có dấu, nội dung cụ thể, không lặp lại giữa các phần.
+        - Nếu có bookContent, hãy ưu tiên dùng nội dung từ sách giáo khoa để đảm bảo chính xác về công thức, định nghĩa, ví dụ.
         - LESSON_SUMMARY (trang bìa): viết đúng 2 dòng, mỗi dòng khoảng 10 từ (tổng khoảng 20 từ).
         - LEARNING_OBJECTIVES (mục tiêu): viết đúng 2 dòng, mỗi dòng khoảng 10 từ (tổng khoảng 20 từ).
         - Nội dung phải NGẮN GỌN theo chuẩn 1 slide nhưng vẫn đầy đủ ý cốt lõi.
@@ -2256,6 +2280,7 @@ public class LessonSlideServiceImpl implements LessonSlideService {
           learningObjectives,
           opening,
           lessonContent,
+          bookSection,
           SLIDE_CONTENT_MAX_WORDS,
           outputFormat,
           formatGuidance);
@@ -2311,6 +2336,86 @@ public class LessonSlideServiceImpl implements LessonSlideService {
 
   private LessonSlideOutputFormat resolveOutputFormat(LessonSlideOutputFormat outputFormat) {
     return outputFormat == null ? LessonSlideOutputFormat.PLAIN_TEXT : outputFormat;
+  }
+
+  /**
+   * Fetches the OCR-ed book content for a lesson from the crawl-data service and
+   * compresses it into a structured plain-text snippet suitable for AI prompts.
+   * Returns an empty string when the lesson has no associated book content or when
+   * the upstream call fails (fail-silently so slide generation is never blocked).
+   */
+  @SuppressWarnings("unchecked")
+  private String fetchBookContentText(UUID lessonId) {
+    try {
+      String json = crawlDataRestClient
+          .get()
+          .uri("/api/v1/lessons/{id}/content", lessonId)
+          .retrieve()
+          .body(String.class);
+      if (json == null || json.isBlank()) return "";
+      Map<?, ?> root = objectMapper.readValue(json, Map.class);
+      Object result = root.get("result");
+      if (!(result instanceof Map<?, ?> resultMap)) return "";
+      return compressBookContent(resultMap);
+    } catch (Exception ex) {
+      log.warn("[SlidePrompt] Could not fetch book content for lessonId={}: {}",
+          lessonId, ex.getMessage());
+      return "";
+    }
+  }
+
+  /**
+   * Compresses the raw lesson-content API response into a compact, page-structured text.
+   * Image blocks are dropped; formula/definition/exercise/table blocks are labelled;
+   * plain text blocks are emitted as-is. This reduces ~10k-token JSON to ~1-2k tokens.
+   */
+  @SuppressWarnings("unchecked")
+  private String compressBookContent(Map<?, ?> resultMap) {
+    Object pagesObj = resultMap.get("pages");
+    if (!(pagesObj instanceof List<?> pages)) return "";
+
+    StringBuilder sb = new StringBuilder();
+    for (Object pageObj : pages) {
+      if (!(pageObj instanceof Map<?, ?> page)) continue;
+      Object pageNumber = page.get("pageNumber");
+      Object blocksObj = page.get("contentBlocks");
+      if (!(blocksObj instanceof List<?> blocks)) continue;
+
+      StringBuilder pageContent = new StringBuilder();
+      for (Object blockObj : blocks) {
+        if (!(blockObj instanceof Map<?, ?> block)) continue;
+        String type = String.valueOf(block.getOrDefault("type", ""));
+        if ("image".equals(type)) continue; // images add no text value
+
+        String content = String.valueOf(block.getOrDefault("content", "")).trim();
+        Object latexObj = block.get("latex");
+        String latex = (latexObj != null) ? String.valueOf(latexObj).trim() : null;
+
+        String line;
+        if (latex != null && !latex.isBlank()) {
+          line = "[FORMULA] " + latex;
+        } else if ("definition".equals(type)) {
+          line = "[DEF] " + content;
+        } else if ("exercise".equals(type)) {
+          line = "[EX] " + content;
+        } else if ("table".equals(type)) {
+          line = "[TABLE] " + content;
+        } else {
+          line = content;
+        }
+
+        if (!line.isBlank()) {
+          pageContent.append(line).append("\n");
+        }
+      }
+
+      if (pageContent.length() > 0) {
+        if (sb.length() > 0) sb.append("\n");
+        sb.append("=== Trang ").append(pageNumber).append(" ===\n");
+        sb.append(pageContent);
+      }
+    }
+    return sb.toString().trim();
   }
 
   private String buildFormatGuidance(LessonSlideOutputFormat outputFormat, boolean jsonMode) {
