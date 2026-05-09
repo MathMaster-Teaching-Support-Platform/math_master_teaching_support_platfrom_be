@@ -1121,9 +1121,12 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
     return value
         .replace("\\r\\n", "\n")
-        // Replace literal \n only when NOT followed by a letter (to avoid breaking LaTeX
-        // commands like \neq, \not, \nabla, etc. that contain \n as a substring).
-        .replaceAll("\\\\n(?![a-zA-Z])", "\n")
+        // Replace literal \n only when NOT preceded by a backslash that's part of a LaTeX
+        // command. We match \n where the char before \ is not a-z (i.e. not mid-command)
+        // AND the n is not followed by a-z (e.g. \not, \nabla).
+        // Known LaTeX commands starting with \n: \ne, \neq, \neg, \not, \nabla, \newline, \notin
+        // We protect all of them by requiring the match to NOT be \<letter>n OR \n<letter>.
+        .replaceAll("(?<![a-zA-Z\\\\])\\\\n(?![a-zA-Z])", "\n")
         // Convert \\ used as an inline separator (e.g. " \\ " or " \\\\ ") to a real newline.
         // AI frequently uses \\ or \\\\ between sentences as a paragraph/line separator.
         .replaceAll("\\h*\\\\{2,}\\h+", "\n")
@@ -1140,7 +1143,11 @@ public class LessonSlideServiceImpl implements LessonSlideService {
     }
     String normalized = value.replace("\\$", "$");
     normalized = normalized.replace("\\\\(", "\\(").replace("\\\\)", "\\)");
-    return normalized.replace("\\\\[", "\\[").replace("\\\\]", "\\]");
+    normalized = normalized.replace("\\\\[", "\\[").replace("\\\\]", "\\]");
+    // \ne not followed by a letter → \neq (avoids \neg, \newline, \notin being changed)
+    // KaTeX and some renderers don't support \ne; \neq is universally safe.
+    normalized = normalized.replaceAll("\\\\ne(?![a-zA-Z])", "\\\\neq");
+    return normalized;
   }
 
   private String sanitizeDisplayText(String value) {
@@ -2426,10 +2433,12 @@ public class LessonSlideServiceImpl implements LessonSlideService {
               + "- Danh sách bước/ý: dùng \\\\begin{itemize} \\\\item ... \\\\end{itemize}. KHÔNG dùng dấu gạch đầu dòng thủ công.\n"
               + "- Vì output là JSON string, PHẢI escape backslash: \\\\frac, \\\\item, \\\\begin, \\\\end, \\\\textbf, v.v.\n"
               + "- KHÔNG thêm ký tự \\\\ ở cuối dòng văn bản thường.\n"
+              + "- Dùng \\\\neq thay vì \\\\ne để ký hiệu ≠.\n"
               + "- KHÔNG viết công thức dạng chữ thuần túy."
           : "- Tất cả biểu thức toán học PHẢI dùng LaTeX inline ($...$) hoặc display (\\[ ... \\]).\n"
               + "- Danh sách bước/ý: dùng \\begin{itemize} \\item ... \\end{itemize}. KHÔNG dùng dấu gạch đầu dòng thủ công.\n"
               + "- KHÔNG thêm ký tự \\ ở cuối dòng văn bản thường.\n"
+              + "- Dùng \\neq thay vì \\ne để ký hiệu ≠.\n"
               + "- KHÔNG viết công thức dạng chữ thuần túy.";
       case HYBRID -> jsonMode
           ? "- Nội dung mô tả bằng tiếng Việt, công thức/ký hiệu toán dùng LaTeX inline ($...$).\n"
