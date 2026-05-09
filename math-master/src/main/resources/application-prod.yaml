@@ -127,7 +127,7 @@ minio:
   ocr-content-bucket: ${MINIO_OCR_CONTENT_BUCKET:${MINIO_TEMPLATE_BUCKET:slide-templates}}
 
 crawl-data:
-  base-url: ${CRAWL_DATA_BASE_URL:http://localhost:8001}
+  base-url: ${CRAWL_DATA_BASE_URL:http://host.docker.internal:8001}
   internal-api-key: ${CRAWL_DATA_INTERNAL_API_KEY:production-api-key-19asda981jdud91d}
   timeout-seconds: ${CRAWL_DATA_TIMEOUT_SECONDS:15}
 
