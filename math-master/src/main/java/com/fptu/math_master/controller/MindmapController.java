@@ -149,27 +149,27 @@ public class MindmapController {
   @Operation(
       summary = "Get my mindmaps",
       description =
-          "Get all mindmaps created by the current teacher. Optionally filter by lessonId. Supports pagination and sorting.")
+                    "Get all mindmaps created by the current teacher. Optionally filter by grade/subject/chapter/lesson. Supports pagination and sorting.")
   public ApiResponse<Page<MindmapResponse>> getMyMindmaps(
       @RequestParam(required = false) String lessonId,
+            @RequestParam(required = false) String chapterId,
+            @RequestParam(required = false) String subjectId,
+            @RequestParam(required = false) String gradeId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size,
       @RequestParam(defaultValue = "createdAt") String sortBy,
       @RequestParam(defaultValue = "DESC") String direction) {
 
-    // Convert lessonId string to UUID if provided
-    UUID lessonUuid = null;
-    if (lessonId != null && !lessonId.trim().isEmpty()) {
-      try {
-        lessonUuid = UUID.fromString(lessonId);
-      } catch (IllegalArgumentException e) {
-        log.warn("Invalid lessonId format: {}", lessonId);
-        // lessonUuid remains null, which means no filtering by lesson
-      }
-    }
+        UUID lessonUuid = parseOptionalUuid(lessonId, "lessonId");
+        UUID chapterUuid = parseOptionalUuid(chapterId, "chapterId");
+        UUID subjectUuid = parseOptionalUuid(subjectId, "subjectId");
+        UUID gradeUuid = parseOptionalUuid(gradeId, "gradeId");
 
     log.info(
-        "REST request to get my mindmaps - lessonId: {}, page: {}, size: {}",
+        "REST request to get my mindmaps - gradeId: {}, subjectId: {}, chapterId: {}, lessonId: {}, page: {}, size: {}",
+        gradeUuid,
+        subjectUuid,
+        chapterUuid,
         lessonUuid,
         page,
         size);
@@ -179,7 +179,7 @@ public class MindmapController {
     Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
 
     return ApiResponse.<Page<MindmapResponse>>builder()
-        .result(mindmapService.getMyMindmaps(lessonUuid, pageable))
+        .result(mindmapService.getMyMindmaps(gradeUuid, subjectUuid, chapterUuid, lessonUuid, pageable))
         .build();
   }
 
@@ -206,6 +206,9 @@ public class MindmapController {
       summary = "List all public mindmaps",
       description = "Public endpoint for students to browse all published mindmaps.")
   public ApiResponse<Page<MindmapResponse>> getPublicMindmaps(
+      @RequestParam(required = false) UUID gradeId,
+      @RequestParam(required = false) UUID subjectId,
+      @RequestParam(required = false) UUID chapterId,
       @RequestParam(required = false) UUID lessonId,
       @RequestParam(required = false) String name,
       @RequestParam(defaultValue = "0") int page,
@@ -217,9 +220,24 @@ public class MindmapController {
     Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
 
     return ApiResponse.<Page<MindmapResponse>>builder()
-        .result(mindmapService.getPublicMindmaps(lessonId, name, pageable))
+                .result(
+                        mindmapService.getPublicMindmaps(
+                                gradeId, subjectId, chapterId, lessonId, name, pageable))
         .build();
   }
+
+    private UUID parseOptionalUuid(String rawValue, String fieldName) {
+        if (rawValue == null || rawValue.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            return UUID.fromString(rawValue.trim());
+        } catch (IllegalArgumentException ex) {
+            log.warn("Invalid {} format: {}", fieldName, rawValue);
+            return null;
+        }
+    }
 
     @GetMapping("/public/{id}")
     @Operation(

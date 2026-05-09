@@ -25,6 +25,29 @@ public interface LessonSlideGeneratedFileRepository extends JpaRepository<Lesson
 
   @Query(
       "SELECT f FROM LessonSlideGeneratedFile f "
+          + "LEFT JOIN Lesson l ON f.lessonId = l.id "
+          + "LEFT JOIN Chapter c ON l.chapterId = c.id "
+          + "LEFT JOIN Subject s ON c.subjectId = s.id "
+          + "LEFT JOIN SchoolGrade g ON s.schoolGradeId = g.id "
+          + "WHERE f.createdBy = :teacherId AND f.deletedAt IS NULL "
+          + "AND (:lessonId IS NULL OR f.lessonId = :lessonId) "
+          + "AND (:chapterId IS NULL OR c.id = :chapterId) "
+          + "AND (:subjectId IS NULL OR s.id = :subjectId) "
+          + "AND (:gradeId IS NULL OR g.id = :gradeId) "
+          + "AND (:keyword IS NULL OR :keyword = '' "
+          + "     OR LOWER(f.fileName) LIKE LOWER(CONCAT('%', :keyword, '%')) "
+          + "     OR LOWER(COALESCE(f.name, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))) "
+          + "ORDER BY f.createdAt DESC")
+  List<LessonSlideGeneratedFile> findByTeacherWithFilters(
+      @Param("teacherId") UUID teacherId,
+      @Param("gradeId") UUID gradeId,
+      @Param("subjectId") UUID subjectId,
+      @Param("chapterId") UUID chapterId,
+      @Param("lessonId") UUID lessonId,
+      @Param("keyword") String keyword);
+
+  @Query(
+      "SELECT f FROM LessonSlideGeneratedFile f "
           + "WHERE f.createdBy = :teacherId AND f.lessonId = :lessonId AND f.deletedAt IS NULL "
           + "ORDER BY f.createdAt DESC")
   List<LessonSlideGeneratedFile> findByTeacherAndLesson(
@@ -50,10 +73,29 @@ public interface LessonSlideGeneratedFileRepository extends JpaRepository<Lesson
       @Query(
           "SELECT f FROM LessonSlideGeneratedFile f "
               + "WHERE f.isPublic = true AND f.deletedAt IS NULL "
+              + "AND (:gradeId IS NULL OR EXISTS ("
+              + "    SELECT 1 FROM Lesson l "
+              + "    JOIN Chapter c ON l.chapterId = c.id "
+              + "    JOIN Subject s ON c.subjectId = s.id "
+              + "    JOIN SchoolGrade g ON s.schoolGradeId = g.id "
+              + "    WHERE l.id = f.lessonId AND g.id = :gradeId)) "
+              + "AND (:subjectId IS NULL OR EXISTS ("
+              + "    SELECT 1 FROM Lesson l "
+              + "    JOIN Chapter c ON l.chapterId = c.id "
+              + "    JOIN Subject s ON c.subjectId = s.id "
+              + "    WHERE l.id = f.lessonId AND s.id = :subjectId)) "
+              + "AND (:chapterId IS NULL OR EXISTS ("
+              + "    SELECT 1 FROM Lesson l "
+              + "    WHERE l.id = f.lessonId AND l.chapterId = :chapterId)) "
               + "AND (:lessonId IS NULL OR f.lessonId = :lessonId) "
               + "AND (:keyword IS NULL OR :keyword = '' "
               + "     OR LOWER(f.fileName) LIKE LOWER(CONCAT('%', :keyword, '%')) "
               + "     OR LOWER(COALESCE(f.name, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))")
       Page<LessonSlideGeneratedFile> findAllPublicWithFilters(
-          @Param("lessonId") UUID lessonId, @Param("keyword") String keyword, Pageable pageable);
+          @Param("gradeId") UUID gradeId,
+          @Param("subjectId") UUID subjectId,
+          @Param("chapterId") UUID chapterId,
+          @Param("lessonId") UUID lessonId,
+          @Param("keyword") String keyword,
+          Pageable pageable);
 }

@@ -59,7 +59,8 @@ public interface LessonSlideService {
 
   BinaryFileData generatePptxFromJson(LessonSlideGeneratePptxFromJsonRequest request);
 
-    List<LessonSlideGeneratedFileResponse> getMyGeneratedSlides(UUID lessonId);
+    List<LessonSlideGeneratedFileResponse> getMyGeneratedSlides(
+      UUID gradeId, UUID subjectId, UUID chapterId, UUID lessonId, String keyword);
 
     BinaryFileData downloadGeneratedSlide(UUID generatedFileId);
 
@@ -77,10 +78,20 @@ public interface LessonSlideService {
     BinaryFileData getGeneratedSlideThumbnailImage(UUID generatedFileId);
 
     Page<LessonSlideGeneratedFileResponse> getAllPublicGeneratedSlides(
-      UUID lessonId, String keyword, Pageable pageable);
+      UUID gradeId,
+      UUID subjectId,
+      UUID chapterId,
+      UUID lessonId,
+      String keyword,
+      Pageable pageable);
 
     Page<LessonSlideGeneratedFileResponse> getPublicGeneratedSlidesByLesson(
-      UUID lessonId, String keyword, Pageable pageable);
+      UUID lessonId,
+      UUID gradeId,
+      UUID subjectId,
+      UUID chapterId,
+      String keyword,
+      Pageable pageable);
 
     BinaryFileData downloadPublicGeneratedSlide(UUID generatedFileId);
 
