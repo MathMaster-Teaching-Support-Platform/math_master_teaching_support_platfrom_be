@@ -25,6 +25,12 @@ public class GeminiServiceImpl implements GeminiService {
   private static final int MAX_RETRY_ATTEMPTS = 4;
   private static final long INITIAL_BACKOFF_MS = 800L;
 
+  /**
+   * Gemini API output budget per request. TF/MCQ JSON replies with long solutionSteps often exceed
+   * 8192; 32k matches {@code sendJsonMessage} historical default and reduces MAX_TOKEN truncation.
+   */
+  private static final int DEFAULT_MAX_OUTPUT_TOKENS = 32768;
+
   RestClient geminiRestClient;
   GeminiProperties geminiProperties;
   ObjectMapper objectMapper;
@@ -39,12 +45,12 @@ public class GeminiServiceImpl implements GeminiService {
 
   @Override
   public String sendMessage(String prompt) {
-    return sendTextPrompt(prompt, 8192, null);
+    return sendTextPrompt(prompt, DEFAULT_MAX_OUTPUT_TOKENS, null);
   }
 
   @Override
   public String sendJsonMessage(String prompt) {
-    return sendTextPrompt(prompt, 32768, "application/json");
+    return sendTextPrompt(prompt, DEFAULT_MAX_OUTPUT_TOKENS, "application/json");
   }
 
   private String sendTextPrompt(String prompt, int maxOutputTokens, String responseMimeType) {
@@ -160,7 +166,7 @@ public class GeminiServiceImpl implements GeminiService {
               .generationConfig(
                   GeminiRequest.GenerationConfig.builder()
                       .temperature(0.4)
-                      .maxOutputTokens(8192)
+                      .maxOutputTokens(DEFAULT_MAX_OUTPUT_TOKENS)
                       .build())
               .safetySettings(
                   Arrays.asList(
