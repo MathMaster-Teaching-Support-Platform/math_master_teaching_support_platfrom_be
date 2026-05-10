@@ -140,20 +140,13 @@ public class LatexRenderServiceImpl implements LatexRenderService {
             "(?m)(\\\\tkzTabInit[^\\n]*\\n)(\\s*)(?!\\{)([-+]?\\\\infty[^\\n]*\\})",
             "$1$2{$3");
 
-    // AI often emits \sqrt{(1)} or \sqrt{2.5*1*1-1} inside TikZ coordinates — QuickLaTeX rejects that.
-    // Collapse every purely-numeric \sqrt{expr} to a decimal before TikZ sees \sqrt as text.
-    fixed = collapseNumericSqrtMacros(fixed);
+    // amsmath \dfrac → \frac so brace-balanced expansion can normalize fractions inside \sqrt{…}.
+    fixed = fixed.replace("\\dfrac", "\\frac");
 
-    // Fix: \sqrt{expr} used as a TikZ coordinate component — TikZ/pgf cannot evaluate LaTeX math
-    // macros as coordinate expressions. Convert to pgfmath form.
-    // Handles:
-    //   \sqrt{4}+1.5   →  {sqrt(4)+1.5}   (offset after)
-    //   -\sqrt{4}-1    →  {-sqrt(4)-1}    (negated with offset)
-    //   \sqrt{4}       →  {sqrt(4)}        (plain)
-    // These patterns appear in coordinates, domain=, and node labels.
-    fixed = fixed.replaceAll(
-        "(-?)\\\\sqrt\\{([^}]*)\\}((?:[+\\-][0-9.]+)?)",
-        "{$1sqrt($2)$3}");
+    // AI often emits \sqrt{(1)}, \sqrt{\frac{1}{4}}, or nested \sqrt{\sqrt{16}} inside TikZ coordinates.
+    // Collapse numeric roots to literals; remaining \sqrt{…} → {sqrt(pgfm…)} for pgfplots.
+    fixed = collapseNumericSqrtMacros(fixed);
+    fixed = convertRemainingSqrtMacrosToPgfmath(fixed);
 
     // Evaluate \pgfmathsetmacro{\name}{expr} definitions and inline computed numeric values.
     // This removes the macro usage entirely so QuickLaTeX never sees variable references.
@@ -171,39 +164,137 @@ public class LatexRenderServiceImpl implements LatexRenderService {
   }
 
   /**
-   * Replaces {@code \\sqrt{expr}} with a plain numeric literal whenever {@code expr} evaluates with
-   * {@link #evalPgfmathExpr}. Fixes AI output like {@code \\draw (-\\sqrt{(1)},0)} which QuickLaTeX
-   * cannot compile inside coordinate expressions.
+   * Index of the {@code '} matching the opening brace at {@code openBraceIdx}, or {@code -1}.
+   */
+  private static int findMatchingBrace(String s, int openBraceIdx) {
+    if (s == null
+        || openBraceIdx < 0
+        || openBraceIdx >= s.length()
+        || s.charAt(openBraceIdx) != '{') {
+      return -1;
+    }
+    int depth = 0;
+    for (int i = openBraceIdx; i < s.length(); i++) {
+      char c = s.charAt(i);
+      if (c == '{') {
+        depth++;
+      } else if (c == '}') {
+        depth--;
+        if (depth == 0) {
+          return i;
+        }
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Turns {@code \\frac{a}{b}} into {@code (a)/(b)} using balanced braces so nested fractions work.
+   */
+  private static String expandFracMacrosForPgf(String expr) {
+    if (expr == null || !expr.contains("\\frac")) {
+      return expr;
+    }
+    String cur = expr;
+    for (int guard = 0; guard < 64; guard++) {
+      int idx = cur.indexOf("\\frac{");
+      if (idx < 0) {
+        break;
+      }
+      int numOpen = idx + "\\frac".length();
+      if (numOpen >= cur.length() || cur.charAt(numOpen) != '{') {
+        break;
+      }
+      int numClose = findMatchingBrace(cur, numOpen);
+      if (numClose < 0) {
+        break;
+      }
+      int denOpen = numClose + 1;
+      if (denOpen >= cur.length() || cur.charAt(denOpen) != '{') {
+        break;
+      }
+      int denClose = findMatchingBrace(cur, denOpen);
+      if (denClose < 0) {
+        break;
+      }
+      String num = cur.substring(numOpen + 1, numClose).trim();
+      String den = cur.substring(denOpen + 1, denClose).trim();
+      cur = cur.substring(0, idx) + "(" + num + ")/(" + den + ")" + cur.substring(denClose + 1);
+    }
+    return cur;
+  }
+
+  /**
+   * Replaces {@code \\sqrt{expr}} with a numeric literal when {@code expr} can be evaluated (possibly
+   * after expanding {@code \\frac}), including nested {@code \\sqrt{\\sqrt{16}}}. Innermost roots are
+   * collapsed first.
    */
   private static String collapseNumericSqrtMacros(String latex) {
     if (latex == null || !latex.contains("\\sqrt")) {
       return latex;
     }
-    Pattern sqrtPat = Pattern.compile("\\\\sqrt\\{([^}]+)\\}");
     String cur = latex;
-    for (int pass = 0; pass < 20; pass++) {
-      Matcher m = sqrtPat.matcher(cur);
-      StringBuffer sb = new StringBuffer();
-      boolean changed = false;
-      while (m.find()) {
-        String inner = m.group(1).trim();
-        try {
-          double arg = evalPgfmathExpr(inner);
-          if (arg < 0) {
-            throw new IllegalArgumentException("negative radicand");
-          }
-          double r = Math.sqrt(arg);
-          m.appendReplacement(sb, Matcher.quoteReplacement(formatNumericForTikzCoordinate(r)));
-          changed = true;
-        } catch (Exception e) {
-          m.appendReplacement(sb, Matcher.quoteReplacement(m.group(0)));
-        }
-      }
-      m.appendTail(sb);
-      cur = sb.toString();
-      if (!changed) {
+    for (int guard = 0; guard < 200; guard++) {
+      int idx = cur.indexOf("\\sqrt{");
+      if (idx < 0) {
         break;
       }
+      int openBrace = idx + "\\sqrt".length();
+      if (openBrace >= cur.length() || cur.charAt(openBrace) != '{') {
+        break;
+      }
+      int closeBrace = findMatchingBrace(cur, openBrace);
+      if (closeBrace < 0) {
+        break;
+      }
+      String inner = cur.substring(openBrace + 1, closeBrace);
+      if (inner.contains("\\sqrt")) {
+        String innerNew = collapseNumericSqrtMacros(inner);
+        if (innerNew.equals(inner)) {
+          break;
+        }
+        cur = cur.substring(0, idx) + "\\sqrt{" + innerNew + "}" + cur.substring(closeBrace + 1);
+        continue;
+      }
+      try {
+        String expanded = expandFracMacrosForPgf(inner);
+        double radicand = evalPgfmathExpr(expanded);
+        if (radicand < 0) {
+          throw new IllegalArgumentException("negative radicand");
+        }
+        double r = Math.sqrt(radicand);
+        cur = cur.substring(0, idx) + formatNumericForTikzCoordinate(r) + cur.substring(closeBrace + 1);
+      } catch (Exception e) {
+        break;
+      }
+    }
+    return cur;
+  }
+
+  /**
+   * Any surviving {@code \\sqrt{x}} becomes pgfmath {@code {sqrt(x)}} so TikZ can evaluate coordinates.
+   */
+  private static String convertRemainingSqrtMacrosToPgfmath(String latex) {
+    if (latex == null || !latex.contains("\\sqrt")) {
+      return latex;
+    }
+    String cur = latex;
+    for (int guard = 0; guard < 200; guard++) {
+      int idx = cur.indexOf("\\sqrt{");
+      if (idx < 0) {
+        break;
+      }
+      int openBrace = idx + "\\sqrt".length();
+      if (openBrace >= cur.length() || cur.charAt(openBrace) != '{') {
+        break;
+      }
+      int closeBrace = findMatchingBrace(cur, openBrace);
+      if (closeBrace < 0) {
+        break;
+      }
+      String inner = cur.substring(openBrace + 1, closeBrace);
+      String pgfInner = expandFracMacrosForPgf(inner).trim();
+      cur = cur.substring(0, idx) + "{sqrt(" + pgfInner + ")}" + cur.substring(closeBrace + 1);
     }
     return cur;
   }
@@ -339,10 +430,15 @@ public class LatexRenderServiceImpl implements LatexRenderService {
           "QuickLaTeX render failure (status -1). rawLatex={} payload={}",
           rawLatexForLogging,
           payload);
+      String payloadTrim = payload == null ? "" : payload.trim();
+      String userHint =
+          payloadTrim.contains("error.png")
+              ? "QuickLaTeX chỉ trả về ảnh lỗi chung (không có log biên dịch). "
+                  + "Thường do TikZ: hãy dùng tọa độ số hoặc biểu thức trong {...}; "
+                  + "tránh \\sqrt hay \\frac trực tiếp trong (axis cs: ...) — máy chủ sẽ cố đổi thành pgfmath/số."
+              : payloadTrim;
       throw new LatexCompileException(
-          "LaTeX/TikZ không hợp lệ hoặc QuickLaTeX không dịch được (status -1). "
-              + "Tránh \\sqrt{…} trong tọa độ TikZ — dùng số hoặc {{…}} pgfmath. Chi tiết: "
-              + payload);
+          "Không dịch được TikZ/LaTeX (QuickLaTeX status -1). " + userHint);
     }
 
     if (!"0".equals(status)) {
@@ -497,6 +593,22 @@ public class LatexRenderServiceImpl implements LatexRenderService {
         skipWs();
         if (i < s.length() && s.charAt(i) == ')') i++;
         return v;
+      }
+      skipWs();
+      if (i + 4 <= s.length() && s.regionMatches(i, "sqrt", 0, 4)) {
+        int before = i;
+        i += 4;
+        skipWs();
+        if (i < s.length() && s.charAt(i) == '(') {
+          i++;
+          double inner = parseExpr();
+          skipWs();
+          if (i < s.length() && s.charAt(i) == ')') {
+            i++;
+          }
+          return Math.sqrt(inner);
+        }
+        i = before;
       }
       int start = i;
       while (i < s.length() && (Character.isDigit(s.charAt(i)) || s.charAt(i) == '.')) i++;

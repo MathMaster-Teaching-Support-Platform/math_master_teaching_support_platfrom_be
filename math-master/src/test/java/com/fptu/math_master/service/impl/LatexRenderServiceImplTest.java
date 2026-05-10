@@ -23,6 +23,7 @@ import com.fptu.math_master.repository.QuestionRepository;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.lang.reflect.Method;
 import java.net.http.HttpTimeoutException;
 import java.time.Instant;
 import java.util.Optional;
@@ -614,6 +615,26 @@ class LatexRenderServiceImplTest extends BaseUnitTest {
 
     // ===== ASSERT =====
     assertEquals("https://quicklatex.com/cache/empty-preamble.png", result);
+  }
+
+  /**
+   * Normal case: Balanced-brace sqrt + frac / nested sqrt collapse so QuickLaTeX sees numeric coords.
+   */
+  @Test
+  void it_should_normalize_sqrt_frac_and_nested_sqrt_inside_tikz() throws Exception {
+    Method normalize =
+        LatexRenderServiceImpl.class.getDeclaredMethod("normalizeLatexForRender", String.class);
+    normalize.setAccessible(true);
+
+    String frac =
+        "\\begin{tikzpicture}\\draw (0,0)--(\\sqrt{\\frac{1}{4}},0);\\end{tikzpicture}";
+    String outFrac = (String) normalize.invoke(service, frac);
+    assertEquals(true, outFrac.contains("0.5") || outFrac.contains(".5"), outFrac);
+
+    String nested =
+        "\\begin{tikzpicture}\\draw (0,0)--(\\sqrt{\\sqrt{16}},0);\\end{tikzpicture}";
+    String outNest = (String) normalize.invoke(service, nested);
+    assertEquals(true, outNest.contains("(2,0)") || outNest.contains("(2, 0)"), outNest);
   }
 
   /**
