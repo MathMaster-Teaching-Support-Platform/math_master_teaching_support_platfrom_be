@@ -595,11 +595,16 @@ public class BlueprintServiceImpl implements BlueprintService {
   }
 
   private static String buildJsSmokeExpression(String substitutedFormula) {
-    return normalizeFracChainForJsSmoke(substitutedFormula.trim())
-        .replace('$', ' ')
-        .replace('\u2212', '-')
-        .replace('−', '-')
-        .replace("^", "**");
+    // Align with AIEnhancementServiceImpl#evaluateFormula JS path: bare sqrt/abs are not globals.
+    String s =
+        normalizeFracChainForJsSmoke(substitutedFormula.trim())
+            .replace('$', ' ')
+            .replace('\u2212', '-')
+            .replace('−', '-')
+            .replace("^", "**");
+    return s.replaceAll("(?i)\\bsqrt\\s*\\(", "Math.sqrt(")
+        .replaceAll("(?i)\\babs\\s*\\(", "Math.abs(")
+        .trim();
   }
 
   @Override
