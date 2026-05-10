@@ -1808,6 +1808,14 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       log.debug("Internal evaluator failed for '{}': {}", normalizedFormula, e.getMessage());
     }
 
+    // Variation-table sign rows, TikZ coordinate leaks, etc. are not JavaScript math.
+    if (shouldSkipScriptEngineForAnswerFormula(normalizedFormula, paramsForFormula)) {
+      log.debug(
+          "Skipping ScriptEngine for non-arithmetic answerFormula after probe: '{}'",
+          normalizedFormula);
+      return "?";
+    }
+
     javax.script.ScriptEngine engine = null;
     try {
       javax.script.ScriptEngineManager mgr = new javax.script.ScriptEngineManager();
@@ -2083,6 +2091,14 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         return "?";
       }
 
+      if (looksLikeCommaSeparatedSignRow(expression)) {
+        log.debug(
+            "Formula '{}' after substitution looks like a variation-table sign row (not arithmetic) — {}",
+            formula,
+            expression);
+        return "?";
+      }
+
       log.debug("Evaluating formula: '{}' with substituted expression: '{}'", formula, expression);
       double result = parseArithmetic(expression);
       log.debug("Formula evaluation result: {}", result);
@@ -2110,6 +2126,61 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     }
     String s = expression.replaceAll("\\s+", "");
     return s.contains(",(");
+  }
+
+  /**
+   * Detects comma-separated sign rows often pasted from variation tables (e.g. {@code , +, 0, -, 0,
+   * +}) — not a single numeric expression.
+   */
+  private static boolean looksLikeCommaSeparatedSignRow(String expression) {
+    if (expression == null || expression.isBlank()) {
+      return false;
+    }
+    String trimmed = expression.strip();
+    if (trimmed.startsWith(",")) {
+      return true;
+    }
+    String compact = trimmed.replaceAll("\\s+", "");
+    if (!compact.contains(",")) {
+      return false;
+    }
+    if (compact.matches(".*[a-zA-Z].*")) {
+      return false;
+    }
+    if (compact.matches(".*[*/].*") || compact.contains("(")) {
+      return false;
+    }
+    return compact.matches("[,0-9+\\-]+");
+  }
+
+  /** Substitutes parameter names (same rules as {@link #evaluateFormulaSimple}) for heuristic probes. */
+  private String substituteFormulaParametersForProbe(
+      String formula, Map<String, Object> params) {
+    if (formula == null || params == null || params.isEmpty()) {
+      return formula != null ? formula : "";
+    }
+    String expression = formula;
+    for (Map.Entry<String, Object> entry : params.entrySet()) {
+      String paramName = entry.getKey();
+      if (paramName == null) {
+        continue;
+      }
+      Object paramValue = entry.getValue();
+      String valueStr = paramValue != null ? paramValue.toString() : "0";
+      String insert =
+          Matcher.quoteReplacement(
+              paramValue instanceof Number
+                  ? formatParameterValueForEmbedding(paramValue)
+                  : valueStr);
+      expression = expression.replaceAll("\\b" + Pattern.quote(paramName) + "\\b", insert);
+    }
+    return expression;
+  }
+
+  private boolean shouldSkipScriptEngineForAnswerFormula(
+      String normalizedFormula, Map<String, Object> paramsForFormula) {
+    String probe = substituteFormulaParametersForProbe(normalizedFormula, paramsForFormula);
+    return looksLikeCoordinateOrDiagramLeak(probe) || looksLikeCommaSeparatedSignRow(probe);
   }
 
   /** Parse and evaluate arithmetic expression like "(1) - (1) / (1)" */
@@ -2727,9 +2798,17 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       JsonNode root = objectMapper.readTree(json);
 
       Map<String, Object> effectiveParams = resolveEffectiveParameters(root, template, params);
-      String effectiveCorrectAnswer = evaluateFormula(template.getAnswerFormula(), effectiveParams);
-      if ("?".equals(effectiveCorrectAnswer)) {
-        effectiveCorrectAnswer = correctAnswer;
+      QuestionType templateKind = template.getTemplateType();
+      String effectiveCorrectAnswer;
+      if (templateKind == QuestionType.TRUE_FALSE) {
+        // Clause truth keys (e.g. A,C) are authoritative — answerFormula is often a diagram row,
+        // not evaluable arithmetic.
+        effectiveCorrectAnswer = correctAnswer != null ? correctAnswer : "";
+      } else {
+        effectiveCorrectAnswer = evaluateFormula(template.getAnswerFormula(), effectiveParams);
+        if ("?".equals(effectiveCorrectAnswer)) {
+          effectiveCorrectAnswer = correctAnswer;
+        }
       }
       String fallbackQuestionText = fillTemplateText(template.getTemplateText(), effectiveParams);
 
@@ -2795,26 +2874,34 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         options = new LinkedHashMap<>(templateOptions);
       }
 
-      // Ensure all 4 keys exist
-      if (!optionPlaceholderMode) {
+      // Ensure all 4 keys exist (MCQ-style numeric gaps — not applicable to TRUE_FALSE clauses)
+      if (!optionPlaceholderMode && templateKind != QuestionType.TRUE_FALSE) {
         ensureFourOptions(options, effectiveCorrectAnswer, effectiveParams);
       }
 
-      // Always find the correct key by matching the pre-computed answer
-      String correctKey = findKeyByValue(options, effectiveCorrectAnswer);
-      if (correctKey == null) {
-        // LLM didn't put the correct answer in options — inject it at key A and shift others
-        options.put("A", effectiveCorrectAnswer);
-        correctKey = "A";
-        log.warn(
-            "LLM did not include correct answer '{}' in options — injected at A",
-            effectiveCorrectAnswer);
+      String correctKey;
+      if (templateKind == QuestionType.TRUE_FALSE) {
+        correctKey = correctAnswer != null ? correctAnswer : effectiveCorrectAnswer;
+      } else {
+        correctKey = findKeyByValue(options, effectiveCorrectAnswer);
+        if (correctKey == null) {
+          // LLM didn't put the correct answer in options — inject it at key A and shift others
+          options.put("A", effectiveCorrectAnswer);
+          correctKey = "A";
+          log.warn(
+              "LLM did not include correct answer '{}' in options — injected at A",
+              effectiveCorrectAnswer);
+        }
       }
 
       String answerCalc =
-          template.getAnswerFormula() != null
-              ? template.getAnswerFormula() + " = " + effectiveCorrectAnswer
-              : "= " + effectiveCorrectAnswer;
+          templateKind == QuestionType.TRUE_FALSE
+              ? (correctAnswer != null && !correctAnswer.isBlank()
+                  ? "Các mệnh đề đúng: " + correctAnswer
+                  : "= " + effectiveCorrectAnswer)
+              : (template.getAnswerFormula() != null
+                  ? template.getAnswerFormula() + " = " + effectiveCorrectAnswer
+                  : "= " + effectiveCorrectAnswer);
 
       return GeneratedQuestionSample.builder()
           .questionText(questionText)
