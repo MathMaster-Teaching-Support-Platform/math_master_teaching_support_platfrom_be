@@ -382,8 +382,82 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     // Sanitize JSON: escape unescaped control characters within string values
     // This handles cases where AI generates multi-line strings without proper escaping
     jsonContent = sanitizeJSON(jsonContent);
+    jsonContent = repairInvalidJsonEscapes(jsonContent);
 
     return jsonContent;
+  }
+
+  /**
+   * Jackson rejects LaTeX-style sequences inside JSON strings when the model emits a single
+   * backslash before a letter (e.g. {@code \infty}, {@code \cdot}) — {@code \i} is not a valid JSON
+   * escape. Double the backslash so the parsed string contains one {@code \} for LaTeX.
+   */
+  private static String repairInvalidJsonEscapes(String json) {
+    if (json == null || json.isEmpty()) {
+      return json;
+    }
+    StringBuilder out = new StringBuilder(json.length() + 32);
+    boolean inString = false;
+    int i = 0;
+    while (i < json.length()) {
+      char c = json.charAt(i);
+      if (!inString) {
+        if (c == '"') {
+          inString = true;
+        }
+        out.append(c);
+        i++;
+        continue;
+      }
+      if (c == '"') {
+        inString = false;
+        out.append(c);
+        i++;
+        continue;
+      }
+      if (c == '\\') {
+        if (i + 1 >= json.length()) {
+          out.append("\\\\");
+          i++;
+          break;
+        }
+        char nxt = json.charAt(i + 1);
+        if ("\"\\/bfnrt".indexOf(nxt) >= 0) {
+          out.append('\\').append(nxt);
+          i += 2;
+          continue;
+        }
+        if (nxt == 'u') {
+          if (i + 5 < json.length()) {
+            boolean hexOk = true;
+            for (int k = i + 2; k <= i + 5; k++) {
+              char h = json.charAt(k);
+              hexOk =
+                  (h >= '0' && h <= '9')
+                      || (h >= 'a' && h <= 'f')
+                      || (h >= 'A' && h <= 'F');
+              if (!hexOk) {
+                break;
+              }
+            }
+            if (hexOk) {
+              out.append(json, i, i + 6);
+              i += 6;
+              continue;
+            }
+          }
+          out.append("\\\\u");
+          i += 2;
+          continue;
+        }
+        out.append("\\\\").append(nxt);
+        i += 2;
+        continue;
+      }
+      out.append(c);
+      i++;
+    }
+    return out.toString();
   }
 
   private String sanitizeJSON(String json) {
@@ -2389,7 +2463,18 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
           .append("\" — copy this value into the solution; do not reach a different number.\n");
     }
     p.append(
-        "L9. NEVER output the literal word \"null\" anywhere in explanation or solutionSteps.\n\n");
+        "L9. NEVER output the literal word \"null\" anywhere in explanation or solutionSteps.\n");
+    p.append(
+        "L10. NOTATION — hệ số 1 trước f(x): Nếu đề có dạng \"1f(x)\" hoặc \"1 f(x)\" (chữ số "
+            + "sát ngay trước f(x)), trên nền tảng này đó là NHÂN: $1\\cdot f(x)$, tức cùng ý với "
+            + "$f(x)$ — KHÔNG được hiểu nhầm là nghịch đảo $\\frac{1}{f(x)}$. Trong lời giải hãy "
+            + "viết rõ $f(x)+1=0$ hoặc $1\\cdot f(x)+1=0$; chỉ dùng $\\frac{1}{f(x)}$ khi đề thực "
+            + "sự có phân số phủ cả $f(x)$.\n");
+    p.append(
+        "L11. Đồ thị — đường ngang $y=m$ và $y=f(x)$: Không áp dụng máy móc kiểu \"luôn cắt tại 2 "
+            + "điểm\" khi $m$ trùng cực trị địa phương. Nếu $m$ trùng $y_{\\max}$ hoặc $y_{\\min}$ "
+            + "theo tham số đã cho, đường thẳng có thể tiếp xúc — lượng nghiệm $f(x)=m$ phải khớp "
+            + "logic hình vẽ và các giá trị cực trị đã nêu, không được bịa quy tắc chung.\n\n");
 
     // Detail / depth rules — apply to every generation prompt so every output
     // is a worked walk-through, not a high-level description of the approach.

@@ -93,6 +93,13 @@ artifacts — do not invent content for them.
   coordinate pairs — QuickLaTeX cannot compile that. Use **numeric literals**
   (possibly via `{{param}}` that becomes a number) or `\\pgfmathsetmacro` then
   use the macro name in coordinates.
+- **Coefficient before `f(x)` (platform convention):** Writing `1f(x)` or `1 f(x)`
+  without an operator is ambiguous — many readers assume the reciprocal
+  `\\frac{1}{f(x)}`. **On this platform it means multiplication:** `1 \\cdot f(x)`
+  ≡ `f(x)`. In `templateText` / `solutionStepsTemplate`, never use bare `1f(x)`;
+  prefer **`f(x)+1=0`**, **`1\\cdot f(x)+1=0`**, or **`\\bigl(1\\cdot f(x)\\bigr)+1=0`**
+  with a visible `\\cdot`. Reserve **`\\dfrac{1}{f(x)}`** only when the teacher
+  truly means the reciprocal.
 - **The `warnings` array MUST be written in Vietnamese**, in plain everyday
   language a high-school teacher (not a developer) can understand. Avoid
   technical terms like "questionText", "correctAnswer", "placeholder",

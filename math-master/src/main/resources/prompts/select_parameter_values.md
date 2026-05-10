@@ -65,5 +65,6 @@ distinctness.
   - **`x_axis_bound > x_root_val`** when `x_root_val > 0` so turning points fit on the plot.
   Violating these produces misleading diagrams even when pairwise constraints look OK.
 - **Algebra vs picture:** If `answerFormula` counts horizontal-line intersections for a given graph family, pick tuples where **`-b/a`** (from parameters `a`, `b`) falls in the intended vertical band relative to `y_min_val` / `y_max_val` — do not mix unrelated extremum values with the same counting logic.
+- **Implicit “1” before `f(x)`:** If `templateText` shows `1f(x)` or similar, treat it as **`1 \\cdot f(x)`** (multiplication), **not** `1/f(x)`, unless the template explicitly contains `\\frac{1}{f(x)}` or `\\dfrac{1}{f(x)}`.
 - **Do NOT compute the answer.** That is the substitutor's job downstream — but you MUST satisfy geometric ordering above so the downstream answer matches the drawing.
 - Output **strict JSON only** — no commentary, no code fences, no trailing text.

@@ -22,6 +22,7 @@ import com.fptu.math_master.service.UserSubscriptionService;
 import com.fptu.math_master.util.PromptLoader;
 import com.fptu.math_master.util.SecurityUtils;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -547,7 +548,7 @@ public class BlueprintServiceImpl implements BlueprintService {
     if (formula == null || formula.isBlank()) {
       return Optional.empty();
     }
-    String sub = substituteTupleIntoAnswerFormula(formula, tuple);
+    String sub = substituteBareTupleIdentifiers(substituteTupleIntoAnswerFormula(formula, tuple), tuple);
     if (sub.contains("{{")) {
       return Optional.of(
           "answerFormula còn placeholder sau khi thế tuple — kiểm tra tên {{}} trong công thức. Sau thế: "
@@ -682,6 +683,32 @@ public class BlueprintServiceImpl implements BlueprintService {
     }
     m.appendTail(sb);
     return sb.toString();
+  }
+
+  /**
+   * Same idea as {@code AIEnhancementServiceImpl#evaluateFormula}: blueprints often store
+   * {@code ((a*c+b)**4-b**4)/(4*a)} without {@code {{a}}} wrappers after reverse-AI. Smoke eval
+   * must substitute bare parameter names or JS sees free identifiers.
+   */
+  private static String substituteBareTupleIdentifiers(String expression, Map<String, Object> tuple) {
+    if (tuple == null || tuple.isEmpty()) {
+      return expression;
+    }
+    List<String> keys = new ArrayList<>(tuple.keySet());
+    keys.sort(Comparator.comparingInt(String::length).reversed());
+    String out = expression;
+    for (String key : keys) {
+      if (key == null || !key.matches("[a-zA-Z_][a-zA-Z0-9_]*")) {
+        continue;
+      }
+      Object val = tuple.get(key);
+      if (val == null) {
+        continue;
+      }
+      String insert = Matcher.quoteReplacement(embedNumericPlaceholderSubstitution(val));
+      out = out.replaceAll("\\b" + Pattern.quote(key) + "\\b", insert);
+    }
+    return out;
   }
 
   /** Quick programmatic check; not exhaustive but catches the obvious AI off-by-ones. */
