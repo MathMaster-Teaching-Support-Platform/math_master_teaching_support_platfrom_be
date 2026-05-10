@@ -694,6 +694,73 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
     }
 
     /**
+     * Ordinate labels mistakenly anchored at {@code (axis cs: 0, 0)} should move to {@code (axis cs:
+     * 0, \{-3\})} so the number sits at the correct height on the $y$-axis.
+     */
+    @Test
+    void it_should_repair_axis_origin_numeric_labels_in_diagram_template() {
+      String template = "\\node at (axis cs: 0, 0) {$-3$};";
+      String rendered =
+          invokePrivate(
+              "renderDiagramTemplate",
+              new Class<?>[] {String.class, Map.class},
+              template,
+              Map.of("a", 2));
+
+      assertTrue(rendered.contains("at (axis cs: 0, {-3})"));
+      assertFalse(rendered.contains("axis cs: 0, 0"));
+    }
+
+    /** Path-style {@code (axis cs: 0, 0) node} should anchor ordinate like {@code at} form. */
+    @Test
+    void it_should_repair_axis_origin_path_node_numeric_labels_in_diagram_template() {
+      String template = "\\path (axis cs: 0, 0) node {$5$};";
+      String rendered =
+          invokePrivate(
+              "renderDiagramTemplate",
+              new Class<?>[] {String.class, Map.class},
+              template,
+              Map.of("k", 1));
+
+      assertTrue(rendered.contains("(axis cs: 0, {5}) node"));
+      assertFalse(rendered.contains("axis cs: 0, 0"));
+    }
+
+    /** Parenthesized math {@code $(-3)$} at origin should still map to $y=-3$. */
+    @Test
+    void it_should_repair_axis_origin_labels_with_parenthesized_negative_math() {
+      String template = "\\node at (axis cs: 0, 0) {$(-3)$};";
+      String rendered =
+          invokePrivate(
+              "renderDiagramTemplate",
+              new Class<?>[] {String.class, Map.class},
+              template,
+              Map.of("a", 2));
+
+      assertTrue(rendered.contains("at (axis cs: 0, {-3})"));
+    }
+
+    /**
+     * Quartic $x^4$ graph: one trough label wrongly on the $y$-axis at $(0,c)$ splits to $(\\pm a,
+     * c)$ when params {@code a}, {@code c} match.
+     */
+    @Test
+    void it_should_split_symmetric_trough_label_on_y_axis_for_quartic_when_a_and_c_match() {
+      String template =
+          "\\addplot[smooth] {x^4-5*x^2+4}; \\node[below] at (axis cs: 0, {-3}) {$-3$};";
+      String rendered =
+          invokePrivate(
+              "renderDiagramTemplate",
+              new Class<?>[] {String.class, Map.class},
+              template,
+              Map.of("a", 2, "c", -3));
+
+      assertTrue(rendered.contains("at (axis cs: -2, {(-3)})"));
+      assertTrue(rendered.contains("at (axis cs: 2, {(-3)})"));
+      assertFalse(rendered.contains("at (axis cs: 0, {-3})"));
+    }
+
+    /**
      * Normal case: Sửa dangling double braces về single braces.
      */
     @Test
