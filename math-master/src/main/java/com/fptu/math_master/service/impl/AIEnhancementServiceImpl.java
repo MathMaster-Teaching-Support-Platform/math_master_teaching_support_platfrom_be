@@ -3287,6 +3287,30 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
   private static final Pattern TIKZ_SINGLE_BRACE_ARITHMETIC =
       Pattern.compile("\\{([\\s0-9+\\-*/().,^%]+)\\}");
 
+  /**
+   * Gemini-authored TikZ often pins ordinate labels at {@code (axis cs: 0, 0)} so values like $-3$
+   * draw next to the origin instead of on the $y$-axis at $y=-3$. Move anchor to {@code (axis cs: 0,
+   * \{-3\})} when the node body is a plain numeric inline math label.
+   */
+  private static final Pattern AXIS_CS_ORIGIN_WITH_NUMERIC_MATH_LABEL =
+      Pattern.compile(
+          "at\\s*\\(\\s*axis\\s+cs\\s*:\\s*0\\s*,\\s*0\\s*\\)\\s*\\{\\s*(\\$[^$]*\\$)\\s*\\}",
+          Pattern.CASE_INSENSITIVE);
+
+  /**
+   * Path/draw style: {@code (axis cs: 0, 0) node {$n$}} — same misplaced anchor as {@code at}
+   * form.
+   */
+  private static final Pattern AXIS_CS_ORIGIN_PATH_NODE_NUMERIC_LABEL =
+      Pattern.compile(
+          "\\(\\s*axis\\s+cs\\s*:\\s*0\\s*,\\s*0\\s*\\)\\s+node\\s*\\{\\s*(\\$[^$]*\\$)\\s*\\}",
+          Pattern.CASE_INSENSITIVE);
+
+  private static final Pattern NODE_ON_Y_AXIS_WITH_BRACE_Y_AND_MATH_LABEL =
+      Pattern.compile(
+          "\\\\node(\\[[^\\]]*\\])?\\s*at\\s*\\(\\s*axis\\s+cs\\s*:\\s*0\\s*,\\s*\\{([^}]+)\\}\\s*\\)\\s*\\{\\s*(\\$[^$]*\\$)\\s*\\}",
+          Pattern.CASE_INSENSITIVE);
+
   /** Returns evaluated arithmetic value or null when content is not pure arithmetic. */
   private String tryEvaluate(String expr, Map<String, Object> params) {
     if (expr == null) return null;
@@ -3311,6 +3335,56 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       return t.substring(1, t.length() - 1);
     }
     return t;
+  }
+
+  /**
+   * Parses a single numeric literal from short TikZ math fragments ({@code $-3$}, {@code $(-3)$},
+   * {@code $\\dfrac{6}{2}$} is not supported — returns null).
+   */
+  private Double tryParsePlainNumericFromMathFragment(String innerRaw) {
+    if (innerRaw == null) {
+      return null;
+    }
+    String inner = innerRaw.trim();
+    while (inner.startsWith("\\(") && inner.endsWith("\\)")) {
+      inner = inner.substring(2, inner.length() - 2).trim();
+    }
+    int parenGuard = 0;
+    while (inner.startsWith("(") && inner.endsWith(")") && parenGuard++ < 16) {
+      String stripped = inner.substring(1, inner.length() - 1).trim();
+      if (stripped.matches("-?\\d+(?:\\.\\d+)?")) {
+        inner = stripped;
+        break;
+      }
+      inner = stripped;
+    }
+    if (!inner.matches("-?\\d+(?:\\.\\d+)?")) {
+      return null;
+    }
+    try {
+      return Double.parseDouble(inner);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  private String formatNumericForTikzBraceCoordinate(double v) {
+    if (Double.isNaN(v) || Double.isInfinite(v)) {
+      return null;
+    }
+    if (Math.abs(v - Math.rint(v)) < 1e-9) {
+      return String.valueOf((long) Math.rint(v));
+    }
+    String s = String.format(Locale.ROOT, "%.10f", v).replaceAll("0+$", "").replaceAll("\\.$", "");
+    return s;
+  }
+
+  private boolean latexLooksLikeQuartic(String latex) {
+    if (latex == null || latex.isBlank()) {
+      return false;
+    }
+    String compact = latex.replaceAll("\\s+", "");
+    return compact.contains("x^4") || compact.contains("x^{4}");
   }
 
   private Object resolvePlaceholderValue(String token, Map<String, Object> params) {
@@ -3352,9 +3426,9 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     }
 
     // Strict mode: only replace exact double-brace placeholders (e.g. {{a}} -> 6).
-    // Do not repair or transform any other diagram content.
+    // Still repair known pgfplots anchor bugs even when there are no placeholders.
     if (params == null || params.isEmpty()) {
-      return diagramTemplate;
+      return repairAxisOriginNumericLabels(diagramTemplate);
     }
 
     String rendered = diagramTemplate;
@@ -3381,7 +3455,124 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       return rendered;
     }
     String afterDollarMath = evaluateInlineArithmetic(rendered, params);
-    return simplifyPureArithmeticBraceGroups(afterDollarMath, params);
+    String afterBraces = simplifyPureArithmeticBraceGroups(afterDollarMath, params);
+    String afterOrigin = repairAxisOriginNumericLabels(afterBraces);
+    return repairSymmetricTroughLabelsOnYAxisWhenQuartic(afterOrigin, params);
+  }
+
+  private String repairAxisOriginNumericLabels(String latex) {
+    if (latex == null || latex.isBlank() || !latex.contains("axis cs")) {
+      return latex;
+    }
+    String passAt = repairOriginNumericLabelsWithPattern(latex, AXIS_CS_ORIGIN_WITH_NUMERIC_MATH_LABEL);
+    return repairOriginNumericLabelsWithPattern(passAt, AXIS_CS_ORIGIN_PATH_NODE_NUMERIC_LABEL);
+  }
+
+  /**
+   * Rewrites {@code (axis cs: 0, 0)} + numeric math label to anchor ordinate on the $y$-axis, or
+   * fixes path-style {@code (axis cs: 0, 0) node}.
+   */
+  private String repairOriginNumericLabelsWithPattern(String latex, Pattern pattern) {
+    Matcher m = pattern.matcher(latex);
+    StringBuffer sb = new StringBuffer();
+    while (m.find()) {
+      String dollarBlock = m.group(1).trim();
+      String inner =
+          dollarBlock.length() >= 2 && dollarBlock.startsWith("$") && dollarBlock.endsWith("$")
+              ? dollarBlock.substring(1, dollarBlock.length() - 1).trim()
+              : dollarBlock;
+      Double num = tryParsePlainNumericFromMathFragment(inner);
+      if (num == null) {
+        m.appendReplacement(sb, Matcher.quoteReplacement(m.group(0)));
+        continue;
+      }
+      String braceCoord = formatNumericForTikzBraceCoordinate(num);
+      if (braceCoord == null) {
+        m.appendReplacement(sb, Matcher.quoteReplacement(m.group(0)));
+        continue;
+      }
+      String replacement;
+      if (pattern == AXIS_CS_ORIGIN_PATH_NODE_NUMERIC_LABEL) {
+        replacement = "(axis cs: 0, {" + braceCoord + "}) node {" + dollarBlock + "}";
+      } else {
+        replacement = "at (axis cs: 0, {" + braceCoord + "}) {" + dollarBlock + "}";
+      }
+      m.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+    }
+    m.appendTail(sb);
+    return sb.toString();
+  }
+
+  /**
+   * When a symmetric quartic ($x^4$) mistakenly puts **both** trough ordinates at $x=0$, split one
+   * combined label into two nodes at $x=\\pm a$ if parameters {@code a} (half-offset) and {@code c}
+   * (minimum ordinate) match the rendered coordinates and label.
+   */
+  private String repairSymmetricTroughLabelsOnYAxisWhenQuartic(String latex, Map<String, Object> params) {
+    if (latex == null
+        || latex.isBlank()
+        || params == null
+        || params.isEmpty()
+        || !latexLooksLikeQuartic(latex)) {
+      return latex;
+    }
+    Object aObj = params.get("a");
+    Object cObj = params.get("c");
+    if (!(aObj instanceof Number) || !(cObj instanceof Number)) {
+      return latex;
+    }
+    double a = ((Number) aObj).doubleValue();
+    double c = ((Number) cObj).doubleValue();
+    if (a <= 0) {
+      return latex;
+    }
+    Matcher m = NODE_ON_Y_AXIS_WITH_BRACE_Y_AND_MATH_LABEL.matcher(latex);
+    StringBuffer sb = new StringBuffer();
+    while (m.find()) {
+      String nodeOpts = m.group(1) != null ? m.group(1) : "";
+      String braceInner = m.group(2).trim();
+      String dollarBlock = m.group(3).trim();
+      String inner =
+          dollarBlock.length() >= 2 && dollarBlock.startsWith("$") && dollarBlock.endsWith("$")
+              ? dollarBlock.substring(1, dollarBlock.length() - 1).trim()
+              : dollarBlock;
+      Double yCoord = tryParsePlainNumericFromMathFragment(braceInner);
+      Double labelNum = tryParsePlainNumericFromMathFragment(inner);
+      if (yCoord == null || labelNum == null) {
+        m.appendReplacement(sb, Matcher.quoteReplacement(m.group(0)));
+        continue;
+      }
+      if (Math.abs(yCoord - c) > 1e-5
+          || Math.abs(labelNum - c) > 1e-5
+          || Math.abs(yCoord - labelNum) > 1e-5) {
+        m.appendReplacement(sb, Matcher.quoteReplacement(m.group(0)));
+        continue;
+      }
+      String xa = formatParameterValueForEmbedding(aObj).trim();
+      String negX = "-" + xa;
+      String yEmbed = formatParameterValueForEmbedding(cObj).trim();
+      String replacement =
+          "\\node"
+              + nodeOpts
+              + " at (axis cs: "
+              + negX
+              + ", {"
+              + yEmbed
+              + "}) {"
+              + dollarBlock
+              + "};\n\\node"
+              + nodeOpts
+              + " at (axis cs: "
+              + xa
+              + ", {"
+              + yEmbed
+              + "}) {"
+              + dollarBlock
+              + "}";
+      m.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+    }
+    m.appendTail(sb);
+    return sb.toString();
   }
 
   private String simplifyPureArithmeticBraceGroups(String input, Map<String, Object> params) {

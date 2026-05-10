@@ -106,6 +106,8 @@ artifacts — do not invent content for them.
   `(axis cs: {a}, {m})`, **or** one combined annotation only if it is explicitly tied to both points.
   The peak on the **y-axis** may use `(axis cs: 0, {y_{\\max}})`; a trough **not** on the axis must
   **not** reuse `(axis cs: 0, \\cdots)` for its ordinate label — use the trough's actual `(x, y)`.
+  Do **not** pin an ordinate value at `(axis cs: 0, 0)` — use `(axis cs: 0, {value})` on the $y$-axis
+  or `(axis cs: \\pm x_0, {value})` at each trough; the server auto-fixes `(0,0)+$number$` when possible.
 - **Coefficient before `f(x)` (platform convention):** Writing `1f(x)` or `1 f(x)`
   without an operator is ambiguous — many readers assume the reciprocal
   `\\frac{1}{f(x)}`. **On this platform it means multiplication:** `1 \\cdot f(x)`
