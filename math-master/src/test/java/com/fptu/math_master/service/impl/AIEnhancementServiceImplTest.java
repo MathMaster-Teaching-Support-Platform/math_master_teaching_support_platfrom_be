@@ -170,6 +170,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -194,6 +195,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -221,6 +223,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -251,6 +254,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -277,6 +281,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -298,6 +303,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -318,6 +324,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -339,6 +346,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -359,6 +367,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -378,6 +387,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -397,6 +407,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -421,6 +432,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -441,6 +453,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -461,6 +474,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -489,6 +503,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -527,6 +542,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -557,6 +573,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -588,6 +605,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -618,6 +636,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -639,6 +658,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -659,6 +679,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -679,6 +700,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
   }
@@ -726,6 +748,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -760,6 +783,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -796,6 +820,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -829,6 +854,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -861,6 +887,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
   }
@@ -900,6 +927,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -933,6 +961,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -966,6 +995,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1011,6 +1041,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1049,6 +1080,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1085,6 +1117,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1118,6 +1151,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1161,6 +1195,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1195,6 +1230,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1229,6 +1265,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1268,6 +1305,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1319,6 +1357,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
   }
@@ -1350,6 +1389,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
   }
@@ -1381,6 +1421,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1404,7 +1445,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
               + "\"difficulty\":\"MEDIUM\","
               + "\"usedParameters\":{},"
               + "\"answerCalculation\":\"7 = 7\"}";
-      when(geminiService.sendMessage(anyString())).thenReturn(aiJson);
+      when(geminiService.sendJsonMessage(anyString())).thenReturn(aiJson);
 
       // ===== ACT =====
       GeneratedQuestionSample result = aiEnhancementService.generateQuestion(template, 1);
@@ -1417,7 +1458,8 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
       assertEquals("7", result.getOptions().get("C"));
 
       // ===== VERIFY =====
-      verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, times(1)).sendJsonMessage(anyString());
+      verify(geminiService, never()).sendMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1433,7 +1475,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
     void it_should_return_java_fallback_when_gemini_throws_during_generation() {
       // ===== ARRANGE =====
       QuestionTemplate template = buildConstantAnswerTemplate();
-      when(geminiService.sendMessage(anyString()))
+      when(geminiService.sendJsonMessage(anyString()))
           .thenThrow(new RuntimeException("Network timeout contacting Gemini"));
 
       // ===== ACT =====
@@ -1447,7 +1489,8 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
       assertTrue(result.getExplanation().contains("Áp dụng công thức"));
 
       // ===== VERIFY =====
-      verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, times(1)).sendJsonMessage(anyString());
+      verify(geminiService, never()).sendMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
   }
@@ -1479,6 +1522,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1518,7 +1562,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
               + "\"difficulty\":\"EASY\","
               + "\"usedParameters\":{},"
               + "\"answerCalculation\":\"a+b\"}";
-      when(geminiService.sendMessage(anyString())).thenReturn(aiJson);
+      when(geminiService.sendJsonMessage(anyString())).thenReturn(aiJson);
 
       // ===== ACT =====
       GeneratedQuestionSample result =
@@ -1531,7 +1575,8 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
       assertNotNull(result.getCorrectAnswer());
 
       // ===== VERIFY =====
-      verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, times(1)).sendJsonMessage(anyString());
+      verify(geminiService, never()).sendMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1562,7 +1607,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
               .optionsGenerator(null)
               .diagramTemplate(null)
               .build();
-      when(geminiService.sendMessage(anyString()))
+      when(geminiService.sendJsonMessage(anyString()))
           .thenThrow(new IllegalStateException("Streaming response interrupted"));
 
       // ===== ACT =====
@@ -1577,7 +1622,8 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
       assertEquals("Lua chon A", result.getOptions().get("A"));
 
       // ===== VERIFY =====
-      verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, times(1)).sendJsonMessage(anyString());
+      verify(geminiService, never()).sendMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
   }
@@ -1604,6 +1650,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1643,6 +1690,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1664,6 +1712,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1744,6 +1793,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1767,6 +1817,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1796,6 +1847,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1831,6 +1883,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1872,6 +1925,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1910,6 +1964,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -1943,6 +1998,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2028,6 +2084,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2044,6 +2101,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2088,6 +2146,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2118,6 +2177,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2184,6 +2244,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2210,6 +2271,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2235,6 +2297,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2285,6 +2348,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2314,6 +2378,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2341,6 +2406,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2372,6 +2438,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2391,6 +2458,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2411,6 +2479,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2441,6 +2510,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2484,6 +2554,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2511,6 +2582,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2532,6 +2604,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2586,6 +2659,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2604,7 +2678,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
               .answerFormula("a+1")
               .parameters(Map.of("a", Map.of("type", "integer", "min", 1, "max", 1)))
               .build();
-      when(geminiService.sendMessage(anyString())).thenThrow(new RuntimeException("offline"));
+      when(geminiService.sendJsonMessage(anyString())).thenThrow(new RuntimeException("offline"));
 
       // ===== ACT =====
       GeneratedQuestionSample result =
@@ -2616,7 +2690,8 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
       assertEquals("a+1", result.getAnswerCalculation());
 
       // ===== VERIFY =====
-      verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, times(1)).sendJsonMessage(anyString());
+      verify(geminiService, never()).sendMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2675,6 +2750,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2728,6 +2804,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2769,6 +2846,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2794,6 +2872,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2820,6 +2899,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2846,6 +2926,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2864,6 +2945,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2888,6 +2970,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2905,6 +2988,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2919,6 +3003,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2945,6 +3030,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2965,6 +3051,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -2986,7 +3073,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
               .optionsGenerator(Map.of("A", "1", "B", "2", "C", "3", "D", "4"))
               .build();
 
-      when(geminiService.sendMessage(anyString())).thenThrow(new RuntimeException("offline"));
+      when(geminiService.sendJsonMessage(anyString())).thenThrow(new RuntimeException("offline"));
 
       // ===== ACT =====
       GeneratedQuestionSample result =
@@ -2999,7 +3086,8 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
       assertEquals("A", result.getCorrectAnswer());
 
       // ===== VERIFY =====
-      verify(geminiService, times(1)).sendMessage(anyString());
+      verify(geminiService, times(1)).sendJsonMessage(anyString());
+      verify(geminiService, never()).sendMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3039,6 +3127,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3091,6 +3180,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3141,6 +3231,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3183,6 +3274,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3212,6 +3304,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3230,6 +3323,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3250,6 +3344,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3263,6 +3358,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3300,6 +3396,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3333,6 +3430,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3381,6 +3479,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
 
@@ -3397,6 +3496,7 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
 
       // ===== VERIFY =====
       verify(geminiService, never()).sendMessage(anyString());
+      verify(geminiService, never()).sendJsonMessage(anyString());
       verifyNoMoreInteractions(geminiService);
     }
   }

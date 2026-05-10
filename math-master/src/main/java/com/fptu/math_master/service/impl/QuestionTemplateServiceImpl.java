@@ -562,6 +562,11 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
       List<Question> existingQuestions =
           questionRepository.findByTemplateIdAndNotDeleted(template.getId());
       for (Question q : existingQuestions) {
+        // Rejected / withdrawn drafts must not block picking the same parameter tuple again —
+        // teachers often "sinh lại" after archiving the previous attempt.
+        if (q.getQuestionStatus() == QuestionStatus.ARCHIVED) {
+          continue;
+        }
         if (q.getGenerationMetadata() != null
             && q.getGenerationMetadata().get("usedParameters") instanceof Map<?, ?> m) {
           @SuppressWarnings("unchecked")

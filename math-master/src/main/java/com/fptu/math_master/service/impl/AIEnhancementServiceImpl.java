@@ -832,7 +832,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       // Step 2b: fall back to LLM for question wording + 3 distractors
       String prompt =
           buildGenerationPrompt(template, params, correctAnswerStr, questionTextBase, sampleIndex);
-      String aiContent = geminiService.sendMessage(prompt);
+      String aiContent = geminiService.sendJsonMessage(prompt);
       return parseGeneratedQuestion(
           aiContent, template, params, correctAnswerStr, difficulty, questionTextBase);
     } catch (Exception e) {
@@ -997,7 +997,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     }
     try {
       String prompt = buildPolishPrompt(template, params, correctAnswerStr, stem, rawSteps, options);
-      String aiContent = geminiService.sendMessage(prompt);
+      String aiContent = geminiService.sendJsonMessage(prompt);
       String json = repairTruncatedJson(extractJSON(aiContent));
       JsonNode root = objectMapper.readTree(json);
 
@@ -1272,7 +1272,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       try {
         String prompt =
             buildGenerationPrompt(template, params, correctAnswer, questionText, sampleIndex);
-        String aiContent = geminiService.sendMessage(prompt);
+        String aiContent = geminiService.sendJsonMessage(prompt);
         return parseGeneratedQuestion(
             aiContent, template, params, correctAnswer, difficulty, questionText);
       } catch (Exception aiError) {
@@ -1393,7 +1393,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       try {
         String prompt =
             buildGenerationPrompt(template, params, correctAnswer, questionStem, sampleIndex);
-        String aiContent = geminiService.sendMessage(prompt);
+        String aiContent = geminiService.sendJsonMessage(prompt);
         GeneratedQuestionSample aiGenerated =
             parseGeneratedQuestion(
                 aiContent, template, params, correctAnswer, difficulty, questionStem);
@@ -1499,10 +1499,10 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
               canonicalQuestion,
               template,
               params,
-              fallbackQuestionText,
-              fallbackExplanation,
-              sampleIndex);
-      String aiContent = geminiService.sendMessage(prompt);
+          fallbackQuestionText,
+          fallbackExplanation,
+          sampleIndex);
+      String aiContent = geminiService.sendJsonMessage(prompt);
       return parseCanonicalGeneratedQuestion(
           aiContent,
           template,
@@ -3671,7 +3671,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
     String prompt = buildExtractParametersPrompt(request);
     try {
-      String aiContent = geminiService.sendMessage(prompt);
+      String aiContent = geminiService.sendJsonMessage(prompt);
       return parseExtractParametersResponse(aiContent);
     } catch (Exception e) {
       log.error("[Feature1] extractParameters AI call failed: {}", e.getMessage(), e);
@@ -3802,7 +3802,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
     log.info("[Feature2] Generating parameter values for templateId={}", templateId);
     String prompt = buildGenerateParametersPrompt(request, null);
     try {
-      String aiContent = geminiService.sendMessage(prompt);
+      String aiContent = geminiService.sendJsonMessage(prompt);
       GenerateParametersResponse response = parseGenerateParametersResponse(aiContent);
       // Build filled text preview
       if (request.getTemplateText() != null && response.getParameters() != null) {
@@ -3826,7 +3826,7 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         request.getTeacherCommand());
     String prompt = buildUpdateParametersPrompt(request);
     try {
-      String aiContent = geminiService.sendMessage(prompt);
+      String aiContent = geminiService.sendJsonMessage(prompt);
       GenerateParametersResponse response = parseGenerateParametersResponse(aiContent);
       if (request.getTemplateText() != null && response.getParameters() != null) {
         String preview =
