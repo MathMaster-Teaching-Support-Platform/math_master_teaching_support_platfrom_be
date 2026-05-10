@@ -21,7 +21,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.LinkedHashMap;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Map;
 import java.util.Optional;
@@ -495,36 +494,74 @@ public class LatexRenderServiceImpl implements LatexRenderService {
     if (!latex.contains("\\pgfmathsetmacro")) {
       return latex;
     }
-    // Match: \pgfmathsetmacro{\name}{expression}  (optional trailing whitespace / newline)
-    Pattern macroPattern = Pattern.compile(
-        "\\\\pgfmathsetmacro\\s*\\{\\\\([a-zA-Z]+)\\}\\s*\\{([^}]+)\\}[ \\t]*\\r?\\n?");
-    Matcher m = macroPattern.matcher(latex);
+    String original = latex;
     Map<String, String> macros = new LinkedHashMap<>();
-    StringBuffer sb = new StringBuffer();
-    while (m.find()) {
-      String name = m.group(1);
-      String expr = m.group(2).trim();
+    String cur = latex;
+    for (int guard = 0; guard < 500; guard++) {
+      int idx = cur.indexOf("\\pgfmathsetmacro");
+      if (idx < 0) {
+        break;
+      }
+      int p = idx + "\\pgfmathsetmacro".length();
+      while (p < cur.length() && Character.isWhitespace(cur.charAt(p))) {
+        p++;
+      }
+      if (p >= cur.length() || cur.charAt(p) != '{') {
+        break;
+      }
+      int closeName = findMatchingBrace(cur, p);
+      if (closeName < 0) {
+        break;
+      }
+      String nameBody = cur.substring(p + 1, closeName).trim();
+      String macroName =
+          nameBody.startsWith("\\") && nameBody.length() > 1
+              ? nameBody.substring(1)
+              : nameBody;
+      int q = closeName + 1;
+      while (q < cur.length() && Character.isWhitespace(cur.charAt(q))) {
+        q++;
+      }
+      if (q >= cur.length() || cur.charAt(q) != '{') {
+        break;
+      }
+      int closeExpr = findMatchingBrace(cur, q);
+      if (closeExpr < 0) {
+        break;
+      }
+      String expr = cur.substring(q + 1, closeExpr);
+      int lineEnd = closeExpr + 1;
+      while (lineEnd < cur.length() && (cur.charAt(lineEnd) == ' ' || cur.charAt(lineEnd) == '\t')) {
+        lineEnd++;
+      }
+      if (lineEnd < cur.length() && cur.charAt(lineEnd) == '\r') {
+        lineEnd++;
+      }
+      if (lineEnd < cur.length() && cur.charAt(lineEnd) == '\n') {
+        lineEnd++;
+      }
       try {
         double value = evalPgfmathExpr(expr);
-        // Format as integer when possible, otherwise as compact decimal.
         String valueStr;
         if (value == Math.floor(value) && !Double.isInfinite(value) && Math.abs(value) < 1e12) {
           valueStr = String.valueOf((long) value);
         } else {
           valueStr = String.format("%.6g", value).replaceAll("0+$", "").replaceAll("\\.$", "");
         }
-        macros.put(name, valueStr);
-        m.appendReplacement(sb, ""); // drop the \pgfmathsetmacro line
-        log.info("[LatexNorm] pgfmathsetmacro name={} evaluated to {} (expr={})", name, valueStr, expr);
+        macros.put(macroName, valueStr);
+        cur = cur.substring(0, idx) + cur.substring(lineEnd);
+        log.info(
+            "[LatexNorm] pgfmathsetmacro name={} evaluated to {} (expr={})", macroName, valueStr, expr);
       } catch (Exception e) {
-        log.warn("[LatexNorm] pgfmathsetmacro name={} expr='{}' could not be evaluated ({}), leaving as-is",
-            name, expr, e.getMessage());
-        m.appendReplacement(sb, Matcher.quoteReplacement(m.group(0)));
+        log.warn(
+            "[LatexNorm] pgfmathsetmacro name={} expr='{}' could not be evaluated ({}), leaving as-is",
+            macroName,
+            expr,
+            e.getMessage());
+        return original;
       }
     }
-    m.appendTail(sb);
-    String result = sb.toString();
-    // Replace every \name usage with the computed value.
+    String result = cur;
     for (Map.Entry<String, String> entry : macros.entrySet()) {
       result = result.replace("\\" + entry.getKey(), entry.getValue());
     }
@@ -533,10 +570,31 @@ public class LatexRenderServiceImpl implements LatexRenderService {
 
   /**
    * Evaluates a pgfmath-style arithmetic expression to a {@code double}.
-   * Supports {@code + - * / ^}, parentheses, and unary/double negatives.
+   * Supports {@code + - * / ^}, parentheses, unary/double negatives, optional outer {@code {...}},
+   * TeX {@code \\sqrt(...)}, and {@code sqrt(...)}.
    */
   private static double evalPgfmathExpr(String raw) {
-    return new PgfmathExprParser(raw).parseExpr();
+    String normalized = normalizePgfmathEvalExpr(raw);
+    return new PgfmathExprParser(normalized).parseExpr();
+  }
+
+  /** Strips outer braces, replaces TeX {@code \\sqrt} with {@code sqrt}, trims. */
+  private static String normalizePgfmathEvalExpr(String raw) {
+    if (raw == null) {
+      return "";
+    }
+    String t = raw.trim().replace("\\sqrt", "sqrt");
+    for (int g = 0; g < 24; g++) {
+      if (t.length() >= 2 && t.startsWith("{")) {
+        int close = findMatchingBrace(t, 0);
+        if (close == t.length() - 1) {
+          t = t.substring(1, close).trim();
+          continue;
+        }
+      }
+      break;
+    }
+    return t;
   }
 
   private static final class PgfmathExprParser {

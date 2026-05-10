@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import java.util.regex.Matcher;
@@ -507,6 +508,14 @@ public class BlueprintServiceImpl implements BlueprintService {
               + "tuple="
               + tuple);
     }
+    Optional<String> globalFail = globalConstraintsFailureReason(template, tuple);
+    if (globalFail.isPresent()) {
+      return globalFail;
+    }
+    Optional<String> wShapeFail = wShapeHorizontalLineSemanticFailure(template, tuple);
+    if (wShapeFail.isPresent()) {
+      return wShapeFail;
+    }
     if (!passesSemanticAxisOrdering(tuple)) {
       return Optional.of(
           "semantic_axis: y_min_val/y_max_val hoặc biên trục không hợp lý — tuple=" + tuple);
@@ -594,17 +603,132 @@ public class BlueprintServiceImpl implements BlueprintService {
     return out;
   }
 
-  private static String buildJsSmokeExpression(String substitutedFormula) {
-    // Align with AIEnhancementServiceImpl#evaluateFormula JS path: bare sqrt/abs are not globals.
+  /**
+   * Shared normalization for {@link #answerFormulaSmokeFailureReason} (numeric) and {@link
+   * #globalConstraintsFailureReason} (boolean inequalities).
+   */
+  private static String normalizeMathExpressionForJavaScript(String substituted) {
+    if (substituted == null) {
+      return "";
+    }
     String s =
-        normalizeFracChainForJsSmoke(substitutedFormula.trim())
+        normalizeFracChainForJsSmoke(substituted.trim())
             .replace('$', ' ')
             .replace('\u2212', '-')
             .replace('−', '-')
             .replace("^", "**");
+    s = s.replace("≤", "<=").replace("≥", ">=").replace("≠", "!=");
     return s.replaceAll("(?i)\\bsqrt\\s*\\(", "Math.sqrt(")
         .replaceAll("(?i)\\babs\\s*\\(", "Math.abs(")
         .trim();
+  }
+
+  private static String buildJsSmokeExpression(String substitutedFormula) {
+    return normalizeMathExpressionForJavaScript(substitutedFormula);
+  }
+
+  /**
+   * Validates {@link QuestionTemplate#getGlobalConstraints()} after substituting the tuple (same idea
+   * as answerFormula smoke, but each constraint must evaluate to {@code true} in JS).
+   */
+  private Optional<String> globalConstraintsFailureReason(
+      QuestionTemplate template, Map<String, Object> tuple) {
+    String[] gcs = template.getGlobalConstraints();
+    if (gcs == null || gcs.length == 0) {
+      return Optional.empty();
+    }
+    ScriptEngine engine = resolveScriptEngine();
+    if (engine == null) {
+      return Optional.empty();
+    }
+    for (String raw : gcs) {
+      if (raw == null || raw.isBlank()) {
+        continue;
+      }
+      String sub =
+          substituteBareTupleIdentifiers(substituteTupleIntoAnswerFormula(raw.trim(), tuple), tuple);
+      if (sub.contains("{{")) {
+        return Optional.of(
+            "globalConstraint còn placeholder sau khi thế tuple — constraint="
+                + raw
+                + " → "
+                + sub);
+      }
+      String js = normalizeMathExpressionForJavaScript(sub);
+      try {
+        Object r = engine.eval(js);
+        if (r instanceof Boolean bool && !bool) {
+          return Optional.of(
+              "globalConstraint không thỏa (false): "
+                  + raw
+                  + " → "
+                  + sub
+                  + " → "
+                  + js);
+        }
+      } catch (Exception e) {
+        return Optional.of(
+            "globalConstraint không evaluate được: "
+                + raw
+                + " → "
+                + js
+                + " — "
+                + e.getMessage());
+      }
+    }
+    return Optional.empty();
+  }
+
+  /**
+   * When the template is clearly {@code {{a}}f(x)+{{b}}=0}-style and parameters {@code a,b,c,d,e}
+   * describe {@code f(x)=c(x^2-d)^2-e}, require the horizontal line {@code y=-b/a} to lie strictly
+   * between the trough ordinate {@code -e} and the on-axis peak {@code c d^2 - e} so “four cuts” is
+   * geometrically consistent (backup when AI omits or miswrites {@code globalConstraints}).
+   */
+  private static Optional<String> wShapeHorizontalLineSemanticFailure(
+      QuestionTemplate template, Map<String, Object> tuple) {
+    if (!templateLooksLikeParameterizedAfPlusB(template)) {
+      return Optional.empty();
+    }
+    if (!tuple.keySet().containsAll(Set.of("a", "b", "c", "d", "e"))) {
+      return Optional.empty();
+    }
+    try {
+      double a = Double.parseDouble(tuple.get("a").toString());
+      double b = Double.parseDouble(tuple.get("b").toString());
+      double c = Double.parseDouble(tuple.get("c").toString());
+      double d = Double.parseDouble(tuple.get("d").toString());
+      double e = Double.parseDouble(tuple.get("e").toString());
+      if (Math.abs(a) < 1e-12) {
+        return Optional.of("semantic_wshape: a phải khác 0 — tuple=" + tuple);
+      }
+      double lineY = -b / a;
+      double yTrough = -e;
+      double yPeak = c * d * d - e;
+      double eps = 1e-6;
+      if (!(lineY > yTrough + eps && lineY < yPeak - eps)) {
+        return Optional.of(
+            "semantic_wshape: đường y=-b/a="
+                + lineY
+                + " phải nằm nghiêm giữa cực tiểu y="
+                + yTrough
+                + " và đỉnh (Oy) y="
+                + yPeak
+                + " — tuple="
+                + tuple);
+      }
+    } catch (Exception ex) {
+      return Optional.empty();
+    }
+    return Optional.empty();
+  }
+
+  private static boolean templateLooksLikeParameterizedAfPlusB(QuestionTemplate t) {
+    String bundle =
+        (t.getTemplateText() == null ? "" : t.getTemplateText())
+            + "\n"
+            + (t.getDiagramTemplate() == null ? "" : t.getDiagramTemplate());
+    return bundle.contains("{{a}}") && bundle.contains("{{b}}") && bundle.contains("f(x)");
   }
 
   @Override

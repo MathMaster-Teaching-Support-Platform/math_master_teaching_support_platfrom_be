@@ -2075,6 +2075,14 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
         expression = expression.replaceAll("\\b" + Pattern.quote(paramName) + "\\b", insert);
       }
 
+      if (looksLikeCoordinateOrDiagramLeak(expression)) {
+        log.debug(
+            "Formula '{}' after substitution looks like TikZ/coordinates (not pure arithmetic) — {}",
+            formula,
+            expression);
+        return "?";
+      }
+
       log.debug("Evaluating formula: '{}' with substituted expression: '{}'", formula, expression);
       double result = parseArithmetic(expression);
       log.debug("Formula evaluation result: {}", result);
@@ -2090,6 +2098,18 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       log.warn("Simple formula evaluation failed for '{}': {}", formula, e.getMessage());
       return "?";
     }
+  }
+
+  /**
+   * Detects junk like {@code (0.3^3) (3,(1*3+3)^3)} — nested commas/parens from diagram text pasted into
+   * answerFormula — which is not valid single arithmetic.
+   */
+  private static boolean looksLikeCoordinateOrDiagramLeak(String expression) {
+    if (expression == null || expression.isBlank()) {
+      return false;
+    }
+    String s = expression.replaceAll("\\s+", "");
+    return s.contains(",(");
   }
 
   /** Parse and evaluate arithmetic expression like "(1) - (1) / (1)" */

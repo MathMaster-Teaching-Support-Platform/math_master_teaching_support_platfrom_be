@@ -108,6 +108,11 @@ artifacts — do not invent content for them.
   **not** reuse `(axis cs: 0, \\cdots)` for its ordinate label — use the trough's actual `(x, y)`.
   Do **not** pin an ordinate value at `(axis cs: 0, 0)` — use `(axis cs: 0, {value})` on the $y$-axis
   or `(axis cs: \\pm x_0, {value})` at each trough; the server auto-fixes `(0,0)+$number$` when possible.
+- **Counting solutions / line $y=m$ vs graph ($a f(x)+b=0$ style):** When the question reduces to the number of intersections of $y=f(x)$ with $y=-b/a$, you MUST record **globalConstraints** so every generated parameter tuple keeps $y=-b/a$ **strictly between** the relevant local minimum and the axis intercept peak for the quartic shape you encode (for $f(x)=c(x^2-d)^2-e$ with minima at $y=-e$ and peak on the $y$-axis at $y=c d^2-e$, require chains such as \`-e < -b/a < c d^2 - e\`). The server **rejects** tuples that violate these inequalities or the geometric backup check for templates that mention `{{a}}`, `{{b}}`, and `f(x)`.
+- **diagramTemplate for such graphs:** Prefer a **short fragment** (`\\begin{tikzpicture}…\\end{tikzpicture}` only). Avoid stuffing extra `\\documentclass{standalone}…\\end{document}` unless necessary — the platform strips `\\begin{document}` bodies, but extra wrappers confuse models.
+- **\\pgfmathsetmacro:** Use **one** surrounding brace pair for the whole expression, e.g. `\\pgfmathsetmacro{\\ymaxval}{{ {{c}}*(({{d}})^2) - {{e}} }}` — never emit triple-stacked `{{{c}}*{{d}}*{{d}}` which breaks after substitution.
+- **Axes longer than features:** Choose axis bounds so every extremum and the horizontal guide $y=-b/a$ stay **inside** the window with margin (e.g. $|x|$ past $\\sqrt{d}$ by at least ~1; $y_{\\min}$ below $\\min(-e,-b/a)$; $y_{\\max}$ above $\\max(c d^2-e,-b/a)$).
+- **Tick labels:** After `\\pgfmathsetmacro`, show numbers with `\\pgfmathprintnumber` or literal evaluated forms — avoid putting macro names like `$-\\xminval$` inside math mode if they render as text instead of decimals.
 - **Coefficient before `f(x)` (platform convention):** Writing `1f(x)` or `1 f(x)`
   without an operator is ambiguous — many readers assume the reciprocal
   `\\frac{1}{f(x)}`. **On this platform it means multiplication:** `1 \\cdot f(x)`
