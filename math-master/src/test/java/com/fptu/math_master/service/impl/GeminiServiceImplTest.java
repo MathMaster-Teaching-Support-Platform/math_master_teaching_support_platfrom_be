@@ -517,10 +517,11 @@ class GeminiServiceImplTest extends BaseUnitTest {
       assertTrue(exception.getMessage().contains("Failed to analyze image with Gemini API"));
 
       // ===== VERIFY =====
-      verify(geminiProperties, times(2)).getModel();
-      verify(geminiProperties, times(1)).getApiKey();
-      verify(geminiRestClient, times(1)).post();
-      verify(requestBodySpec, times(1)).exchange(any());
+      // 429 is retried up to MAX_RETRY_ATTEMPTS; each attempt builds URI with getModel/getApiKey.
+      verify(geminiProperties, times(5)).getModel();
+      verify(geminiProperties, times(4)).getApiKey();
+      verify(geminiRestClient, times(4)).post();
+      verify(requestBodySpec, times(4)).exchange(any());
       verifyNoMoreInteractions(geminiProperties, geminiRestClient);
     }
 
