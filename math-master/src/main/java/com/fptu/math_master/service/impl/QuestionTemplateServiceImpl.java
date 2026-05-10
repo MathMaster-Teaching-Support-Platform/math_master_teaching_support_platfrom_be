@@ -593,10 +593,12 @@ public class QuestionTemplateServiceImpl implements QuestionTemplateService {
         log.warn("[gen] template {} has no parameters; selector returned empty", template.getId());
       } else if (noConstraints) {
         warning =
-            "AI selector trả về 0 bộ giá trị mặc dù mẫu không có ràng buộc — "
-                + "có thể Gemini bị lỗi tạm thời. Hãy thử lại sau ít phút.";
+            "Không có bộ giá trị nào được chấp nhận: Gemini có thể đã trả tuple nhưng tất cả bị lọc "
+                + "(constraintText trên biến, thứ tự trục, hoặc kiểm tra answerFormula). "
+                + "Xem log backend WARN [Blueprint] để biết lý do đầu tiên; hoặc chỉnh constraint/công thức.";
         log.warn(
-            "[gen] template {} has no globalConstraints but selector returned empty — likely AI hiccup",
+            "[gen] template {} selector returned empty without globalConstraints — "
+                + "often all tuples rejected by validation (not necessarily Gemini); see [Blueprint] WARN",
             template.getId());
       } else {
         warning =

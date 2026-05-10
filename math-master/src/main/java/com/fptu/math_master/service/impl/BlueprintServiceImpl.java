@@ -456,8 +456,11 @@ public class BlueprintServiceImpl implements BlueprintService {
     if (arr == null || !arr.isArray()) return List.of();
 
     List<Map<String, Object>> validSets = new ArrayList<>();
+    int rawCount = 0;
+    String firstFailure = null;
     for (JsonNode set : arr) {
       if (!set.isObject()) continue;
+      rawCount++;
       Map<String, Object> tuple = new LinkedHashMap<>();
       set.fields().forEachRemaining(e -> {
         if (e.getKey().startsWith("_")) return;
@@ -466,15 +469,136 @@ public class BlueprintServiceImpl implements BlueprintService {
         else if (v.isDouble() || v.isFloat()) tuple.put(e.getKey(), v.asDouble());
         else tuple.put(e.getKey(), v.asText(""));
       });
-      if (passesGuardrails(tuple, params)
-          && passesSemanticAxisOrdering(tuple)
-          && passesAnswerFormulaSmoke(template, tuple)) {
+      Optional<String> fail = describeTupleRejection(template, params, tuple);
+      if (fail.isEmpty()) {
         validSets.add(tuple);
-      } else {
-        log.debug("[Blueprint] dropped AI tuple {} (guardrails / axis ordering / answerFormula smoke)", tuple);
+      } else if (firstFailure == null) {
+        firstFailure = fail.get();
+        log.debug("[Blueprint] dropped tuple {} — {}", tuple, fail.get());
       }
     }
+    if (rawCount > 0 && validSets.isEmpty()) {
+      log.warn(
+          "[Blueprint] AI returned {} parameter tuple(s) but ALL were rejected for template {}. "
+              + "First reason: {}",
+          rawCount,
+          template.getId(),
+          firstFailure != null ? firstFailure : "(unknown)");
+    }
     return validSets;
+  }
+
+  /**
+   * Non-empty if this tuple must not be used; combines guardrails, axis ordering, and answerFormula
+   * smoke — same predicates as before but with actionable messages for logs and ops.
+   */
+  private Optional<String> describeTupleRejection(
+      QuestionTemplate template,
+      List<BlueprintParameter> params,
+      Map<String, Object> tuple) {
+    Optional<String> missing = missingTemplateParameterKeys(tuple, params);
+    if (missing.isPresent()) {
+      return missing;
+    }
+    if (!passesGuardrails(tuple, params)) {
+      return Optional.of(
+          "guardrails (constraintText): một hoặc nhiều giá trị không khớp integer/even/range/prime… — "
+              + "tuple="
+              + tuple);
+    }
+    if (!passesSemanticAxisOrdering(tuple)) {
+      return Optional.of(
+          "semantic_axis: y_min_val/y_max_val hoặc biên trục không hợp lý — tuple=" + tuple);
+    }
+    Optional<String> smoke = answerFormulaSmokeFailureReason(template, tuple);
+    if (smoke.isPresent()) {
+      return smoke;
+    }
+    return Optional.empty();
+  }
+
+  private static Optional<String> missingTemplateParameterKeys(
+      Map<String, Object> tuple, List<BlueprintParameter> params) {
+    List<String> missing = new ArrayList<>();
+    for (BlueprintParameter p : params) {
+      String name = p.getName();
+      if (name == null || name.isBlank()) {
+        continue;
+      }
+      if (!tuple.containsKey(name)) {
+        missing.add(name);
+      }
+    }
+    if (missing.isEmpty()) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        "tuple thiếu khóa mẫu cần có: "
+            + String.join(", ", missing)
+            + " — Gemini phải trả đủ "
+            + missing.size()
+            + " biến (tên khớp chính xác). Tuple nhận được: "
+            + tuple.keySet());
+  }
+
+  private Optional<String> answerFormulaSmokeFailureReason(
+      QuestionTemplate template, Map<String, Object> tuple) {
+    String formula = template.getAnswerFormula();
+    if (formula == null || formula.isBlank()) {
+      return Optional.empty();
+    }
+    String sub = substituteTupleIntoAnswerFormula(formula, tuple);
+    if (sub.contains("{{")) {
+      return Optional.of(
+          "answerFormula còn placeholder sau khi thế tuple — kiểm tra tên {{}} trong công thức. Sau thế: "
+              + sub);
+    }
+    String js = buildJsSmokeExpression(sub);
+    ScriptEngine engine = resolveScriptEngine();
+    if (engine == null) {
+      return Optional.empty();
+    }
+    try {
+      Object r = engine.eval(js);
+      if (r instanceof Number n) {
+        double d = n.doubleValue();
+        if (Double.isNaN(d) || Double.isInfinite(d)) {
+          return Optional.of("answerFormula cho NaN/Infinity — expr=" + js);
+        }
+        return Optional.empty();
+      }
+      if (r instanceof Boolean b) {
+        return b ? Optional.empty() : Optional.of("answerFormula boolean false — expr=" + js);
+      }
+      if (r != null) {
+        return Optional.empty();
+      }
+      return Optional.of("answerFormula null — expr=" + js);
+    } catch (Exception e) {
+      return Optional.of(
+          "answerFormula không evaluate được — expr=\"" + js + "\" — " + e.getMessage());
+    }
+  }
+
+  /** Same \\frac → ((a)/(b)) idea as {@code AIEnhancementServiceImpl#normalizeFormulaForEvaluation}. */
+  private static String normalizeFracChainForJsSmoke(String normalized) {
+    String out = normalized;
+    Pattern fracPattern = Pattern.compile("\\\\+frac\\{([^{}]+)\\}\\{([^{}]+)\\}");
+    String previous;
+    do {
+      previous = out;
+      Matcher m = fracPattern.matcher(out);
+      out = m.replaceAll("(($1)/($2))");
+    } while (!out.equals(previous));
+    return out;
+  }
+
+  private static String buildJsSmokeExpression(String substitutedFormula) {
+    return normalizeFracChainForJsSmoke(substitutedFormula.trim())
+        .replace('$', ' ')
+        .replace('\u2212', '-')
+        .replace('−', '-')
+        .replace("^", "**");
   }
 
   @Override
@@ -535,46 +659,6 @@ public class BlueprintServiceImpl implements BlueprintService {
       return Double.parseDouble(v.toString());
     } catch (NumberFormatException e) {
       return null;
-    }
-  }
-
-  /**
-   * Substitute tuple into {@link QuestionTemplate#getAnswerFormula()} and evaluate as JavaScript
-   * (same family as generation). Drops tuples that still contain placeholders or evaluate to
-   * NaN/Infinity / script error — catches inconsistent AI samples without trusting prose constraints.
-   */
-  private boolean passesAnswerFormulaSmoke(QuestionTemplate template, Map<String, Object> tuple) {
-    String formula = template.getAnswerFormula();
-    if (formula == null || formula.isBlank()) {
-      return true;
-    }
-    String sub = substituteTupleIntoAnswerFormula(formula, tuple);
-    if (sub.contains("{{")) {
-      return false;
-    }
-    String js =
-        sub.trim()
-            .replace('$', ' ')
-            .replace('\u2212', '-')
-            .replace('−', '-')
-            .replace("^", "**");
-    ScriptEngine engine = resolveScriptEngine();
-    if (engine == null) {
-      return true;
-    }
-    try {
-      Object r = engine.eval(js);
-      if (r instanceof Number n) {
-        double d = n.doubleValue();
-        return !Double.isNaN(d) && !Double.isInfinite(d);
-      }
-      if (r instanceof Boolean b) {
-        return b;
-      }
-      return r != null;
-    } catch (Exception e) {
-      log.debug("[Blueprint] answerFormula smoke failed for '{}': {}", js, e.getMessage());
-      return false;
     }
   }
 
