@@ -97,6 +97,15 @@ artifacts — do not invent content for them.
   `(axis cs: 0, {4+{{c}}})` — after substitution the backend simplifies `{4+(-2)}` → `{2}`.
   For labels, put arithmetic in **inline math**: `$4+{{c}}$` → `$2$` so text does not show
   unevaluated `4+(-2)` when a parameter is negative.
+- **Label anchors (critical — avoids floating labels):** Every `\\node`, `\\pin`, or label giving a
+  numeric extremum/intercept MUST be anchored at **that point's axis coordinates**, i.e.
+  `at (axis cs: <x>, <y>)` where `<x>` and `<y>` match the feature (use `{…}` around arithmetic).
+  **Never** attach a minimum/maximum value label near `(axis cs: 0, 0)` or an arbitrary tick unless
+  that feature really lies there. For **two symmetric minima** at `x = \\pm a` and height `y = m`,
+  use **two** nodes, e.g. `\\node[below] at (axis cs: {-a}, {m}) {$\\cdots$}` and the mirror at
+  `(axis cs: {a}, {m})`, **or** one combined annotation only if it is explicitly tied to both points.
+  The peak on the **y-axis** may use `(axis cs: 0, {y_{\\max}})`; a trough **not** on the axis must
+  **not** reuse `(axis cs: 0, \\cdots)` for its ordinate label — use the trough's actual `(x, y)`.
 - **Coefficient before `f(x)` (platform convention):** Writing `1f(x)` or `1 f(x)`
   without an operator is ambiguous — many readers assume the reciprocal
   `\\frac{1}{f(x)}`. **On this platform it means multiplication:** `1 \\cdot f(x)`
