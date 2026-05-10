@@ -663,6 +663,37 @@ class AIEnhancementServiceImplTest extends BaseUnitTest {
     }
 
     /**
+     * Diagram post-processing: simplify arithmetic in {@code $...$} after embedding negatives as
+     * {@code (-2)} so teachers see {@code $2$}, not {@code $4+(-2)$}.
+     */
+    @Test
+    void it_should_simplify_pure_arithmetic_inside_dollar_math_in_diagram_template() {
+      String template = "peak label $4+{{c}}$";
+      String rendered =
+          invokePrivate(
+              "renderDiagramTemplate",
+              new Class<?>[] {String.class, Map.class},
+              template,
+              Map.of("c", -2));
+
+      assertEquals("peak label $2$", rendered);
+    }
+
+    /** pgfplots/TikZ brace groups {@code {4+(-2)}} must collapse to {@code {2}} for correct coords. */
+    @Test
+    void it_should_simplify_pure_arithmetic_brace_groups_in_diagram_template() {
+      String template = "(axis cs: 0, {4+(-2)})";
+      String rendered =
+          invokePrivate(
+              "renderDiagramTemplate",
+              new Class<?>[] {String.class, Map.class},
+              template,
+              Map.of("c", -2));
+
+      assertEquals("(axis cs: 0, {2})", rendered);
+    }
+
+    /**
      * Normal case: Sửa dangling double braces về single braces.
      */
     @Test

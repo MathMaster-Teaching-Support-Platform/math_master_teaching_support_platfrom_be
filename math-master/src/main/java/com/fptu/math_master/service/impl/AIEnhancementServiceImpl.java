@@ -3280,6 +3280,13 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
 
   private static final Pattern INLINE_MATH_BLOCK = Pattern.compile("\\$([^$]+)\\$");
 
+  /**
+   * TikZ/pgfplots often wraps numeric expressions in braces, e.g. {@code (axis cs: 0, {4+(-2)})}.
+   * Only digits/operators — never matches {@code \\begin{axis}} ({@code axis} has letters).
+   */
+  private static final Pattern TIKZ_SINGLE_BRACE_ARITHMETIC =
+      Pattern.compile("\\{([\\s0-9+\\-*/().,^%]+)\\}");
+
   /** Returns evaluated arithmetic value or null when content is not pure arithmetic. */
   private String tryEvaluate(String expr, Map<String, Object> params) {
     if (expr == null) return null;
@@ -3361,7 +3368,33 @@ public class AIEnhancementServiceImpl implements AIEnhancementService {
       rendered = rendered.replace(token, value);
     }
 
-    return rendered;
+    return postProcessDiagramAfterSubstitution(rendered, params);
+  }
+
+  /**
+   * Collapses pure arithmetic after placeholders are embedded (same idea as {@link
+   * #renderOptionValue}): {@code $4+(-2)$} → {@code $2$}, and {@code {4+(-2)}} → {@code {2}} for
+   * pgfplots coordinates so labels sit at the computed ordinates.
+   */
+  private String postProcessDiagramAfterSubstitution(String rendered, Map<String, Object> params) {
+    if (rendered == null || rendered.isBlank()) {
+      return rendered;
+    }
+    String afterDollarMath = evaluateInlineArithmetic(rendered, params);
+    return simplifyPureArithmeticBraceGroups(afterDollarMath, params);
+  }
+
+  private String simplifyPureArithmeticBraceGroups(String input, Map<String, Object> params) {
+    Matcher m = TIKZ_SINGLE_BRACE_ARITHMETIC.matcher(input);
+    StringBuffer sb = new StringBuffer();
+    while (m.find()) {
+      String inner = m.group(1).trim();
+      String evaluated = tryEvaluate(inner, params);
+      String replacement = evaluated != null ? "{" + evaluated + "}" : m.group();
+      m.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+    }
+    m.appendTail(sb);
+    return sb.toString();
   }
 
   private String repairDanglingRenderedDoubleBraces(String input) {
