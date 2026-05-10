@@ -93,6 +93,10 @@ artifacts — do not invent content for them.
   coordinate pairs — QuickLaTeX cannot compile that. Use **numeric literals**
   (possibly via `{{param}}` that becomes a number) or `\\pgfmathsetmacro` then
   use the macro name in coordinates.
+- **Expressions in diagrams:** For pgfplots, wrap arithmetic in **braces**, e.g.
+  `(axis cs: 0, {4+{{c}}})` — after substitution the backend simplifies `{4+(-2)}` → `{2}`.
+  For labels, put arithmetic in **inline math**: `$4+{{c}}$` → `$2$` so text does not show
+  unevaluated `4+(-2)` when a parameter is negative.
 - **Coefficient before `f(x)` (platform convention):** Writing `1f(x)` or `1 f(x)`
   without an operator is ambiguous — many readers assume the reciprocal
   `\\frac{1}{f(x)}`. **On this platform it means multiplication:** `1 \\cdot f(x)`
